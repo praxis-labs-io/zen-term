@@ -362,7 +362,8 @@ versions.
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
 `zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
-`zen action <name>` runs a keymap action. A command
+`zen action <name>` runs a keymap action. `zen setup claude` and `zen setup claude --remove`
+edit Claude Code's config, not the app, and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
