@@ -147,4 +147,22 @@ final class ControlResponseTests: XCTestCase {
         XCTAssertFalse(ControlEndpoint.isSocketFileName("control..sock"))
         XCTAssertFalse(ControlEndpoint.isSocketFileName("control.123.sock.bak"))
     }
+
+    func test_aRunResultAndARunPaneCarryTheFirstTaskInSnakeCase() throws {
+        XCTAssertEqual(
+            text(try ControlWire.line(PaneRunResult(pane: 34, firstTask: .held(.noStatus)))),
+            "{\"first_task\":{\"reason\":\"no_status\",\"sent\":false},\"pane\":34}\n")
+        XCTAssertEqual(text(try ControlWire.line(PaneRunResult(pane: 34, firstTask: nil))), "{\"pane\":34}\n")
+        XCTAssertEqual(
+            text(try ControlWire.line(FirstTask.held(.notReady))), "{\"reason\":\"not_ready\",\"sent\":false}\n")
+
+        let pane = ListResult.Pane(
+            token: 34, drawer: nil, title: "", cwd: nil, busy: true, agent: nil, name: "review", parent: 31,
+            firstTask: .delivered)
+        XCTAssertEqual(
+            text(try ControlWire.line(pane)),
+            "{\"busy\":true,\"first_task\":{\"sent\":true},\"name\":\"review\",\"parent\":31,"
+                + "\"title\":\"\",\"token\":34}\n")
+        XCTAssertEqual(try JSONDecoder().decode(ListResult.Pane.self, from: ControlWire.line(pane)), pane)
+    }
 }

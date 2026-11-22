@@ -84,7 +84,8 @@ A `refused` error says what `force` would end:
  "details":{"closesWindow":false,"floats":[],"panes":[{"token":31,"title":"npm run dev","cwd":"/Users/me/app","busy":true}]}}
 ```
 
-`panes` are the running panes and drawers, in the shape `list` uses. `floats` are the
+`panes` are the running panes and drawers, in the shape `list` uses, the running children
+that `pane.run` started from them included. `floats` are the
 titles of running tool floats. `closesWindow` is true when the close would take the
 window with it.
 A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
@@ -101,7 +102,7 @@ write side open until it has the answer: closing it is read as hanging up, which
 
 | Thing  | Address                           | Notes                                         |
 | ------ | --------------------------------- | --------------------------------------------- |
-| Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
+| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among open panes, and is sent as a string; a string of digits is read as a token. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`, except to `workspace.open`, which still reaches a renamed configured workspace through its entry's folder. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
@@ -149,7 +150,8 @@ is listed from its first opening until it closes, shown or hidden.
      "process":{"pid":81234,"program":"claude"},
      "agent":{"name":"claude","state":"waiting","status":"blocked","kind":"permission",
               "msg":"Claude needs your permission to use Bash","title":"Fix the build"}},
-    {"token":32,"drawer":"bottom","title":"","busy":false}]}]}]}]}
+    {"token":32,"drawer":"bottom","title":"","busy":false},
+    {"token":34,"title":"claude","busy":true,"name":"review","parent":31,"first_task":{"sent":true}}]}]}]}]}
 ```
 
 - `key`: the window is the key window.
@@ -175,6 +177,10 @@ is listed from its first opening until it closes, shown or hidden.
   `done`, `blocked` or `error`. Absent for an agent that sends none. `kind` joins
   `blocked` when the agent says what it waits on: `permission`, `question` or `auth`.
   `msg` and `title` are the report's text, each absent when it sent none.
+- `name`, `parent`, `first_task`: present for a pane `pane.run` opened, when it was given a
+  name, run from a pane, or given a task. `parent` is the token of the pane that ran it, and is
+  absent once that pane has closed. `first_task` is the run's answer about its task, once it
+  has one.
 
 ### `workspace.open`
 
@@ -300,6 +306,48 @@ Into a pane that runs an agent:
   caller's own pane, is never wrapped.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
+
+### `pane.run`
+
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`,
+`outlive_parent`.
+
+Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
+it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
+starting in that pane's folder. With `split` it splits `pane` the way `pane.split` does, and is
+refused or fails the same way. `focus` shows the new pane.
+
+A pane closes the children it started when it closes, and they close theirs, wherever they are
+in its window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
+exiting, or the window closing. A close that would end a running child is refused without
+`force`, and its `details` list that child; the app's close confirmation names it too.
+`outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. An agent
+that quits while its pane stays open closes nothing.
+
+The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
+the way `tab.new` and `pane.split` run a `cmd`.
+
+`name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
+digits. The name then addresses the pane anywhere a token does, until it closes.
+
+```json
+{"pane":34,"first_task":{"sent":false,"reason":"blocked"}}
+```
+
+Without `task` it answers at once and `first_task` is absent. With one, it answers once the
+program sends its first OSC 7501 status report, or after 60 seconds. A first report of `idle`
+or `done` means it is ready: the task is pasted and Return sent, as `pane.send` with `enter`
+does, and `first_task` is `{"sent":true}`. Otherwise the task is not sent and `reason` says why:
+
+| `reason`    | When                                                                 |
+| ----------- | -------------------------------------------------------------------- |
+| `blocked`   | The first report was `blocked`: it waits on the person, such as a permission ask. |
+| `not_ready` | The first report was `working` or `error`, or the pane closed before any report. |
+| `no_status` | No report in 60 seconds. A program that sends none, or an agent under tmux. |
+
+The pane keeps the answer as its `first_task` in `list`. The task is sent at most once: read the
+pane before sending it yourself, never resend blind. After `no_status`, wait for the program's
+prompt with `zen wait --output`, then send the task with `pane.send`.
 
 ### `pane.keys`
 
@@ -438,8 +486,8 @@ lists every action.
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`, and the
-`--timeout` plus 10 seconds for `zen wait`, 70 seconds for `zen pane send` and its `--timeout`
+answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, and
+the `--timeout` plus 10 seconds for `zen wait`, 70 seconds for `zen pane send` and its `--timeout`
 more with `--wait`), 2 usage,
 3 no instance or the connection failed.
 
@@ -449,7 +497,7 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|interrupt|read|get` and
+`zen tab new|select|rename|close`, `zen pane run|split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
 `--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
@@ -461,6 +509,10 @@ rest print nothing. `zen pane get` takes the pane as its argument, this pane by 
 `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
 a usage error.
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] <command>` takes
+everything after its options, and after a `--`, as the command. One argument is a shell line as
+written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A pane argument,
+`zen wait`'s included, is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and
 opens a workspace on it only with `--open` or `--focus`.

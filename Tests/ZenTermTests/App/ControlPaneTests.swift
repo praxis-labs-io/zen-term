@@ -138,7 +138,7 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(background.view.bounds.size, showing.view.bounds.size)
 
         let opened = try result(
-            send(.paneSplit, ControlArgs(pane: token(of: background), dir: .right)), as: PaneResult.self)
+            send(.paneSplit, ControlArgs(pane: .token(token(of: background)), dir: .right)), as: PaneResult.self)
 
         let new = try surface(opened.pane).view.bounds.size
         XCTAssertEqual(new.height, showing.view.bounds.height)
@@ -177,7 +177,7 @@ final class ControlPaneTests: WindowTestCase {
         let drawer = try token(of: XCTUnwrap(spawned.last))
 
         XCTAssertEqual(try error(send(.paneSplit, from: caller)).code, .badRequest)
-        XCTAssertEqual(try error(send(.paneSplit, ControlArgs(pane: drawer, dir: .right))).code, .badRequest)
+        XCTAssertEqual(try error(send(.paneSplit, ControlArgs(pane: .token(drawer), dir: .right))).code, .badRequest)
         XCTAssertEqual(try error(send(.paneSplit, ControlArgs(pane: 9999, dir: .right))).code, .notFound)
     }
 
@@ -188,7 +188,7 @@ final class ControlPaneTests: WindowTestCase {
         c.newTabForTesting()
         XCTAssertNotEqual(c.activeTabIDForTesting, first)
 
-        XCTAssertEqual(try send(.paneFocus, ControlArgs(pane: target)).isSuccess, true)
+        XCTAssertEqual(try send(.paneFocus, ControlArgs(pane: .token(target))).isSuccess, true)
 
         XCTAssertEqual(c.activeTabIDForTesting, first)
         XCTAssertTrue(c.focusedSurfaceForTesting === (try surface(target)))
@@ -203,7 +203,7 @@ final class ControlPaneTests: WindowTestCase {
         tab.focusActivePane()
         XCTAssertFalse(tab.overlayState.isBottomOpen)
 
-        XCTAssertEqual(try send(.paneFocus, ControlArgs(pane: token(of: drawer))).isSuccess, true)
+        XCTAssertEqual(try send(.paneFocus, ControlArgs(pane: .token(token(of: drawer)))).isSuccess, true)
 
         XCTAssertTrue(tab.overlayState.isBottomOpen)
         XCTAssertTrue(c.window.firstResponder === drawer.view)
@@ -217,14 +217,14 @@ final class ControlPaneTests: WindowTestCase {
         busy.isBusy = true
         busy.title = "htop"
 
-        let refusal = try error(send(.paneClose, ControlArgs(pane: opened.pane)))
+        let refusal = try error(send(.paneClose, ControlArgs(pane: .token(opened.pane))))
 
         XCTAssertEqual(refusal.code, .refused)
         XCTAssertEqual(refusal.details?.panes.map(\.token), [opened.pane])
         XCTAssertEqual(refusal.details?.closesWindow, false)
         XCTAssertEqual(panes(c).count, 2)
 
-        XCTAssertEqual(try send(.paneClose, ControlArgs(force: true, pane: opened.pane)).isSuccess, true)
+        XCTAssertEqual(try send(.paneClose, ControlArgs(force: true, pane: .token(opened.pane))).isSuccess, true)
         XCTAssertEqual(panes(c).map(\.token), [caller])
         XCTAssertTrue(busy.terminated)
     }
@@ -235,7 +235,7 @@ final class ControlPaneTests: WindowTestCase {
         let opened = try result(
             send(.paneSplit, ControlArgs(dir: .right), from: token(of: caller)), as: PaneResult.self)
 
-        XCTAssertEqual(try send(.paneClose, ControlArgs(pane: opened.pane)).isSuccess, true)
+        XCTAssertEqual(try send(.paneClose, ControlArgs(pane: .token(opened.pane))).isSuccess, true)
 
         XCTAssertEqual(panes(c).map(\.token), [try token(of: caller)])
         XCTAssertTrue(c.window.firstResponder === caller.view)
@@ -245,13 +245,13 @@ final class ControlPaneTests: WindowTestCase {
         let c = makeWindow()
         let only = try token(of: XCTUnwrap(spawned.first))
 
-        let refusal = try error(send(.paneClose, ControlArgs(pane: only)))
+        let refusal = try error(send(.paneClose, ControlArgs(pane: .token(only))))
         XCTAssertEqual(refusal.code, .refused)
         XCTAssertEqual(refusal.details?.closesWindow, true, "the window's last tab")
 
         c.newTabForTesting()
         let tabs = c.tabOrderForTesting.count
-        XCTAssertEqual(try send(.paneClose, ControlArgs(pane: only)).isSuccess, true)
+        XCTAssertEqual(try send(.paneClose, ControlArgs(pane: .token(only))).isSuccess, true)
         XCTAssertEqual(c.tabOrderForTesting.count, tabs - 1)
     }
 
@@ -260,7 +260,7 @@ final class ControlPaneTests: WindowTestCase {
         c.handle(.toggleBottomDrawer)
         let drawer = try token(of: XCTUnwrap(spawned.last))
 
-        XCTAssertEqual(try error(send(.paneClose, ControlArgs(pane: drawer))).code, .badRequest)
+        XCTAssertEqual(try error(send(.paneClose, ControlArgs(pane: .token(drawer)))).code, .badRequest)
     }
 
     func test_sendPastesTheTextAndSubmitsOnceAfterIt() throws {
@@ -284,7 +284,7 @@ final class ControlPaneTests: WindowTestCase {
         c.handle(.toggleBottomDrawer)
         let drawer = try XCTUnwrap(spawned.last)
 
-        XCTAssertEqual(try send(.paneSend, ControlArgs(pane: token(of: drawer), text: "top")).isSuccess, true)
+        XCTAssertEqual(try send(.paneSend, ControlArgs(pane: .token(token(of: drawer)), text: "top")).isSuccess, true)
         XCTAssertEqual(drawer.inputs, [.paste("top")])
     }
 
@@ -292,7 +292,8 @@ final class ControlPaneTests: WindowTestCase {
         _ = makeWindow()
         let target = try XCTUnwrap(spawned.first)
 
-        let reply = try send(.paneKeys, ControlArgs(pane: token(of: target), keys: ["down", "enter", "ctrl-c"]))
+        let reply = try send(
+            .paneKeys, ControlArgs(pane: .token(token(of: target)), keys: ["down", "enter", "ctrl-c"]))
 
         XCTAssertEqual(reply.isSuccess, true, "\(reply)")
         let expected = try ["down", "enter", "ctrl-c"].map {
@@ -305,12 +306,13 @@ final class ControlPaneTests: WindowTestCase {
         _ = makeWindow()
         let target = try XCTUnwrap(spawned.first)
 
-        let refusal = try error(send(.paneKeys, ControlArgs(pane: token(of: target), keys: ["down", "hyper"])))
+        let refusal = try error(send(.paneKeys, ControlArgs(pane: .token(token(of: target)), keys: ["down", "hyper"])))
 
         XCTAssertEqual(refusal.code, .badRequest)
         XCTAssertTrue(refusal.message.hasPrefix("There is no key named hyper."), refusal.message)
         XCTAssertEqual(target.inputs, [])
-        XCTAssertEqual(try error(send(.paneKeys, ControlArgs(pane: token(of: target), keys: []))).code, .badRequest)
+        XCTAssertEqual(
+            try error(send(.paneKeys, ControlArgs(pane: .token(token(of: target)), keys: []))).code, .badRequest)
     }
 
     func test_interruptingAnAgentPressesEscapeAndSignalsNothing() throws {
@@ -320,7 +322,7 @@ final class ControlPaneTests: WindowTestCase {
             send(.paneSplit, ControlArgs(cmd: "claude", dir: .right), from: caller), as: PaneResult.self)
         try surface(opened.pane).foregroundProcessGroupID = 4242
 
-        XCTAssertEqual(try send(.paneInterrupt, ControlArgs(pane: opened.pane)).isSuccess, true)
+        XCTAssertEqual(try send(.paneInterrupt, ControlArgs(pane: .token(opened.pane))).isSuccess, true)
 
         XCTAssertEqual(try surface(opened.pane).inputs, [.press(.escape)])
         XCTAssertEqual(interrupted, [])
@@ -431,7 +433,8 @@ final class ControlPaneTests: WindowTestCase {
                     state: state, app: "claude-code", message: "Reading x.swift", title: "Reviewing x.swift"))
             drainMainQueue()
 
-            let got = try result(send(.paneGet, ControlArgs(pane: try token(of: agent))), as: ListResult.Pane.self)
+            let got = try result(
+                send(.paneGet, ControlArgs(pane: .token(try token(of: agent)))), as: ListResult.Pane.self)
 
             XCTAssertEqual(got.agent?.status, status, "\(state)")
             XCTAssertEqual(got.agent?.kind, kind, "\(state)")

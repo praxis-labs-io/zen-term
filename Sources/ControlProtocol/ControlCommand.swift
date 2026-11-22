@@ -18,6 +18,7 @@ public enum ControlCommand: String, Codable, Sendable, CaseIterable {
     case paneKeys = "pane.keys"
     case paneInterrupt = "pane.interrupt"
     case paneRead = "pane.read"
+    case paneRun = "pane.run"
     case paneGet = "pane.get"
     case paneWait = "pane.wait"
     case worktreeList = "worktree.list"

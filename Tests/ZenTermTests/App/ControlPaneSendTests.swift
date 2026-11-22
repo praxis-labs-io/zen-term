@@ -90,7 +90,8 @@ final class ControlPaneSendTests: WindowTestCase {
         wait: Bool? = nil, timeout: Int? = nil, hangup: ControlHangup = ControlHangup()
     ) -> Answer {
         let answer = Answer()
-        let args = ControlArgs(force: force, pane: pane, text: text, enter: enter, timeout: timeout, wait: wait)
+        let args = ControlArgs(
+            force: force, pane: .token(pane), text: text, enter: enter, timeout: timeout, wait: wait)
         responder.respond(
             to: ControlRequest(id: 1, cmd: .paneSend, args: args, caller: caller.map(ControlCaller.init(pane:))),
             hangup: hangup
@@ -112,7 +113,7 @@ final class ControlPaneSendTests: WindowTestCase {
 
     private func split(_ c: WindowController, from surface: RecordingSurface) throws -> RecordingSurface {
         responder.respond(
-            to: ControlRequest(id: 2, cmd: .paneSplit, args: ControlArgs(pane: try token(of: surface), dir: .right))
+            to: ControlRequest(id: 2, cmd: .paneSplit, args: ControlArgs(pane: .token(try token(of: surface)), dir: .right))
         ) { _ in }
         return try XCTUnwrap(spawned.last)
     }

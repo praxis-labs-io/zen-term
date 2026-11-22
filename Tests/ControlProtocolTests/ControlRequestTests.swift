@@ -106,7 +106,7 @@ final class ControlRequestTests: XCTestCase {
                 "workspace.close", "tab.new",
                 "tab.select", "tab.rename", "tab.close",
                 "pane.split", "pane.focus", "pane.close", "pane.send", "pane.keys", "pane.interrupt", "pane.read",
-                "pane.get", "pane.wait",
+                "pane.run", "pane.get", "pane.wait",
                 "worktree.list", "worktree.create", "worktree.remove", "action",
             ])
     }
@@ -119,5 +119,42 @@ final class ControlRequestTests: XCTestCase {
         let line = Data(#"{"v":1,"id":6,"cmd":"pane.split","args":{"dir":"left"}}"#.utf8)
         guard case .failure(let rejection) = ControlRequest.decode(line) else { return XCTFail("decoded a left split") }
         XCTAssertEqual(rejection.error.code, .badRequest)
+    }
+
+    func test_aPaneIsAddressedByAnIntegerTokenOrAName_andAStringOfDigitsIsAToken() throws {
+        func pane(_ json: String) throws -> ControlAddress.Pane? {
+            try decode(#"{"v":1,"id":1,"cmd":"pane.focus","args":{"pane":"# + json + "}}").get().args.pane
+        }
+        XCTAssertEqual(try pane("31"), .token(31))
+        XCTAssertEqual(try pane(#""31""#), .token(31))
+        XCTAssertEqual(try pane(#""review""#), .name("review"))
+        XCTAssertEqual(try pane(#""31b""#), .name("31b"))
+        XCTAssertEqual(rejection(#"{"v":1,"id":1,"cmd":"pane.focus","args":{"pane":true}}"#)?.error.code, .badRequest)
+
+        let named = ControlRequest(id: 2, cmd: .paneSend, args: ControlArgs(pane: .name("review"), text: "x"))
+        XCTAssertTrue(String(decoding: try ControlWire.line(named), as: UTF8.self).contains(#""pane":"review""#))
+        XCTAssertEqual(try ControlRequest.decode(ControlWire.line(named)).get(), named)
+    }
+
+    func test_aPaneNameCannotReadAsATokenOrBeBlank() {
+        XCTAssertTrue(ControlAddress.Pane.isValidName("review"))
+        XCTAssertTrue(ControlAddress.Pane.isValidName("review 2"))
+        XCTAssertFalse(ControlAddress.Pane.isValidName("42"))
+        XCTAssertFalse(ControlAddress.Pane.isValidName(""))
+        XCTAssertFalse(ControlAddress.Pane.isValidName("  "))
+    }
+
+    func test_paneRunArgsDecodeFromTheWire() throws {
+        let line =
+            #"{"v":1,"id":3,"cmd":"pane.run","args":{"cmd":"claude","name":"review","task":"Review x.swift","#
+            + #""split":"down","pane":"lead","focus":true,"keep":true,"outlive_parent":true},"caller":{"pane":31}}"#
+        XCTAssertEqual(
+            try decode(line).get(),
+            ControlRequest(
+                id: 3, cmd: .paneRun,
+                args: ControlArgs(
+                    cmd: "claude", focus: true, pane: .name("lead"), name: "review", task: "Review x.swift",
+                    split: .down, keep: true, outliveParent: true),
+                caller: ControlCaller(pane: 31)))
     }
 }

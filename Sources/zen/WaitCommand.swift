@@ -11,8 +11,8 @@ struct WaitCommand: ParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Argument(help: "A pane or drawer token.")
-    var pane: Int
+    @Argument(help: "A pane or drawer token, or a pane's name.")
+    var pane: ControlAddress.Pane
 
     @Option(help: "Answer once this text appears in output printed after the wait began.")
     var output: String?

@@ -10,8 +10,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var title: String?
     public var focus: Bool?
     public var force: Bool?
-    /// A pane or drawer token.
-    public var pane: Int?
+    public var pane: ControlAddress.Pane?
     public var dir: PaneDirection?
     public var text: String?
     public var enter: Bool?
@@ -23,8 +22,16 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var base: String?
     public var existing: Bool?
     public var open: Bool?
-    /// A keymap action's config name, like `toggle_sidebar`.
+    /// A keymap action's config name, like `toggle_sidebar`, or the name `pane.run` gives its pane.
     public var name: String?
+    /// The first message `pane.run` sends its program once the program is ready.
+    public var task: String?
+    /// Where `pane.run` splits its pane. Absent opens a tab.
+    public var split: PaneDirection?
+    /// Whether `pane.run` keeps its pane open after its program exits.
+    public var keep: Bool?
+    /// Whether `pane.run`'s pane stays open when the pane that ran it closes. Sent as `outlive_parent`.
+    public var outliveParent: Bool?
     /// Text `pane.wait` answers on once it appears in the pane's output.
     public var output: String?
     /// Seconds `pane.wait`, or a `pane.send` that waits, holds before it answers `timeout`.
@@ -34,10 +41,11 @@ public struct ControlArgs: Codable, Equatable, Sendable {
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
-        title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: Int? = nil, dir: PaneDirection? = nil,
-        text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil, branch: String? = nil,
-        base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil, output: String? = nil,
-        timeout: Int? = nil, wait: Bool? = nil
+        title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: ControlAddress.Pane? = nil,
+        dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil,
+        branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
+        output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
+        keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -61,5 +69,15 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.output = output
         self.timeout = timeout
         self.wait = wait
+        self.task = task
+        self.split = split
+        self.keep = keep
+        self.outliveParent = outliveParent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, branch, base
+        case existing, open, name, output, timeout, task, split, keep, wait
+        case outliveParent = "outlive_parent"
     }
 }
