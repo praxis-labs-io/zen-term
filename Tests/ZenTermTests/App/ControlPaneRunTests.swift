@@ -387,6 +387,51 @@ final class ControlPaneRunTests: WindowTestCase {
         waitUntil(!isOpen(family.grandchild, in: c), "the grandchild closing")
     }
 
+    func test_aParentClosesItsRunningHelperAndThatHelpersChildrenWithoutForce() throws {
+        let c = makeWindow()
+        let family = try family(in: c)
+        try surface(family.child).isBusy = true
+        try surface(family.grandchild).isBusy = true
+
+        let refused = try XCTUnwrap(
+            error(try answer(.paneClose, ControlArgs(pane: .token(family.child)), from: family.lead)),
+            "a pane that is not the helper's parent closes its running work")
+        XCTAssertEqual(refused.details?.panes.map(\.token), [family.child, family.grandchild])
+        XCTAssertTrue(isOpen(family.child, in: c))
+
+        XCTAssertTrue(try answer(.paneClose, ControlArgs(pane: .token(family.child)), from: family.parent).isSuccess)
+        waitUntil(!isOpen(family.grandchild, in: c), "the helper's child closing with it")
+        XCTAssertFalse(isOpen(family.child, in: c))
+        XCTAssertTrue(isOpen(family.parent, in: c))
+    }
+
+    func test_aParentClosesARunningHelperSplitBesideIt() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let helper = try run(ControlArgs(cmd: "claude", split: .right), from: lead).pane
+        try surface(helper).isBusy = true
+
+        XCTAssertTrue(try answer(.paneClose, ControlArgs(pane: .token(helper)), from: lead).isSuccess)
+        XCTAssertFalse(isOpen(helper, in: c))
+    }
+
+    func test_aParentClosingItsHelperIsStillRefusedOverRunningWorkItDidNotStart() throws {
+        let c = makeWindow()
+        let family = try family(in: c)
+        try surface(family.child).isBusy = true
+        let childTab = try XCTUnwrap(c.pane(token: family.child)?.tab)
+        try XCTUnwrap(c.controllerForTesting(tab: childTab)).toggleBottomDrawer()
+        let drawer = try XCTUnwrap(spawned.last)
+        drawer.isBusy = true
+
+        let refusal = try XCTUnwrap(
+            error(try answer(.paneClose, ControlArgs(pane: .token(family.child)), from: family.parent)))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.panes.map(\.token), [try token(of: drawer)])
+        XCTAssertTrue(isOpen(family.child, in: c))
+    }
+
     func test_theCloseWarningNamesARunningChild_andConfirmingClosesIt() throws {
         let c = makeWindow()
         let family = try family(in: c)

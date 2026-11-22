@@ -282,10 +282,11 @@ to split.
 
 ### `pane.close`
 
-`args`: `pane`, `force`. `refused` without `force` when the pane is running something. The
-last pane of a tab closes the tab, refused as `tab.close` would be. The login pane of a host
-that is connecting is refused, and closed with `force`, as `tab.close` on its tab is. A drawer
-is not closed.
+`args`: `pane`, `force`. `refused` without `force` when the pane is running something. From
+the pane's `parent`, the pane's own program and the children that close with it are not
+refused over; anything else the close would end still is. The last pane of a tab closes the
+tab, refused as `tab.close` would be. The login pane of a host that is connecting is refused,
+and closed with `force`, as `tab.close` on its tab is. A drawer is not closed.
 
 ### `pane.send`
 
@@ -323,7 +324,8 @@ refused or fails the same way. `focus` shows the new pane.
 A pane closes the children it started when it closes, and they close theirs, wherever they are
 in its window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
 exiting, or the window closing. A close that would end a running child is refused without
-`force`, and its `details` list that child; the app's close confirmation names it too.
+`force`, and its `details` list that child; the app's close confirmation names it too. A
+parent's own `pane.close` on its child is not refused over the child's work (`pane.close`).
 `outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. An agent
 that quits while its pane stays open closes nothing.
 

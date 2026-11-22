@@ -99,7 +99,9 @@ extension ControlResponder {
             if place.pane.drawer != nil {
                 return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, which pane.close leaves open."))
             }
-            guard let stakes = place.window.closeStakes(pane: place.pane, in: place.tab) else {
+            let byParent = request.caller?.pane.map { $0 == place.pane.record.parent } ?? false
+            guard let stakes = place.window.closeStakes(pane: place.pane, in: place.tab, closedByItsParent: byParent)
+            else {
                 return .failure(ControlError(.notFound, "There is no pane \(token)."))
             }
             if stakes.needsForce, request.args.force != true {
