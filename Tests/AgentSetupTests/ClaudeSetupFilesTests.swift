@@ -72,20 +72,78 @@ final class ClaudeSetupFilesTests: XCTestCase {
     }
 
     func test_shippedHookSaysNothingOutsideZenTerm() throws {
+        let (status, output) = try runShippedHook(environment: ["PATH": "/usr/bin:/bin"])
+
+        XCTAssertEqual(status, 0)
+        XCTAssertTrue(output.isEmpty)
+    }
+
+    func test_shippedHookNamesAHelpersParent() throws {
+        let pane = #"{"agent":{"name":"claude"},"name":"review","parent":31,"token":34}"#
+        let (status, output) = try runShippedHook(environment: try zenPaneEnvironment(pane: 34, answering: pane))
+
+        XCTAssertEqual(status, 0)
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        XCTAssertTrue(lines[0].hasPrefix("This session runs in ZenTerm pane 34 (`$ZEN_PANE`), the user's terminal."))
+        XCTAssertEqual(
+            lines[1],
+            #"You are helper `review`, started by pane 31. When done or stuck, report with "#
+                + #"`zen pane send --pane 31 "<result>"`, then stop."#)
+    }
+
+    func test_shippedHookHasNoHelperLineWithoutAParent() throws {
+        let pane = #"{"agent":{"name":"claude"},"name":"lead","token":31,"worktree":{"parent":"/src/app"}}"#
+        let (status, output) = try runShippedHook(environment: try zenPaneEnvironment(pane: 31, answering: pane))
+
+        XCTAssertEqual(status, 0)
+        XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
+        XCTAssertFalse(output.contains("You are helper"))
+        XCTAssertTrue(output.contains("zen pane run --name"))
+    }
+
+    func test_shippedHookStillSpeaksWhenThePaneCannotBeRead() throws {
+        let (status, output) = try runShippedHook(environment: try zenPaneEnvironment(pane: 31, answering: nil))
+
+        XCTAssertEqual(status, 0)
+        XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
+        XCTAssertFalse(output.contains("You are helper"))
+    }
+
+    // A stub `zen` that answers `hello`, and `pane get` with `pane`, or fails it when nil.
+    private func zenPaneEnvironment(pane token: Int, answering pane: String?) throws -> [String: String] {
+        let bin = root.appendingPathComponent("stub-bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let reply = root.appendingPathComponent("pane.json")
+        try Data((pane ?? "").utf8).write(to: reply)
+        let getAnswer = pane == nil ? "exit 1" : "cat '\(reply.path)'"
+        let script = """
+            #!/bin/bash
+            case "$*" in
+              *hello*) echo '{}' ;;
+              *"pane get \(token)"*) \(getAnswer) ;;
+              *) exit 1 ;;
+            esac
+            """
+        let zen = bin.appendingPathComponent("zen")
+        try Data(script.utf8).write(to: zen)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: zen.path)
+        return ["PATH": "\(bin.path):/usr/bin:/bin", "ZEN_CONTROL_SOCK": "/tmp/zen-test.sock", "ZEN_PANE": "\(token)"]
+    }
+
+    private func runShippedHook(environment: [String: String]) throws -> (Int32, String) {
         let files = try XCTUnwrap(shipped)
         let script = root.appendingPathComponent(ClaudeSetup.hookFileName)
         try files.hook.write(to: script)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [script.path]
-        process.environment = ["PATH": "/usr/bin:/bin"]
+        process.environment = environment
         let output = Pipe()
         process.standardOutput = output
 
         try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-
-        XCTAssertEqual(process.terminationStatus, 0)
-        XCTAssertTrue(output.fileHandleForReading.readDataToEndOfFile().isEmpty)
+        return (process.terminationStatus, String(decoding: data, as: UTF8.self))
     }
 }
