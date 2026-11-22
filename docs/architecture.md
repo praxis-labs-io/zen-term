@@ -374,8 +374,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **The Agents rows nest a pane under the agent that started it.** `AgentFamilies` reads each
   row's `PaneRecord` parent and climbs through listed agents to the topmost, so there is one
   level: a helper's helper lists under the top agent and its tooltip names the helper that
-  started it. A child is a one-line row (`ListRow` nesting, a leading symbol): a helper agent
-  shows its own state, a process shows none. A process row is a parented pane with no agent,
+  started it. A child is a one-line row (`ListRow` nesting): a helper agent leads with its
+  agent's brand mark (`AgentRules.brandMark`, else the process symbol) and shows its own
+  state, a process shows none. A process row is a parented pane with no agent,
   listed until its pane closes or its busy reading falls (`BusyFallWatch`, the roster's rule);
   a parented pane whose agent left is never one. A family sorts by its most urgent member.
   When the parent's agent leaves, or its pane closes under children that outlive it, the chain

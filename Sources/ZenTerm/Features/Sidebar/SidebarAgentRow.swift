@@ -14,6 +14,7 @@ struct SidebarAgentItem: Equatable {
     let message: String?
     var role = Role.agent
     var startedBy: String?
+    var mark: String?
 }
 
 // The Agents list's own ordering, and the state a row speaks since its title never names it.
@@ -54,7 +55,6 @@ final class SidebarAgentRow: SidebarJumpRow {
     static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
     private static let processJumpHint = "Jump to process"
-    private static let helperSymbol = "sparkles"
     private static let processSymbol = "terminal"
     private static let glyphSize = NSSize(width: 14, height: 16)
 
@@ -103,7 +103,9 @@ final class SidebarAgentRow: SidebarJumpRow {
         case .agent:
             render(Content(title: item.summary, subtitle: item.detail))
         case .helper:
-            render(Content(title: item.summary, leading: .symbol(Self.helperSymbol), ink: .subtle, nests: true))
+            render(
+                Content(
+                    title: item.summary, leading: .symbol(item.mark ?? Self.processSymbol), ink: .subtle, nests: true))
         case .process(let nested):
             render(Content(title: item.summary, leading: .symbol(Self.processSymbol), ink: .subtle, nests: nested))
         }

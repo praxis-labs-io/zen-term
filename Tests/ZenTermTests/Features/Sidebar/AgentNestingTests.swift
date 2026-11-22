@@ -140,13 +140,37 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(parentRow.frame.height, SidebarAgentRow.height)
         let helperRow = try row(of: helper, in: c)
         XCTAssertTrue(helperRow.isNestedForTesting)
-        XCTAssertEqual(helperRow.leadingSymbolForTesting, "sparkles")
+        XCTAssertEqual(helperRow.leadingSymbolForTesting, "claude", "a helper leads with its agent's mark")
         XCTAssertTrue(helperRow.showsStateForTesting, "a helper agent shows its own state")
         XCTAssertEqual(helperRow.frame.height, ChromeMetrics.Height.control)
         let processRow = try row(of: process, in: c)
         XCTAssertTrue(processRow.isNestedForTesting)
         XCTAssertEqual(processRow.leadingSymbolForTesting, "terminal")
         XCTAssertFalse(processRow.showsStateForTesting, "a process row shows a state")
+    }
+
+    func test_aHelperLeadsWithItsAgentsMark_elseTheProcessSymbol() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+
+        let codex = try run("codex", from: root, in: c)
+        let unmarked = try run("aider", from: root, in: c)
+        unmarked.surface.delegate?.surface(
+            unmarked.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
+        drainMainQueue()
+
+        XCTAssertEqual(try row(of: codex, in: c).leadingSymbolForTesting, "openai")
+        XCTAssertEqual(try row(of: unmarked, in: c).itemForTesting?.role, .helper, "precondition: aider is an agent")
+        XCTAssertEqual(try row(of: unmarked, in: c).leadingSymbolForTesting, "terminal")
+    }
+
+    func test_everyAgentMarkIsABrandMarkTheCatalogDraws() {
+        for agent in ["claude", "codex", "gemini", "copilot", "opencode", "ollama"] {
+            let mark = AgentRules.brandMark(for: agent)
+            XCTAssertNotNil(mark, agent)
+            XCTAssertTrue(IconCatalog.brands.contains(mark ?? ""), "\(agent) has no mark in the catalog")
+            XCTAssertNotNil(IconCatalog.image(mark ?? ""), "\(agent)'s mark does not draw")
+        }
     }
 
     func test_aFamilySortsByItsMostUrgentMember_whileEachDotSpeaksForItsOwnRow() throws {

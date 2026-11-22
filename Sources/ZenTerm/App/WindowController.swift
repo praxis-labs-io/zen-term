@@ -3802,8 +3802,9 @@ final class WindowController: NSObject {
             let paneTitle =
                 agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
-            let item = SidebarAgentItem(
+            var item = SidebarAgentItem(
                 id: id, state: state, summary: title, detail: place.name, message: message)
+            item.mark = AgentRules.brandMark(for: agent.name)
             let pane = panes[id]
             return AgentFamilies.Member(
                 item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
