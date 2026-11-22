@@ -1091,7 +1091,7 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()
-        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.sessionCWD))
+        addTab(cwd: activeWorkspace.flatMap { newTabCWD(in: $0.id) })
     }
 
     private func addTab(cwd: URL?) {
@@ -2361,7 +2361,11 @@ final class WindowController: NSObject {
         workspaces.first { $0.id == id }.map(listing(of:))
     }
 
-    func sessionCWD(of id: WorkspaceID) -> URL? { workspaces.first { $0.id == id }?.activeController?.sessionCWD }
+    func newTabCWD(in id: WorkspaceID) -> URL? {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
+        return ShellLaunch.newSessionCWD(
+            focused: workspace.activeController?.sessionCWD, workspace: workspace.newTabFolder)
+    }
 
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
 

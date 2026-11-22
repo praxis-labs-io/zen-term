@@ -61,7 +61,7 @@ final class SettingsTerminalSection: SettingsFormSection {
             self.addSegmentedRow(
                 key: "tab-inherit-cwd", caption: "Start directory",
                 blurb: "Where a new tab or window opens",
-                options: ["Home", "Current pane"], read: { $0.tabInheritCWD ? 1 : 0 },
+                options: ["Workspace", "Current pane"], read: { $0.tabInheritCWD ? 1 : 0 },
                 token: { LayoutFormat.boolToken($0 == 1) }, notifiesOnReselect: false)
         }
     }

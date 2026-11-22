@@ -155,9 +155,10 @@
 # shell = /bin/zsh
 # shell-args = -l -i                  # whitespace-separated argv
 
-# Where a new tab (⌘T) or window (⌘N) starts. Off = your home directory, so a new
-# tab is a clean slate. On = the focused pane's working directory. Panes (⌘D / ⌘⇧D),
-# drawers, tool floats and ⌘P workspace tabs inherit either way.
+# Where a new tab (⌘T) or window (⌘N) starts. Off = a new tab starts in its workspace's
+# folder and a new window in your home directory, so each is a clean slate. On = the
+# focused pane's working directory. Panes (⌘D / ⌘⇧D), drawers, tool floats and ⌘P
+# workspace tabs inherit either way.
 # In-app Settings edit: applies to the next tab or window you open.
 # tab-inherit-cwd = false             # true | false
 

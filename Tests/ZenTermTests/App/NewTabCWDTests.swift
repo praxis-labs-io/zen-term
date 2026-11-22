@@ -53,14 +53,27 @@ final class NewTabCWDTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
     }
 
-    func test_newTab_startsAtHomeByDefault() throws {
-        XCTAssertFalse(GeneralConfig.builtIn.tabInheritCWD, "home is the shipped default")
+    func test_newTab_startsInItsWorkspaceFolderByDefault() throws {
+        XCTAssertFalse(GeneralConfig.builtIn.tabInheritCWD, "the workspace folder is the shipped default")
         let c = try makeWindowInRoot()
+        try XCTUnwrap(spawned.first).currentDirectory = root.appendingPathComponent("elsewhere")
 
         c.newTabForTesting()
 
         let tab = try XCTUnwrap(spawned.last)
-        XCTAssertEqual(tab.lastConfig?.workingDirectory, ShellLaunch.defaultCWD)
+        XCTAssertEqual(tab.lastConfig?.workingDirectory, root)
+    }
+
+    func test_newTab_inAConfiguredWorkspace_startsInThatWorkspacesFolder() throws {
+        let c = try makeWindowInRoot()
+        let project = root.appendingPathComponent("project", isDirectory: true)
+        c.openWorkspaceForTesting(Workspace(title: "project", path: project, tabs: [], env: [:]))
+        try XCTUnwrap(spawned.last).currentDirectory = root
+
+        c.newTabForTesting()
+
+        let tab = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(tab.lastConfig?.workingDirectory, project)
     }
 
     func test_newTab_inheritsTheFocusedCWDWhenOptedIn() throws {
@@ -123,6 +136,24 @@ final class NewTabCWDTests: WindowTestCase {
         XCTAssertEqual(tab.lastConfig?.workingDirectory, parent.path, "a new tab")
     }
 
+    func test_newTab_inARemovedWorktree_startsInItsParentsFolderWithoutInheriting() throws {
+        let c = try makeWindowInRoot()
+        let parent = Workspace(
+            title: "alpha", path: FileManager.default.temporaryDirectory, tabs: [], env: [:])
+        let worktree = Worktree(path: root, branch: "one", head: "0000000", isLocked: false)
+        c.openWorkspaceForTesting(
+            Workspace(title: "alpha: one", path: root, tabs: [], env: [:]),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        c.newTabForTesting()
+
+        let tab = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(tab.lastConfig?.workingDirectory, parent.path)
+    }
+
     func test_split_inheritsTheCWDRegardlessOfTheKey() throws {
         let c = try makeWindowInRoot()
 
@@ -133,10 +164,14 @@ final class NewTabCWDTests: WindowTestCase {
     }
 
     func test_newSessionCWD_isTheOneRuleBothChordsRead() {
-        XCTAssertNil(ShellLaunch.newSessionCWD(focused: root), "home by default, whatever is focused")
+        let folder = root.appendingPathComponent("folder")
+        XCTAssertNil(ShellLaunch.newSessionCWD(focused: root), "home for a window, whatever is focused")
+        XCTAssertEqual(
+            ShellLaunch.newSessionCWD(focused: root, workspace: folder), folder,
+            "the workspace's folder for a tab, whatever is focused")
 
         inheritCWD(true)
-        XCTAssertEqual(ShellLaunch.newSessionCWD(focused: root), root)
+        XCTAssertEqual(ShellLaunch.newSessionCWD(focused: root, workspace: folder), root)
         XCTAssertNil(ShellLaunch.newSessionCWD(focused: nil), "an unresolvable pane still means home")
     }
 }

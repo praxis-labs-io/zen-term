@@ -18,6 +18,9 @@ final class WorkspaceController {
     var isWorktreeRemoved = false
 
     var removedWorktree: WorktreeOrigin? { isWorktreeRemoved ? origin : nil }
+
+    // Nil on a host, whose login shell picks its own directory.
+    var newTabFolder: URL? { host == nil ? (removedWorktree?.relocating(folder) ?? folder) : nil }
     // Shared by a folder's workspace and its worktrees, so the group keeps its place as members close.
     let seat: Int
 
