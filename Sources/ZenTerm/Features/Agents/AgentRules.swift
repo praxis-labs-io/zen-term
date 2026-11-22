@@ -41,9 +41,10 @@ enum AgentRules {
         case stateless, ask, idlePrompt
     }
 
-    static func notificationKind(body: String, agentName: String?) -> NotificationKind {
+    // An OSC 7501 report owns its agent's state, and Claude's notification trails that report by seconds.
+    static func notificationKind(body: String, agentName: String?, reportsStatus: Bool) -> NotificationKind {
         let agent = key(for: agentName)
-        if statelessNotifiers.contains(agent ?? "") { return .stateless }
+        if statelessNotifiers.contains(agent ?? "") || reportsStatus { return .stateless }
         if agent == "claude", claudeIdlePrompt.matches(body) { return .idlePrompt }
         return .ask
     }
@@ -76,7 +77,7 @@ enum AgentRules {
             match: .regex("(?:^| )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?: |$)")),
     ]
 
-    // Claude's title flickers to idle mid-turn while progress holds working, so progress is the only state it gives.
+    // Without OSC 7501 Claude's title flickers to idle mid-turn while progress holds working, so progress is its state.
     private static let progressOnly: [AgentStateRule] = [
         AgentStateRule(
             id: "progress_working", state: .working, priority: 1_100, region: .oscProgress,

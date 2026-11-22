@@ -594,6 +594,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_PROGRESS_REPORT:
             delegate?.surface(self, progressDidChange: Self.progress(action.action.progress_report))
             return true
+        case GHOSTTY_ACTION_PROGRAM_STATUS:
+            delegate?.surface(self, programStatusDidChange: Self.programStatus(action.action.program_status))
+            return true
         case GHOSTTY_ACTION_COMMAND_FINISHED:
             delegate?.surface(
                 self, commandDidFinish: Self.commandResult(action.action.command_finished))
@@ -718,6 +721,39 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         } else {
             SecureInput.shared.removeScoped(secureInputID)
         }
+    }
+
+    static func programStatus(_ report: ghostty_action_program_status_s) -> TerminalProgramStatus? {
+        let state: TerminalProgramStatus.State
+        switch report.state {
+        case GHOSTTY_PROGRAM_STATUS_STATE_IDLE: state = .idle
+        case GHOSTTY_PROGRAM_STATUS_STATE_WORKING: state = .working
+        case GHOSTTY_PROGRAM_STATUS_STATE_DONE: state = .done
+        case GHOSTTY_PROGRAM_STATUS_STATE_BLOCKED: state = .blocked(need(report.kind))
+        case GHOSTTY_PROGRAM_STATUS_STATE_ERROR: state = .failed
+        default: return nil
+        }
+        return TerminalProgramStatus(
+            state: state, app: displayable(report.app), message: displayable(report.msg),
+            title: displayable(report.title))
+    }
+
+    private static func need(_ kind: ghostty_action_program_status_kind_e) -> TerminalProgramStatus.Need? {
+        switch kind {
+        case GHOSTTY_PROGRAM_STATUS_KIND_PERMISSION: return .permission
+        case GHOSTTY_PROGRAM_STATUS_KIND_QUESTION: return .question
+        case GHOSTTY_PROGRAM_STATUS_KIND_AUTH: return .auth
+        default: return nil
+        }
+    }
+
+    // The program's text is untrusted, and libghostty does not strip control characters from it.
+    private static func displayable(_ cString: UnsafePointer<CChar>?) -> String? {
+        guard let cString else { return nil }
+        let text = String(decoding: Data(bytes: cString, count: strlen(cString)), as: UTF8.self)
+        let printable = text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
+        let kept = String(String.UnicodeScalarView(printable)).trimmingCharacters(in: .whitespaces)
+        return kept.isEmpty ? nil : kept
     }
 
     private static func progress(_ report: ghostty_action_progress_report_s) -> TerminalProgress? {
