@@ -284,6 +284,28 @@ final class ControlChildrenWaitTests: WindowTestCase {
         XCTAssertTrue(waits.pending.isEmpty)
     }
 
+    func test_aWaitByNameThatBeginsAfterItsPaneClosedAnswersWithTheLatestExitOfThatName() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        var tokens: [Int] = []
+        for code in [3, 5] {
+            let ran = request(.paneRun, ControlArgs(cmd: "npm test", name: "tests", split: .right), from: caller)
+            XCTAssertNotNil(ran.reply)
+            let child = try XCTUnwrap(spawned.last)
+            tokens.append(try token(of: child))
+            child.delegate?.surface(child, commandDidFinish: TerminalCommandResult(exitCode: code, duration: 1))
+            child.delegate?.surfaceDidExit(child, code: 0)
+            settle(0.1)
+        }
+
+        let got = try result(request(.paneWait, ControlArgs(pane: .name("tests")), from: caller))
+
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 5)
+        XCTAssertEqual(got.pane?.token, tokens.last)
+        XCTAssertEqual(got.pane?.name, "tests")
+    }
+
     func test_anyHearsALaunchedChildExit_withItsExitCode() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))

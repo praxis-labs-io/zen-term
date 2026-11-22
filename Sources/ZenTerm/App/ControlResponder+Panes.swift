@@ -281,7 +281,7 @@ extension ControlResponder {
         }
         switch pane(address, for: request) {
         case .failure(let error):
-            if error.code == .notFound, case .token(let token) = address, let exit = launchedExit(of: token) {
+            if error.code == .notFound, let exit = launchedExit(of: address) {
                 return reply(.success(Self.exited(exit)))
             }
             reply(.failure(error))
@@ -359,6 +359,14 @@ extension ControlResponder {
 
     func launchedExit(of token: Int) -> LaunchedPaneExit? {
         windows().lazy.compactMap { $0.launchedPaneExits.exit(of: token) }.first
+    }
+
+    private func launchedExit(of address: ControlAddress.Pane) -> LaunchedPaneExit? {
+        switch address {
+        case .token(let token): return launchedExit(of: token)
+        case .name(let name):
+            return windows().compactMap { $0.launchedPaneExits.latestExit(named: name) }.max { $0.token < $1.token }
+        }
     }
 
     static func exited(_ exit: LaunchedPaneExit) -> WaitResult {

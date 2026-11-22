@@ -451,9 +451,9 @@ Holds until something happens to the pane, then answers once with why:
   is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
 - A pane `pane.run` opened closes when its program exits, and a wait on it still answers
-  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after
-  and addresses it by token. The app keeps the 64 most recent such exits; an older one is
-  `not_found`.
+  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
+  A name then reaches the most recent such pane with that name. The app keeps the 64 most
+  recent such exits; an older one is `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
 begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
