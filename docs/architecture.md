@@ -369,7 +369,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   else, for Claude and Codex until they exit, the task in their pane title (`AgentRules.taskTitle`:
   Claude's without its status glyph, Codex's between its prompt and its folder; any other pane
   title is the shell's), else its name. Never its message, which stays in the tooltip and follows
-  the title in the accessibility label, and never a state word. Its second line is its place.
+  the title in the accessibility label, and never a state word. Its second line is its place. It leads
+  with its agent's brand mark (`AgentRules.brandMark`), else the process symbol, so rows align.
   Its state reaches VoiceOver through the accessibility value.
 - **The Agents rows nest a pane under the agent that started it.** `AgentFamilies` reads each
   row's `PaneRecord` parent and climbs through listed agents to the topmost, so there is one

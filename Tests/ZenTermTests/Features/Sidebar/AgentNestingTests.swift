@@ -137,6 +137,7 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.role), [.agent, .helper, .process(nested: true)])
         let parentRow = try row(of: root, in: c)
         XCTAssertFalse(parentRow.isNestedForTesting)
+        XCTAssertEqual(parentRow.leadingSymbolForTesting, "claude", "a top-level agent leads with its mark")
         XCTAssertEqual(parentRow.frame.height, SidebarAgentRow.height)
         let helperRow = try row(of: helper, in: c)
         XCTAssertTrue(helperRow.isNestedForTesting)
@@ -162,6 +163,14 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(try row(of: codex, in: c).leadingSymbolForTesting, "openai")
         XCTAssertEqual(try row(of: unmarked, in: c).itemForTesting?.role, .helper, "precondition: aider is an agent")
         XCTAssertEqual(try row(of: unmarked, in: c).leadingSymbolForTesting, "terminal")
+        let promoted = try run("aider", from: nil, in: c)
+        promoted.surface.delegate?.surface(
+            promoted.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
+        drainMainQueue()
+        XCTAssertEqual(try row(of: promoted, in: c).itemForTesting?.role, .agent, "precondition")
+        XCTAssertEqual(
+            try row(of: promoted, in: c).leadingSymbolForTesting, "terminal",
+            "an unmarked agent row keeps the leading column so rows align")
     }
 
     func test_everyAgentMarkIsABrandMarkTheCatalogDraws() {

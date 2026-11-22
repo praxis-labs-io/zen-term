@@ -101,7 +101,8 @@ final class SidebarAgentRow: SidebarJumpRow {
         glyphSlot.isHidden = !item.showsState
         switch item.role {
         case .agent:
-            render(Content(title: item.summary, subtitle: item.detail))
+            render(
+                Content(title: item.summary, subtitle: item.detail, leading: .symbol(item.mark ?? Self.processSymbol)))
         case .helper:
             render(
                 Content(
