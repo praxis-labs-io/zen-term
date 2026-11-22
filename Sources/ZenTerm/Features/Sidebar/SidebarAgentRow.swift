@@ -102,7 +102,9 @@ final class SidebarAgentRow: SidebarJumpRow {
         switch item.role {
         case .agent:
             render(
-                Content(title: item.summary, subtitle: item.detail, leading: .symbol(item.mark ?? Self.processSymbol)))
+                Content(
+                    title: item.summary, subtitle: item.detail, leading: .symbol(item.mark ?? Self.processSymbol),
+                    leadingOnTitleLine: true))
         case .helper:
             render(
                 Content(
