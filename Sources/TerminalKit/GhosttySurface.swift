@@ -490,6 +490,19 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return lines.suffix(count).joined(separator: "\n")
     }
 
+    public var activeScreenText: String? {
+        guard let surfacePtr else { return nil }
+        let screen = ghostty_selection_s(
+            top_left: ghostty_point_s(tag: GHOSTTY_POINT_ACTIVE, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+            bottom_right: ghostty_point_s(
+                tag: GHOSTTY_POINT_ACTIVE, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
+            rectangle: false)
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_text(surfacePtr, screen, &text) else { return nil }
+        defer { ghostty_surface_free_text(surfacePtr, &text) }
+        return text.text.map { String(cString: $0) }
+    }
+
     private func text(in range: TerminalViewportRange, metrics: TerminalCellMetrics) -> String? {
         guard let surfacePtr else { return nil }
         let lastRow = max(metrics.rows - 1, 0)

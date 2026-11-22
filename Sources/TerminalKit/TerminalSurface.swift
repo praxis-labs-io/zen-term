@@ -359,6 +359,10 @@ public protocol TerminalSurface: AnyObject {
     /// Nil when the screen cannot be read.
     func text(lastLines count: Int) -> String?
 
+    /// The screen's own rows, below the scrollback whatever the viewport shows, soft wraps joined. A bounded read
+    /// however long the scrollback is. Nil when the screen cannot be read.
+    var activeScreenText: String? { get }
+
     /// Runs or re-runs a scrollback search. An empty needle stops the engine only.
     func search(_ needle: String)
 
@@ -397,6 +401,8 @@ public extension TerminalSurface {
     func text(viewportRow row: Int) -> String? { nil }
 
     func text(in range: TerminalViewportRange) -> String? { nil }
+
+    var activeScreenText: String? { nil }
 
     func search(_ needle: String) {}
     func stepSearch(_ step: TerminalSearchStep) {}
