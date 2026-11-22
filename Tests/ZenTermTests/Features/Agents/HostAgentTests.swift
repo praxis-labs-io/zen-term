@@ -101,7 +101,7 @@ final class HostAgentTests: WindowTestCase {
         claudeWorking(on: host.login)
 
         let row = try XCTUnwrap(host.c.agentRowForTesting(host.loginID))
-        XCTAssertEqual(row.detail, "devbox · claude")
+        XCTAssertEqual(row.detail, "devbox")
         XCTAssertEqual(row.state, .working)
     }
 
@@ -167,7 +167,8 @@ final class HostAgentTests: WindowTestCase {
 
         push("✳ Claude Code", from: host.login)
 
-        XCTAssertEqual(host.c.agentRowForTesting(host.loginID)?.detail, "devbox · claude")
+        XCTAssertEqual(host.c.agentRowForTesting(host.loginID)?.detail, "devbox")
+        XCTAssertEqual(host.c.agentNameForTesting(host.loginID), "claude")
         XCTAssertEqual(host.c.agentRowForTesting(host.loginID)?.state, .idle)
     }
 

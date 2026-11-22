@@ -97,6 +97,17 @@ final class SidebarAgentsTests: WindowTestCase {
         drainMainQueue()
     }
 
+    private func retitle(_ agent: Agent, _ title: String) {
+        agent.surface.delegate?.surface(agent.surface, titleDidChange: title)
+        drainMainQueue()
+    }
+
+    private func report(_ state: TerminalProgramStatus.State, title: String? = nil, from agent: Agent) {
+        agent.surface.delegate?.surface(
+            agent.surface, programStatusDidChange: TerminalProgramStatus(state: state, title: title))
+        drainMainQueue()
+    }
+
     private func progress(_ agent: Agent, working: Bool) {
         agent.surface.delegate?.surface(
             agent.surface,
@@ -319,7 +330,9 @@ final class SidebarAgentsTests: WindowTestCase {
 
         XCTAssertEqual(items(c).map(\.id), [first.id, second.id, third.id])
         XCTAssertEqual(items(c).map(\.state), [.blocked, .working, .idle])
-        XCTAssertEqual(items(c).map(\.summary), ["Wants to run swift test", "Working", "Idle"])
+        XCTAssertEqual(
+            items(c).map(\.summary), ["pi", AgentRoster.unnamed, AgentRoster.unnamed])
+        XCTAssertEqual(items(c).first?.message, "Wants to run swift test")
         XCTAssertFalse(c.sidebarForTesting.view.agentsAreHiddenForTesting)
 
         notify(second, "Asks before the backfill")
@@ -329,7 +342,7 @@ final class SidebarAgentsTests: WindowTestCase {
         c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.id), [second.id, first.id, third.id])
         XCTAssertEqual(items(c).map(\.state), [.blocked, .idle, .idle])
-        XCTAssertEqual(items(c)[1].summary, "Idle", "an answered question does not linger")
+        XCTAssertEqual(items(c)[1].summary, "pi", "an answered question does not linger")
 
         progress(third, working: true)
         XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
@@ -364,8 +377,118 @@ final class SidebarAgentsTests: WindowTestCase {
         c.openWorkspaceForTesting(recipe("zen-review", right: "claude --resume"))
         c.openWorkspaceForTesting(recipe("notes", right: "vim"))
 
-        XCTAssertEqual(items(c).map(\.detail), ["zen-review · claude"])
+        XCTAssertEqual(items(c).map(\.summary), ["claude"])
+        XCTAssertEqual(items(c).map(\.detail), ["zen-review"])
         XCTAssertEqual(items(c).map(\.state), [.idle])
+    }
+
+    func test_anAgentsReportedTitle_winsOverItsPaneTitle_untilTheReportClears() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        c.identifyAgentForTesting(agent.id, name: "claude")
+        retitle(agent, "✳ Fix the sidebar")
+
+        report(.working, title: "Fix the login bug", from: agent)
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the login bug", "the agent's own title wins")
+        retitle(agent, "⠋ Something else")
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the login bug", "a pane title never covers it")
+
+        report(.working, from: agent)
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Something else", "a report with no title falls through")
+
+        report(.working, title: "Fix the login bug", from: agent)
+        agent.surface.delegate?.surface(agent.surface, programStatusDidChange: nil)
+        drainMainQueue()
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Something else", "a cleared report takes its title")
+    }
+
+    func test_anAgentRowsTitle_isItsPaneTitle_elseItsName_evenWhileItAsks() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        c.identifyAgentForTesting(agent.id, name: "pi")
+        XCTAssertEqual(c.agentRowForTesting(agent.id)?.summary, "pi", "no title falls back to the name")
+        XCTAssertEqual(c.agentRowForTesting(agent.id)?.detail, "Workspace 1", "the second line is the place alone")
+
+        retitle(agent, "Fix the sidebar")
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition: the title moved no state")
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the sidebar", "a new pane title re-renders the row")
+        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Idle, Workspace 1")
+
+        retitle(agent, "Review the diff")
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Review the diff", "and so does the next")
+
+        notify(agent, "Wants to run swift test")
+        let row = try XCTUnwrap(rows(c).first)
+        XCTAssertEqual(row.summaryTextForTesting, "Review the diff", "the dot says it asks; the title stays")
+        XCTAssertEqual(row.accessibilityLabel(), "Wants to run swift test")
+        XCTAssertEqual(row.accessibilityValue() as? String, "Waiting, Workspace 1")
+        try hover(row, in: c)
+        XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test", "the tooltip keeps the ask")
+    }
+
+    func test_anAgentRowsTitle_dropsTheAgentsStatusGlyph_andItsChurnRendersNothing() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        c.identifyAgentForTesting(agent.id, name: "pi")
+
+        retitle(agent, "✳ Fix the sidebar")
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the sidebar")
+
+        let row = try XCTUnwrap(rows(c).first)
+        let renders = row.rendersForTesting
+        for frame in ["⠋ Fix the sidebar", "⠙  Fix the sidebar", "· Fix the sidebar"] { retitle(agent, frame) }
+        XCTAssertEqual(row.summaryTextForTesting, "Fix the sidebar")
+        XCTAssertEqual(row.rendersForTesting, renders, "a spinner frame is not a new title")
+
+        retitle(agent, "⠋ 2 files to review")
+        XCTAssertEqual(rows(c).first?.summaryTextForTesting, "2 files to review", "a digit is the title's own")
+    }
+
+    func test_anUnnamedAgentWithNoTitle_readsAsAnAgent_neverAsItsState() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+
+        progress(agent, working: true)
+
+        XCTAssertEqual(items(c).map(\.state), [.working], "precondition")
+        XCTAssertEqual(items(c).map(\.summary), [AgentRoster.unnamed])
+    }
+
+    func test_noStateChange_putsAStateWordOfOursInAnAgentRowsTitle() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        let other = try split(c)
+        c.identifyAgentForTesting(agent.id, name: "claude")
+        WindowController.isPresent = { _ in false }
+        let ours = Set([AttentionTone.blocked, .done, .working, .idle].map { $0.accessibilityName.lowercased() })
+        var seen: [AttentionTone] = []
+        func expectNoStateWord(_ step: String) {
+            guard let row = rows(c).first(where: { $0.itemForTesting?.id == agent.id }) else { return }
+            row.itemForTesting.map { seen.append($0.state) }
+            let words = Set(row.summaryTextForTesting.lowercased().split { !$0.isLetter }.map(String.init))
+            XCTAssertTrue(
+                words.isDisjoint(with: ours), "\(step) titled the row \"\(row.summaryTextForTesting)\"")
+        }
+
+        progress(agent, working: true)
+        expectNoStateWord("working")
+        progress(agent, working: false)
+        expectNoStateWord("a finished turn")
+        notify(agent, "Wants to run swift test", title: "")
+        expectNoStateWord("an ask")
+        focus(agent, in: c)
+        c.answerTypedAgent()
+        expectNoStateWord("an answer")
+        focus(other, in: c)
+        for state: TerminalProgramStatus.State in [.working, .blocked(.permission), .done, .failed, .idle] {
+            report(state, from: agent)
+            expectNoStateWord("a reported \(state)")
+        }
+        retitle(agent, "⠋")
+        expectNoStateWord("a glyph-only pane title")
+
+        XCTAssertEqual(Set(seen), [.blocked, .done, .working, .idle], "precondition: every state was reached")
     }
 
     func test_aListedProgram_joinsOnLaunch_andByItsNotificationTitle() throws {
@@ -374,7 +497,7 @@ final class SidebarAgentsTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
         let c = makeWindow()
         c.openWorkspaceForTesting(recipe("zen-review", right: "gemini --yolo"))
-        XCTAssertEqual(items(c).map(\.detail), ["zen-review · gemini"])
+        XCTAssertEqual(items(c).map(\.summary), ["gemini"])
 
         let shell = try split(c)
         notify(shell, "Waiting for input", title: "gemini")
@@ -391,7 +514,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(shell, "Build finished", title: "")
         notify(second, "Claude needs your permission", title: "Claude Code")
 
-        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · Claude Code"])
+        XCTAssertEqual(items(c).map(\.id), [second.id])
     }
 
     func test_anAgentThatWorksBeforeItAsks_takesTheNameItsNotificationCarries() throws {
@@ -400,10 +523,10 @@ final class SidebarAgentsTests: WindowTestCase {
         _ = try split(c)
 
         progress(agent, working: true)
-        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · agent"], "precondition: joined unnamed")
+        XCTAssertEqual(items(c).map(\.summary), [AgentRoster.unnamed], "precondition: joined unnamed")
         notify(agent, "Claude needs your permission", title: "Claude Code")
 
-        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · Claude Code"])
+        XCTAssertEqual(c.agentNameForTesting(agent.id), "Claude Code")
     }
 
     func test_anAgentLeaves_whenItsSurfaceFallsIdle_notBeforeItWasBusy() throws {
@@ -456,7 +579,7 @@ final class SidebarAgentsTests: WindowTestCase {
         c.trackAgentExitsForTesting()
 
         XCTAssertEqual(items(c).map(\.state), [.blocked], "a crash waits on you")
-        XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
+        XCTAssertEqual(items(c).first?.message, WindowController.commandResultMessage(result))
 
         focus(first, in: c)
         c.answerTypedAgent()
@@ -491,7 +614,7 @@ final class SidebarAgentsTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertEqual(items(c).map(\.state), [.blocked])
-        XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
+        XCTAssertEqual(items(c).first?.message, WindowController.commandResultMessage(result))
     }
 
     func test_anAgentStoppedWithCtrlC_doesNotReadAsFailed() throws {
@@ -827,7 +950,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(b.attentionStateForTesting(tab: try XCTUnwrap(b.activeTabIDForTesting)), .waiting)
     }
 
-    func test_hoveringAnAgent_showsTheWholeMessage_whileTheRowReadsItsFirstSentence() throws {
+    func test_hoveringAnAgent_showsTheWholeMessage_whileTheRowKeepsItsTitle() throws {
         let c = makeWindow()
         let agent = try focusedAgent(c)
         _ = try split(c)
@@ -836,7 +959,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(agent, body)
         let row = try XCTUnwrap(rows(c).first)
 
-        XCTAssertEqual(row.summaryTextForTesting, "Wants to run swift test.", "the row stops at the sentence")
+        XCTAssertEqual(row.summaryTextForTesting, "pi", "the message never replaces the title")
         XCTAssertEqual(row.frame.height, SidebarAgentRow.height, "the message does not grow the row")
 
         try hover(row, in: c)
@@ -859,7 +982,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let body = "Wants to run bin/check, which rebuilds GhosttyKit first."
         row.render(
             SidebarAgentItem(
-                id: first.id, state: first.state, summary: SidebarAgentItem.summaryLine(of: body),
+                id: first.id, state: first.state, summary: first.summary,
                 detail: first.detail, message: body))
 
         XCTAssertEqual(
@@ -868,7 +991,7 @@ final class SidebarAgentsTests: WindowTestCase {
 
         row.render(
             SidebarAgentItem(
-                id: first.id, state: .working, summary: AttentionTone.working.summary, detail: first.detail,
+                id: first.id, state: .working, summary: "claude", detail: first.detail,
                 message: nil))
 
         XCTAssertEqual(
@@ -884,7 +1007,7 @@ final class SidebarAgentsTests: WindowTestCase {
         focus(agent, in: c)
         c.answerTypedAgent()
         let row = try XCTUnwrap(rows(c).first)
-        XCTAssertEqual(row.summaryTextForTesting, "Idle", "precondition: an answered agent shows a state word")
+        XCTAssertEqual(row.summaryTextForTesting, "pi", "precondition: an answered agent shows its name")
 
         try hover(row, in: c)
 

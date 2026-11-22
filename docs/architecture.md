@@ -278,7 +278,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **An agent's state is derived from the signals it already pushes.** Its own OSC 7501
   report (`TerminalProgramStatus`) outranks everything: `AgentStateEngine` maps it straight
   to a state (`done` is a turn end, `error` asks like `blocked`). The report's `msg` is
-  the row's words and the ask card's, and its `title`, when it sends one, is the row's title.
+  the row's tooltip and the ask card's words, and its `title`, when it sends one, is the row's title.
   While a report is present, the screen-reading fallbacks below stand down; without one (a Claude that is older, or under tmux, which
   does not pass the query through), rules that are typed data in the repo, never
   configuration, decide:
@@ -351,7 +351,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ssh started in, so that path is the signal. Only on a host: locally a cleared title would drop
   the agent before the result that tells a crash from a clean exit.
   The Agents rows join it with `agentWait(of:)` and sort blocked and done together (oldest
-  first), then working, then idle, ties in sidebar order.
+  first), then working, then idle, ties in sidebar order. A row's title is its 7501 title,
+  else the title the agent set on its pane without its leading status glyph, else its name: never its message,
+  which stays in the tooltip and accessibility label, and never a state word. Its second line
+  is its place. Its state reaches VoiceOver through the accessibility value.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.

@@ -177,7 +177,7 @@ final class AgentNotificationTests: WindowTestCase {
 
         XCTAssertEqual(cardCount(c), 1)
         XCTAssertTrue(cardCopy(c).contains("Finished its turn."), "the card the turn end raised stays")
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.summary, "Finished its turn.")
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.message, "Finished its turn.")
     }
 
     func test_aFinishedTurn_neverTakesTheCardOfAQuestionInItsTab() throws {
@@ -358,7 +358,7 @@ final class AgentNotificationTests: WindowTestCase {
 
         XCTAssertFalse(cardCopy(c).contains("done"), "a shell's news never covers the crash waiting on you")
         XCTAssertEqual(
-            c.agentRowForTesting(pane.id)?.summary, WindowController.commandResultMessage(failure),
+            c.agentRowForTesting(pane.id)?.message, WindowController.commandResultMessage(failure),
             "the exited row keeps its own words")
     }
 

@@ -7,22 +7,13 @@ struct SidebarAgentItem: Equatable {
     let detail: String
     let message: String?
 
-    static func summaryLine(of message: String) -> String {
-        let firstLine = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            .prefix { !$0.isNewline }
-            .trimmingCharacters(in: .whitespaces)
-        var index = firstLine.startIndex
-        while let stop = firstLine[index...].firstIndex(where: { ".!?".contains($0) }) {
-            let after = firstLine.index(after: stop)
-            guard after < firstLine.endIndex else { return firstLine }
-            if firstLine[after].isWhitespace { return String(firstLine[...stop]) }
-            index = after
-        }
-        return firstLine
+    // An agent heads its pane title with an animated status glyph, which the row's indicator already shows.
+    static func title(fromPane title: String) -> String {
+        String(title.drop { !$0.isLetter && !$0.isNumber }).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
-// The Agents list's own ordering and copy for the shared states.
+// The Agents list's own ordering, and the state a row speaks since its title never names it.
 extension AttentionTone {
     // Blocked and done share a rank, so waiting agents queue by age alone.
     var rank: Int {
@@ -33,7 +24,7 @@ extension AttentionTone {
         }
     }
 
-    var summary: String {
+    var accessibilityName: String {
         switch self {
         case .blocked: return "Waiting"
         case .done: return "Done"
@@ -76,18 +67,21 @@ final class SidebarAgentRow: SidebarJumpRow {
     func render(_ item: SidebarAgentItem) {
         guard item != self.item else { return }
         self.item = item
+        rendersForTesting += 1
         render(Content(title: item.summary, subtitle: item.detail))
         tooltip?.label = item.message ?? Self.jumpHint
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
         announce(item)
-        setAccessibilityValue(item.detail)
+        setAccessibilityValue("\(item.state.accessibilityName), \(item.detail)")
         dot.state = item.state.dot
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
     }
 
     var itemForTesting: SidebarAgentItem? { item }
+
+    private(set) var rendersForTesting = 0
 
     var dotForTesting: StateDot { dot }
 
