@@ -68,6 +68,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
     enum Input: Equatable {
         case paste(String)
         case submit
+        case press(TerminalKey)
     }
     private(set) var inputs: [Input] = []
     private(set) var pastes: [String] = []
@@ -76,6 +77,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
         inputs.append(.paste(text))
     }
     func submit() { inputs.append(.submit) }
+    func press(_ key: TerminalKey) { inputs.append(.press(key)) }
     var selectionText: String?
     func copySelection() -> String? { selectionText }
     private(set) var scrolls: [TerminalScroll] = []

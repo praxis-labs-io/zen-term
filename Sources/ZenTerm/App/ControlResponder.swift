@@ -29,6 +29,7 @@ struct ControlResponder {
         case .paneFocus: reply(focusPane(request))
         case .paneClose: reply(closePane(request))
         case .paneSend: reply(sendToPane(request))
+        case .paneKeys: reply(pressKeys(request))
         case .paneRead: reply(readPane(request))
         case .worktreeList: listWorktrees(request, reply: reply)
         case .worktreeCreate: createWorktree(request, reply: reply)

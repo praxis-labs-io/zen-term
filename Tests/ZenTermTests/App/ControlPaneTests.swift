@@ -283,6 +283,31 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(drawer.inputs, [.paste("top")])
     }
 
+    func test_keysPressEachNamedKeyInOrderRatherThanPasting() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+
+        let reply = try send(.paneKeys, ControlArgs(pane: token(of: target), keys: ["down", "enter", "ctrl-c"]))
+
+        XCTAssertEqual(reply.isSuccess, true, "\(reply)")
+        let expected = try ["down", "enter", "ctrl-c"].map {
+            try XCTUnwrap(PaneKey(name: $0).flatMap(TerminalKey.init(paneKey:)))
+        }
+        XCTAssertEqual(target.inputs, expected.map(RecordingSurface.Input.press))
+    }
+
+    func test_anUnknownKeyIsABadRequestNamingItAndPressesNothing() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+
+        let refusal = try error(send(.paneKeys, ControlArgs(pane: token(of: target), keys: ["down", "hyper"])))
+
+        XCTAssertEqual(refusal.code, .badRequest)
+        XCTAssertTrue(refusal.message.hasPrefix("There is no key named hyper."), refusal.message)
+        XCTAssertEqual(target.inputs, [])
+        XCTAssertEqual(try error(send(.paneKeys, ControlArgs(pane: token(of: target), keys: []))).code, .badRequest)
+    }
+
     func test_readReturnsTheViewportWithoutTrailingBlankRows() throws {
         _ = makeWindow()
         let target = try XCTUnwrap(spawned.first)

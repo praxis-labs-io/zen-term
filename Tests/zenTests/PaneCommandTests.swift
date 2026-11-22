@@ -30,11 +30,17 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertTrue(close.force)
 
         XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["pane", "focus", "32"]) as? PaneCommands.Focus).pane, 32)
+
+        let keys = try XCTUnwrap(try Zen.parseAsRoot(["pane", "keys", "34", "down", "enter"]) as? PaneCommands.Keys)
+        XCTAssertEqual(keys.pane, 34)
+        XCTAssertEqual(keys.keys, [.down, .enter])
     }
 
-    func test_aBadDirectionOrLineCountIsAUsageError() {
+    func test_aBadDirectionLineCountOrKeyIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "split", "--dir", "left"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "read", "--lines", "0"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "send"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34", "down", "ctrl-1"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34"]), 2)
     }
 }

@@ -106,6 +106,33 @@ extension ControlResponder {
         }
     }
 
+    func pressKeys(_ request: ControlRequest) -> ControlReply {
+        guard let names = request.args.keys, !names.isEmpty else {
+            return .failure(ControlError(.badRequest, "pane.keys needs keys."))
+        }
+        var keys: [PaneKey] = []
+        for name in names {
+            guard let key = PaneKey(name: name) else {
+                let known = PaneKey.names.joined(separator: ", ")
+                return .failure(ControlError(.badRequest, "There is no key named \(name). The keys are \(known)."))
+            }
+            keys.append(key)
+        }
+        return pane(request.args.pane, for: request).flatMap { place in
+            let surface = place.pane.surface
+            guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
+            var pressed: [TerminalKey] = []
+            for key in keys {
+                guard let typed = TerminalKey(paneKey: key) else {
+                    return .failure(ControlError(.failed, "The keyboard layout has no key for \(key.name)."))
+                }
+                pressed.append(typed)
+            }
+            pressed.forEach(surface.press)
+            return .success(NoPayload())
+        }
+    }
+
     func readPane(_ request: ControlRequest) -> ControlReply {
         if let lines = request.args.lines, lines < 1 {
             return .failure(ControlError(.badRequest, "lines must be 1 or more."))

@@ -4,7 +4,7 @@ import ControlProtocol
 struct PaneCommands: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "pane", abstract: "Split, focus, close, type into and read panes.",
-        subcommands: [Split.self, Focus.self, Close.self, Send.self, Read.self])
+        subcommands: [Split.self, Focus.self, Close.self, Send.self, Keys.self, Read.self])
 
     struct Split: ParsableCommand {
         static let configuration = CommandConfiguration(
@@ -83,6 +83,26 @@ struct PaneCommands: ParsableCommand {
         }
     }
 
+    struct Keys: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Press keys in a pane, in order, as keystrokes rather than a paste.")
+
+        private static let names = "One of " + PaneKey.names.joined(separator: ", ") + "."
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token.")
+        var pane: Int
+
+        @Argument(help: ArgumentHelp("The keys.", discussion: Keys.names))
+        var keys: [PaneKey]
+
+        func run() throws {
+            let args = ControlArgs(pane: pane, keys: keys.map(\.name))
+            _ = try connection.client().send(.paneKeys, args, expecting: NoPayload.self)
+        }
+    }
+
     struct Read: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Print a pane's text: the rows on screen, or its last lines with --lines.")
@@ -107,3 +127,7 @@ struct PaneCommands: ParsableCommand {
 }
 
 extension PaneDirection: ExpressibleByArgument {}
+
+extension PaneKey: ExpressibleByArgument {
+    public init?(argument: String) { self.init(name: argument) }
+}

@@ -429,6 +429,31 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         performBindingAction("text:\\r")
     }
 
+    // A control-held key carries its bare letter as text, as `ghosttyCharacters` does for a typed one.
+    public func press(_ key: TerminalKey) {
+        guard let surfacePtr else { return }
+        var event = Self.ghosttyKey(key)
+        event.mods = NSEvent.ghosttySidedMods(key.modifiers)
+        event.consumed_mods = NSEvent.ghosttyMods(key.modifiers.subtracting([.control, .command]))
+        let typed = key.text ?? Self.typedText(key.unshiftedCodepoint)
+        if let typed {
+            typed.withCString {
+                event.text = $0
+                _ = ghostty_surface_key(surfacePtr, event)
+            }
+        } else {
+            _ = ghostty_surface_key(surfacePtr, event)
+        }
+        event.action = GHOSTTY_ACTION_RELEASE
+        event.text = nil
+        _ = ghostty_surface_key(surfacePtr, event)
+    }
+
+    private static func typedText(_ codepoint: UInt32) -> String? {
+        guard codepoint >= 0x20, codepoint != 0x7F, let scalar = Unicode.Scalar(codepoint) else { return nil }
+        return String(Character(scalar))
+    }
+
     public func copySelection() -> String? {
         guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
         var text = ghostty_text_s()

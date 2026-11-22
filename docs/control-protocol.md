@@ -271,8 +271,18 @@ is not closed.
 
 Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
-characters become spaces. `failed` when the pane has not started, such as a host's pane
+characters become spaces, and `pane.keys` presses keys. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
+
+### `pane.keys`
+
+`args`: `pane`, `keys` (required), a list of key names.
+
+Presses each key in order as a keystroke, not a paste, so a menu or a prompt reads it as
+the key: `enter`, `escape`, `tab`, `shift-tab`, `backspace`, `space`, `up`, `down`, `left`,
+`right`, `home`, `end`, `pageup`, `pagedown`, and `ctrl-a` through `ctrl-z`. A name that is
+not a key is `bad_request` naming it, and nothing is pressed. `failed` when the pane has not
+started.
 
 ### `pane.read`
 
@@ -359,11 +369,13 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
+`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|read` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
+`zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
+a usage error.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
