@@ -409,8 +409,9 @@ Holds until something happens to the pane, then answers once with why:
   is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
 - A pane `pane.run` opened closes when its program exits, and a wait on it still answers
-  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
-  The app keeps that for the 64 most recent such exits; an older one is `not_found`.
+  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after
+  and addresses it by token. The app keeps the 64 most recent such exits; an older one is
+  `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
 begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
@@ -421,7 +422,7 @@ begins, and takes no `pane`. Each child is watched as a wait on its pane would b
 | `all`      | `stopped` once none is working, at once when none is. |
 
 A child is working while its agent's `status` is `working`, or, with no `status`, while the app
-reads its agent as working; a child that runs no agent while its program runs. A child whose
+reads its agent as working. A child that runs no agent is working while its program runs. A child whose
 first task was sent counts as working until its `status` moves past `idle` or `done`, so `all`
 does not answer before it starts on the task. `message` and `timeout` answer as they do for a
 pane, and `output` is a `bad_request` with `all`.
