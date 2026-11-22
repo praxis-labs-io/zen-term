@@ -304,8 +304,9 @@ Into a pane that runs an agent:
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
   `<zen from="31 lead" reply="zen pane send --pane 31">text</zen>`. `from` is the caller's
-  token, and its name after it when it has one. A send into a shell, or into the caller's own
-  pane, is never wrapped. A child's note to its parent (`pane.run`) arrives the same way.
+  token, and its name after it when it has one. A send into a shell, into the caller's own
+  pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
+  note to its parent (`pane.run`) arrives the same way.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
 
