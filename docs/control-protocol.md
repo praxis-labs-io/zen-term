@@ -92,7 +92,9 @@ A worktree removal's refusal adds `files`, its uncommitted and untracked files, 
 `lostCommits`, the commits on it that no branch or other worktree holds.
 
 Requests are decoded off the main thread, applied on it, and written back off it. The app
-answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds.
+answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds,
+`pane.send`, within 65 seconds, and with `wait` its `timeout` more, and `pane.run` with `wait`,
+within its `timeout` plus 65 seconds.
 A client that closes its connection before the answer ends a `pane.wait`. A client keeps its
 write side open until it has the answer: closing it is read as hanging up, which drops a held
 `pane.wait`.
@@ -287,12 +289,25 @@ is not closed.
 
 ### `pane.send`
 
-`args`: `pane`, `text` (required), `enter`.
+`args`: `pane`, `text` (required), `enter`, `force`, `wait`, `timeout`.
 
 Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
 characters become spaces, and `pane.keys` presses keys. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
+
+Into a pane that runs an agent:
+
+- `refused` while its `status` is `blocked`, since what it waits on is the user's decision.
+  `force` sends anyway. A `working` agent takes the text into its running turn.
+- It holds while the person is typing into the pane: until 2 seconds after their last key
+  into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
+- From another pane, the text arrives wrapped, so the agent can tell it from its user:
+  `<zen from="31 lead" reply="zen pane send --pane 31">text</zen>`. `from` is the caller's
+  token, and its name after it when it has one. A send into a shell, or into the caller's own
+  pane, is never wrapped.
+
+`wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
 
 ### `pane.run`
 
@@ -335,6 +350,9 @@ does, and `first_task` is `{"sent":true}`. Otherwise the task is not sent and `r
 The pane keeps the answer as its `first_task` in `list`. The task is sent at most once: read the
 pane before sending it yourself, never resend blind. After `no_status`, wait for the program's
 prompt with `zen wait --output`, then send the task with `pane.send`.
+
+`wait` takes `timeout` and, once it would answer, holds as `pane.wait` on the new pane instead
+and answers as it does. The answer's `pane` carries `first_task`.
 
 ### `pane.keys`
 
@@ -505,7 +523,8 @@ lists every action.
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
 answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, and
-the `--timeout` plus 10 seconds for `zen wait`), 2 usage,
+the `--timeout` plus 10 seconds for `zen wait`, 70 seconds for `zen pane send`, and its
+`--timeout` more for `zen pane send --wait`, or 70 more for `zen pane run --wait`), 2 usage,
 3 no instance or the connection failed.
 
 `zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
@@ -522,10 +541,12 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
+`zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
+`zen wait` does.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
 a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] <command>` takes
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A pane argument,
 `zen wait`'s included, is a token when it is all digits and a name otherwise.

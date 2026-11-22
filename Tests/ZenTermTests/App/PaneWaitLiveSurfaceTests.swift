@@ -11,6 +11,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
     private var controller: WindowController?
     private var surfaces: [GhosttySurface] = []
     private let waits = PaneWaits()
+    private let drafts = PaneDrafts()
     private let originalPresence = WindowController.isPresent
 
     override func setUpWithError() throws {
@@ -48,6 +49,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             initialCWD: FileManager.default.temporaryDirectory)
         c.paneWaits = waits
+        c.paneDrafts = drafts
         c.mountAndStart()
         c.window.orderFront(nil)
         c.window.contentView?.layoutSubtreeIfNeeded()
@@ -95,7 +97,9 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         let (surface, token) = try shellPane()
         let report = #"printf '\033]7501;state=%s:app=claude-code\007'"#
         run("\(report) working; read -r _; \(report) done; sleep 30", in: surface)
-        waitUntil(controller?.listing().workspaces.first?.tabs.first?.panes.first?.agent?.status == .working, "working")
+        waitUntil(
+            controller?.listing().workspaces.first?.tabs.first?.panes.first?.agent?.status == .working, "working",
+            timeout: 10)
         let answer = wait(on: token)
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         XCTAssertNil(answer.reply, "the agent is still working")
@@ -132,7 +136,32 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         let (surface, _) = try shellPane()
         run("sleep 5", in: surface)
         waitUntil(
-            surface.foregroundProcessGroupID.map { !ForegroundGroup.isShell($0) } == true, "sleep in the foreground")
-        XCTAssertEqual(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName(of:)), "sleep")
+            surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName(of:)) == "sleep",
+            "sleep in the foreground", timeout: 10)
+        let job = try XCTUnwrap(surface.foregroundProcessGroupID)
+        XCTAssertFalse(ForegroundGroup.isShell(job))
+    }
+
+    func test_aKeyTypedIntoThePaneRecordsTheDraftTime() throws {
+        let (surface, token) = try shellPane()
+        let c = try XCTUnwrap(controller)
+        let place = try XCTUnwrap(c.pane(token: token))
+        c.window.makeKeyAndOrderFront(nil)
+        c.focus(place.pane.surfaceID, in: place.tab)
+        let keys = KeyInterceptor()
+        keys.onKeyToFocus = { c.keyReachedFocus() }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "q", charactersIgnoringModifiers: "q",
+                isARepeat: false, keyCode: 12))
+        XCTAssertNil(drafts.lastKey(into: place.pane.surfaceID))
+        let before = Date()
+
+        c.window.sendEvent(try XCTUnwrap(keys.route(event)))
+
+        let typed = try XCTUnwrap(drafts.lastKey(into: place.pane.surfaceID))
+        XCTAssertGreaterThanOrEqual(typed, before)
+        waitUntil((surface.activeScreenText ?? "").contains("q"), "the key to reach the shell", timeout: 10)
     }
 }

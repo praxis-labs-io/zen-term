@@ -9,6 +9,11 @@ struct ControlClient {
     let caller: ControlCaller?
     var replyTimeout: time_t = 10
 
+    // A held command's app answers at its own deadline and gives up past its margin; the client outwaits both.
+    static func replyTimeout(for cmd: ControlCommand, _ args: ControlArgs) -> time_t {
+        time_t(ControlWire.answerWait(for: cmd, args) + ControlWire.answerMargin)
+    }
+
     func send<Payload: ControlPayload>(
         _ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), expecting: Payload.Type
     ) throws(ZenFailure) -> Payload {

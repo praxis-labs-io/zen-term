@@ -20,6 +20,14 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(send.text, "echo hi")
         XCTAssertTrue(send.enter)
         XCTAssertEqual(send.pane, 7)
+        XCTAssertFalse(send.wait)
+        XCTAssertFalse(send.force)
+
+        let waiting = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "send", "go", "--wait", "--timeout", "30", "--force"]) as? PaneCommands.Send)
+        XCTAssertTrue(waiting.wait)
+        XCTAssertTrue(waiting.force)
+        XCTAssertEqual(waiting.timeout, 30)
 
         let read = try XCTUnwrap(try Zen.parseAsRoot(["pane", "read", "--lines", "100"]) as? PaneCommands.Read)
         XCTAssertEqual(read.lines, 100)
@@ -76,6 +84,13 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertNil(plain.split)
         XCTAssertFalse(plain.keep)
         XCTAssertFalse(plain.outliveParent)
+        XCTAssertFalse(plain.wait)
+
+        let waiting = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "run", "--wait", "--timeout", "30", "claude"]) as? PaneCommands.Run)
+        XCTAssertTrue(waiting.wait)
+        XCTAssertEqual(waiting.timeout, 30)
+        XCTAssertEqual(waiting.command, ["claude"])
     }
 
     func test_runSendsOneArgumentAsALineAndQuotesSeveral() throws {
@@ -95,12 +110,14 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--name", "42", "claude"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--split", "left", "claude"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--timeout", "601", "claude"]), 2)
     }
 
     func test_aBadDirectionLineCountOrKeyIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "split", "--dir", "left"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "read", "--lines", "0"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "send"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "send", "go", "--wait", "--timeout", "0"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34", "down", "ctrl-1"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "interrupt"]), 2)

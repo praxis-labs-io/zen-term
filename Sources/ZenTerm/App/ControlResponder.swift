@@ -12,6 +12,7 @@ struct ControlResponder {
     var worktreeRemovals = WorktreeRemovalTracker()
     var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
     var paneWaits = PaneWaits()
+    var paneDrafts = PaneDrafts()
     var interruptGroup: (pid_t) -> Bool = ControlResponder.interrupt(group:)
 
     func respond(
@@ -32,11 +33,11 @@ struct ControlResponder {
         case .paneSplit: reply(splitPane(request))
         case .paneFocus: reply(focusPane(request))
         case .paneClose: reply(closePane(request))
-        case .paneSend: reply(sendToPane(request))
+        case .paneSend: sendToPane(request, hangup: hangup, reply: reply)
         case .paneKeys: reply(pressKeys(request))
         case .paneInterrupt: reply(interruptPane(request))
         case .paneRead: reply(readPane(request))
-        case .paneRun: runInPane(request, reply: reply)
+        case .paneRun: runInPane(request, hangup: hangup, reply: reply)
         case .paneGet: reply(getPane(request))
         case .paneWait: waitOnPane(request, hangup: hangup, reply: reply)
         case .worktreeList: listWorktrees(request, reply: reply)

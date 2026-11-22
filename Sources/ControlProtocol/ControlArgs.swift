@@ -34,8 +34,10 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var outliveParent: Bool?
     /// Text `pane.wait` answers on once it appears in the pane's output.
     public var output: String?
-    /// Seconds `pane.wait` holds before it answers `timeout`.
+    /// Seconds `pane.wait`, or a `pane.send` that waits, holds before it answers `timeout`.
     public var timeout: Int?
+    /// `pane.send` answers as `pane.wait` on its target once the text is in.
+    public var wait: Bool?
     /// Which of the caller's children `pane.wait` waits on, in place of a pane.
     public var children: WaitChildren?
 
@@ -45,7 +47,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil,
         branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
         output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
-        keep: Bool? = nil, outliveParent: Bool? = nil, children: WaitChildren? = nil
+        keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil, children: WaitChildren? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -68,6 +70,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.name = name
         self.output = output
         self.timeout = timeout
+        self.wait = wait
         self.task = task
         self.split = split
         self.keep = keep
@@ -77,7 +80,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, branch, base
-        case existing, open, name, output, timeout, task, split, keep, children
+        case existing, open, name, output, timeout, task, split, keep, wait, children
         case outliveParent = "outlive_parent"
     }
 }

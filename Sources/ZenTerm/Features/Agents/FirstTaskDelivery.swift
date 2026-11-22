@@ -3,7 +3,7 @@ import Foundation
 import TerminalKit
 
 final class FirstTaskDelivery {
-    static let readinessWindow: TimeInterval = 60
+    static let readinessWindow = TimeInterval(ControlWire.longestFirstTaskWait)
 
     private struct Pending {
         let send: () -> Void
