@@ -348,7 +348,11 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(ghost.titleInkForTesting, Theme.current.chrome.ink(.faint))
         XCTAssertEqual(ghost.detailForTesting, "")
         XCTAssertNil(ghost.tooltip, "a ghost takes no ⌘⌃ number")
-        XCTAssertEqual(rows(of: c)[2].variant, .nested(symbol: "arrow.triangle.branch"))
+        XCTAssertEqual(rows(of: c)[2].variant, .nested(.worktree))
+        let chip = try XCTUnwrap(rows(of: c)[2].processBadgeForTesting, "a worktree row draws no chip")
+        XCTAssertEqual(chip.process, .worktree)
+        XCTAssertTrue(chip.isDescendant(of: rows(of: c)[2]), "the chip is not in the row")
+        XCTAssertNil(rows(of: c)[1].processBadgeForTesting, "a workspace row is not a worktree")
         XCTAssertEqual(rows(of: c)[2].layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
     }
 
@@ -361,7 +365,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha: feature/one", "Alpha"])
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one"])
-        XCTAssertEqual(rows(of: c).map(\.variant), [.standard, .standard, .nested(symbol: "arrow.triangle.branch")])
+        XCTAssertEqual(rows(of: c).map(\.variant), [.standard, .standard, .nested(.worktree)])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting[2])
     }
 

@@ -412,7 +412,7 @@ final class SidebarAgentsTests: WindowTestCase {
         retitle(agent, "✳ Fix the sidebar")
         XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition: the title moved no state")
         XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the sidebar", "a new pane title re-renders the row")
-        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Idle, Workspace 1")
+        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Claude Code, Idle, Workspace 1")
 
         retitle(agent, "✳ Review the diff")
         XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Review the diff", "and so does the next")
@@ -423,7 +423,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(
             row.accessibilityLabel(), "Review the diff, Wants to run swift test",
             "VoiceOver names the row before its ask, or two asking rows sound alike")
-        XCTAssertEqual(row.accessibilityValue() as? String, "Waiting, Workspace 1")
+        XCTAssertEqual(row.accessibilityValue() as? String, "Claude Code, Waiting, Workspace 1")
         try hover(row, in: c)
         XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test", "the tooltip keeps the ask")
     }

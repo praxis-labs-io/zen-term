@@ -12,6 +12,7 @@ final class AgentNestingTests: WindowTestCase {
     private let originalPresence = WindowController.isPresent
     private var controllers: [WindowController] = []
     private var spawned: [RecordingSurface] = []
+    private let jobs = ProgramJobs()
 
     private struct Pane {
         let token: Int
@@ -41,6 +42,7 @@ final class AgentNestingTests: WindowTestCase {
         }
         controllers = []
         spawned = []
+        jobs.stopAll()
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         WindowController.isPresent = originalPresence
@@ -83,13 +85,15 @@ final class AgentNestingTests: WindowTestCase {
     }
 
     private func run(
-        _ cmd: String, from parent: Pane?, keep: Bool = false, outlivesParent: Bool = false, in c: WindowController
+        _ cmd: String, from parent: Pane?, keep: Bool = false, outlivesParent: Bool = false,
+        split: PaneDirection? = nil, in c: WindowController
     ) throws -> Pane {
         var reply: ControlReply?
         responder(c).respond(
             to: ControlRequest(
                 id: 1, cmd: .paneRun,
-                args: ControlArgs(cmd: cmd, keep: keep ? true : nil, outliveParent: outlivesParent ? true : nil),
+                args: ControlArgs(
+                    cmd: cmd, split: split, keep: keep ? true : nil, outliveParent: outlivesParent ? true : nil),
                 caller: parent.map { ControlCaller(pane: $0.token) })
         ) { reply = $0 }
         let result = try XCTUnwrap(try XCTUnwrap(reply).get() as? PaneRunResult)
@@ -141,16 +145,18 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.role), [.agent, .helper, .process])
         let parentRow = try row(of: root, in: c)
         XCTAssertFalse(parentRow.isNestedForTesting)
-        XCTAssertEqual(parentRow.leadingSymbolForTesting, "claude", "a top-level agent leads with its mark")
+        XCTAssertEqual(parentRow.leadingProcessForTesting?.name, "Claude Code", "a top-level agent leads with its chip")
+        XCTAssertNotNil(parentRow.processBadgeForTesting, "the row draws no chip for its agent")
         XCTAssertEqual(parentRow.frame.height, SidebarAgentRow.height)
         let helperRow = try row(of: helper, in: c)
         XCTAssertTrue(helperRow.isNestedForTesting)
-        XCTAssertEqual(helperRow.leadingSymbolForTesting, "claude", "a helper leads with its agent's mark")
+        XCTAssertEqual(helperRow.leadingProcessForTesting?.name, "Claude Code", "a helper leads with its agent's chip")
+        XCTAssertEqual(helperRow.processBadgeForTesting?.process?.name, "Claude Code")
         XCTAssertTrue(helperRow.showsStateForTesting, "a helper agent shows its own state")
         XCTAssertEqual(helperRow.frame.height, ChromeMetrics.Height.control)
         let processRow = try row(of: process, in: c)
         XCTAssertTrue(processRow.isNestedForTesting)
-        XCTAssertEqual(processRow.leadingSymbolForTesting, "terminal")
+        XCTAssertEqual(processRow.processBadgeForTesting?.process, .shell, "a process at its prompt shows the shell")
         XCTAssertFalse(processRow.showsStateForTesting, "a process row shows a state")
     }
 
@@ -164,17 +170,88 @@ final class AgentNestingTests: WindowTestCase {
             unmarked.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
         drainMainQueue()
 
-        XCTAssertEqual(try row(of: codex, in: c).leadingSymbolForTesting, "openai")
+        XCTAssertEqual(try row(of: codex, in: c).leadingProcessForTesting?.name, "Codex")
         XCTAssertEqual(try row(of: unmarked, in: c).itemForTesting?.role, .helper, "precondition: aider is an agent")
-        XCTAssertEqual(try row(of: unmarked, in: c).leadingSymbolForTesting, "bot")
+        XCTAssertEqual(try row(of: unmarked, in: c).leadingProcessForTesting, .unknownAgent)
         let promoted = try run("aider", from: nil, in: c)
         promoted.surface.delegate?.surface(
             promoted.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
         drainMainQueue()
         XCTAssertEqual(try row(of: promoted, in: c).itemForTesting?.role, .agent, "precondition")
         XCTAssertEqual(
-            try row(of: promoted, in: c).leadingSymbolForTesting, "bot",
+            try row(of: promoted, in: c).leadingProcessForTesting, .unknownAgent,
             "an agent with no mark leads with the robot, never a blank column")
+    }
+
+    func test_aProcessRowsChip_followsItsProgram_inAPaneNoTabChipShows() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let process = try run("htop", from: root, split: .right, in: c)
+        let place = try XCTUnwrap(c.pane(token: root.token))
+        c.focus(root.id, in: place.tab)
+        XCTAssertEqual(try XCTUnwrap(c.pane(token: process.token)).tab, place.tab, "precondition: one tab")
+        XCTAssertEqual(try row(of: process, in: c).processBadgeForTesting?.process, .shell, "precondition")
+
+        process.surface.foregroundProcessGroupID = try jobs.start(named: "htop")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(try row(of: process, in: c).processBadgeForTesting?.process?.name, "htop")
+
+        process.surface.foregroundProcessGroupID = 1
+        c.pollTitlesForTesting()
+        XCTAssertEqual(
+            try row(of: process, in: c).processBadgeForTesting?.process, .unknown,
+            "a program whose arguments cannot be read is not the resting shell")
+    }
+
+    func test_theDetailLine_namesTheWorkspace_andOnlyAnUnmarkedAgentAddsItsName() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let unmarked = try run("aider", from: nil, in: c)
+        unmarked.surface.delegate?.surface(
+            unmarked.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
+        drainMainQueue()
+
+        func lines(of row: NSView) -> [String] {
+            func labels(_ view: NSView) -> [NSTextField] {
+                view.subviews.flatMap { (($0 as? NSTextField).map { [$0] } ?? []) + labels($0) }
+            }
+            return labels(row).map(\.stringValue)
+        }
+        let workspace = try XCTUnwrap(c.workspaceNamesForTesting.first)
+        let title = try row(of: root, in: c).summaryTextForTesting
+        XCTAssertEqual(
+            lines(of: try row(of: root, in: c)).filter { $0 != title }, [workspace],
+            "a marked agent's chip already names it, so its detail is the workspace alone")
+        XCTAssertEqual(
+            try row(of: unmarked, in: c).summaryTextForTesting, "aider", "precondition: an untitled agent is its name")
+        XCTAssertEqual(
+            lines(of: try row(of: unmarked, in: c)), ["aider", workspace],
+            "a title that is already the name is not said again under it")
+
+        unmarked.surface.delegate?.surface(
+            unmarked.surface,
+            programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider", title: "Fix login"))
+        drainMainQueue()
+        XCTAssertTrue(lines(of: try row(of: unmarked, in: c)).contains("aider · \(workspace)"))
+    }
+
+    func test_aRowSpeaksTheProgramItsChipShows_unlessTheTitleAlreadyIsIt() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let editor = try run("nvim", from: root, in: c)
+        editor.surface.foregroundProcessGroupID = try jobs.start(named: "nvim")
+        c.pollTitlesForTesting()
+        let spoken = try row(of: editor, in: c).accessibilityValue() as? String
+        XCTAssertEqual(spoken?.hasPrefix("Neovim"), true, "VoiceOver hears the program, got \(spoken ?? "nothing")")
+
+        let unmarked = try run("aider", from: nil, in: c)
+        unmarked.surface.delegate?.surface(
+            unmarked.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
+        drainMainQueue()
+        XCTAssertFalse(
+            (try row(of: unmarked, in: c).accessibilityValue() as? String ?? "").contains("Agent"),
+            "the generic chip names no agent, so it says nothing")
     }
 
     func test_everyAgentMarkDrawsInItsRow_neverAnSFSymbolOfTheSameName() {
