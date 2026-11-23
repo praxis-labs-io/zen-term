@@ -44,10 +44,8 @@ final class FirstTaskDelivery {
 
     // Only a program waiting for input takes a task: one mid-turn or failing would lose it.
     private static func outcome(of status: TerminalProgramStatus) -> FirstTask {
-        switch status.state {
-        case .idle, .done: return .delivered
-        case .blocked: return .held(.blocked)
-        case .working, .failed: return .held(.notReady)
-        }
+        if TaskPickups.isReady(status) { return .delivered }
+        if case .blocked = status.state { return .held(.blocked) }
+        return .held(.notReady)
     }
 }
