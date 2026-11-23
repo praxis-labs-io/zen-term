@@ -117,6 +117,44 @@ final class LaunchedProgramShellTests: XCTestCase {
         XCTAssertEqual(try events(running: "exit 3", in: "/bin/zsh").sorted(), ["exited", "finished 3"])
         XCTAssertEqual(try events(running: "sleep 1; exit 5", in: "/bin/bash").sorted(), ["exited", "finished 5"])
         XCTAssertEqual(try events(running: "exit 6", in: "/bin/sh").sorted(), ["exited", "finished 6"])
+        XCTAssertEqual(try events(running: "exit 7", in: "/bin/ksh").sorted(), ["exited", "finished 7"])
+    }
+
+    // dash shows its traps only to itself, not to a `$(trap)`, so it gets no exit hook that could replace one.
+    func test_dashReportsAnExitCodeOnlyWhenItsCommandEndsOnItsOwn() throws {
+        XCTAssertEqual(try events(running: "false", in: "/bin/dash").sorted(), ["exited", "finished 1"])
+        XCTAssertEqual(try events(running: "exit 6", in: "/bin/dash").sorted(), ["exited"])
+    }
+
+    // An interactive shell needs a terminal, and the surface drops a repeated mark, so this reads the shell's own output.
+    private func exitMarks(running command: String, in shell: String) throws -> [String] {
+        var config = GeneralConfig.builtIn
+        config.shell = shell
+        GeneralConfig.setCurrentForTesting(config)
+        let launch = ShellLaunch.program(command, cwd: scratch, exitClosesPane: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        process.arguments = ["-q", "/dev/null", try XCTUnwrap(launch.command)] + launch.args
+        process.currentDirectoryURL = scratch
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+        try process.run()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 20) { if process.isRunning { process.terminate() } }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self).components(separatedBy: "\u{1b}]133;D;").dropFirst()
+            .map { String($0.prefix { $0 != "\u{07}" }) }
+    }
+
+    func test_theShellWritesTheExitMarkOnce() throws {
+        for shell in ["/bin/zsh", "/bin/bash", "/bin/sh", "/bin/ksh", "/bin/dash"] {
+            XCTAssertEqual(try exitMarks(running: "false", in: shell), ["1"], shell)
+        }
+        for shell in ["/bin/zsh", "/bin/bash", "/bin/sh", "/bin/ksh"] {
+            XCTAssertEqual(try exitMarks(running: "exit 3", in: shell), ["3"], shell)
+        }
     }
 
     func test_aCommandThatSetsItsOwnExitTrapStillReportsItsCode() throws {
@@ -126,27 +164,39 @@ final class LaunchedProgramShellTests: XCTestCase {
             try events(running: "trap 'echo bye' EXIT; false", in: "/bin/bash").sorted(), ["exited", "finished 1"])
     }
 
-    func test_anExitTrapFromTheUsersStartupFilesStillRuns() throws {
-        let marker = scratch.appendingPathComponent("rc-trap-ran")
-        let rc = scratch.appendingPathComponent("rc.sh")
-        try "trap 'echo ran > \"\(marker.path)\"' EXIT\n".write(to: rc, atomically: true, encoding: .utf8)
-        XCTAssertEqual(
-            try events(running: "true", in: "/bin/sh", env: ["ENV": rc.path]).sorted(), ["exited", "finished 0"])
-        run { FileManager.default.fileExists(atPath: marker.path) }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path), "the startup file's EXIT trap never ran")
+    func test_anExitTrapFromTheUsersStartupFilesStillRunsWithTheExitStatus() throws {
+        for shell in ["/bin/sh", "/bin/ksh"] {
+            let marker = scratch.appendingPathComponent("rc-trap-\(URL(fileURLWithPath: shell).lastPathComponent)")
+            let rc = scratch.appendingPathComponent("rc.sh")
+            try "trap 'echo \"it'\\''s $?\" > \"\(marker.path)\"' EXIT\n".write(
+                to: rc, atomically: true, encoding: .utf8)
+            XCTAssertEqual(
+                try events(running: "exit 3", in: shell, env: ["ENV": rc.path]).sorted(), ["exited", "finished 3"],
+                shell)
+            run { FileManager.default.fileExists(atPath: marker.path) }
+            XCTAssertEqual(try? String(contentsOf: marker, encoding: .utf8), "it's 3\n", shell)
+        }
     }
 
-    func test_aKeptPaneWhoseCommandEndsInTheShellsOwnExitReportsItsCodeAndStaysOpen() throws {
-        XCTAssertEqual(try events(keeping: "exit 5", in: "/bin/zsh"), ["finished 5"])
-        XCTAssertEqual(try events(keeping: "sleep 1; exit 2", in: "/bin/bash"), ["finished 2"])
+    func test_aKeptPaneWhoseCommandEndsInTheShellsOwnExitReportsItsCode() throws {
+        XCTAssertEqual(try events(keeping: "exit 5", in: "/bin/zsh").sorted(), ["exited", "finished 5"])
+        XCTAssertEqual(try events(keeping: "sleep 1; exit 2", in: "/bin/bash").sorted(), ["exited", "finished 2"])
+    }
+
+    func test_aKeptPaneReportsItsCommandsCodeOnceAndStaysOpen() throws {
+        XCTAssertEqual(try events(keeping: "false", in: "/bin/zsh"), ["finished 1"])
+        XCTAssertEqual(try events(keeping: "true", in: "/bin/bash"), ["finished 0"])
     }
 
     func test_theLaunchedCommandIsThePanesForegroundProgram() throws {
         for shell in ["/bin/zsh", "/bin/bash", "/bin/sh"] {
-            for closes in [true, false] {
-                let surface = try launch("sleep 100", in: shell, exitClosesPane: closes).surface
-                XCTAssertEqual(foregroundProgram(of: surface, becoming: "sleep"), "sleep", "\(shell), closes \(closes)")
-                XCTAssertFalse(atShell(surface), "\(shell), closes \(closes)")
+            for command in ["sleep 100", "sleep 100 && true"] {
+                for closes in [true, false] {
+                    let surface = try launch(command, in: shell, exitClosesPane: closes).surface
+                    let label = "\(shell), \(command), closes \(closes)"
+                    XCTAssertEqual(foregroundProgram(of: surface, becoming: "sleep"), "sleep", label)
+                    XCTAssertFalse(atShell(surface), label)
+                }
             }
         }
     }
@@ -162,16 +212,21 @@ final class LaunchedProgramShellTests: XCTestCase {
         }
     }
 
-    // An interactive zsh drops the rest of its `-c` list once a job dies of SIGINT, so it prints no mark.
-    func test_interruptingTheForegroundGroupEndsTheLaunchedCommand() throws {
-        for (shell, ended) in [("/bin/zsh", ["exited"]), ("/bin/bash", ["exited", "finished 130"])] {
-            let (surface, recorder) = try launch("sleep 100", in: shell)
-            XCTAssertEqual(foregroundProgram(of: surface, becoming: "sleep"), "sleep", shell)
+    func test_interruptingTheForegroundGroupEndsTheLaunchedCommandWithItsCode() throws {
+        let cases = [
+            ("/bin/zsh", true, ["exited", "finished 130"]), ("/bin/bash", true, ["exited", "finished 130"]),
+            ("/bin/zsh", false, ["exited", "finished 130"]), ("/bin/bash", false, ["finished 130"]),
+        ]
+        for (shell, closes, ended) in cases {
+            let (surface, recorder) = try launch("sleep 100", in: shell, exitClosesPane: closes)
+            let label = "\(shell), closes \(closes)"
+            XCTAssertEqual(foregroundProgram(of: surface, becoming: "sleep"), "sleep", label)
             let group = try XCTUnwrap(surface.foregroundProcessGroupID)
             guard group != getpgrp() else { return XCTFail("a signal to the test's own group would end the test run") }
             XCTAssertTrue(ControlResponder.interrupt(group: group))
             run { recorder.events.sorted() == ended }
-            XCTAssertEqual(recorder.events.sorted(), ended, shell)
+            run(until: { recorder.events.contains("exited") || atShell(surface) }, timeout: 5)
+            XCTAssertEqual(recorder.events.sorted(), ended, label)
         }
     }
 }

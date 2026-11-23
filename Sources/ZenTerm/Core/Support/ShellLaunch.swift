@@ -34,10 +34,14 @@ enum ShellLaunch {
         let sh = userShell
         let tail = exitClosesPane ? "" : "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i"
         let title = titling(command, for: sh)
-        let script =
-            exitClosesPane || marksExit || isAgent(command)
-            ? "\(title)\(commandStart)\(contained(command, for: sh)); \(commandFinish(for: sh))\(tail)"
-            : "\(title)\(command); \(tail)"
+        let script: String
+        if !(exitClosesPane || marksExit || isAgent(command)) {
+            script = "\(title)\(command); \(tail)"
+        } else if let hook = exitHook(for: sh) {
+            script = "\(title)\(onceMark)\(hook)\(commandStart)\(command)\n__zen_mark $?; \(tail)"
+        } else {
+            script = "\(title)\(commandStart)\(command); \(commandFinish(for: sh))\(tail)"
+        }
         return TerminalSurfaceConfig(
             command: sh,
             args: ["-l", "-i", "-c", script],
@@ -78,9 +82,23 @@ enum ShellLaunch {
         return "printf '\\033]133;D;%d\\007' \(status); "
     }
 
-    // A subshell keeps a builtin `exit` from skipping the mark after it; fish's `( )` is command substitution.
-    private static func contained(_ command: String, for shell: String) -> String {
-        URL(fileURLWithPath: shell).lastPathComponent == "fish" ? command : "( \(command)\n)"
+    // Both the inline mark and the exit hook call it, and only the first prints.
+    private static let onceMark =
+        "__zen_mark() { [ -n \"${__zen_marked-}\" ] || { __zen_marked=1; printf '\\033]133;D;%d\\007' \"$1\"; }; "
+        + "return \"$1\"; }; "
+
+    // A builtin `exit` skips the inline mark, so a POSIX shell also marks on exit, chained onto any EXIT trap the rc set.
+    private static func exitHook(for shell: String) -> String? {
+        let chainedTrap = "trap '__zen_mark $?; eval \"$__zen_prev\"' EXIT; "
+        let bashChain = "eval \"set -- $(trap -p EXIT)\"; __zen_prev=${3-}; set --; \(chainedTrap)"
+        switch URL(fileURLWithPath: shell).lastPathComponent {
+        case "zsh": return "__zen_exit_mark() { __zen_mark $?; }; zshexit_functions+=(__zen_exit_mark); "
+        case "bash": return bashChain
+        case "sh": return "if [ -n \"${BASH_VERSION-}\" ]; then \(bashChain)fi; "
+        case "ksh": return "__zen_prev=$(trap -p EXIT); \(chainedTrap)"
+        case "dash": return ""
+        default: return nil
+        }
     }
 
     /// libghostty's `.zshenv` restores `ZDOTDIR`, so the `exec`'d zsh needs the redirect restaged.

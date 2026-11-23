@@ -332,7 +332,8 @@ parent's own `pane.close` on its child is not refused over the child's work (`pa
 that quits while its pane stays open closes nothing.
 
 The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
-the way `tab.new` and `pane.split` run a `cmd`.
+the way `tab.new` and `pane.split` run a `cmd`, unless the command ends in its shell's own `exit`
+or, under zsh, an interrupt ends it.
 
 `name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
 digits. The name then addresses the pane anywhere a token does, until it closes.
@@ -449,9 +450,10 @@ Holds until something happens to the pane, then answers once with why:
 - The program is the pane's foreground job, an agent included. A pane at a shell prompt waits
   for the next command to finish. An agent that sends no `status` waits as a plain program does.
 - `exitCode` is the shell's report through its integration, and is absent when the shell
-  integration is off. A `pane.run` command reports none when it ends in fish's own `exit`, or
-  when an interrupt ends it under zsh. `text` is the last 40 lines. Both are absent for a pane
-  that closed, unless `pane.run` opened it.
+  integration is off. A `pane.run` command that ends in its shell's own `exit` reports none
+  under a shell other than sh, bash, zsh and ksh, or under bash, sh and ksh once it set an `EXIT`
+  trap of its own. `text` is the last 40 lines. Both are absent for a pane that closed, unless
+  `pane.run` opened it.
 - `output` is matched within one line of the screen's rows, without escapes, so a newline in it
   is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
