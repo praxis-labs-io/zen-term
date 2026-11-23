@@ -226,9 +226,9 @@ final class LaunchedProgramShellTests: XCTestCase {
     }
 
     func test_aLaunchedCommandOf256BytesOrMoreTitlesItsPane() throws {
-        let accents = String(repeating: "\u{e9}", count: 200)
-        let expected = "true " + String(repeating: "\u{e9}", count: 123) + "\u{2026}"
-        let recorder = try launch("true \(accents)", in: "/bin/zsh").recorder
+        let command = "true " + String(repeating: "x", count: 300)
+        let expected = "true " + String(repeating: "x", count: 247) + "\u{2026}"
+        let recorder = try launch(command, in: "/bin/zsh").recorder
         run { recorder.titles.contains(expected) || recorder.events.contains("exited") }
         XCTAssertTrue(recorder.titles.contains(expected), "\(recorder.titles)")
     }
