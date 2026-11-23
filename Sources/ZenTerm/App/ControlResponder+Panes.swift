@@ -148,7 +148,10 @@ extension ControlResponder {
             return .success(place)
         }
         guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
-        paste(request.args.text ?? "", from: request.caller?.pane, into: place, enter: request.args.enter == true)
+        let text = request.args.text ?? ""
+        let enter = request.args.enter == true
+        paste(text, from: request.caller?.pane, into: place, enter: enter)
+        if enter, !text.isEmpty { place.window.noteTaskSubmitted(to: place.pane) }
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }
@@ -171,7 +174,6 @@ extension ControlResponder {
         let surface = place.pane.surface
         if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
         if enter { surface.submit() }
-        if enter, !text.isEmpty { place.window.noteTaskSubmitted(to: place.pane) }
         paneWaits.sent(to: place.pane.surfaceID)
     }
 
