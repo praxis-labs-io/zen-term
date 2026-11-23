@@ -74,6 +74,18 @@ final class ModeChromeMotionTests: WindowTestCase {
         waitUntil(bar.isHidden, "the bar to hide once it has slid out")
     }
 
+    func test_aLeavingBar_takesNoClicks() throws {
+        let bar = try XCTUnwrap(chrome.setFindBarShown(true))
+        window.contentView?.layoutSubtreeIfNeeded()
+        let center = NSPoint(x: bar.frame.midX, y: bar.frame.midY)
+        XCTAssertNotNil(bar.hitTest(center), "premise: a shown bar takes clicks")
+
+        chrome.setFindBarShown(false)
+
+        XCTAssertFalse(bar.isHidden, "premise: the bar is still sliding out")
+        XCTAssertNil(bar.hitTest(center), "a click on the leaving bar would focus a field nothing listens to")
+    }
+
     func test_reopeningTheBarWhileItLeaves_keepsItUp() throws {
         let bar = try XCTUnwrap(chrome.setFindBarShown(true))
         chrome.setFindBarShown(false)

@@ -83,6 +83,7 @@ final class ModeChrome {
         guard shown else {
             guard isFindBarShown, let findBar, let contentBottomToFindBar else { return nil }
             isFindBarShown = false
+            findBar.isDismissed = true
             contentBottomToFindBar.isActive = false
             contentBottomToContainer.isActive = true
             slide(findBar, appearing: false, fromBottom: true)
@@ -91,6 +92,7 @@ final class ModeChrome {
         let bar = findBar ?? makeFindBar()
         guard !isFindBarShown else { return bar }
         isFindBarShown = true
+        bar.isDismissed = false
         contentBottomToContainer.isActive = false
         contentBottomToFindBar?.isActive = true
         slide(bar, appearing: true, fromBottom: true)

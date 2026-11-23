@@ -8,6 +8,7 @@ final class FindBarView: NSView, ThemeReapplying {
     var onChange: ((String) -> Void)?
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
+    var isDismissed = false
 
     /// Setting it doesn't fire `onChange`, so a seed from a selection doesn't re-run its search.
     var needle: String {
@@ -77,6 +78,8 @@ final class FindBarView: NSView, ThemeReapplying {
     func focusField() {
         window?.makeFirstResponder(field)
     }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { isDismissed ? nil : super.hitTest(point) }
 
     var countTextForTesting: String { count.stringValue }
 
