@@ -52,7 +52,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private weak var subtitleLine: NSTextField?
     private let subtitleTip = TooltipHost(label: "")
     var onChoose: () -> Void
-    // Set by a list with a keyboard cursor: the pointer moves the cursor, whose fill stands in for hover.
+    // The pointer moves a list's cursor instead of filling its own row, or two rows would look chosen.
     var onPointerEnter: (() -> Void)? {
         didSet { refreshFill() }
     }
@@ -364,7 +364,6 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         refreshFill()
     }
 
-    // A list with a keyboard cursor suppresses hover too, or the hovered row and the cursor's row would both look chosen.
     func setHoverSuppressed(_ suppressed: Bool) {
         guard suppressed != isHoverSuppressed else { return }
         isHoverSuppressed = suppressed

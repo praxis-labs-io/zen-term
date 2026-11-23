@@ -112,7 +112,7 @@ final class BranchField: NSView, ThemeReapplying {
     }
 
     private func highlightPointed(_ index: Int) {
-        guard index != highlighted, rowViews.indices.contains(index) else { return }
+        guard popover.isOpen, index != highlighted, rowViews.indices.contains(index) else { return }
         highlighted = index
         for (position, row) in rowViews.enumerated() { row.isHighlighted = position == index }
     }
