@@ -52,6 +52,16 @@ enum FormCard {
         return content
     }
 
+    static func footer(_ actions: ModalActionBar, failure: FormErrorLabel) -> NSStackView {
+        let stack = NSStackView(views: [failure, actions])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = ChromeMetrics.Spacing.s10
+        stack.setHuggingPriority(.defaultLow, for: .horizontal)
+        for view in stack.arrangedSubviews { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        return stack
+    }
+
     static func revealTarget(for stop: NSView) -> NSView {
         var view: NSView? = stop
         while let current = view {

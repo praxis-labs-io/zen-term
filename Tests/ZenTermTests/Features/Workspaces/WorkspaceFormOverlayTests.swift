@@ -6,8 +6,10 @@ import XCTest
 final class WorkspaceFormOverlayTests: WindowTestCase {
     private final class Sink {
         var submitted: [Workspace] = []
+        var submitFailure: String?
         var cancelled = 0
         var deleted = 0
+        var deleteFailure: String?
     }
 
     private var window: NSWindow?
@@ -23,10 +25,17 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         let sink = Sink()
         let overlay = WorkspaceFormOverlay(
             editing: editing, existingTitles: existingTitles,
-            onSubmit: { sink.submitted.append($0) },
+            onSubmit: {
+                sink.submitted.append($0)
+                return sink.submitFailure
+            },
             onCancel: { sink.cancelled += 1 },
             onDismiss: {},
-            onDelete: withDelete ? { sink.deleted += 1 } : nil)
+            onDelete: withDelete
+                ? {
+                    sink.deleted += 1
+                    return sink.deleteFailure
+                } : nil)
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 900),
@@ -45,6 +54,10 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
 
     private func button(in overlay: NSView, title: String) -> AppButton? {
         descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
+    }
+
+    private func confirmCard(in overlay: NSView) -> ConfirmCard? {
+        descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first
     }
 
     private func visibleText(in overlay: NSView) -> [String] {
@@ -112,6 +125,35 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertTrue(sink.submitted.isEmpty)
     }
 
+    func test_aFailedSave_showsInlineAboveTheButtons_andEditingClearsIt() throws {
+        let (overlay, sink) = mount()
+        sink.submitFailure = "Couldn't write the workspaces file: the volume is read-only."
+        typeFolder(try makeRealDir().path, in: overlay)
+
+        try save(overlay)
+
+        XCTAssertEqual(sink.submitted.count, 1)
+        XCTAssertTrue(visibleText(in: overlay).contains(try XCTUnwrap(sink.submitFailure)))
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: overlay, title: "Add Workspace")), in: window))
+
+        overlay.titleFieldForTesting.onChange?()
+        XCTAssertFalse(visibleText(in: overlay).contains(try XCTUnwrap(sink.submitFailure)))
+    }
+
+    func test_aFailedDelete_showsInline_andFocusesDelete() throws {
+        let existing = Workspace(title: "api", path: try makeRealDir(), tabs: [], env: [:], carry: [])
+        let (overlay, sink) = mount(editing: existing, withDelete: true)
+        sink.deleteFailure = "Couldn't write the workspaces file: the volume is read-only."
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+
+        delete.onTap()
+        try XCTUnwrap(button(in: try XCTUnwrap(confirmCard(in: overlay)), title: "Delete")).onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+        XCTAssertTrue(visibleText(in: overlay).contains(try XCTUnwrap(sink.deleteFailure)))
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window))
+    }
+
     func test_theAddCard_opensWithOneShellTab_focusedOnItsMainPane() throws {
         let (overlay, _) = mount()
 
@@ -130,8 +172,76 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertTrue(visibleText(in: overlay).contains("Edit Workspace"))
         XCTAssertNotNil(button(in: overlay, title: "Save"))
         XCTAssertNil(button(in: overlay, title: "Add Workspace"))
+        XCTAssertNotNil(button(in: overlay, title: "Delete"))
+        XCTAssertEqual(sink.deleted, 0)
+    }
+
+    func test_delete_asksFirst_withFocusOnCancel_andOnlyConfirmingDeletes() throws {
+        let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+
         try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        let card = try XCTUnwrap(confirmCard(in: overlay))
+        XCTAssertTrue(visibleText(in: card).contains("Delete zen-term"))
+        XCTAssertTrue(
+            visibleText(in: card).contains(
+                "Deleting zen-term removes its tabs, layout and environment. The folder stays."))
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+        XCTAssertEqual(sink.deleted, 0)
+
+        try XCTUnwrap(button(in: card, title: "Delete")).onTap()
+
         XCTAssertEqual(sink.deleted, 1)
+    }
+
+    func test_cancellingTheDeleteCard_deletesNothing_andFocusReturnsToDelete() throws {
+        let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+        delete.onTap()
+
+        try XCTUnwrap(button(in: try XCTUnwrap(confirmCard(in: overlay)), title: "Cancel")).onTap()
+
+        XCTAssertEqual(sink.deleted, 0)
+        XCTAssertEqual(sink.cancelled, 0)
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window))
+    }
+
+    func test_aDeleteThatLeavesTheFormUp_returnsFocusToDelete() throws {
+        let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+        delete.onTap()
+
+        try XCTUnwrap(button(in: try XCTUnwrap(confirmCard(in: overlay)), title: "Delete")).onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window), "a failed delete keeps the keyboard in the form")
+    }
+
+    func test_escapeOnTheDeleteCard_closesOnlyTheCard() throws {
+        let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+        XCTAssertTrue(overlay.isShowingOverlaidCard)
+
+        _ = window!.contentView!.performKeyEquivalent(with: try escapeKey())
+
+        XCTAssertEqual(sink.deleted, 0)
+        XCTAssertEqual(sink.cancelled, 0)
+        waitUntil(!overlay.isShowingOverlaidCard, "the card to leave")
+    }
+
+    func test_commandReturn_underTheDeleteCard_doesNotSave() throws {
+        let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        _ = window!.contentView!.performKeyEquivalent(with: try key(36, "\r", flags: .command))
+
+        XCTAssertEqual(sink.submitted, [])
+        XCTAssertEqual(sink.deleted, 0)
     }
 
     func test_deleteWhileDismissing_doesNotDelete() throws {

@@ -1,13 +1,20 @@
-import AgentSetup
 import AppKit
 import TerminalKit
 import XCTest
 
+@testable import AgentSetup
 @testable import ZenTerm
 
 final class ClaudeSetupOfferTests: WindowTestCase {
     private static let offerTitle = "Teach Claude Code to use zen?"
-    private let files = ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8))
+    private static let updateTitle = "Update zen for Claude Code?"
+    private static let updatedTitle = "Updated zen for Claude Code"
+    private let files = ClaudeSetupFiles(
+        skill: Data("skill".utf8), hook: Data("hook".utf8),
+        shippedDigests: [
+            ClaudeSetupFiles.digest(of: Data("older".utf8)), ClaudeSetupFiles.digest(of: Data("hook".utf8)),
+        ])
+    private let edited = Data("my own skill".utf8)
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private let originalPresence = WindowController.isPresent
@@ -64,10 +71,28 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     private func offerToast(in c: WindowController) -> ToastView? {
+        toast(titled: Self.offerTitle, in: c)
+    }
+
+    private func toast(titled title: String, in c: WindowController) -> ToastView? {
         guard let content = c.window.contentView else { return nil }
         return descendants(of: content).compactMap { $0 as? ToastView }.first {
-            !$0.isDismissing && descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == Self.offerTitle }
+            !$0.isDismissing && descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == title }
         }
+    }
+
+    private func install(skill: Data) throws {
+        let setup = ClaudeSetup(configRoot: try claudeRoot(), files: files)
+        _ = try setup.install()
+        try skill.write(to: setup.skillURL)
+    }
+
+    private func installedSkill() throws -> Data {
+        try Data(contentsOf: ClaudeSetup(configRoot: try claudeRoot(), files: files).skillURL)
+    }
+
+    private func state() throws -> ClaudeSetup.State {
+        try ClaudeSetup(configRoot: try claudeRoot(), files: files).state()
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -167,15 +192,112 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         XCTAssertNil(offerToast(in: c))
     }
 
-    func test_anOutdatedSetupIsLeftToSettings() throws {
-        let older = ClaudeSetupFiles(skill: Data("older".utf8), hook: files.hook)
-        _ = try ClaudeSetup(configRoot: try claudeRoot(), files: older).install()
+    func test_anOlderShippedSetupIsUpdatedInPlace() throws {
+        try install(skill: Data("older".utf8))
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+
+        waitUntil(toast(titled: Self.updatedTitle, in: c) != nil, "the update notice")
+        XCTAssertEqual(try state(), .current)
+        XCTAssertNil(toast(titled: Self.updateTitle, in: c))
+    }
+
+    func test_anInstallDeclinedEarlierStillUpdatesWhatIsInstalled() throws {
+        defaults.set(true, forKey: ClaudeSetupOffer.declinedKey)
+        try install(skill: Data("older".utf8))
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+
+        waitUntil(toast(titled: Self.updatedTitle, in: c) != nil, "the update notice")
+        XCTAssertEqual(try state(), .current)
+    }
+
+    func test_anUpdateThatCannotWriteSaysWhy() throws {
+        try install(skill: Data("older".utf8))
+        let folder = try claudeRoot().appendingPathComponent("skills/zen")
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+
+        waitUntil(toastTexts(in: c).contains(WindowController.claudeUpdateFailedTitle), "the failure")
+        XCTAssertNil(toast(titled: Self.updatedTitle, in: c))
+        XCTAssertEqual(try installedSkill(), Data("older".utf8))
+    }
+
+    func test_anEditedSetupIsOfferedAndLeftAsItIs() throws {
+        try install(skill: edited)
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+
+        waitUntil(toast(titled: Self.updateTitle, in: c) != nil, "the update offer")
+        XCTAssertTrue(toastTexts(in: c).contains(WindowController.claudeUpdateOfferMessage))
+        XCTAssertEqual(try installedSkill(), edited)
+    }
+
+    func test_anEditedSetupIsNotOfferedOnceSetupWasDeclined() throws {
+        defaults.set(true, forKey: ClaudeSetupOffer.declinedKey)
+        try install(skill: edited)
         let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
 
         try start("claude", in: c)
         settle()
 
-        XCTAssertNil(offerToast(in: c))
+        XCTAssertNil(toast(titled: Self.updateTitle, in: c))
+        XCTAssertEqual(try installedSkill(), edited)
+    }
+
+    func test_updateReplacesAnEditedSetup() throws {
+        try install(skill: edited)
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        try start("claude", in: c)
+        waitUntil(toast(titled: Self.updateTitle, in: c) != nil, "the update offer")
+
+        try press("Update", on: try XCTUnwrap(toast(titled: Self.updateTitle, in: c)))
+
+        waitUntil(toast(titled: Self.updatedTitle, in: c) != nil, "the update confirmation")
+        XCTAssertFalse(toastTexts(in: c).contains("Claude Code can use zen"))
+        XCTAssertEqual(try state(), .current)
+    }
+
+    func test_aSetupALaterBuildInstalledIsLeftQuietly() throws {
+        let later = ClaudeSetupFiles(skill: Data("later skill".utf8), hook: files.hook, build: 20)
+        _ = try ClaudeSetup(configRoot: try claudeRoot(), files: later).install()
+        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
+            skill: files.skill, hook: files.hook, shippedDigests: files.shippedDigests, build: 10)
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+        settle()
+
+        XCTAssertNil(toast(titled: Self.updateTitle, in: c))
+        XCTAssertNil(toast(titled: Self.updatedTitle, in: c))
+        XCTAssertEqual(try installedSkill(), later.skill)
+    }
+
+    func test_skipThisVersionStopsTheOfferUntilTheFilesChange() throws {
+        try install(skill: edited)
+        let first = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        try start("claude", in: first)
+        waitUntil(toast(titled: Self.updateTitle, in: first) != nil, "the update offer")
+        try press("Skip this version", on: try XCTUnwrap(toast(titled: Self.updateTitle, in: first)))
+
+        let later = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        try start("claude", in: later)
+        settle()
+        XCTAssertNil(toast(titled: Self.updateTitle, in: later))
+        XCTAssertEqual(try installedSkill(), edited)
+
+        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
+            skill: Data("newer skill".utf8), hook: files.hook, shippedDigests: files.shippedDigests)
+        let newerBuild = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        try start("claude", in: newerBuild)
+        waitUntil(toast(titled: Self.updateTitle, in: newerBuild) != nil, "the offer for a newer build")
+        XCTAssertEqual(try installedSkill(), edited)
     }
 
     func test_setUpInstallsAndConfirms() throws {
@@ -201,13 +323,18 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_offerCopyFitsTheToast() {
-        for line in WindowController.claudeSetupOfferMessage(in: "~/.claude").split(separator: "\n") {
+        let messages = [
+            WindowController.claudeSetupOfferMessage(in: "~/.claude"), WindowController.claudeUpdateOfferMessage,
+        ]
+        for line in messages.flatMap({ $0.split(separator: "\n") }) {
             let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.messageMaxWidth, "wraps: \(line)")
         }
         let titleRoom = ToastView.messageMaxWidth - ChromeMetrics.Height.xs - ChromeMetrics.Spacing.s6
-        let title = Self.offerTitle as NSString
-        XCTAssertLessThanOrEqual(
-            title.size(withAttributes: [.font: ChromeType.font(.body, weight: .semibold)]).width, titleRoom)
+        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.claudeUpdateFailedTitle] {
+            let width = (title as NSString).size(withAttributes: [.font: ChromeType.font(.body, weight: .semibold)])
+                .width
+            XCTAssertLessThanOrEqual(width, titleRoom, "wraps: \(title)")
+        }
     }
 }

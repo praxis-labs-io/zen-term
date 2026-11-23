@@ -13,7 +13,8 @@ struct SetupCommands: ParsableCommand {
             discussion: """
                 Writes skills/zen/SKILL.md and hooks/zenterm-context.sh in $CLAUDE_CONFIG_DIR, or ~/.claude \
                 when it is unset, and adds the hook under hooks.SessionStart in settings.json. Every other \
-                entry in settings.json stays. Run it again after a ZenTerm update to refresh both.
+                entry in settings.json stays. ZenTerm updates both when Claude starts after an app update, \
+                and asks first when either has edits. This command replaces them without asking.
                 """)
 
         @Flag(help: "Remove what setup installed instead.")
