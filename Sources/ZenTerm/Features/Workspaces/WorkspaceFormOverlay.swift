@@ -460,7 +460,12 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
                 message: "Deleting \(name) removes its tabs, layout and environment. The folder stays.",
                 confirmLabel: "Delete",
                 onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.deleteButton) } },
-                onConfirm: { [weak self] in self?.confirm.dismiss { self?.onDelete?() } }))
+                onConfirm: { [weak self] in self?.confirm.dismiss { self?.performDelete() } }))
+    }
+
+    private func performDelete() {
+        onDelete?()
+        if !isDismissing { focus(deleteButton) }
     }
 
     private var folderName: String { WorkspaceForm.folderName(folderPicker.text) }

@@ -170,6 +170,18 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window))
     }
 
+    func test_aDeleteThatLeavesTheFormUp_returnsFocusToDelete() throws {
+        let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+        delete.onTap()
+
+        try XCTUnwrap(button(in: try XCTUnwrap(confirmCard(in: overlay)), title: "Delete")).onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window), "a failed delete keeps the keyboard in the form")
+    }
+
     func test_escapeOnTheDeleteCard_closesOnlyTheCard() throws {
         let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
         let (overlay, sink) = mount(editing: ws, withDelete: true)

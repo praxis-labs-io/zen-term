@@ -371,6 +371,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
 
     private func delete() {
         guard !isDismissing, let editingFloat, confirm.card == nil else { return }
+        endCapture()
         errorLabel.clear()
         let name = editingFloat.title
         confirm.present(
