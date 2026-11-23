@@ -531,6 +531,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
                 descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Remove" })
 
             remove.onTap()
+            try confirmRemove(in: overlay)
             waitUntil(form(in: content) == nil && rows(in: content).count == 2, "Settings to come back")
             settle()
 
@@ -552,6 +553,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             }
 
             remove.onTap()
+            try confirmRemove(in: overlay)
 
             XCTAssertNotNil(form(in: content))
             XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha"])
@@ -561,6 +563,11 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
                 "\(texts.map(\.stringValue))")
             XCTAssertIdentical(c.window.firstResponder, remove)
         }
+    }
+
+    private func confirmRemove(in overlay: NSView) throws {
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        try XCTUnwrap(descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == "Remove" }).onTap()
     }
 
     private func escape() -> NSEvent {

@@ -96,16 +96,21 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertNil(inlineMessage(in: overlay))
     }
 
-    func test_aBranchTheMainCheckoutHolds_asksBeforeMovingIt() throws {
+    func test_aBranchTheMainCheckoutHolds_saysTheCheckoutMoves_andCreatesWithoutAsking() throws {
         let (overlay, sink) = mount(
-            branches: ["feature/zen-473"],
+            branches: ["feature/zen-473"], defaultBase: "origin/main",
             holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
 
         type("feature/zen-473", into: overlay)
+        XCTAssertTrue(
+            visibleText(in: overlay).contains(
+                NewWorktreeOverlay.moveMainCheckoutMessage("feature/zen-473", to: "origin/main")),
+            "\(visibleText(in: overlay))")
         try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
 
-        XCTAssertTrue(sink.submitted.isEmpty, "nothing is created until the question is answered")
-        XCTAssertTrue(visibleText(in: overlay).contains("Move Your Main Checkout"))
+        XCTAssertEqual(sink.submitted, [.existingBranch("feature/zen-473")])
+        XCTAssertFalse(overlay.isShowingOverlaidCard)
+        XCTAssertFalse(descendants(of: overlay).contains { $0 is ConfirmCard })
     }
 
     func test_theDefaultBranchUnderTheMainCheckout_isRefusedRatherThanConfirmed() throws {
@@ -120,8 +125,6 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertEqual(
             inlineMessage(in: overlay),
             "main is the default branch, so your main checkout cannot move off it.")
-        XCTAssertFalse(
-            visibleText(in: overlay).contains("Move Your Main Checkout"), "no confirm was shown")
     }
 
     func test_submitting_takesTheSuggestionListDown() throws {
@@ -132,78 +135,6 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
 
         XCTAssertFalse(branchListIsOpen(in: overlay))
-    }
-
-    func test_withTheConfirmUp_theCardReportsAnOverlaidCard() throws {
-        let (overlay, _) = mount(
-            branches: ["feature/zen-473"],
-            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
-        XCTAssertFalse(overlay.isShowingOverlaidCard)
-
-        type("feature/zen-473", into: overlay)
-        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
-
-        XCTAssertTrue(overlay.isShowingOverlaidCard)
-    }
-
-    func test_confirmingTheMove_submitsTheExistingBranch() throws {
-        let (overlay, sink) = mount(
-            branches: ["feature/zen-473"],
-            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
-        type("feature/zen-473", into: overlay)
-        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
-
-        try XCTUnwrap(button(in: confirmCard(in: overlay), title: "Create Worktree")).onTap()
-
-        XCTAssertEqual(sink.submitted.first, .existingBranch("feature/zen-473"))
-    }
-
-    func test_cancellingTheMove_createsNothing() throws {
-        let (overlay, sink) = mount(
-            branches: ["feature/zen-473"],
-            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
-        type("feature/zen-473", into: overlay)
-        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
-
-        try XCTUnwrap(button(in: confirmCard(in: overlay), title: "Cancel")).onTap()
-
-        XCTAssertTrue(sink.submitted.isEmpty)
-    }
-
-    func test_cancellingTheMove_putsTheKeyboardBackInTheBranchField() throws {
-        Motion.isReduceMotionEnabled = { false }
-        let (overlay, _) = mount(
-            branches: ["feature/zen-473"],
-            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
-        let field = branchField(in: overlay).field
-        type("feature/zen-473", into: overlay)
-        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
-        let card = confirmCard(in: overlay)
-        XCTAssertFalse(KeyboardFocus.isFocused(field, in: window), "the confirm took the keyboard")
-
-        try XCTUnwrap(button(in: card, title: "Cancel")).onTap()
-        XCTAssertNotNil(card.superview, "the confirm is still leaving")
-        XCTAssertTrue(KeyboardFocus.isFocused(field, in: window), "Cancel hands the keyboard back")
-
-        overlay.focusInitialResponder()
-        XCTAssertTrue(
-            KeyboardFocus.isFocused(field, in: window), "a refocus during the exit lands in the field, not the card")
-
-        waitUntil(card.superview == nil, "the confirm to finish leaving")
-        XCTAssertTrue(KeyboardFocus.isFocused(field, in: window), "and it stays there")
-    }
-
-    func test_escapeWithTheConfirmUp_leavesTheCardStanding() throws {
-        let (overlay, sink) = mount(
-            branches: ["feature/zen-473"],
-            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
-        type("feature/zen-473", into: overlay)
-        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
-
-        pressEscape()
-
-        XCTAssertEqual(sink.cancelled, 0, "the confirm answered its own Esc")
-        XCTAssertTrue(sink.submitted.isEmpty)
     }
 
     func test_theMoveMessage_namesTheLocalBranchTheCheckoutLandsOn() {
@@ -542,10 +473,6 @@ final class NewWorktreeOverlayTests: WindowTestCase {
 
     private func branchListIsOpen(in overlay: NSView) -> Bool {
         descendants(of: overlay).compactMap { $0 as? BranchField }.first?.isListOpen ?? false
-    }
-
-    private func confirmCard(in overlay: NSView) -> NSView {
-        descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first!
     }
 
     private func descendants(of view: NSView) -> [NSView] {

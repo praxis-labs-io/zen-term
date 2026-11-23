@@ -64,7 +64,7 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  AgentSetup         Foundation leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  AgentSetup         Foundation + CryptoKit leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
   zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 
@@ -535,6 +535,11 @@ New modal surfaces compose the existing primitives.
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
   back one step, a click outside closes the stack), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
+- **Forms share one scaffold.** `FormValidation` collects each field's message through
+  `LabeledField.setMessage` and focuses the first invalid field on submit.
+  `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
+  or delete (a config write, git, the browser) shows in a `FormErrorLabel` above the action
+  bar, never a toast.
 - **Popovers:** `ListPopover` is every anchored list (dropdowns, `BranchField`, the sidebar
   row menu, the icon grid) and owns its dismissal: a local event monitor closes it on Esc
   or a click outside the card, and when the window resizes, resigns key or closes. A click
@@ -543,7 +548,14 @@ New modal surfaces compose the existing primitives.
   `onSelfClose`; `absorbsEscape` lets a typed query take the first Esc. It opens and closes
   through `Motion.springScaleFade`.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
-  submits, Esc cancels. Every card is fully operable without a mouse.
+  submits, Esc cancels. A card with a single field (rename) submits on Return. Every card is fully
+  operable without a mouse.
+- **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
+  (files or config), and a toast confirm when it only ends running processes (closing a
+  pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
+  form hosts its card through `ConfirmSlot`; Cancel hands focus back to the button that
+  opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
+  only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.
 - **Scrolling lists** use a flipped document (`FlippedView`) plus `SlimScroller`, and no
@@ -606,7 +618,7 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
   what it declines; a key it `owns` passes `passThroughGuard` to reach it as a key event
-  (⌘↩ in the report, worktree, tool float and workspace forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes
+  (⌘↩ in the report, worktree, tool float, workspace and remote host forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes
   reading chords to its own buffer (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
   otherwise consumed app-wide and those keys belong to shells and TUIs. A focused sidebar
@@ -804,8 +816,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
   on Connect reconnects. A host leaving the `ssh-host` lines, from Settings or a hand edit, disconnects in every
-  window and lands the way a removed host's Connect screen does. Settings warns first, in a
-  `ConfirmCard` over Settings, when the host is open in any window.
+  window and lands the way a removed host's Connect screen does. Settings always confirms in a
+  `ConfirmCard` over the form, naming what ends when the host is open in any window.
 - **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
   makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the

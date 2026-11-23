@@ -47,6 +47,12 @@ class ModalShell: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    static func submitButton(title: String) -> AppButton {
+        AppButton(
+            title: title, variant: .primary, shortcut: submitChord.displayGlyph,
+            keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+    }
+
     func embed(_ content: NSView) {
         content.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(content)

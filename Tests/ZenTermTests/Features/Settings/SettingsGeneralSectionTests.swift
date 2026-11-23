@@ -1,7 +1,7 @@
-import AgentSetup
 import AppKit
 import XCTest
 
+@testable import AgentSetup
 @testable import ZenTerm
 
 final class SettingsGeneralSectionTests: WindowTestCase {
@@ -16,7 +16,11 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         ClaudeCodeSetup.configRootOverrideForTesting = tempRoot.appendingPathComponent("claude")
-        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8))
+        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
+            skill: Data("skill".utf8), hook: Data("hook".utf8),
+            shippedDigests: [
+                ClaudeSetupFiles.digest(of: Data("older".utf8)), ClaudeSetupFiles.digest(of: Data("hook".utf8)),
+            ])
         AppConfig.reload()
     }
 
@@ -179,20 +183,87 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills/zen/SKILL.md").path))
     }
 
-    func test_claudeSetup_anOlderInstallSaysChoosingOnUpdatesIt() throws {
+    private func updateButton() throws -> AppButton {
+        let detail = try XCTUnwrap(hostWindow?.contentView)
+        return try XCTUnwrap(descendants(of: detail).compactMap { $0 as? AppButton }.first { $0.title == "Update" })
+    }
+
+    private var updateRow: LayoutRow? { section?.rowFor(SettingsGeneralSection.claudeUpdateKey) }
+
+    private func updateRowTexts() -> [String] {
+        updateRow.map { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } } ?? []
+    }
+
+    private func installedSkill() throws -> Data {
+        try Data(contentsOf: claudeRoot.appendingPathComponent("skills/zen/SKILL.md"))
+    }
+
+    private func clickUpdate() throws {
+        let update = try updateButton()
+        update.performClick(nil)
+        waitUntil(update.isHidden && update.isEnabled, "the update to land")
+    }
+
+    private func installOlder() throws {
         let older = ClaudeSetupFiles(skill: Data("older".utf8), hook: Data("hook".utf8))
         _ = try ClaudeSetup(configRoot: claudeRoot, files: older).install()
+    }
+
+    func test_claudeSetup_offersNoUpdateWhenNothingIsInstalledOrItIsCurrent() throws {
         let control = claudeSetupControl()
+        XCTAssertEqual(updateRow?.isHidden, true)
 
-        XCTAssertEqual(control.selectedIndex, 0)
-        XCTAssertEqual(claudeSetupMessage(), "An older version is installed. Choose On to update it.")
-
-        press(Self.rightKey, on: control)
         press(Self.leftKey, on: control)
 
-        XCTAssertNil(claudeSetupMessage())
-        XCTAssertEqual(
-            try Data(contentsOf: claudeRoot.appendingPathComponent("skills/zen/SKILL.md")), Data("skill".utf8))
+        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertEqual(updateRow?.isHidden, true)
+        XCTAssertTrue(try updateButton().isHidden)
+    }
+
+    func test_claudeSetup_anEditedInstallIsReplacedByUpdate() throws {
+        _ = try ClaudeSetup(
+            configRoot: claudeRoot, files: ClaudeSetupFiles(skill: Data("mine".utf8), hook: Data("hook".utf8))
+        )
+        .install()
+        let control = claudeSetupControl()
+
+        XCTAssertEqual(updateRow?.isHidden, false)
+        XCTAssertTrue(updateRowTexts().contains("Your zen setup has changes, and updating replaces them."))
+
+        try clickUpdate()
+
+        XCTAssertEqual(updateRow?.isHidden, true)
+        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertEqual(try installedSkill(), Data("skill".utf8))
+    }
+
+    func test_claudeSetup_anOlderInstallIsUpdatedByUpdate() throws {
+        try installOlder()
+        _ = claudeSetupControl()
+
+        XCTAssertEqual(updateRow?.isHidden, false)
+        XCTAssertTrue(updateRowTexts().contains("An older version is installed."))
+
+        try clickUpdate()
+
+        XCTAssertEqual(updateRow?.isHidden, true)
+        XCTAssertEqual(try installedSkill(), Data("skill".utf8))
+    }
+
+    func test_claudeSetup_tabSkipsTheUpdateRowOnceUpdated() throws {
+        try installOlder()
+        let control = claudeSetupControl()
+        hostWindow?.makeFirstResponder(control)
+        control.onTab?()
+        XCTAssertTrue(KeyboardFocus.isFocused(try updateButton(), in: hostWindow))
+
+        try clickUpdate()
+        hostWindow?.makeFirstResponder(control)
+        control.onTab?()
+
+        let detail = try XCTUnwrap(hostWindow?.contentView)
+        let attention = descendants(of: detail).compactMap { $0 as? SegmentedControl }[Segment.attentionToast.rawValue]
+        XCTAssertTrue(KeyboardFocus.isFocused(attention, in: hostWindow))
     }
 
     func test_claudeSetup_malformedSettingsShowsWhy_andWritesNothing() throws {

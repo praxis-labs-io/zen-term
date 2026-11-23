@@ -408,15 +408,74 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertTrue(window!.firstResponder === picker, "Esc leaves focus on the field")
     }
 
-    func test_editForm_deleteButton_firesOnDelete() {
-        let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
-        let (overlay, _, sink) = mount(editing: existing, withDelete: true)
-        let delete = descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" }
-        XCTAssertNotNil(delete, "editing an existing float shows a Delete button")
+    func test_editForm_delete_asksFirst_withFocusOnCancel_andOnlyConfirmingDeletes() throws {
+        let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
 
-        delete?.onTap()
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        let texts = descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(texts.contains("Delete dev"), "\(texts)")
+        XCTAssertTrue(texts.contains("Deleting dev removes its command and shortcut."), "\(texts)")
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+        XCTAssertEqual(sink.deleted, 0)
+
+        try XCTUnwrap(button(in: card, title: "Delete")).onTap()
 
         XCTAssertEqual(sink.deleted, 1)
+    }
+
+    func test_delete_duringAShortcutCapture_endsTheCapture() throws {
+        let (overlay, capturer, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
+        chip(in: overlay).onActivate?()
+        XCTAssertTrue(capturer.isArmed)
+
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        XCTAssertFalse(capturer.isArmed, "the card takes the keyboard, not the capture")
+        XCTAssertTrue(descendants(of: overlay).filter { $0 is KeybindHintBubble }.isEmpty)
+        XCTAssertEqual(sink.deleted, 0)
+    }
+
+    func test_cancellingTheDeleteCard_deletesNothing_andFocusReturnsToDelete() throws {
+        let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+        delete.onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+
+        try XCTUnwrap(button(in: card, title: "Cancel")).onTap()
+
+        XCTAssertEqual(sink.deleted, 0)
+        XCTAssertEqual(sink.cancelled, 0)
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window))
+    }
+
+    func test_escapeOnTheDeleteCard_closesOnlyTheCard() throws {
+        let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+        XCTAssertTrue(overlay.isShowingOverlaidCard)
+
+        _ = overlay.performKeyEquivalent(with: keyDown("\u{1b}", code: 53))
+
+        XCTAssertEqual(sink.deleted, 0)
+        XCTAssertEqual(sink.cancelled, 0)
+        waitUntil(!overlay.isShowingOverlaidCard, "the card to leave")
+    }
+
+    func test_commandReturn_underTheDeleteCard_doesNotSave() throws {
+        let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        _ = overlay.performKeyEquivalent(with: try commandReturnKey())
+
+        XCTAssertEqual(sink.submitted, [])
+        XCTAssertEqual(sink.deleted, 0)
+    }
+
+    private func confirmDelete(in overlay: NSView) throws {
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        try XCTUnwrap(button(in: card, title: "Delete")).onTap()
     }
 
     private func failureLabel(_ message: String, in overlay: NSView) throws -> NSTextField {
@@ -458,7 +517,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let (overlay, _, sink) = mount(editing: existing, withDelete: true)
         sink.failure = message
 
-        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+        try confirmDelete(in: overlay)
 
         let label = try failureLabel(message, in: overlay)
         XCTAssertEqual(sink.deleted, 1)
@@ -480,7 +539,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
             "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now", in: overlay)
         sink.failure = nil
 
-        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+        try confirmDelete(in: overlay)
 
         XCTAssertTrue(label.isHidden)
     }
