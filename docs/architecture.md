@@ -554,8 +554,8 @@ New modal surfaces compose the existing primitives.
 - **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
   (files or config), and a toast confirm when it only ends running processes (closing a
   pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
-  card opens through the `ConfirmSlot` every `ModalShell` owns; Cancel hands focus back to the button that
-  opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
+  card opens through the `ConfirmSlot` every `ModalShell` owns; Cancel hands focus back to what held it before the
+  card opened. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
   only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.

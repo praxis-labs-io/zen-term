@@ -7,6 +7,7 @@ final class UnsavedChangesWindowTests: WindowTestCase {
     private final class Sink {
         var cancelled = 0
         var dismissed = 0
+        var submitted = 0
         var backdropCancels = false
     }
 
@@ -78,6 +79,45 @@ final class UnsavedChangesWindowTests: WindowTestCase {
         XCTAssertEqual(addingSink.cancelled, 0)
     }
 
+    func test_commandReturnUnderTheCard_doesNotSubmitTheForm() throws {
+        let forms: [(String, () -> (ModalShell, Sink), (ModalShell) throws -> Void)] = [
+            ("New Worktree", makeNewWorktreeForm, { try self.type("feature/x", intoFieldAt: 0, of: $0) }),
+            (
+                "Report an Issue", makeReportIssueForm,
+                { form in
+                    try self.type("Hang", intoFieldAt: 0, of: form)
+                    let area = try XCTUnwrap(self.descendants(of: form).compactMap { $0 as? TextAreaBox }.first)
+                    form.window?.makeFirstResponder(area.textView)
+                    area.textView.insertText("It hung.", replacementRange: area.textView.selectedRange())
+                }
+            ),
+        ]
+        for (name, make, fill) in forms {
+            let (form, sink) = make()
+            try fill(form)
+            _ = form.performKeyEquivalent(with: try escapeKey())
+            XCTAssertNotNil(confirmCard(in: form), name)
+
+            _ = form.performKeyEquivalent(with: try commandReturnKey())
+
+            XCTAssertEqual(sink.submitted, 0, name)
+        }
+    }
+
+    func test_workspaceForm_backdropDuringATabRename_asksAboutTheTypedName() throws {
+        let editing = Workspace(
+            title: "api", path: FileManager.default.temporaryDirectory, tabs: [Workspace.Tab(name: "one")], env: [:])
+        let (form, sink) = makeWorkspaceForm(editing: editing)
+        _ = (form as? WorkspaceFormOverlay)?.handle(.renameTab)
+        let editor = try XCTUnwrap(form.window?.firstResponder as? NSTextView)
+        editor.insertText("logs", replacementRange: editor.selectedRange())
+
+        try clickBackdrop(of: form)
+
+        XCTAssertNotNil(confirmCard(in: form))
+        XCTAssertEqual(sink.dismissed, 0)
+    }
+
     func test_toolFloatForm_changingASegmentIsAChange() throws {
         let (form, sink) = makeToolFloatForm()
         let segment = try XCTUnwrap(descendants(of: form).compactMap { $0 as? SegmentedControl }.first)
@@ -102,6 +142,7 @@ final class UnsavedChangesWindowTests: WindowTestCase {
             let (form, sink) = make()
             try change(form)
             let edited = form.window?.firstResponder
+            let selection = (edited as? NSTextView)?.selectedRange()
             try leave(form, by: exit)
             let card = try XCTUnwrap(confirmCard(in: form), "changed asks, \(exit)", file: file, line: line)
             XCTAssertEqual(sink.cancelled + sink.dismissed, 0, "the form stays open, \(exit)", file: file, line: line)
@@ -113,6 +154,9 @@ final class UnsavedChangesWindowTests: WindowTestCase {
             waitUntil(!form.isShowingOverlaidCard, "Esc on the card to return to the form", file: file, line: line)
             XCTAssertEqual(sink.cancelled + sink.dismissed, 0, "Esc on the card keeps editing", file: file, line: line)
             XCTAssertIdentical(form.window?.firstResponder, edited, "focus returns", file: file, line: line)
+            XCTAssertEqual(
+                (form.window?.firstResponder as? NSTextView)?.selectedRange(), selection, "the caret stays put",
+                file: file, line: line)
 
             try leave(form, by: exit)
             let again = try XCTUnwrap(confirmCard(in: form), file: file, line: line)
@@ -169,7 +213,10 @@ final class UnsavedChangesWindowTests: WindowTestCase {
         sink.backdropCancels = true
         let form = ReportIssueOverlay(
             report: SystemReport(appVersion: "0.3.0", build: "1", osVersion: "15.5", architecture: "arm64"),
-            onOpenURL: { _ in nil }, onExportDiagnostics: {}, onCancel: { sink.cancelled += 1 })
+            onOpenURL: { _ in
+                sink.submitted += 1
+                return nil
+            }, onExportDiagnostics: {}, onCancel: { sink.cancelled += 1 })
         return (mount(form), sink)
     }
 
@@ -180,7 +227,8 @@ final class UnsavedChangesWindowTests: WindowTestCase {
                 title: "ZenTerm", path: URL(fileURLWithPath: "/tmp/zenterm-fixture"), tabs: [], env: [:]),
             options: WorktreeStore.CreateOptions(
                 branches: [], defaultBase: "origin/main", currentBranch: "main", holders: [:]),
-            onSubmit: { _ in }, onCancel: { sink.cancelled += 1 }, onDismiss: { sink.dismissed += 1 })
+            onSubmit: { _ in sink.submitted += 1 }, onCancel: { sink.cancelled += 1 },
+            onDismiss: { sink.dismissed += 1 })
         return (mount(form), sink)
     }
 
@@ -218,6 +266,13 @@ final class UnsavedChangesWindowTests: WindowTestCase {
 
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
+    private func commandReturnKey() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
     }
 
     private func escapeKey() throws -> NSEvent {

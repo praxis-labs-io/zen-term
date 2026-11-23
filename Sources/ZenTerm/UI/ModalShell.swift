@@ -85,14 +85,21 @@ class ModalShell: NSView, ThemeReapplying {
         guard !isDismissing, !isBusy, !confirm.isShowing else { return }
         guard hasUnsavedChanges else { return exit() }
         let returnFocus = focusedView
+        let selection = (window?.firstResponder as? NSTextView)?.selectedRange()
         confirm.present(
             ConfirmCard(
                 title: "Unsaved changes", message: "Closing now discards your changes.",
                 cancelLabel: "Keep editing", confirmLabel: "Discard changes",
                 onCancel: { [weak self, weak returnFocus] in
-                    self?.confirm.dismiss { self?.focus(returnFocus) }
+                    self?.confirm.dismiss { self?.refocus(returnFocus, selecting: selection) }
                 },
                 onConfirm: { [weak self] in self?.confirm.dismiss(then: exit) }))
+    }
+
+    private func refocus(_ view: NSView?, selecting selection: NSRange?) {
+        focus(view)
+        guard let selection, let editor = window?.firstResponder as? NSTextView else { return }
+        editor.setSelectedRange(selection)
     }
 
     private var focusedView: NSView? {

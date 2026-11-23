@@ -242,7 +242,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isWorking else { return }
+        guard !isWorking, !confirm.isShowing else { return }
         branchField.closeList()
         let validation = validate(submitting: true)
         guard validation.isValid else { return validation.revealFirstInvalid() }

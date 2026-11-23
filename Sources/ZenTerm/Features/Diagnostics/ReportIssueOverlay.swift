@@ -162,7 +162,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isDismissing else { return }
+        guard !isDismissing, !confirm.isShowing else { return }
         errorLabel.clear()
         let validation = validate(submitting: true)
         guard validation.isValid else { return validation.revealFirstInvalid() }

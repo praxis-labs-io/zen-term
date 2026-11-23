@@ -11,7 +11,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private struct Inputs: Equatable {
         let title, folder: String
         let env: [[String]]
-        let carry: [String]
+        let carry: Set<String>
         let tabs: [Workspace.Tab]
         let launchFocus: Workspace.LaunchFocus
     }
@@ -86,7 +86,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private var inputs: Inputs {
         Inputs(
             title: titleField.text, folder: folderPicker.text, env: envRows.map { [$0.key, $0.value] },
-            carry: carryPicker.carried, tabs: form.tabs, launchFocus: form.launchFocus)
+            carry: Set(carryPicker.carried), tabs: form.tabs, launchFocus: form.launchFocus)
     }
 
     func focusInitialResponder() {
@@ -96,6 +96,11 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     override func cancel() {
         if !tabStrip.cancelRename() { super.cancel() }
+    }
+
+    override func dismiss() {
+        tabStrip.commitRename()
+        super.dismiss()
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
