@@ -64,7 +64,7 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  AgentSetup         Foundation leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  AgentSetup         Foundation + CryptoKit leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
   zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 
@@ -541,6 +541,12 @@ New modal surfaces compose the existing primitives.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. A card with a single field (rename) submits on Return. Every card is fully
   operable without a mouse.
+- **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
+  (files or config), and a toast confirm when it only ends running processes (closing a
+  pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
+  form hosts its card through `ConfirmSlot`; Cancel hands focus back to the button that
+  opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
+  only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.
 - **Scrolling lists** use a flipped document (`FlippedView`) plus `SlimScroller`, and no
@@ -801,8 +807,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
   on Connect reconnects. A host leaving the `ssh-host` lines, from Settings or a hand edit, disconnects in every
-  window and lands the way a removed host's Connect screen does. Settings warns first, in a
-  `ConfirmCard` over Settings, when the host is open in any window.
+  window and lands the way a removed host's Connect screen does. Settings always confirms in a
+  `ConfirmCard` over the form, naming what ends when the host is open in any window.
 - **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
   makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the

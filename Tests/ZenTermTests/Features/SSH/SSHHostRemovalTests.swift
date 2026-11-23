@@ -192,11 +192,14 @@ final class SSHHostRemovalTests: WindowTestCase {
         XCTAssertTrue(texts(in: card).contains("Removing devbox will stop connecting to it and close its tabs."))
     }
 
-    func test_removingAHostThatIsNotOpen_removesWithoutAsking_andFocusesTheRowBeforeWhenLast() throws {
+    func test_removingAHostThatIsNotOpen_asksFirst_andFocusesTheRowBeforeWhenLast() throws {
         let c = makeWindow()
         let content = try openSettings(in: c)
 
         try button("Remove", in: editForm(ofRow: 2, in: c)).onTap()
+        let warning = try XCTUnwrap(card(in: content), "an idle host still asks")
+        XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("deploy@10.0.0.5"))
+        try button("Remove", in: warning).onTap()
         waitUntil(settings(in: content) != nil && form(in: content) == nil, "Settings to come back")
         drainMainQueue()
 
@@ -215,6 +218,7 @@ final class SSHHostRemovalTests: WindowTestCase {
         waitUntil(hostRows(in: content).count == 1, "Settings to land on Remote hosts")
 
         try button("Remove", in: editForm(ofRow: 0, in: c)).onTap()
+        try button("Remove", in: XCTUnwrap(card(in: content))).onTap()
         waitUntil(settings(in: content) != nil && form(in: content) == nil, "Settings to come back")
         drainMainQueue()
 

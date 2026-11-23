@@ -8,6 +8,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private let capturer: KeybindCapturing?
     private let onSubmit: (ToolFloat) -> String?
     private let onDelete: (() -> String?)?
+    private lazy var confirm = ConfirmSlot(over: self)
 
     private lazy var header = ModalHeader(title: editingFloat == nil ? "New Tool Float" : "Edit Tool Float")
 
@@ -63,7 +64,12 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
 
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
-    func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
+    override var isShowingOverlaidCard: Bool { confirm.isShowing }
+
+    func focusInitialResponder() {
+        if let card = confirm.card { return card.focusInitialResponder() }
+        window?.makeFirstResponder(titleField.field)
+    }
 
     override func animateOut(completion: @escaping () -> Void) {
         guard !isDismissing else { return }
@@ -348,7 +354,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isDismissing else { return }
+        guard !isDismissing, !confirm.isShowing else { return }
         errorLabel.clear()
         let validation = validate(submitting: true)
         guard validation.isValid else { return validation.revealFirstInvalid() }
@@ -360,8 +366,19 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func delete() {
-        guard !isDismissing else { return }
+        guard !isDismissing, let editingFloat, confirm.card == nil else { return }
+        endCapture()
         errorLabel.clear()
+        let name = editingFloat.title
+        confirm.present(
+            ConfirmCard(
+                title: "Delete \(name)", message: "Deleting \(name) removes its command and shortcut.",
+                confirmLabel: "Delete",
+                onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.deleteButton) } },
+                onConfirm: { [weak self] in self?.confirm.dismiss { self?.performDelete() } }))
+    }
+
+    private func performDelete() {
         if let failure = onDelete?() {
             showFailure(failure)
             focus(deleteButton)
