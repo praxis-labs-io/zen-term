@@ -532,6 +532,12 @@ New modal surfaces compose the existing primitives.
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. Every card is fully operable without a mouse.
+- **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
+  (files or config), and a toast confirm when it only ends running processes (closing a
+  pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
+  form hosts its card through `ConfirmSlot`; Cancel hands focus back to the button that
+  opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
+  only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.
 - **Scrolling lists** use a flipped document (`FlippedView`) plus `SlimScroller`, and no

@@ -25,6 +25,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (Workspace) -> Void
     private let onDelete: (() -> Void)?
     private var form: WorkspaceForm
+    private lazy var confirm = ConfirmSlot(over: self)
 
     private lazy var header = ModalHeader(title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace")
 
@@ -77,14 +78,21 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     var noticeForTesting: String? { notice.isHidden ? nil : notice.stringValue }
     var undoButtonForTesting: AppButton? { undoButton.isHidden ? nil : undoButton }
 
-    func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
+    override var isShowingOverlaidCard: Bool { confirm.isShowing }
+
+    func focusInitialResponder() {
+        if let card = confirm.card { return card.focusInitialResponder() }
+        window?.makeFirstResponder(titleField.field)
+    }
 
     override func cancel() {
         if !tabStrip.cancelRename() { super.cancel() }
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if Chord(event: event) == Self.launchFocusChord { return drawing.openFocusedAtFocusedRegion() }
+        if !confirm.isShowing, Chord(event: event) == Self.launchFocusChord {
+            return drawing.openFocusedAtFocusedRegion()
+        }
         return super.performKeyEquivalent(with: event)
     }
 
@@ -225,10 +233,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         addButton.onTap = { [weak self] in self?.submit() }
         var leading: [NSView] = [notice, undoButton]
         if onDelete != nil {
-            deleteButton.onTap = { [weak self] in
-                guard let self, !self.isDismissing else { return }
-                self.onDelete?()
-            }
+            deleteButton.onTap = { [weak self] in self?.delete() }
             leading.insert(deleteButton, at: 0)
         }
         for button in [addVarButton, undoButton, cancelButton, addButton, deleteButton] {
@@ -446,6 +451,18 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     private func closeForm() { super.cancel() }
 
+    private func delete() {
+        guard !isDismissing, let editingWorkspace, confirm.card == nil else { return }
+        let name = editingWorkspace.title
+        confirm.present(
+            ConfirmCard(
+                title: "Delete \(name)",
+                message: "Deleting \(name) removes its tabs, layout and environment. The folder stays.",
+                confirmLabel: "Delete",
+                onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.deleteButton) } },
+                onConfirm: { [weak self] in self?.confirm.dismiss { self?.onDelete?() } }))
+    }
+
     private var folderName: String { WorkspaceForm.folderName(folderPicker.text) }
 
     private var typedTitle: String { titleField.text.trimmingCharacters(in: .whitespaces) }
@@ -472,7 +489,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isDismissing else { return }
+        guard !isDismissing, !confirm.isShowing else { return }
         if let problem = validate(includeRequired: true) {
             reveal(problem)
             return
