@@ -533,7 +533,8 @@ New modal surfaces compose the existing primitives.
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
-  back one step, a click outside closes the stack), `FormCard` for forms (body scrolls, footer pinned,
+  back one step, a click outside closes the stack; a form whose inputs differ from its opening
+  snapshot asks first, and its Cancel button never asks), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
@@ -553,7 +554,7 @@ New modal surfaces compose the existing primitives.
 - **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
   (files or config), and a toast confirm when it only ends running processes (closing a
   pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
-  form hosts its card through `ConfirmSlot`; Cancel hands focus back to the button that
+  card opens through the `ConfirmSlot` every `ModalShell` owns; Cancel hands focus back to the button that
   opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
   only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;

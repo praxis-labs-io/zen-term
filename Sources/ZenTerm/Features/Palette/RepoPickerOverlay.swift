@@ -291,10 +291,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
-    private lazy var confirm = ConfirmSlot(over: self)
-
-    override var isShowingOverlaidCard: Bool { confirm.isShowing }
-
     func presentConfirm(_ card: ConfirmCard) { confirm.present(card) }
 
     override func focusInitialResponder() {

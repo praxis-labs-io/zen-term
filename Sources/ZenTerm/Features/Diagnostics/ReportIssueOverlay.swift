@@ -3,6 +3,10 @@ import AppKit
 final class ReportIssueOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
 
+    private struct Inputs: Equatable {
+        let title, whatHappened: String
+    }
+
     private let report: SystemReport
     private let onOpenURL: (URL) -> String?
     private let onExportDiagnostics: () -> Void
@@ -20,6 +24,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let openButton = ModalShell.submitButton(title: "Open on GitHub")
     private let errorLabel = FormErrorLabel(maximumLines: 3)
+    private var openingInputs: Inputs?
 
     init(
         report: SystemReport,
@@ -31,11 +36,16 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
         self.onExportDiagnostics = onExportDiagnostics
         super.init(width: Self.width, onCancel: onCancel)
         embed(buildContent())
+        openingInputs = inputs
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
+
+    override var hasUnsavedChanges: Bool { inputs != openingInputs }
+
+    private var inputs: Inputs { Inputs(title: titleField.text, whatHappened: whatHappened.text) }
 
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
@@ -93,7 +103,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
             guard let self, !self.isDismissing else { return }
             self.onExportDiagnostics()
         }
-        cancelButton.onTap = { [weak self] in self?.cancel() }
+        cancelButton.onTap = { [weak self] in self?.cancelDiscardingChanges() }
         openButton.onTap = { [weak self] in self?.submit() }
 
         for button in [exportButton, cancelButton, openButton] {

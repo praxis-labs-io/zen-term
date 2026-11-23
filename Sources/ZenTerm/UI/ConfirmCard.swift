@@ -8,15 +8,15 @@ final class ConfirmCard: ModalShell, ModalOverlay {
     private let header: ModalHeader
     private let messageLabel = NSTextField(labelWithString: "")
     private let checklist: ConfirmCardChecklist?
-    private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
+    private let cancelButton: AppButton
     private let confirmButton: AppButton
 
     convenience init(
-        title: String, message: String, confirmLabel: String,
+        title: String, message: String, cancelLabel: String = "Cancel", confirmLabel: String,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
-            title: title, message: message, checklist: nil, confirmLabel: confirmLabel,
+            title: title, message: message, checklist: nil, cancelLabel: cancelLabel, confirmLabel: confirmLabel,
             onCancel: onCancel, onConfirm: onConfirm)
     }
 
@@ -25,17 +25,18 @@ final class ConfirmCard: ModalShell, ModalOverlay {
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
-            title: title, message: "", checklist: ConfirmCardChecklist(items: items), confirmLabel: confirmLabel,
-            onCancel: onCancel, onConfirm: onConfirm)
+            title: title, message: "", checklist: ConfirmCardChecklist(items: items), cancelLabel: "Cancel",
+            confirmLabel: confirmLabel, onCancel: onCancel, onConfirm: onConfirm)
     }
 
     private init(
-        title: String, message: String, checklist: ConfirmCardChecklist?, confirmLabel: String,
-        onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+        title: String, message: String, checklist: ConfirmCardChecklist?, cancelLabel: String,
+        confirmLabel: String, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.checklist = checklist
         self.onConfirm = onConfirm
         header = ModalHeader(title: title)
+        cancelButton = AppButton(title: cancelLabel, variant: .secondary)
         confirmButton = AppButton(title: confirmLabel, variant: .destructive)
         super.init(width: Self.width, onCancel: onCancel)
         embed(buildContent(message: message))

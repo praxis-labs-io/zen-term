@@ -8,6 +8,10 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         case edit(SSHHostEntry, address: String?)
     }
 
+    private struct Inputs: Equatable {
+        let host, name: String
+    }
+
     struct Removal {
         let consequence: () -> String?
         let perform: () -> String?
@@ -16,8 +20,6 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     private let mode: Mode
     private let removal: Removal?
     private let onSubmit: (SSHHostEntry) -> String?
-
-    private lazy var confirm = ConfirmSlot(over: self)
 
     private lazy var header = ModalHeader(title: editing == nil ? "Add remote host" : "Edit remote host")
     private let hostField = FieldBox(placeholder: "user@host or alias")
@@ -30,6 +32,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private lazy var submitButton = ModalShell.submitButton(title: editing == nil ? "Add" : "Save")
     private let removeButton = AppButton(title: "Remove", variant: .destructive)
+    private var openingInputs: Inputs?
 
     private var editing: (entry: SSHHostEntry, address: String?)? {
         guard case .edit(let entry, let address) = mode else { return nil }
@@ -45,13 +48,16 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         self.onSubmit = onSubmit
         super.init(width: Self.width, onCancel: onCancel, onDismiss: onDismiss)
         embed(buildContent())
+        openingInputs = inputs
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override var isShowingOverlaidCard: Bool { confirm.isShowing }
-
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
+
+    override var hasUnsavedChanges: Bool { inputs != openingInputs }
+
+    private var inputs: Inputs { Inputs(host: hostField.text, name: nameField.text) }
 
     func focusInitialResponder() {
         if let card = confirm.card { return card.focusInitialResponder() }
@@ -83,7 +89,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         }
         nameField.onTab = { [weak self] in self?.focus(self?.cancelButton) }
 
-        cancelButton.onTap = { [weak self] in self?.cancel() }
+        cancelButton.onTap = { [weak self] in self?.cancelDiscardingChanges() }
         submitButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, submitButton] {
             button.isKeyboardFocusable = true
