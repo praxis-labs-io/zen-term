@@ -302,6 +302,35 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(removed, 1)
     }
 
+    func test_returnWithTheWarningUp_answersTheWarning_notTheForm() throws {
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+
+        deliver(returnKey())
+
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(removed, 0)
+        XCTAssertEqual(cancelled, 0)
+        XCTAssertTrue(isFocused(button("Remove", in: overlay)), "Return on Cancel closed the warning")
+    }
+
+    func test_returnOnTheWarningsRemove_removes() throws {
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        window?.makeFirstResponder(button("Remove", in: card))
+
+        deliver(returnKey())
+
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(removed, 1)
+    }
+
+    private func deliver(_ event: NSEvent) {
+        guard let window, !window.performKeyEquivalent(with: event) else { return }
+        window.firstResponder?.keyDown(with: event)
+    }
+
     func test_cancellingTheWarning_removesNothing_andFocusReturnsToRemove() throws {
         removalConsequence = "stop connecting to it and close its tabs"
         let overlay = mount(devbox, removable: true)
