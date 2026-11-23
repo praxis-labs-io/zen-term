@@ -106,8 +106,8 @@ view-level test covers that.
   filesystem walk, or blocking I/O on the main queue. The chrome _is_ the product,
   and a stalled main thread is a beachball. Work off-main, hop back to main
   for the UI update.
-- Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
-  ticket for genuinely out-of-scope work.
+- No `TODO`/`FIXME`/`HACK` markers. Fix what you find as part of the current
+  change. If the fix is large, flag it and ask before expanding scope.
 - **Comments follow the global comment rules exactly.** Only three kinds:
   - a one-line file purpose, only when the file name doesn't already say it;
   - contract docs, only on names visible outside their module: `public` API in
@@ -219,8 +219,9 @@ asking to ship it is. Say the work is ready and stop there.
 
 Two things that flow does not decide for you:
 
-- **Triage leaves no tech debt.** Fix, mitigate, or ignore every finding. Residual
-  work becomes a Linear ticket, never an in-code `TODO`.
+- **Triage leaves no tech debt.** Fix, mitigate, or ignore every finding, in this
+  PR. Suggest a Linear ticket only for a complex or risky finding, and file it only
+  when Drew agrees. Never leave an in-code `TODO`.
 - **Status:** you drive Backlog to Todo to In Progress. The GitHub integration moves
   In Review and Done on its own once a PR is ready or merged, so do not set those by
   hand.
