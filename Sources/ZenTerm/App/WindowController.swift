@@ -60,6 +60,8 @@ final class WindowController: NSObject {
     private var processBusy = BusyFallWatch()
     private var exitedProcesses: Set<SurfaceID> = []
     private var listedProcesses: [SurfaceID: ProcessIcon] = [:]
+    private var helpersReported: Set<SurfaceID> = []
+    private var blocksParentsAnswered: Set<SurfaceID> = []
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -2428,6 +2430,13 @@ final class WindowController: NSObject {
         }
     }
 
+    func helperReported(_ surface: SurfaceID) { helpersReported.insert(surface) }
+
+    func helperHeardFromParent(_ surface: SurfaceID) {
+        helpersReported.remove(surface)
+        if case .blocked = agentStates.status(of: surface)?.state { blocksParentsAnswered.insert(surface) }
+    }
+
     // Only an agent that reports its status shows when it picks a task up.
     func noteTaskSubmitted(to pane: PaneHandle) {
         guard runsAgent(pane), let status = agentStates.status(of: pane.surfaceID), TaskPickups.isReady(status)
@@ -3394,6 +3403,8 @@ final class WindowController: NSObject {
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
+                self?.helpersReported.remove($0)
+                self?.blocksParentsAnswered.remove($0)
             }
             self?.renderAgents()
         }
@@ -3693,11 +3704,30 @@ final class WindowController: NSObject {
             }
             self.renderAgents()
             let stopped = previous?.state == .working && status?.state != .working
-            if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
+            if Self.startsTurn(from: previous, to: status) { self.helpersReported.remove(surface) }
+            let answeredByParent =
+                Self.leavesBlock(from: previous, to: status)
+                && self.blocksParentsAnswered.remove(surface) != nil
+            if !settlesFirstTask, !answeredByParent, let change = Self.helperChange(from: previous, to: status) {
                 self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
             }
             if stopped { self.paneWaits.agentStopped(surface) }
         }
+    }
+
+    // Leaving a block resumes the turn the agent was in, so only a start from rest begins a new one.
+    private static func startsTurn(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?) -> Bool {
+        guard status?.state == .working else { return false }
+        switch previous?.state {
+        case nil, .idle, .done, .failed: return true
+        case .working, .blocked: return false
+        }
+    }
+
+    private static func leavesBlock(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?) -> Bool {
+        guard case .blocked = previous?.state else { return false }
+        if case .blocked = status?.state { return false }
+        return true
     }
 
     // Entering `blocked` is its own note, so a helper that stops to ask sends one note, not two.
@@ -3708,6 +3738,7 @@ final class WindowController: NSObject {
             if case .blocked = previous?.state { return nil }
             return .blocked(need.map(agentNeed))
         }
+        if case .blocked = previous?.state, status?.state == .working { return .resumed }
         guard previous?.state == .working, status?.state != .working else { return nil }
         return .stopped(status.map { agentStatus($0.state) })
     }
@@ -3715,10 +3746,13 @@ final class WindowController: NSObject {
     // Read before the change reaches `paneWaits`, which drops the waits it answers.
     private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
         guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
+        if case .stopped = change, helpersReported.contains(surface) { return }
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,
-                answeredWaits: reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
+                answeredWaits: change == .resumed
+                    ? paneWaits.callers(watching: surface)
+                    : reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
     }
 
     private static func asks(_ status: TerminalProgramStatus) -> Bool {

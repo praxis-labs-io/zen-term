@@ -13,6 +13,7 @@ extension ControlResponder {
             return reply(.failure(ControlError(.badRequest, "output needs wait.")))
         }
         if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
+        if let problem = Self.cwdProblem(request.args) { return reply(.failure(problem)) }
         let name = request.args.name
         if let name {
             guard ControlAddress.Pane.isValidName(name) else {
@@ -36,8 +37,8 @@ extension ControlResponder {
                 return .failure(ControlError(.notFound, "That workspace is gone."))
             }
             return openTab(
-                in: WorkspacePlace(window: place.window, id: workspace), cwd: place.pane.cwd, explicitCWD: false,
-                running: program, focus: focus
+                in: WorkspacePlace(window: place.window, id: workspace), cwd: Self.startFolder(of: place, for: request),
+                explicitCWD: request.args.cwd != nil, running: program, focus: focus
             ).map { (place.window, $0.pane) }
         }
         switch opened {
@@ -56,6 +57,21 @@ extension ControlResponder {
                 answer(PaneRunResult(pane: token, firstTask: outcome), for: request, hangup: hangup, reply: reply)
             }
         }
+    }
+
+    private static func cwdProblem(_ args: ControlArgs) -> ControlError? {
+        guard let cwd = args.cwd else { return nil }
+        if args.split != nil { return ControlError(.badRequest, "pane.run takes a cwd or a split, not both.") }
+        return cwd.hasPrefix("/") ? nil : ControlError(.badRequest, "\(cwd) is not an absolute path.")
+    }
+
+    // A pane launched as `cd <dir> && <program>` never reports `<dir>`, so the caller's own folder is the truer one.
+    private static func startFolder(of place: PanePlace, for request: ControlRequest) -> URL? {
+        if let cwd = request.args.cwd { return URL(fileURLWithPath: cwd, isDirectory: true) }
+        if let caller = request.caller, caller.pane == place.pane.token, let cwd = caller.cwd, cwd.hasPrefix("/") {
+            return URL(fileURLWithPath: cwd, isDirectory: true)
+        }
+        return place.pane.cwd
     }
 
     // The wait's answer carries the pane as `pane.get` reports it, its `first_task` included.

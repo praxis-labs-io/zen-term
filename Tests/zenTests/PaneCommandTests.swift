@@ -42,6 +42,10 @@ final class PaneCommandTests: XCTestCase {
         let keys = try XCTUnwrap(try Zen.parseAsRoot(["pane", "keys", "34", "down", "enter"]) as? PaneCommands.Keys)
         XCTAssertEqual(keys.pane, 34)
         XCTAssertEqual(keys.keys, [.down, .enter])
+        XCTAssertEqual(keys.args, ControlArgs(force: false, pane: 34, keys: ["down", "enter"]))
+        let forced = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "keys", "34", "enter", "--force"]) as? PaneCommands.Keys)
+        XCTAssertEqual(forced.args, ControlArgs(force: true, pane: 34, keys: ["enter"]))
 
         let interrupt = try XCTUnwrap(try Zen.parseAsRoot(["pane", "interrupt", "34"]) as? PaneCommands.Interrupt)
         XCTAssertEqual(interrupt.pane, 34)
@@ -98,6 +102,22 @@ final class PaneCommandTests: XCTestCase {
             ]) as? PaneCommands.Run)
         XCTAssertEqual(server.output, "ready on")
         XCTAssertEqual(server.commandLine, "npm run dev")
+    }
+
+    func test_runCwdIsAFolderResolvedFromHere() throws {
+        let here = FileManager.default.temporaryDirectory.appendingPathComponent("zen-cwd-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: here.appendingPathComponent("app"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: here) }
+
+        let run = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--cwd", "app", "claude"]) as? PaneCommands.Run)
+        XCTAssertEqual(try run.args(in: here.path).cwd, here.appendingPathComponent("app").standardizedFileURL.path)
+        XCTAssertNil(
+            try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "claude"]) as? PaneCommands.Run).args(in: here.path).cwd)
+
+        let missing = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "run", "--cwd", "gone", "claude"]) as? PaneCommands.Run)
+        XCTAssertThrowsError(try missing.args(in: here.path))
     }
 
     func test_runSendsOneArgumentAsALineAndQuotesSeveral() throws {

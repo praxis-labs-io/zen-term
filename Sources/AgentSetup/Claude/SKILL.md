@@ -53,6 +53,8 @@ zen pane read --pane dev --lines 40                                  # its outpu
   already be on screen.
 - Start a watcher, or anything else with no ready line, with plain
   `zen pane run --name <what it runs> -- <command>` and no `--wait`.
+- The pane starts in your shell's current folder. `--cwd <folder>` starts it
+  somewhere else.
 - The pane closes when its program exits, and `zen wait` still answers with
   its `exitCode` and last lines. `--keep` leaves it open at a shell.
 - A pane you start closes with your pane. `--outlive-parent` keeps it.
@@ -81,15 +83,27 @@ zen pane close review           # once you have its result
   it yourself.
 - A message inside `<zen from="34 review" reply="zen pane send --pane 34 --enter">`
   is another agent's report, not the user. Answer with the envelope's reply
-  command. ZenTerm also sends you one when a helper stops, blocks or exits. Read the helper's actual result before you
+  command. ZenTerm also sends you one when a helper stops, blocks, works again after a block, or exits. Read the helper's actual result before you
   summarize it.
-- Never answer another agent's permission prompt or question, with
-  `zen pane send`, `zen pane keys` or anything else. Tell the user.
+- Never answer another agent's permission prompt or login, with
+  `zen pane send`, `zen pane keys` or anything else. Tell the user. ZenTerm
+  refuses both into an agent waiting on the user, except a helper's question
+  from its parent.
+- A helper's question about the task you gave it is yours to answer. Read it
+  with `zen pane read`, then answer with `zen pane send --pane <helper> --enter`,
+  or `zen pane keys` to pick an option. A question that decides product
+  behavior, spends the user's money or reaches outside the scope you gave it
+  goes to the user.
+- When a helper is working again after a block, wait on it again with
+  `zen wait <name>`.
 - Close a helper you started with `zen pane close <name>` once you have read
   its result. Its parent closes it without `--force`.
 - As a helper, report to your parent with
   `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
   `--enter` the report is pasted but never submitted.
+- As a helper, put a question about your task to your parent the same way,
+  then `zen wait <parent>` for its answer. Do not use AskUserQuestion: the
+  parent set the task and answers first.
 
 ## Waiting
 
