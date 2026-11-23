@@ -64,6 +64,16 @@ final class ModeChromeMotionTests: WindowTestCase {
         waitUntil(header.isHidden, "the header to hide once it has slid out")
     }
 
+    func test_dismissingTheBarWhileItArrives_slidesItBackOut() throws {
+        let bar = try XCTUnwrap(chrome.setFindBarShown(true))
+        chrome.setFindBarShown(false)
+        let soon = Date().addingTimeInterval(Motion.pageSlideDuration / 4)
+        while Date() < soon { RunLoop.main.run(mode: .default, before: soon) }
+
+        XCTAssertFalse(bar.isHidden, "the replaced arrival's completion must not cut the leaving slide short")
+        waitUntil(bar.isHidden, "the bar to hide once it has slid out")
+    }
+
     func test_reopeningTheBarWhileItLeaves_keepsItUp() throws {
         let bar = try XCTUnwrap(chrome.setFindBarShown(true))
         chrome.setFindBarShown(false)

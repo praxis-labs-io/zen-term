@@ -18,6 +18,7 @@ final class ModeChrome {
 
     private var findBar: FindBarView?
     private var isFindBarShown = false
+    private var slideRuns: [ObjectIdentifier: Int] = [:]
     private var contentBottomToFindBar: NSLayoutConstraint?
     private let contentBottomToContainer: NSLayoutConstraint
 
@@ -84,7 +85,7 @@ final class ModeChrome {
             isFindBarShown = false
             contentBottomToFindBar.isActive = false
             contentBottomToContainer.isActive = true
-            slide(findBar, appearing: false, fromBottom: true) { [weak self] in self?.isFindBarShown == true }
+            slide(findBar, appearing: false, fromBottom: true)
             return nil
         }
         let bar = findBar ?? makeFindBar()
@@ -92,7 +93,7 @@ final class ModeChrome {
         isFindBarShown = true
         contentBottomToContainer.isActive = false
         contentBottomToFindBar?.isActive = true
-        slide(bar, appearing: true, fromBottom: true) { [weak self] in self?.isFindBarShown == true }
+        slide(bar, appearing: true, fromBottom: true)
         return bar
     }
 
@@ -118,15 +119,20 @@ final class ModeChrome {
             contentTopToHeader.isActive = false
             contentTopToContainer.isActive = true
         }
-        slide(header, appearing: shown, fromBottom: false) { [weak self] in self?.isHeaderShown == true }
+        slide(header, appearing: shown, fromBottom: false)
     }
 
-    // The strip stays laid out at its edge while it leaves, so it slides out of place rather than collapsing first.
-    private func slide(_ strip: NSView, appearing: Bool, fromBottom: Bool, isShown: @escaping () -> Bool) {
+    // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the strip.
+    private func slide(_ strip: NSView, appearing: Bool, fromBottom: Bool) {
+        let key = ObjectIdentifier(strip)
+        let run = (slideRuns[key] ?? 0) + 1
+        slideRuns[key] = run
         let depth = strip.fittingSize.height + Self.stripInset
         strip.isHidden = false
         Motion.slideFade(strip, appearing: appearing, from: CGVector(dx: 0, dy: fromBottom ? -depth : depth)) {
-            if !isShown() { strip.isHidden = true }
+            [weak self] in
+            guard !appearing, self?.slideRuns[key] == run else { return }
+            strip.isHidden = true
         }
     }
 
