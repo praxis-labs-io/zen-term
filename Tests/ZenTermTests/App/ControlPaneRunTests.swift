@@ -123,7 +123,7 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertNil(helper.firstTask)
         XCTAssertNil(try listed(caller, in: c).name)
         let launched = script(of: try surface(opened.pane))
-        XCTAssertTrue(launched.contains("claude; "), launched)
+        XCTAssertTrue(launched.contains("claude\n__zen_mark $?; "), launched)
         XCTAssertFalse(launched.contains("exec "), "a launched pane started a shell after its program")
     }
 

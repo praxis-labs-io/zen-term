@@ -74,16 +74,56 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertEqual(config.workingDirectory, URL(fileURLWithPath: "/work"))
     }
 
-    func test_aProgramThatClosesItsPaneEndsWithItsExitMark_andStartsNoShell() {
+    private let onceMark =
+        "__zen_mark() { [ -n \"${__zen_marked-}\" ] || { __zen_marked=1; printf '\\033]133;D;%d\\007' \"$1\"; }; "
+        + "return \"$1\"; }; "
+
+    func test_aProgramThatClosesItsPaneUnderZsh_marksItsExitInlineAndOnTheShellsExit_andStartsNoShell() {
         withConfig(shell: "/bin/zsh")
         let config = ShellLaunch.program("npm test", cwd: nil, exitClosesPane: true)
         XCTAssertEqual(
             config.args,
             [
                 "-l", "-i", "-c",
-                "printf '\\033]2;%s\\007' 'npm test'; printf '\\033]133;C\\007'; npm test; "
-                    + "printf '\\033]133;D;%d\\007' $?; ",
+                "printf '\\033]2;%s\\007' 'npm test'; \(onceMark)"
+                    + "__zen_exit_mark() { __zen_mark $?; }; zshexit_functions+=(__zen_exit_mark); "
+                    + "printf '\\033]133;C\\007'; npm test\n__zen_mark $?; ",
             ])
+    }
+
+    func test_aKeptProgramUnderBash_chainsItsExitMarkOntoTheExistingExitTrap_thenStartsTheShell() {
+        withConfig(shell: "/bin/bash")
+        XCTAssertEqual(
+            ShellLaunch.program("npm test", cwd: nil, marksExit: true).args.last,
+            "printf '\\033]2;%s\\007' 'npm test'; \(onceMark)"
+                + "eval \"set -- $(trap -p EXIT)\"; __zen_prev=${3-}; set --; "
+                + "trap '__zen_mark $?; eval \"$__zen_prev\"' EXIT; "
+                + "printf '\\033]133;C\\007'; npm test\n__zen_mark $?; exec /bin/bash -l -i")
+    }
+
+    func test_aMarkedProgramsExitHook_followsWhatEachPosixShellCanReadOfAnExistingTrap() {
+        let chained = "trap '__zen_mark $?; eval \"$__zen_prev\"' EXIT; "
+        let hooks = [
+            "/bin/sh": "if [ -n \"${BASH_VERSION-}\" ]; then eval \"set -- $(trap -p EXIT)\"; __zen_prev=${3-}; "
+                + "set --; \(chained)fi; ",
+            "/bin/ksh": "__zen_prev=$(trap -p EXIT); \(chained)",
+            "/bin/dash": "",
+        ]
+        for (shell, hook) in hooks {
+            withConfig(shell: shell)
+            XCTAssertEqual(
+                ShellLaunch.program("make", cwd: nil, exitClosesPane: true).args.last,
+                "printf '\\033]2;%s\\007' 'make'; \(onceMark)\(hook)printf '\\033]133;C\\007'; make\n__zen_mark $?; ",
+                shell)
+        }
+    }
+
+    func test_aProgramThatClosesItsPaneUnderFish_marksItsExitInline() {
+        withConfig(shell: "/usr/local/bin/fish")
+        XCTAssertEqual(
+            ShellLaunch.program("npm test", cwd: nil, exitClosesPane: true).args.last,
+            "printf '\\033]2;%s\\007' 'npm test'; printf '\\033]133;C\\007'; npm test; "
+                + "printf '\\033]133;D;%d\\007' $status; ")
     }
 
     func test_program_doesNotRearmIntegration_forANonZshShell() {
@@ -100,10 +140,8 @@ final class ShellLaunchTests: XCTestCase {
         withConfig(shell: "/bin/zsh")
         let script = ShellLaunch.program("claude --resume", cwd: nil).args.last
         XCTAssertEqual(
-            script?.hasPrefix(
-                "printf '\\033]2;%s\\007' 'claude --resume'; printf '\\033]133;C\\007'; claude --resume; printf '\\033]133;D;%d\\007' $?; "
-            ),
-            true, "the exit mark carries the agent's own status, right where it exits")
+            script?.contains("printf '\\033]133;C\\007'; claude --resume\n__zen_mark $?; "), true,
+            "the exit mark carries the agent's own status, right where it exits")
     }
 
     func test_program_marksAnAgentsExit_withFishStatusUnderFish() {
