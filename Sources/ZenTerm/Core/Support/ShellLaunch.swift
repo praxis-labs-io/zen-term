@@ -34,14 +34,10 @@ enum ShellLaunch {
         let sh = userShell
         let tail = exitClosesPane ? "" : "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i"
         let title = titling(command, for: sh)
-        let script: String
-        if exitClosesPane, let trap = exitTrapFinish(for: sh) {
-            script = "\(title)\(trap)\(commandStart)\(command)"
-        } else if exitClosesPane || marksExit || isAgent(command) {
-            script = "\(title)\(commandStart)\(command); \(commandFinish(for: sh))\(tail)"
-        } else {
-            script = "\(title)\(command); \(tail)"
-        }
+        let script =
+            exitClosesPane || marksExit || isAgent(command)
+            ? "\(title)\(commandStart)\(contained(command, for: sh)); \(commandFinish(for: sh))\(tail)"
+            : "\(title)\(command); \(tail)"
         return TerminalSurfaceConfig(
             command: sh,
             args: ["-l", "-i", "-c", script],
@@ -82,10 +78,9 @@ enum ShellLaunch {
         return "printf '\\033]133;D;%d\\007' \(status); "
     }
 
-    // A builtin `exit` ends the shell before an inline mark but still runs an EXIT trap; fish has no POSIX trap.
-    private static func exitTrapFinish(for shell: String) -> String? {
-        guard URL(fileURLWithPath: shell).lastPathComponent != "fish" else { return nil }
-        return "trap 'printf \"\\033]133;D;%d\\007\" \"$?\"' EXIT; "
+    // A subshell keeps a builtin `exit` from skipping the mark after it; fish's `( )` is command substitution.
+    private static func contained(_ command: String, for shell: String) -> String {
+        URL(fileURLWithPath: shell).lastPathComponent == "fish" ? command : "( \(command)\n)"
     }
 
     /// libghostty's `.zshenv` restores `ZDOTDIR`, so the `exec`'d zsh needs the redirect restaged.

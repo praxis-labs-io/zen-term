@@ -74,16 +74,24 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertEqual(config.workingDirectory, URL(fileURLWithPath: "/work"))
     }
 
-    func test_aProgramThatClosesItsPaneMarksItsExitOnTheShellsExit_andStartsNoShell() {
+    func test_aProgramThatClosesItsPaneRunsInASubshellBeforeItsExitMark_andStartsNoShell() {
         withConfig(shell: "/bin/zsh")
         let config = ShellLaunch.program("npm test", cwd: nil, exitClosesPane: true)
         XCTAssertEqual(
             config.args,
             [
                 "-l", "-i", "-c",
-                "printf '\\033]2;%s\\007' 'npm test'; trap 'printf \"\\033]133;D;%d\\007\" \"$?\"' EXIT; "
-                    + "printf '\\033]133;C\\007'; npm test",
+                "printf '\\033]2;%s\\007' 'npm test'; printf '\\033]133;C\\007'; ( npm test\n); "
+                    + "printf '\\033]133;D;%d\\007' $?; ",
             ])
+    }
+
+    func test_aKeptProgramRunsInASubshellBeforeItsExitMark_thenStartsTheShell() {
+        withConfig(shell: "/bin/bash")
+        XCTAssertEqual(
+            ShellLaunch.program("npm test", cwd: nil, marksExit: true).args.last,
+            "printf '\\033]2;%s\\007' 'npm test'; printf '\\033]133;C\\007'; ( npm test\n); "
+                + "printf '\\033]133;D;%d\\007' $?; exec /bin/bash -l -i")
     }
 
     func test_aProgramThatClosesItsPaneUnderFish_marksItsExitInline() {
@@ -109,7 +117,7 @@ final class ShellLaunchTests: XCTestCase {
         let script = ShellLaunch.program("claude --resume", cwd: nil).args.last
         XCTAssertEqual(
             script?.hasPrefix(
-                "printf '\\033]2;%s\\007' 'claude --resume'; printf '\\033]133;C\\007'; claude --resume; printf '\\033]133;D;%d\\007' $?; "
+                "printf '\\033]2;%s\\007' 'claude --resume'; printf '\\033]133;C\\007'; ( claude --resume\n); printf '\\033]133;D;%d\\007' $?; "
             ),
             true, "the exit mark carries the agent's own status, right where it exits")
     }

@@ -263,8 +263,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `tab.new` and `pane.split`, with a `PaneProgram` whose `exitClosesPane` drops the shell that
   `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
   Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
-  program's `D` mark and its last 40 lines. The mark is an `EXIT` trap, so a command that ends
-  in the shell's own `exit` still reports; fish has no such trap and marks inline after it. The mark can trail the child exit, so a child exit
+  program's `D` mark and its last 40 lines. The command runs in a subshell, `( command )`, with
+  the mark after it, so a builtin `exit` ends only the subshell; a lone simple command is
+  `exec`'d there and stays the foreground group's leader. fish's `( )` is command substitution,
+  so fish runs the command bare. The mark can trail the child exit, so a child exit
   with no code yet holds the close until the mark or `exitMarkGrace` (async). The window
   keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
   run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
