@@ -4077,7 +4077,7 @@ final class WindowController: NSObject {
     }
 
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
-    static let claudeUpdateOfferMessage = "Your copy has edits, and updating\nreplaces them."
+    static let claudeUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
 
     private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
         switch result {

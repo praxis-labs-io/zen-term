@@ -26,11 +26,11 @@ symlink resolves. Moving or renaming the binary breaks every installed link.
 
 `zen setup claude` reads the skill and hook it installs from
 `Contents/Resources/ZenTerm_AgentSetup.bundle`, found the same way, so an app update ships
-new copies. The app installs them when Claude next starts. When a part is missing, or an
-installed file matches no digest in `shipped-digests.txt` beside them, that is the user's
-edit, so the app asks first. Setup stamps `hooks/zenterm-context.build` with the
-`CFBundleVersion` that wrote the files, so an older build leaves a newer build's untouched
-copies alone.
+new copies. The app installs them when Claude next starts. When a part is missing, the
+SessionStart entry is not the one setup writes, or an installed file matches no digest in
+`shipped-digests.txt` beside them, that is the user's edit, so the app asks first. Setup
+stamps `hooks/zenterm-context.build` with the `CFBundleVersion` that wrote the files, so an
+older build leaves a newer build's untouched copies alone.
 
 ## zen-term-releases stays archived
 
