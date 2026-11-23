@@ -46,7 +46,7 @@ final class TerminalTabChip: TabChip {
 
     override func hoverDidChange() {
         super.hoverDidChange()
-        guard isHovered, let path = directoryLabel else { return tooltip.hide(from: self) }
+        guard showsHover, let path = directoryLabel else { return tooltip.hide(from: self) }
         tooltip.label = path
         tooltip.show(from: self)
     }

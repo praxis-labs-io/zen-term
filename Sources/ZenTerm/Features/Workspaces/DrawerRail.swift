@@ -55,8 +55,8 @@ final class DrawerRail: ControlView, ThemeReapplying {
         let chrome = Theme.current.chrome
         border.strokeColor = (hasKeyboardFocus ? chrome.focusRing : chrome.ink(.faint)).cgColor
         border.lineWidth = ChromeMetrics.Border.width
-        easeFill(isHovered ? chrome.fill(.hover) : .clear)
-        glyph.contentTintColor = chrome.ink(isHovered || hasKeyboardFocus ? .normal : .muted)
+        easeFill(showsHover ? chrome.fill(.hover) : .clear)
+        glyph.contentTintColor = chrome.ink(showsHover || hasKeyboardFocus ? .normal : .muted)
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -78,12 +78,13 @@ final class DrawerRail: ControlView, ThemeReapplying {
     }
 
     override func hoverDidChange() {
-        if !isHovered { tooltip.hide(from: self) }
+        if !showsHover { tooltip.hide(from: self) }
         restyle()
     }
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        guard !isHoverSuppressed else { return }
         tooltip.show(from: self)
     }
 

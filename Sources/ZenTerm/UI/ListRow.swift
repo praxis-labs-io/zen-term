@@ -1,6 +1,6 @@
 import AppKit
 
-class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
+class ListRow: ControlView, ThemeReapplying {
     enum Leading: Equatable {
         case symbol(String)
         case swatch(NSColor)
@@ -81,7 +81,6 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     }
     private(set) var content: Content
     private(set) var isTakingKeyboardFocus = false
-    private(set) var isHoverSuppressed = false
     private let stack = NSStackView()
     // Kept across rebuilds, so a row that re-renders on hover keeps the label its layout and callers hold.
     private let titleLabel = NSTextField(labelWithString: "")
@@ -325,8 +324,6 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         }
     }
 
-    var showsHover: Bool { isHovered && !isHoverSuppressed }
-
     private func refreshFill() {
         let chrome = Theme.current.chrome
         showFocusRing(hasKeyboardFocus)
@@ -350,17 +347,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
 
     override func focusDidChange() { refreshFill() }
 
-    override func hoverDidChange() {
-        if !isHovered { hideTooltip() }
-        refreshFill()
-    }
-
     // A list with a keyboard cursor suppresses hover too, or the hovered row and the cursor's row would both look chosen.
-    func setHoverSuppressed(_ suppressed: Bool) {
-        guard suppressed != isHoverSuppressed else { return }
-        isHoverSuppressed = suppressed
-        if suppressed { hideTooltip() } else { refreshHover() }
-        hoverDidChange()
+    override func hoverDidChange() {
+        if !showsHover { hideTooltip() }
+        refreshFill()
     }
 
     // A truncated subtitle shows in full on hover, unless the owner gave the row a tooltip of its own.
