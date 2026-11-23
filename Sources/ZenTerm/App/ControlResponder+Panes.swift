@@ -148,7 +148,10 @@ extension ControlResponder {
             return .success(place)
         }
         guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
-        paste(request.args.text ?? "", from: request.caller?.pane, into: place, enter: request.args.enter == true)
+        let text = request.args.text ?? ""
+        let enter = request.args.enter == true
+        paste(text, from: request.caller?.pane, into: place, enter: enter)
+        if enter, Self.startsTurn(text) { place.window.noteTaskSubmitted(to: place.pane) }
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }
@@ -180,6 +183,8 @@ extension ControlResponder {
         else { return text }
         return ZenEnvelope.wrap(text, from: sender, named: locate(pane: sender)?.pane.record.name)
     }
+
+    private static func startsTurn(_ text: String) -> Bool { !text.isEmpty && !isSlashCommand(text) }
 
     // A wrapped slash command reaches the agent as a message and never runs.
     private static func isSlashCommand(_ text: String) -> Bool {
