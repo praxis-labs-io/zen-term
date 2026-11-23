@@ -134,4 +134,39 @@ final class SessionWorkspaceNameTests: WindowTestCase {
 
         XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName])
     }
+
+    func test_aSessionAtTheRoot_readsAsTheRoot_neverTheHomeFolder() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+
+        changeFolder(of: pane, to: "/")
+
+        XCTAssertEqual(sidebarTitles(c), ["/"])
+    }
+
+    func test_switchingTheActiveTab_tellsOtherWindowsAtOnce() throws {
+        let c = makeWindow()
+        c.newTabForTesting()
+        changeFolder(of: try XCTUnwrap(spawned.last), to: "/tmp/api")
+        var notified = 0
+        c.onOpenWorkspacesChanged = { notified += 1 }
+
+        c.selectTabForTesting(index: 0)
+
+        XCTAssertEqual(notified, 1, "other windows' lists re-read the session's name without waiting for the poll")
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName])
+    }
+
+    func test_closingTheActiveTab_tellsOtherWindowsAtOnce() throws {
+        let c = makeWindow()
+        c.newTabForTesting()
+        changeFolder(of: try XCTUnwrap(spawned.last), to: "/tmp/api")
+        var notified = 0
+        c.onOpenWorkspacesChanged = { notified += 1 }
+
+        c.closeTabForTesting(index: 1)
+
+        XCTAssertEqual(notified, 1, "other windows' lists re-read the session's name without waiting for the poll")
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName])
+    }
 }

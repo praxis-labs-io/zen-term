@@ -10,8 +10,9 @@ final class WorkspaceController {
     // Nil for a session: an unconfigured workspace nobody named reads as its active tab's folder, as the tab does.
     private let chosenName: String?
     var givenName: String {
-        chosenName ?? activeController?.paneFolder.flatMap(PathDisplay.folderName) ?? PathDisplay.folderName(folder)
-            ?? PathDisplay.homeName
+        if let chosenName { return chosenName }
+        let current = activeController?.paneFolder ?? folder
+        return PathDisplay.folderName(current) ?? current.standardizedFileURL.path
     }
     // Session-only: a rename never reaches the workspaces file, so the config title stays the identity Settings edits.
     var pinnedName: String?
