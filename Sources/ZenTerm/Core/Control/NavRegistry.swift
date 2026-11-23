@@ -24,6 +24,8 @@ final class NavRegistry {
         vimTokens.remove(token)
     }
 
+    func isLive(token: Int) -> Bool { routes[token] != nil }
+
     func route(focus token: Int, _ direction: Direction) {
         routes[token]?(direction)
     }

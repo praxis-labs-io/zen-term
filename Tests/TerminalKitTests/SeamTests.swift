@@ -19,6 +19,7 @@ private final class SpySurface: TerminalSurface {
     func terminate() {}
     func paste(_ text: String) {}
     func submit() {}
+    func press(_ key: TerminalKey) {}
     func copySelection() -> String? { nil }
     func scroll(_ command: TerminalScroll) {}
     func text(lastLines count: Int) -> String? { nil }

@@ -11,8 +11,14 @@ struct ControlResponder {
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
     var worktreeRemovals = WorktreeRemovalTracker()
     var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
+    var paneWaits = PaneWaits()
+    var paneDrafts = PaneDrafts()
+    var parentNotes = ParentNotes()
+    var interruptGroup: (pid_t) -> Bool = ControlResponder.interrupt(group:)
 
-    func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
+    func respond(
+        to request: ControlRequest, hangup: ControlHangup = ControlHangup(), reply: @escaping (ControlReply) -> Void
+    ) {
         switch request.cmd {
         case .hello: reply(.success(HelloResult(app: AppVersion.current)))
         case .list: reply(.success(ListResult(windows: windows().map { $0.listing() })))
@@ -28,8 +34,13 @@ struct ControlResponder {
         case .paneSplit: reply(splitPane(request))
         case .paneFocus: reply(focusPane(request))
         case .paneClose: reply(closePane(request))
-        case .paneSend: reply(sendToPane(request))
+        case .paneSend: sendToPane(request, hangup: hangup, reply: reply)
+        case .paneKeys: reply(pressKeys(request))
+        case .paneInterrupt: reply(interruptPane(request))
         case .paneRead: reply(readPane(request))
+        case .paneRun: runInPane(request, hangup: hangup, reply: reply)
+        case .paneGet: reply(getPane(request))
+        case .paneWait: waitOnPane(request, hangup: hangup, reply: reply)
         case .worktreeList: listWorktrees(request, reply: reply)
         case .worktreeCreate: createWorktree(request, reply: reply)
         case .worktreeRemove: removeWorktree(request, reply: reply)
@@ -42,6 +53,10 @@ struct ControlResponder {
             if let (tab, pane) = window.pane(token: token) { return (window, tab, pane) }
         }
         return nil
+    }
+
+    func locate(paneNamed name: String) -> [(window: WindowController, tab: TabID, pane: PaneHandle)] {
+        windows().flatMap { window in window.panes(named: name).map { (window, $0.tab, $0.pane) } }
     }
 
     private func openWorkspace(_ request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
@@ -174,28 +189,36 @@ struct ControlResponder {
             return .failure(ControlError(.badRequest, "\(cwd) is not an absolute path."))
         }
         return workspace(request.args.workspace, for: request).flatMap { place in
-            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
-            if let host = place.window.host(of: place.id), command != nil || request.args.cwd != nil {
-                return .failure(
-                    ControlError(
-                        .refused,
-                        "A tab on \(ControlAddress.hostPrefix + host.alias) takes no cmd or cwd. "
-                            + "It starts the host's login shell."))
-            }
             let cwd =
                 request.args.cwd.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 ?? callerCWD(in: place, for: request)
-                ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
-            guard let tab = place.window.openTab(in: place.id, cwd: cwd, command: command),
-                let pane = place.window.firstPaneToken(of: tab)
-            else { return .failure(ControlError(.failed, "The tab could not be opened.")) }
-            if request.args.focus == true {
-                place.window.selectTab(tab)
-                raise(place.window)
-            }
-            let address = ControlAddress.tab(window: place.window.windowID, tab: tab.raw)
-            return .success(TabResult(tab: address, pane: pane))
+            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : PaneProgram(command: $0) }
+            return openTab(
+                in: place, cwd: cwd, explicitCWD: request.args.cwd != nil, running: command,
+                focus: request.args.focus == true
+            ).map { $0 as any ControlPayload }
         }
+    }
+
+    func openTab(in place: WorkspacePlace, cwd: URL?, explicitCWD: Bool, running command: PaneProgram?, focus: Bool)
+        -> Result<TabResult, ControlError>
+    {
+        if let host = place.window.host(of: place.id), command != nil || explicitCWD {
+            return .failure(
+                ControlError(
+                    .refused,
+                    "A tab on \(ControlAddress.hostPrefix + host.alias) takes no cmd or cwd. "
+                        + "It starts the host's login shell."))
+        }
+        let cwd = cwd ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
+        guard let tab = place.window.openTab(in: place.id, cwd: cwd, command: command),
+            let pane = place.window.firstPaneToken(of: tab)
+        else { return .failure(ControlError(.failed, "The tab could not be opened.")) }
+        if focus {
+            place.window.selectTab(tab)
+            raise(place.window)
+        }
+        return .success(TabResult(tab: ControlAddress.tab(window: place.window.windowID, tab: tab.raw), pane: pane))
     }
 
     private func selectTab(_ request: ControlRequest) -> ControlReply {
@@ -262,6 +285,11 @@ struct ControlResponder {
     static func refusal(closing name: String, _ stakes: CloseStakes) -> ControlError {
         var consequences: [String] = []
         if stakes.closesWindow { consequences.append("close the window") }
+        switch stakes.closesOtherWindows {
+        case 0: break
+        case 1: consequences.append("close another window")
+        default: consequences.append("close \(stakes.closesOtherWindows) other windows")
+        }
         if stakes.isRunning { consequences.append(stopping(stakes.panes, stakes.floats)) }
         if let login = stakes.login {
             let tabs = login.tabs == 1 ? "tab" : "\(login.tabs) tabs"
@@ -269,7 +297,9 @@ struct ControlResponder {
         }
         return ControlError(
             .refused, "Closing \(name) would \(CloseWarning.list(consequences)).",
-            details: ControlError.Details(panes: stakes.panes, floats: stakes.floats, closesWindow: stakes.closesWindow)
+            details: ControlError.Details(
+                panes: stakes.panes, floats: stakes.floats,
+                closesWindow: stakes.closesWindow || stakes.closesOtherWindows > 0)
         )
     }
 
@@ -279,7 +309,7 @@ struct ControlResponder {
     }
 
     static func stopping(_ panes: [ListResult.Pane], _ floats: [String]) -> String {
-        let running = panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + floats
+        let running = panes.map { $0.name ?? ($0.title.isEmpty ? "pane \($0.token)" : $0.title) } + floats
         return running.isEmpty ? "stop what it is running" : "stop \(CloseWarning.list(running))"
     }
 }

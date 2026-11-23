@@ -23,7 +23,8 @@ enum ChromeThemeDeriver {
             modalShadowAlpha: shadowAlpha(on: terminal.background, tier: .modal),
             overlayRaised: raisedFill(for: terminal, tier: .overlay),
             floatRaised: raisedFill(for: terminal, tier: .float),
-            modalRaised: raisedFill(for: terminal, tier: .modal))
+            modalRaised: raisedFill(for: terminal, tier: .modal),
+            chipRaised: raisedFill(for: terminal, lifting: chipLightening))
     }
 
     private static func onAccent(for accent: TerminalColor, in terminal: TerminalTheme) -> TerminalColor {
@@ -78,12 +79,19 @@ enum ChromeThemeDeriver {
     // Ink is the foreground at an alpha, so a dark float lifts at most this share of the way toward it.
     static let inkClearance = 0.5
 
+    // A process chip with no brand stands a step above the floats, so it reads as an object on the bar.
+    static let chipLightening = 12.0
+
     static func raisedFill(for terminal: TerminalTheme, tier: FloatShadow.Tier) -> TerminalColor {
+        raisedFill(for: terminal, lifting: Double(tier.lightening))
+    }
+
+    private static func raisedFill(for terminal: TerminalTheme, lifting steps: Double) -> TerminalColor {
         let background = terminal.background
         let toward = background.isDark ? terminal.foreground : lightCeiling
         let available = lightening(of: background, to: toward)
         guard available > 0 else { return background }
-        let goal = min(Double(tier.lightening), background.isDark ? available * inkClearance : available)
+        let goal = min(steps, background.isDark ? available * inkClearance : available)
         guard available > goal else { return toward }
         var low = 0.0
         var high = 1.0

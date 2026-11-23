@@ -244,6 +244,15 @@ enum Motion {
         }
     }
 
+    // Dissolves the layer's next change of content, so a swapped image and fill fade rather than cut.
+    static func crossfade(_ layer: CALayer) {
+        guard !isReduceMotionEnabled() else { return }
+        let dissolve = CATransition()
+        dissolve.type = .fade
+        dissolve.duration = fadeDuration
+        layer.add(dissolve, forKey: "motion.crossfade")
+    }
+
     /// Layer-backed views disable implicit layer animations, so these properties are animated explicitly.
     static func ease(
         _ layer: CALayer,

@@ -7,6 +7,11 @@ import TerminalKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
     private let worktreeRemovals = WorktreeRemovalTracker()
+    private let paneWaits = PaneWaits()
+    private let paneDrafts = PaneDrafts()
+    private let parentNotes = ParentNotes()
+    private let claudeSetupOffer = ClaudeSetupOffer()
+    private var controlResponder: ControlResponder?
     private let keys = KeyInterceptor()
     private var navSocket: NavSocketServer?
     private var controlSocket: ControlServer?
@@ -66,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ThemePublisher.publish()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
-        keys.onKeyToFocus = { [weak self] in self?.keyController()?.answerTypedAgent() }
+        keys.onKeyToFocus = { [weak self] in self?.keyController()?.keyReachedFocus() }
         keys.passThroughGuard = { [weak self] chord, action in
             let firstResponder = NSApp.keyWindow?.firstResponder
             guard let controller = self?.keyController() else {
@@ -96,8 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.controlTarget() },
             bringForward: { Self.bringForward($0) },
             isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals,
-            runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) })
-        let control = ControlServer { responder.respond(to: $0, reply: $1) }
+            runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) }, paneWaits: paneWaits,
+            paneDrafts: paneDrafts, parentNotes: parentNotes)
+        controlResponder = responder
+        let control = ControlServer { responder.respond(to: $0, hangup: $1, reply: $2) }
         control.start()
         controlSocket = control
 
@@ -231,6 +238,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.keyModeHost = keys
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
         wc.worktreeRemovals = worktreeRemovals
+        wc.paneWaits = paneWaits
+        wc.paneDrafts = paneDrafts
+        wc.claudeSetupOffer = claudeSetupOffer
+        wc.onHelperNote = { [weak self] in self?.controlResponder?.tell($0) }
         wc.onClosedByRemovalAtPath = { [weak self, weak wc] path in
             self?.windows.reduce(ClosedByRemoval()) {
                 $0.adding($1.closedByRemoval(atPath: path), isThisWindow: $1 === wc)
@@ -251,6 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             other.activateWorkspace(id)
             return true
         }
+        wc.appWindows = { [weak self] in self?.windows ?? [] }
         wc.isWorkspaceOpenInAnotherWindow = { [weak self, weak wc] path in
             self?.otherWindow(holding: path, asking: wc) != nil
         }

@@ -1,4 +1,5 @@
 import ControlProtocol
+import Foundation
 import PaneKit
 import TabKit
 import TerminalKit
@@ -10,12 +11,23 @@ struct PanePlace {
 }
 
 extension ControlResponder {
-    func pane(_ token: Int?, for request: ControlRequest) -> Result<PanePlace, ControlError> {
-        if let token {
+    func pane(_ address: ControlAddress.Pane?, for request: ControlRequest) -> Result<PanePlace, ControlError> {
+        switch address {
+        case .token(let token):
             guard let found = locate(pane: token) else {
                 return .failure(ControlError(.notFound, "There is no pane \(token)."))
             }
             return .success(PanePlace(window: found.window, tab: found.tab, pane: found.pane))
+        case .name(let name):
+            let found = locate(paneNamed: name)
+            guard found.count < 2 else {
+                return .failure(ControlError(.ambiguous, "\(found.count) panes are named \(name)."))
+            }
+            guard let only = found.first else {
+                return .failure(ControlError(.notFound, "There is no pane named \(name)."))
+            }
+            return .success(PanePlace(window: only.window, tab: only.tab, pane: only.pane))
+        case nil: break
         }
         return caller(request).flatMap { context in
             guard let tab = context.tab, let pane = context.pane ?? context.window.focusedPane(of: tab) else {
@@ -30,33 +42,39 @@ extension ControlResponder {
             return .failure(ControlError(.badRequest, "pane.split needs a dir, right or down."))
         }
         return pane(request.args.pane, for: request).flatMap { place in
-            let token = place.pane.token
-            if place.pane.drawer != nil {
-                return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
+            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : PaneProgram(command: $0) }
+            return split(place, direction, running: command, focus: request.args.focus == true)
+                .map { PaneResult(pane: $0) as any ControlPayload }
+        }
+    }
+
+    func split(_ place: PanePlace, _ direction: PaneDirection, running command: PaneProgram?, focus: Bool)
+        -> Result<Int, ControlError>
+    {
+        let token = place.pane.token
+        if place.pane.drawer != nil {
+            return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
+        }
+        if command != nil, let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
+            return .failure(
+                ControlError(
+                    .refused,
+                    "Pane \(token) is on \(ControlAddress.hostPrefix + host.alias), and a split there takes no cmd. "
+                        + "It starts the host's login shell."))
+        }
+        switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command) {
+        case nil:
+            return .failure(ControlError(.notFound, "There is no pane \(token)."))
+        case .focusMode:
+            return .failure(ControlError(.refused, "Pane \(token)'s tab is in Focus Mode. Exit Focus Mode to split."))
+        case .tooSmall:
+            return .failure(ControlError(.failed, "Pane \(token) is too small to split."))
+        case .opened(let opened):
+            if focus, let new = place.window.pane(token: opened) {
+                place.window.focus(new.pane.surfaceID, in: new.tab)
+                raise(place.window)
             }
-            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
-            if command != nil, let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
-                return .failure(
-                    ControlError(
-                        .refused,
-                        "Pane \(token) is on \(ControlAddress.hostPrefix + host.alias), and a split there takes no cmd. "
-                            + "It starts the host's login shell."))
-            }
-            switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command) {
-            case nil:
-                return .failure(ControlError(.notFound, "There is no pane \(token)."))
-            case .focusMode:
-                return .failure(
-                    ControlError(.refused, "Pane \(token)'s tab is in Focus Mode. Exit Focus Mode to split."))
-            case .tooSmall:
-                return .failure(ControlError(.failed, "Pane \(token) is too small to split."))
-            case .opened(let opened):
-                if request.args.focus == true, let new = place.window.pane(token: opened) {
-                    place.window.focus(new.pane.surfaceID, in: new.tab)
-                    raise(place.window)
-                }
-                return .success(PaneResult(pane: opened))
-            }
+            return .success(opened)
         }
     }
 
@@ -81,7 +99,9 @@ extension ControlResponder {
             if place.pane.drawer != nil {
                 return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, which pane.close leaves open."))
             }
-            guard let stakes = place.window.closeStakes(pane: place.pane, in: place.tab) else {
+            let byParent = request.caller?.pane.map { $0 == place.pane.record.parent } ?? false
+            guard let stakes = place.window.closeStakes(pane: place.pane, in: place.tab, closedByItsParent: byParent)
+            else {
                 return .failure(ControlError(.notFound, "There is no pane \(token)."))
             }
             if stakes.needsForce, request.args.force != true {
@@ -93,18 +113,131 @@ extension ControlResponder {
         }
     }
 
-    func sendToPane(_ request: ControlRequest) -> ControlReply {
+    func sendToPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
         guard let text = request.args.text else {
-            return .failure(ControlError(.badRequest, "pane.send needs text."))
+            return reply(.failure(ControlError(.badRequest, "pane.send needs text.")))
+        }
+        if ZenEnvelope.carriesTag(text) {
+            let tagged = "pane.send text cannot contain a <zen or </zen tag, which marks who sent a message."
+            return reply(.failure(ControlError(.badRequest, tagged)))
+        }
+        if request.args.wait == true, case .failure(let error) = Self.waitTimeout(request) {
+            return reply(.failure(error))
+        }
+        switch pane(request.args.pane, for: request) {
+        case .failure(let error): reply(.failure(error))
+        case .success(let place):
+            if let refusal = Self.refusal(sending: place, force: request.args.force) { return reply(.failure(refusal)) }
+            let token = place.pane.token
+            guard place.window.runsAgent(place.pane) else {
+                return deliver(to: token, for: request, hangup: hangup, reply: reply)
+            }
+            paneDrafts.hold(place.pane.surfaceID, hangup: hangup) { [self] in
+                deliver(to: token, for: request, hangup: hangup, reply: reply)
+            }
+        }
+    }
+
+    // The pane is found again because a draft hold can outlast it, and its agent can block meanwhile.
+    private func deliver(
+        to token: Int, for request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void
+    ) {
+        let found = pane(.token(token), for: request).flatMap { place -> Result<PanePlace, ControlError> in
+            guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
+            if let refusal = Self.refusal(sending: place, force: request.args.force) { return .failure(refusal) }
+            return .success(place)
+        }
+        guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
+        paste(request.args.text ?? "", from: request.caller?.pane, into: place, enter: request.args.enter == true)
+        guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
+            return reply(.success(NoPayload()))
+        }
+        hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
+    }
+
+    // A permission prompt or a question is the user's to answer, and a paste would answer it for them.
+    static func refusal(sending place: PanePlace, force: Bool?) -> ControlError? {
+        guard force != true, let agent = place.window.listing(of: place.pane, in: place.tab).agent,
+            agent.status == .blocked
+        else { return nil }
+        let waitsOn = agent.kind.map { " for \($0.rawValue)" } ?? ""
+        return ControlError(
+            .refused,
+            "Pane \(place.pane.token)'s agent is waiting on the user\(waitsOn), and that decision is the user's. "
+                + "Nothing was sent. Pass --force to send anyway.")
+    }
+
+    func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool) {
+        let surface = place.pane.surface
+        if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
+        if enter { surface.submit() }
+        paneWaits.sent(to: place.pane.surfaceID)
+    }
+
+    // An agent reads a bare paste as its user typing, so another agent's message says who sent it and how to answer.
+    private func envelope(_ text: String, from sender: Int?, into place: PanePlace) -> String {
+        guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane), !Self.isSlashCommand(text)
+        else { return text }
+        return ZenEnvelope.wrap(text, from: sender, named: locate(pane: sender)?.pane.record.name)
+    }
+
+    // A wrapped slash command reaches the agent as a message and never runs.
+    private static func isSlashCommand(_ text: String) -> Bool {
+        text.hasPrefix("/") && !text.contains(where: \.isNewline)
+    }
+
+    func pressKeys(_ request: ControlRequest) -> ControlReply {
+        guard let names = request.args.keys, !names.isEmpty else {
+            return .failure(ControlError(.badRequest, "pane.keys needs keys."))
+        }
+        var keys: [PaneKey] = []
+        for name in names {
+            guard let key = PaneKey(name: name) else {
+                let known = PaneKey.names.joined(separator: ", ")
+                return .failure(ControlError(.badRequest, "There is no key named \(name). The keys are \(known)."))
+            }
+            keys.append(key)
         }
         return pane(request.args.pane, for: request).flatMap { place in
             let surface = place.pane.surface
             guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
-            if !text.isEmpty { surface.paste(text) }
-            if request.args.enter == true { surface.submit() }
+            var pressed: [TerminalKey] = []
+            for key in keys {
+                guard let typed = TerminalKey(paneKey: key) else {
+                    return .failure(ControlError(.failed, "The keyboard layout has no key for \(key.name)."))
+                }
+                pressed.append(typed)
+            }
+            pressed.forEach(surface.press)
             return .success(NoPayload())
         }
     }
+
+    // A remote host's foreground is the local ssh, which a signal would end; its remote terminal turns Ctrl-C into one.
+    func interruptPane(_ request: ControlRequest) -> ControlReply {
+        pane(request.args.pane, for: request).flatMap { place in
+            let surface = place.pane.surface
+            let token = place.pane.token
+            guard surface.isStarted else { return .failure(Self.notStarted(token)) }
+            if place.window.runsAgent(place.pane) {
+                surface.press(.escape)
+                return .success(NoPayload())
+            }
+            if place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil {
+                guard let controlC = TerminalKey(paneKey: .control("c")) else {
+                    return .failure(ControlError(.failed, "The keyboard layout has no key for ctrl-c."))
+                }
+                surface.press(controlC)
+                return .success(NoPayload())
+            }
+            guard let group = surface.foregroundProcessGroupID, interruptGroup(group) else {
+                return .failure(ControlError(.failed, "Pane \(token)'s foreground process could not be interrupted."))
+            }
+            return .success(NoPayload())
+        }
+    }
+
+    static func interrupt(group: pid_t) -> Bool { killpg(group, SIGINT) == 0 }
 
     func readPane(_ request: ControlRequest) -> ControlReply {
         if let lines = request.args.lines, lines < 1 {
@@ -124,6 +257,129 @@ extension ControlResponder {
             }
             return .success(PaneText(text: text))
         }
+    }
+
+    func getPane(_ request: ControlRequest) -> ControlReply {
+        pane(request.args.pane, for: request).map { place in place.window.listing(of: place.pane, in: place.tab) }
+    }
+
+    func waitOnPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
+        let timeout: Int
+        switch Self.waitTimeout(request) {
+        case .failure(let error): return reply(.failure(error))
+        case .success(let seconds): timeout = seconds
+        }
+        if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
+        if let children = request.args.children {
+            guard request.args.pane == nil else {
+                return reply(.failure(ControlError(.badRequest, "pane.wait takes a pane or children, not both.")))
+            }
+            if children == .all, request.args.output != nil {
+                return reply(.failure(ControlError(.badRequest, "output takes a pane or children any.")))
+            }
+            return waitOnChildren(children, request, timeout: timeout, hangup: hangup, reply: reply)
+        }
+        guard let address = request.args.pane else {
+            return reply(.failure(ControlError(.badRequest, "pane.wait needs a pane or children.")))
+        }
+        switch pane(address, for: request) {
+        case .failure(let error):
+            if error.code == .notFound, let exit = launchedExit(of: address) {
+                return reply(.success(Self.exited(exit)))
+            }
+            reply(.failure(error))
+        case .success(let place):
+            hold(
+                waitOn: place, output: request.args.output, timeout: timeout, for: request, hangup: hangup,
+                reply: reply)
+        }
+    }
+
+    static func outputProblem(_ output: String?) -> ControlError? {
+        if output?.isEmpty == true { return ControlError(.badRequest, "output must not be empty.") }
+        if output?.contains(where: \.isNewline) == true {
+            return ControlError(.badRequest, "output matches within one line, so it takes no newline.")
+        }
+        return nil
+    }
+
+    static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {
+        let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
+        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
+            return .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds."))
+        }
+        return .success(timeout)
+    }
+
+    func hold(
+        waitOn place: PanePlace, output: String?, timeout: Int, for request: ControlRequest, hangup: ControlHangup,
+        reply: @escaping (ControlReply) -> Void
+    ) {
+        let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
+        let answered: (PaneWait.Answer) -> Void = {
+            reply(.success(WaitResult(reason: $0.reason, exitCode: $0.exitCode, text: $0.text, pane: $0.pane)))
+        }
+        guard let wait = PaneWait(watched(place), caller: caller, output: output, reply: answered) else {
+            return reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
+        }
+        paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+    }
+
+    private func waitOnChildren(
+        _ mode: WaitChildren, _ request: ControlRequest, timeout: Int, hangup: ControlHangup,
+        reply: @escaping (ControlReply) -> Void
+    ) {
+        guard let parent = request.caller?.pane else {
+            return reply(.failure(ControlError(.badRequest, "pane.wait waits on children from a pane.")))
+        }
+        guard let caller = locate(pane: parent) else {
+            return reply(.failure(ControlError(.notFound, "There is no pane \(parent).")))
+        }
+        let children = windows().flatMap { window in
+            window.panes(childOf: parent).map { found in
+                let token = found.pane.token
+                return ChildrenWait.Child(
+                    token: token, watched: watched(PanePlace(window: window, tab: found.tab, pane: found.pane)),
+                    isWorking: { [self] in
+                        locate(pane: token).map { $0.window.isWorking(helper: $0.pane, in: $0.tab) } ?? false
+                    })
+            }
+        }
+        guard !children.isEmpty else { return reply(.success(WaitResult(reason: .noChildren, children: []))) }
+        let wait = ChildrenWait(
+            children, mode: mode, caller: caller.pane.surfaceID, output: request.args.output, reply: reply)
+        paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+    }
+
+    private func watched(_ place: PanePlace) -> PaneWait.Watched {
+        let token = place.pane.token
+        let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
+        return PaneWait.Watched(
+            surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+            pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } },
+            exit: { [self] in launchedExit(of: token) })
+    }
+
+    func launchedExit(of token: Int) -> LaunchedPaneExit? {
+        windows().lazy.compactMap { $0.launchedPaneExits.exit(of: token) }.first
+    }
+
+    private func launchedExit(of address: ControlAddress.Pane) -> LaunchedPaneExit? {
+        switch address {
+        case .token(let token): return launchedExit(of: token)
+        case .name(let name):
+            return windows().compactMap { $0.launchedPaneExits.latestExit(named: name) }.max { $0.token < $1.token }
+        }
+    }
+
+    static func exited(_ exit: LaunchedPaneExit) -> WaitResult {
+        WaitResult(reason: .exited, exitCode: exit.exitCode, text: exit.lastLines, pane: exit.pane ?? closedPane(exit))
+    }
+
+    private static func closedPane(_ exit: LaunchedPaneExit) -> ListResult.Pane {
+        ListResult.Pane(
+            token: exit.token, drawer: nil, title: "", cwd: nil, busy: false, agent: nil, name: exit.record.name,
+            parent: exit.record.parent, firstTask: exit.record.firstTask)
     }
 
     private static func notStarted(_ token: Int) -> ControlError {

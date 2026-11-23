@@ -82,8 +82,21 @@ follow the macOS appearance, not the theme.
 - Text fields edit through `ChromeTextView`, which `HostWindow` vends as the field
   editor; a field calls `applyThemedEditor()` on a theme change.
 - The exceptions are the shadow's black in `FloatShadow`, whose strength is solved per
-  theme, and the white a light theme's raised fill lifts toward. Any other
-  theme-independent value (an alpha mask) carries a one-line why.
+  theme, the white a light theme's raised fill lifts toward, and a process chip's brand
+  colors (below). Any other theme-independent value (an alpha mask) carries a one-line why.
+
+### Process chips
+
+A process chip (`IconBadge(process:size:)`) is a small app icon for what runs in a pane. A
+brand's fill and glyph colors belong to the brand, not the theme, so they stay the same on
+every theme. They live in `ProcessIcon`'s registry and nowhere else; no call site names
+one. Everything else comes from the system: the shape (`Radius.icon(_:)`, continuous
+corners), the size and mark box (`IconBadge.Size`), the edge (`fill(alpha:)` with `border`,
+at `Border.width`) and the sheen, a fixed alpha mask lit from the top that every chip shares.
+A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
+step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
+program runs, so a resting shell and a worktree are never branded. Process marks are never SF
+Symbols; a generic chip's glyph is Lucide, unmodified.
 
 ## State
 
@@ -135,6 +148,7 @@ needs fixing, not a new step.
 | `Radius.surface` | Cards, popovers, floats |
 | `Radius.tile` | Large tiles |
 | `Radius.capsule(_:)` | A fully rounded end, from the view's height |
+| `Radius.icon(_:)` | A process chip's app-icon corner, from its side |
 | `Border.width` | Every border, edge and focus ring |
 | `Border.paneFocus` | A focused pane or tool float |
 | `Icon.xs`, `.sm`, `.md`, `.xl` | SF Symbol point sizes |
@@ -180,6 +194,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
 | `springScaleFade` | Modals, toasts and floats appearing and leaving |
 | `fade` | Plain opacity changes |
+| `crossfade` | A process chip swapping its mark when its program changes |
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
@@ -201,11 +216,14 @@ takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
 
-A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its dot or spinner on the title's line.
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its mark, dot or spinner on the title's line, and its workspace line runs under the mark (`ListRow.Content.leadingOnTitleLine`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 
 A form or row's message line is a `FormErrorLabel`, in its destructive, warning or muted tone.
+
+A mark on a rounded chip is an `IconBadge`: tinted by one role, or a process chip (see
+[Process chips](#process-chips)).
 
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
 `HintFooter` in its place. The shared hairline rule is `Divider`, and the shared muted "nothing here"

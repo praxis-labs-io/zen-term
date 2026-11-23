@@ -8,6 +8,7 @@ final class ControlServerTests: XCTestCase {
     private var path = ""
     private var appliedOnMain: [Bool] = []
     private var lateReplyLanded: XCTestExpectation?
+    private var hungUp: XCTestExpectation?
     private static let answerTimeout: TimeInterval = 1
     private static let hugeReply = String(repeating: "x", count: 4 << 20)
 
@@ -16,9 +17,16 @@ final class ControlServerTests: XCTestCase {
         path = "/tmp/zt-control-\(getpid())-\(name.hashValue & 0xFFFF).sock"
         appliedOnMain = []
         let server = ControlServer(path: path, idleTimeout: 1, answerTimeout: Self.answerTimeout) {
-            [unowned self] request, reply in
+            [unowned self] request, hangup, reply in
             appliedOnMain.append(Thread.isMainThread)
             switch request.cmd {
+            case .paneWait where request.args.timeout == nil:
+                let hungUp = hungUp
+                hangup.onHangup { hungUp?.fulfill() }
+            case .paneWait:
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.answerTimeout + 0.5) {
+                    reply(.success(HelloResult(app: "held-\(request.id)")))
+                }
             case .list:
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     reply(.success(HelloResult(app: "later-\(request.id)")))
@@ -130,6 +138,45 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(last, 0, "the server closes the connection rather than blocking on the write")
         XCTAssertGreaterThan(received, 0, "the reply started before the client stalled")
         XCTAssertLessThan(received, Self.hugeReply.utf8.count, "the reply was cut off, not finished")
+    }
+
+    func test_aWaitIsAnsweredPastTheFixedDeadline_sinceItsOwnTimeoutSetsIt() throws {
+        let replies = try exchange([#"{"v":1,"id":1,"cmd":"pane.wait","args":{"pane":3,"timeout":1}}"#], expecting: 1)
+        XCTAssertEqual(try decode(XCTUnwrap(replies.first), as: HelloResult.self).result, HelloResult(app: "held-1"))
+    }
+
+    func test_aClientThatHangsUpOnAHeldWaitTellsTheResponder() throws {
+        let hungUp = expectation(description: "the hold hears the hangup")
+        self.hungUp = hungUp
+        let fd = try UnixSocket.connect(to: path)
+        _ = UnixSocket.writeAll(Data((#"{"v":1,"id":1,"cmd":"pane.wait","args":{"pane":3}}"# + "\n").utf8), to: fd)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        close(fd)
+        wait(for: [hungUp], timeout: 3)
+    }
+
+    func test_aClientThatShutsItsWriteSideStillGetsAHeldAnswer() throws {
+        let fd = try UnixSocket.connect(to: path)
+        defer { close(fd) }
+        let done = expectation(description: "the held reply arrives")
+        var reply = Data()
+        DispatchQueue.global().async {
+            defer { done.fulfill() }
+            _ = UnixSocket.writeAll(
+                Data((#"{"v":1,"id":1,"cmd":"pane.wait","args":{"pane":3,"timeout":1}}"# + "\n").utf8), to: fd)
+            shutdown(fd, SHUT_WR)
+            var timeout = timeval(tv_sec: 4, tv_usec: 0)
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+            var chunk = [UInt8](repeating: 0, count: 1024)
+            while !reply.contains(0x0A) {
+                let n = read(fd, &chunk, chunk.count)
+                if n <= 0 { break }
+                reply.append(contentsOf: chunk[0..<n])
+            }
+        }
+        wait(for: [done], timeout: 6)
+        let line = try XCTUnwrap(String(decoding: reply, as: UTF8.self).split(separator: "\n").first)
+        XCTAssertEqual(try decode(String(line), as: HelloResult.self).result, HelloResult(app: "held-1"))
     }
 
     func test_malformedLineIsABadRequestAndTheConnectionStaysUsable() throws {

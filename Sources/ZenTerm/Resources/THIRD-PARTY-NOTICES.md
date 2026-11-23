@@ -3022,6 +3022,8 @@ SOFTWARE.
 
 The ZenTerm app icon is Lucide's `origami` mark, drawn from its SVG path data in `icon/make-icon.swift`. `origami.svg` also ships in the app's resource bundle. Reproduced whole, including the Feather portion Lucide carries. The `origami` mark is not in Lucide's list of Feather-derived icons, so only the ISC terms apply to it.
 
+The generic process chips draw Lucide glyphs that ship in the resource bundle: `binary.svg`, `bot.svg`, `columns-2.svg`, `database.svg`, `file-text.svg`, `flask-conical.svg`, `folder.svg`, `gauge.svg`, `git-branch.svg`, `hammer.svg`, `hourglass.svg`, `key-round.svg`, `package.svg`, `scroll-text.svg`, `search.svg`, `send.svg`, `server.svg`, `terminal.svg` and `text-cursor-input.svg`. Of these, `database`, `search`, `server` and `terminal` are in the Feather-derived list below, so the MIT terms apply to them as well.
+
 ```text
 ISC License
 
@@ -3072,7 +3074,37 @@ SOFTWARE.
 
 **CC0 1.0**
 
-The brand marks in the tool-float icon picker: `git.svg`, `github.svg`, `linear.svg`, `neovim.svg`, `vim.svg`, `emacs.svg`, `helix.svg`, `claude.svg`, `openai.svg`, `gemini.svg`, `copilot.svg`, `opencode.svg`, `ollama.svg`, `docker.svg`, `kubernetes.svg`, `postgres.svg`, `sqlite.svg`, `htop.svg`, `slack.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
+The brand marks in the tool-float icon picker and the process chips: `git.svg`, `github.svg`, `linear.svg`, `neovim.svg`, `vim.svg`, `emacs.svg`, `helix.svg`, `claude.svg`, `openai.svg`, `gemini.svg`, `copilot.svg`, `opencode.svg`, `ollama.svg`, `docker.svg`, `kubernetes.svg`, `postgres.svg`, `sqlite.svg`, `htop.svg`, `slack.svg`, `spotify.svg`, `podman.svg`, `terraform.svg`, `mysql.svg`, `redis.svg`, `python.svg`, `nodedotjs.svg`, `bun.svg`, `deno.svg`, `rust.svg`, `go.svg`, `ruby.svg`, `swift.svg`, `homebrew.svg`, `npm.svg`, `pnpm.svg`, `yarn.svg` and `tmux.svg`. `gemini-color.svg` is Simple Icons' Gemini path with Gemini's gradient added. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
+
+### Pi
+
+**MIT**
+
+`pi-agent.svg`, the Pi coding agent's mark, drawn from the `PiLogo` component in the Pi repository (github.com/earendil-works/pi). It covers the artwork only, not the trademark the mark depicts.
+
+```text
+MIT License
+
+Copyright (c) 2025 Mario Zechner
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## Themes
 

@@ -84,19 +84,26 @@ A `refused` error says what `force` would end:
  "details":{"closesWindow":false,"floats":[],"panes":[{"token":31,"title":"npm run dev","cwd":"/Users/me/app","busy":true}]}}
 ```
 
-`panes` are the running panes and drawers, in the shape `list` uses. `floats` are the
-titles of running tool floats. `closesWindow` is true when the close would take the
-window with it.
+`panes` are the running panes and drawers, in the shape `list` uses, the running children
+that `pane.run` started from them included. `floats` are the
+titles of running tool floats. `closesWindow` is true when the close would take a window with
+it: its own, or another window whose last tab is a child that closes with it, whose running
+floats are then counted too. The message says which.
 A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
 `lostCommits`, the commits on it that no branch or other worktree holds.
 
-Requests are decoded off the main thread, applied on it, and written back off it.
+Requests are decoded off the main thread, applied on it, and written back off it. The app
+answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds,
+`pane.send`, within 65 seconds, and with `wait` its `timeout` more, and `pane.run` with `wait`,
+within its `timeout` plus 65 seconds.
+A client that closes its connection before the answer ends a `pane.wait`. Shutting down only its
+write side is not closing it: the answer still comes.
 
 ## Addressing
 
 | Thing  | Address                           | Notes                                         |
 | ------ | --------------------------------- | --------------------------------------------- |
-| Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
+| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among open panes, and is sent as a string; a string of digits is read as a token. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`, except to `workspace.open`, which still reaches a renamed configured workspace through its entry's folder. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
@@ -140,9 +147,12 @@ is listed from its first opening until it closes, shown or hidden.
   "configured":true,"active":true,
   "worktree":{"name":"feat-x","parent":"/Users/me/src/zen-term"},
   "tabs":[{"id":"w1.t3","title":"zen-term","active":true,"panes":[
-    {"token":31,"title":"nvim","cwd":"/Users/me/.zenterm/worktrees/zen-term/feat-x","busy":true,
-     "agent":{"name":"claude","state":"waiting"}},
-    {"token":32,"drawer":"bottom","title":"","busy":false}]}]}]}]}
+    {"token":31,"title":"claude","cwd":"/Users/me/.zenterm/worktrees/zen-term/feat-x","busy":true,
+     "process":{"pid":81234,"program":"claude"},
+     "agent":{"name":"claude","state":"waiting","status":"blocked","kind":"permission",
+              "msg":"Claude needs your permission to use Bash","title":"Fix the build"}},
+    {"token":32,"drawer":"bottom","title":"","busy":false},
+    {"token":34,"title":"claude","busy":true,"name":"review","parent":31,"first_task":{"sent":true}}]}]}]}]}
 ```
 
 - `key`: the window is the key window.
@@ -158,8 +168,20 @@ is listed from its first opening until it closes, shown or hidden.
   that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
 - `busy`: always false in a host's workspace, since a remote shell reports no prompts.
+- `process`: the pane's foreground program: the shell at a prompt, else the job it runs.
+  `pid` is its process group, which is also its leader's pid, and `program` is the name
+  that process was run as (`claude`, `zsh`). Absent in a host's workspace, where it would
+  be the local ssh, and when it cannot be read.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
+- `agent.status`: the agent's own OSC 7501 state word, as it sent it: `idle`, `working`,
+  `done`, `blocked` or `error`. Absent for an agent that sends none. `kind` joins
+  `blocked` when the agent says what it waits on: `permission`, `question` or `auth`.
+  `msg` and `title` are the report's text, each absent when it sent none.
+- `name`, `parent`, `first_task`: present for a pane `pane.run` opened, when it was given a
+  name, run from a pane, or given a task. `parent` is the token of the pane that ran it, and is
+  absent once that pane has closed. `first_task` is the run's answer about its task, once it
+  has one.
 
 ### `workspace.open`
 
@@ -260,19 +282,125 @@ to split.
 
 ### `pane.close`
 
-`args`: `pane`, `force`. `refused` without `force` when the pane is running something. The
-last pane of a tab closes the tab, refused as `tab.close` would be. The login pane of a host
-that is connecting is refused, and closed with `force`, as `tab.close` on its tab is. A drawer
-is not closed.
+`args`: `pane`, `force`. `refused` without `force` when the pane is running something. From
+the pane's `parent`, the pane's own program and the children that close with it are not
+refused over; anything else the close would end still is. The last pane of a tab closes the
+tab, refused as `tab.close` would be. The login pane of a host that is connecting is refused,
+and closed with `force`, as `tab.close` on its tab is. A drawer is not closed.
 
 ### `pane.send`
 
-`args`: `pane`, `text` (required), `enter`.
+`args`: `pane`, `text` (required), `enter`, `force`, `wait`, `timeout`.
 
-Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
+Pastes `text`, so several lines arrive as one block. Text containing `<zen` or `</zen`, in any
+case, is a `bad_request`, since it could pass for the envelope below. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
-characters become spaces. `failed` when the pane has not started, such as a host's pane
+characters become spaces, and `pane.keys` presses keys. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
+
+Into a pane that runs an agent:
+
+- `refused` while its `status` is `blocked`, since what it waits on is the user's decision.
+  `force` sends anyway. A `working` agent takes the text into its running turn.
+- It holds while the person is typing into the pane: until 2 seconds after their last key
+  into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
+- From another pane, the text arrives wrapped, so the agent can tell it from its user:
+  `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
+  token, and its name after it when it has one, with `&`, `"`, `<` and `>` escaped as `&amp;`,
+  `&quot;`, `&lt;` and `&gt;`. A send into a shell, into the caller's own
+  pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
+  note to its parent (`pane.run`) arrives the same way, its name escaped the same way.
+
+`wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
+
+### `pane.run`
+
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`,
+`outlive_parent`, `wait`, `timeout`, `output`.
+
+Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
+it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
+starting in that pane's folder. With `split` it splits `pane` the way `pane.split` does, and is
+refused or fails the same way. `focus` shows the new pane.
+
+A pane closes the children it started when it closes, and they close theirs, wherever they are
+in any window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
+exiting, or the window closing. A close that would end a running child is refused without
+`force`, and its `details` list that child; the app's close confirmation names it too. A
+parent's own `pane.close` on its child is not refused over the child's work (`pane.close`).
+`outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. An agent
+that quits while its pane stays open closes nothing.
+
+The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
+the way `tab.new` and `pane.split` run a `cmd`.
+
+`name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
+digits. The name then addresses the pane anywhere a token does, until it closes.
+
+```json
+{"pane":34,"first_task":{"sent":false,"reason":"blocked"}}
+```
+
+Without `task` it answers at once and `first_task` is absent. With one, it answers once the
+program sends its first OSC 7501 status report, or after 60 seconds. A first report of `idle`
+or `done` means it is ready: the task is pasted and Return sent, as `pane.send` with `enter`
+does, and `first_task` is `{"sent":true}`. Otherwise the task is not sent and `reason` says why:
+
+| `reason`    | When                                                                 |
+| ----------- | -------------------------------------------------------------------- |
+| `blocked`   | The first report was `blocked`: it waits on the person, such as a permission ask. |
+| `not_ready` | The first report was `working` or `error`, or the pane closed before any report. |
+| `no_status` | No report in 60 seconds. A program that sends none, or an agent under tmux. |
+
+The pane keeps the answer as its `first_task` in `list`. The task is sent at most once: read the
+pane before sending it yourself, never resend blind. After `no_status`, wait for the program's
+prompt with `zen wait --output`, then send the task with `pane.send`.
+
+`wait` takes `timeout` and, once it would answer, holds as `pane.wait` on the new pane instead
+and answers as it does. The answer's `pane` carries `first_task`. `output` holds for that text as
+`pane.wait` does, matched from the screen as the pane opens (with `task`, as the task is sent), so
+a server's ready line cannot print before the wait begins. It is a `bad_request` without `wait`.
+
+A parent that runs an agent hears from the children it ran, so a child that finishes after the
+parent's turn ended still wakes it. Each change sends one line, in the child's envelope
+(`<zen from="34 review" reply="zen pane send --pane 34 --enter">`), pasted with Return as `pane.send`
+with `enter` sends it:
+
+| Change    | When                                                       | Note                                                                    |
+| --------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `stopped` | The child's `status` left `working`, but not to `blocked`. | `review stopped (done): read it with zen pane read --pane 34`           |
+| `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
+| `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
+
+- A child without a name is `pane 34`. `blocked` names `a permission prompt`, `a question` or
+  `a login` when the program says which.
+- There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
+  child answers the same change, when one it holds on its `children` watches the child, since
+  that wait reports the change, or for the report that settles `first_task`, which `pane.run`
+  answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
+- A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
+  until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
+  dropped.
+
+### `pane.keys`
+
+`args`: `pane`, `keys` (required), a list of key names.
+
+Presses each key in order as a keystroke, not a paste, so a menu or a prompt reads it as
+the key: `enter`, `escape`, `tab`, `shift-tab`, `backspace`, `space`, `up`, `down`, `left`,
+`right`, `home`, `end`, `pageup`, `pagedown`, and `ctrl-a` through `ctrl-z`. A name that is
+not a key is `bad_request` naming it, and nothing is pressed. `failed` when the pane has not
+started.
+
+### `pane.interrupt`
+
+`args`: `pane`.
+
+Stops what the pane is doing without ending it. A pane running an agent gets Escape, which
+ends Claude's or Codex's turn and leaves the agent running. Otherwise the terminal's
+foreground process group gets SIGINT, as Ctrl-C would: the program, or the shell at a
+prompt. A remote host's pane gets Ctrl-C as a key, so the host's terminal sends the signal.
+`failed` when the pane has not started or its foreground process is not known.
 
 ### `pane.read`
 
@@ -285,6 +413,79 @@ not started or its screen cannot be read.
 ```json
 {"text":"$ seq 3\n1\n2\n3"}
 ```
+
+### `pane.get`
+
+`args`: `pane`.
+
+Returns one pane or drawer in the shape `list` uses, without the tree around it.
+
+```json
+{"token":31,"title":"claude","cwd":"/Users/me/src/app","busy":true,
+ "process":{"pid":81234,"program":"claude"},
+ "agent":{"name":"claude","state":"working","status":"working","msg":"Reading x.swift"}}
+```
+
+### `pane.wait`
+
+`args`: `pane` or `children` (`any` or `all`), `output`, `timeout` (seconds, 1 to 600, 90 by default, under the 2-minute default of agents' shell tools).
+
+Holds until something happens to the pane, then answers once with why:
+
+| `reason`  | When |
+| --------- | ---- |
+| `stopped` | The agent's `status` left `working`. Without `output` only. |
+| `exited`  | Its program exited, or the pane closed. |
+| `output`  | `output` appeared in text printed after the wait began. |
+| `message` | A `pane.send`, or a child's note, reached the caller's own pane. |
+| `timeout` | Nothing happened within `timeout`. A check-in, not a failure: wait again. |
+
+```json
+{"reason":"exited","exitCode":1,"text":"$ make test\n1 test failed",
+ "pane":{"token":34,"title":"make test","busy":false,...}}
+```
+
+- `pane` is the pane as `pane.get` reports it, or for a pane that closed, as it was last read.
+- The program is the pane's foreground job, an agent included. A pane at a shell prompt waits
+  for the next command to finish. An agent that sends no `status` waits as a plain program does.
+- `exitCode` is the shell's report through its integration, and is absent when the shell
+  integration is off. `text` is the last 40 lines. Both are absent for a pane that closed,
+  unless `pane.run` opened it.
+- `output` is matched within one line of the screen's rows, without escapes, so a newline in it
+  is a `bad_request`. Text that scrolls more than a
+  screen past between checks, a quarter second apart, can be missed.
+- A pane `pane.run` opened closes when its program exits, and a wait on it still answers
+  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
+  A name then reaches the most recent such pane with that name. The app keeps the 64 most
+  recent such exits; an older one is `not_found`.
+
+`children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
+begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
+
+| `children` | Answers |
+| ---------- | ------- |
+| `any`      | On the first child's news, with that child's `reason`: `stopped`, `exited`, or `output`. |
+| `all`      | `stopped` once none is working, at once when none is. |
+
+A child is working while its agent's `status` is `working`, or, with no `status`, while the app
+reads its agent as working. A child that runs no agent is working while its program runs. A child whose
+first task was sent counts as working until its `status` moves past `idle` or `done`, so `all`
+does not answer before it starts on the task. With `all`, each child's `reason` is its latest
+news while the wait held, so a child that stopped and then exited answers `exited` with its
+`exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+`bad_request` with `all`.
+
+```json
+{"reason":"exited","children":[
+  {"reason":"exited","exitCode":0,"text":"$ make test\nall passed","pane":{"token":34,...}},
+  {"pane":{"token":35,"agent":{"name":"claude","state":"working","status":"working"},...}}]}
+```
+
+`children` lists every child the wait watched, each with its `pane` as `pane.get` reports it, or
+as it was last read once it closed. A child's `reason`, `exitCode` and `text` are its own news
+during the wait, absent when it had none. The answer has no `pane`. A caller with no children
+gets `{"reason":"no_children","children":[]}` at once. A request without `caller.pane` is a
+`bad_request`.
 
 ### `worktree.list`
 
@@ -304,15 +505,15 @@ is a remote host's workspace, by its `ssh:<host>` address or as the caller's.
 
 ### `worktree.create`
 
-`args`: `branch` (required), `workspace`, `base`, `existing`, `focus`.
+`args`: `branch` (required), `workspace`, `base`, `existing`, `open`, `focus`.
 
 Makes a worktree on a new branch cut from `base`: `default`, the default branch, unless
 `current` cuts it from what the workspace's checkout is on. `existing` checks out a branch
 that already exists instead and ignores `base`. It copies the entry's `carry` into the
-worktree and opens a workspace there, nested under the workspace it was made from, in the
-window that has that workspace open, else the caller's window. It answers once the copy
-finishes. Anything git refuses is `failed`, with the message the app's New Worktree card
-shows.
+worktree and opens nothing. `open` also opens a workspace there, nested under the
+workspace it was made from, in the window that has that workspace open, else the caller's
+window. `focus` implies `open` and switches to it. It answers once the copy finishes.
+Anything git refuses is `failed`, with the message the app's New Worktree card shows.
 
 ```json
 {"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x",
@@ -321,7 +522,8 @@ shows.
 ```
 
 `skipped` holds what was there to copy and did not arrive. An entry with nothing to copy
-is in neither list. `workspace` is in the shape `list` uses.
+is in neither list. `window` and `workspace` are present only when it opened one, and
+`workspace` is in the shape `list` uses.
 
 ### `worktree.remove`
 
@@ -350,7 +552,9 @@ lists every action.
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`), 2 usage,
+answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, and
+the `--timeout` plus 10 seconds for `zen wait`, 70 seconds for `zen pane send`, and its
+`--timeout` more for `zen pane send --wait`, or 70 more for `zen pane run --wait`), 2 usage,
 3 no instance or the connection failed.
 
 `zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
@@ -359,13 +563,27 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
+`zen tab new|select|rename|close`, `zen pane run|split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
-`zen action <name>` runs a keymap action. A command
+`zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
+`--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
+`zen setup claude` and `zen setup claude --remove` edit Claude Code's config, not the app,
+and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
-rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
+rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
+`zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
+`zen wait` does. `zen pane run --wait` also takes `--output`.
+`zen pane split` splits to the right unless `--dir down` says otherwise.
+`zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
+a usage error.
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
+everything after its options, and after a `--`, as the command. One argument is a shell line as
+written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
+`-h` prints the help, and `-- --help` runs `--help`. A pane argument,
+`zen wait`'s included, is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
-as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
+as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and
+opens a workspace on it only with `--open` or `--focus`.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or

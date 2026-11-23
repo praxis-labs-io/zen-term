@@ -64,7 +64,8 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  zen                the control CLI: ControlProtocol + swift-argument-parser, nothing else
+  AgentSetup         Foundation leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 
 The package graph enforces the seam: `ZenTerm` has no `GhosttyKit` dependency, so an
@@ -114,6 +115,10 @@ share `SystemReport`, and never carry the environment or config.
   from conditional theme state, which follows the pane's scheme only when `theme` is a
   light/dark pair with differing paths. The files hold only comments. On a pin bump, diff `ghostty +show-config` with and
   without the line: only `window-theme` may move.
+- **A surface is born with the app's color scheme.** A program can ask before
+  `ghostty_surface_set_color_scheme` lands, so `GhosttyApp` moves the app's scheme to the
+  theme's before each birth. It re-pushes the app config on a move: a surface born while
+  the app's scheme and its config's disagree loses its command, directory and environment.
 - **Shader paths are absolute** (a relative one resolves against the temp config file).
   Shaders get sRGB colors; use them raw. Layer opacity follows `background-alpha` only.
   Only MIT-licensed shaders are bundleable.
@@ -252,6 +257,24 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   Pane verbs take a token: `PaneCanvasController.split(token:axis:command:)` and
   `close(token:)` leave focus on the pane that had it, and put back the keyboard focus the
   rebuild drops.
+- **A pane `pane.run` opened carries a `PaneRecord`** (name, parent token, first-task result)
+  per leaf in `PaneCanvasController`, beside its surface and not in `AgentRoster`, so it
+  outlives the agent leaving the roster. It opens through the same `openTab` and `split` as
+  `tab.new` and `pane.split`, with a `PaneProgram` whose `exitClosesPane` drops the shell that
+  `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
+  Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
+  program's `D` mark and its last 40 lines. The mark can trail the child exit, so a child exit
+  with no code yet holds the close until the mark or `exitMarkGrace` (async). The window
+  keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
+  run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
+  Every pane and drawer token a tab releases reaches its window (`onPaneTokensReleased`),
+  which hands it to every window (`appWindows`), since a child sits wherever its `pane` put it.
+  Each closes that token's children on the next main-queue turn, since the release lands
+  mid-rebuild of a canvas that may hold a child. A child's own release cascades the same way.
+  Close stakes and confirmations count the children in every window first (`familyStakes`),
+  including whether closing them empties the window or another one, whose window floats then
+  count too. A worktree removal closes every window's
+  tabs in it together, so each window counts only the children it holds. `list` drops a `parent` that `NavRegistry` no longer holds.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -261,6 +284,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   active one.** A tab's callbacks keep firing while its workspace is in the background, so
   `workspace(of:)` and `controller(_:)` span them all. Reading the active workspace where
   a lookup belongs fails silently.
+- **A tab leads with its focused pane's process chip.** `ProcessIcon` maps an agent by its
+  own name, since some run under a runtime (`gemini` is `node`), and anything else by its
+  argv[0] (`ProcessArguments.arguments` of the foreground group), or for a script by the first
+  non-flag argument after its interpreter (`brew` runs as `bash`). A group whose arguments cannot
+  be read (a setuid program) is an unknown program, never the resting shell. A focused drawer does not
+  change it, as it does not change the title. The title poll re-renders the tab bar when a
+  tab's chip changes. A tab is named for its pane's folder, so one at home reads as the user's
+  name, never a lone `~`.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.
@@ -355,8 +386,22 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   else, for Claude and Codex until they exit, the task in their pane title (`AgentRules.taskTitle`:
   Claude's without its status glyph, Codex's between its prompt and its folder; any other pane
   title is the shell's), else its name. Never its message, which stays in the tooltip and follows
-  the title in the accessibility label, and never a state word. Its second line is its place.
+  the title in the accessibility label, and never a state word. Its second line is its place. It leads
+  with its agent's mark (`ProcessIcon.forAgent`: the robot for an agent with no mark), or the
+  process symbol for one with no name, so rows align.
   Its state reaches VoiceOver through the accessibility value.
+- **The Agents rows nest a pane under the agent that started it.** `AgentFamilies` reads each
+  row's `PaneRecord` parent and climbs through listed agents to the topmost, so there is one
+  level: a helper's helper lists under the top agent and its tooltip names the helper that
+  started it. A child is a one-line row (`ListRow` nesting): a helper agent leads with its
+  agent's mark (`ProcessIcon.forAgent`) and shows its own
+  state, a process shows none. A process row is a parented pane with no agent,
+  listed until its pane closes or its program finishes: every `pane.run` program reports an
+  OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still
+  leaves, and a busy reading falling (`BusyFallWatch`, the roster's rule) is the backstop;
+  a parented pane whose agent left is never one. A family sorts by its most urgent member.
+  When the parent's agent leaves, or its pane closes under children that outlive it, the chain
+  breaks there and those children list top-level.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
@@ -552,7 +597,24 @@ that refuses a connect is always stale and a sibling's sweep never removes one m
 request decodes on the connection's thread, applies on main through `ControlResponder`,
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
-replies when the read lands, holding only its own connection. A token resolves to its window, tab and surface by walking the windows
+replies when the read lands, holding only its own connection. A command that can hold past `ControlWire.longestReplyWait` (`pane.wait`, `pane.send`, `pane.run`) takes its deadline from its own args through `ControlWire.answerWait`, which the server and `zen` both read, so neither end gives up before the other. `pane.wait` holds in `PaneWaits`,
+app-wide since a caller and the pane it waits on can sit in different windows: `WindowController`
+feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
+`pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
+without OSC 133 are checked on a timer while a wait holds: the screen's own rows, lined up with the
+last read (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). The
+connection's thread checks for a hangup while it waits and drops the hold. A hangup is the write
+side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `shutdown(SHUT_WR)`.
+A wait on the caller's children (`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
+as a single pane's does. A pane `pane.run` opened leaves its exit in its window's
+`LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
+agent holds in `PaneDrafts`, also app-wide, which `WindowController.keyReachedFocus` feeds the
+person's last key into each surface from `KeyInterceptor`'s keys the chrome did not claim, the
+path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)
+starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
+waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
+`onHelperNote`. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
+parent is blocked and `PaneDrafts` while it has a draft. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
 and leaves hosts out. `action` hands its keymap action
@@ -784,7 +846,8 @@ The create card replaces the picker and reopens it on cancel. `BranchField` is a
 plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
 branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
 (create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
-result through the chrome, and the control socket passes nothing and opens it headless.
+result through the chrome, and the control socket passes nothing and opens it headless
+only when asked to.
 
 ### Carry
 
@@ -852,8 +915,9 @@ Tools opens a system prompt.
   The wrapping `-c` shell runs no prompt hook, so without them the agent's exit reports
   nothing and an agent that exits before the first busy poll sits in the Agents list
   forever. Both marks are needed: libghostty drops a `D` that no `C` preceded. The `D`
-  mark carries `$?`, or `$status` under fish. Non-agent programs stay unmarked, or every
-  workspace program would reach `commandFinished` and toast on exit.
+  mark carries `$?`, or `$status` under fish. A program whose exit closes its pane is marked
+  too, for its exit code. Other programs stay unmarked, or every workspace program would
+  reach `commandFinished` and toast on exit.
 - **`ApplePressAndHoldEnabled` is registered false at launch**, or the accent popup leaks
   keys into the shell.
 - **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`, and

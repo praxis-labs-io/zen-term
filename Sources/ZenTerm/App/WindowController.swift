@@ -1,3 +1,4 @@
+import AgentSetup
 import AppKit
 import AppLog
 import ControlProtocol
@@ -20,6 +21,8 @@ final class WindowController: NSObject {
     private let attention = AttentionStore()
     private let agents = AgentRoster()
     private let agentStates = AgentStateTracker()
+    private let firstTasks: FirstTaskDelivery
+    private(set) var launchedPaneExits = LaunchedPaneExits()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
 
@@ -53,6 +56,9 @@ final class WindowController: NSObject {
     private var fontSizeDismissal: DispatchWorkItem?
     // The poll can see an agent exit before its result arrives, and only the result can tell a crash.
     private var exitsAwaitingResult: Set<SurfaceID> = []
+    private var processBusy = BusyFallWatch()
+    private var exitedProcesses: Set<SurfaceID> = []
+    private var listedProcesses: Set<SurfaceID> = []
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -197,6 +203,8 @@ final class WindowController: NSObject {
         )?
 
     private let tabBar: TabBarView
+    // What each tab last showed, so the title poll re-renders when a program changes, not on every tick.
+    private var tabProcesses: [TabID: ProcessIcon?] = [:]
     private let dock: ToggleDock
     private var dockTrailing: NSLayoutConstraint?
     private let sidebar: SidebarController
@@ -244,6 +252,9 @@ final class WindowController: NSObject {
 
     var isWorkspaceOpenInAnotherWindow: ((URL) -> Bool)?
 
+    // A pane's children can sit in any window, since `pane.run` places a child wherever its `pane` is.
+    var appWindows: (() -> [WindowController])?
+
     var revealWorkspaceInAnotherWindow: ((URL) -> Bool)?
 
     var revealHostInAnotherWindow: ((SSHHostID) -> Bool)?
@@ -258,12 +269,22 @@ final class WindowController: NSObject {
 
     var worktreeRemovals = WorktreeRemovalTracker()
 
+    var paneWaits = PaneWaits()
+
+    var paneDrafts = PaneDrafts()
+
+    var onHelperNote: ((HelperNote) -> Void)?
+
+    var claudeSetupOffer: ClaudeSetupOffer?
+
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
 
     func closedByRemoval(atPath path: URL) -> ClosedByRemoval {
-        var closed = ClosedByRemoval()
+        let children = removalStakes(atPath: path)
+        if children.closesWindow { return ClosedByRemoval(thisWindow: true) }
+        var closed = ClosedByRemoval(stopping: children.names)
         var emptied = 0
         for workspace in workspaces {
             let inside = workspace.tabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -275,7 +296,7 @@ final class WindowController: NSObject {
                 closed.tabs += inside
             }
         }
-        return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true) : closed
+        return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true, stopping: children.names) : closed
     }
 
     private func isClosedByRemoval(_ id: TabID, atPath path: URL) -> Bool {
@@ -396,7 +417,10 @@ final class WindowController: NSObject {
         return "\(workspace.name): \(title(of: id))"
     }
 
-    init(contentRect: NSRect, initialCWD: URL?) {
+    init(
+        contentRect: NSRect, initialCWD: URL?, firstTaskWindow: TimeInterval = FirstTaskDelivery.readinessWindow
+    ) {
+        firstTasks = FirstTaskDelivery(readinessWindow: firstTaskWindow)
         window = HostWindow(contentRect: contentRect)
         windowID = WindowController.nextWindowID
         WindowController.nextWindowID += 1
@@ -748,6 +772,7 @@ final class WindowController: NSObject {
                 if workspace.title(id) != t { workspace.setTitle(t, for: id); changed = true }
             }
         }
+        if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
         if changed { renderTabBar() }
 
         if busyDots() != lastBusyDots { renderDock() }
@@ -825,11 +850,11 @@ final class WindowController: NSObject {
     deinit { titlePoll?.invalidate() }
 
     private func makeController(
-        cwd: URL?, command: String? = nil, config ws: Workspace? = nil, tab index: Int = 0,
+        cwd: URL?, command: PaneProgram? = nil, config ws: Workspace? = nil, tab index: Int = 0,
         connection: SSHConnection? = nil
     ) -> TabController {
         let tab = ws?.tabs[index]
-        let mainCommand = command ?? tab?.main.flatMap { $0 == "shell" ? nil : $0 }
+        let mainCommand = command ?? tab?.main.flatMap { $0 == "shell" ? nil : PaneProgram(command: $0) }
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             backingScale: window.backingScaleFactor,
@@ -1101,7 +1126,7 @@ final class WindowController: NSObject {
         select(openTab(in: workspace, cwd: cwd, command: nil), slideFrom: .fromRight)
     }
 
-    private func openTab(in workspace: WorkspaceController, cwd: URL?, command: String?) -> TabID {
+    private func openTab(in workspace: WorkspaceController, cwd: URL?, command: PaneProgram?) -> TabID {
         Log.info("tab opened", category: .tabs)
         let id = mintTabID()
         workspace.append(id)
@@ -1110,7 +1135,7 @@ final class WindowController: NSObject {
     }
 
     private func installController(
-        id: TabID, in workspace: WorkspaceController, cwd: URL?, command: String? = nil, config: Workspace?,
+        id: TabID, in workspace: WorkspaceController, cwd: URL?, command: PaneProgram? = nil, config: Workspace?,
         tab index: Int = 0
     ) {
         let c = makeController(
@@ -2294,7 +2319,8 @@ final class WindowController: NSObject {
             guard let tab = workspace.controller(id) else { return nil }
             return ListResult.Tab(
                 id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
-                active: id == workspace.activeID, panes: tab.paneHandles.map(listing(of:)))
+                active: id == workspace.activeID,
+                panes: tab.paneHandles.map { listing(of: $0, onHost: workspace.host != nil) })
         }
         let host = Self.hostListing(of: workspace)
         return ListResult.Workspace(
@@ -2304,15 +2330,62 @@ final class WindowController: NSObject {
             active: workspace === activeWorkspace, tabs: tabs)
     }
 
-    private func listing(of pane: PaneHandle) -> ListResult.Pane {
+    func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
+
+    func listing(of pane: PaneHandle, in tab: TabID) -> ListResult.Pane {
+        listing(of: pane, onHost: workspace(of: tab)?.host != nil)
+    }
+
+    // A host pane's foreground program is the local ssh, not what runs on the host.
+    private func listing(of pane: PaneHandle, onHost: Bool) -> ListResult.Pane {
         let agent = agents.agents[pane.surfaceID].map { agent in
             let tone = AttentionTone(
                 wait: attention.agentWait(of: pane.surfaceID), working: attention.isWorking(pane.surfaceID))
-            return ListResult.Agent(name: agent.name, state: Self.agentState(tone))
+            return Self.agentListing(
+                name: agent.name, state: Self.agentState(tone), report: agentStates.status(of: pane.surfaceID))
         }
         return ListResult.Pane(
             token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
-            cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent)
+            cwd: pane.cwd?.path, busy: pane.surface.isBusy,
+            process: onHost ? nil : Self.processListing(of: pane.surface), agent: agent, name: pane.record.name,
+            parent: pane.record.parent.flatMap { NavRegistry.shared.isLive(token: $0) ? $0 : nil },
+            firstTask: pane.record.firstTask)
+    }
+
+    private static func processListing(of surface: TerminalSurface) -> ListResult.Process? {
+        guard let group = surface.foregroundProcessGroupID,
+            let program = ProcessArguments.programName(of: group)
+        else { return nil }
+        return ListResult.Process(pid: group, program: program)
+    }
+
+    private static func agentListing(name: String?, state: ListResult.AgentState, report: TerminalProgramStatus?)
+        -> ListResult.Agent
+    {
+        guard let report else { return ListResult.Agent(name: name, state: state) }
+        var kind: ListResult.AgentNeed?
+        if case .blocked(let need) = report.state { kind = need.map(Self.agentNeed) }
+        return ListResult.Agent(
+            name: name, state: state, status: agentStatus(report.state), kind: kind, msg: report.message,
+            title: report.title)
+    }
+
+    private static func agentStatus(_ state: TerminalProgramStatus.State) -> ListResult.AgentStatus {
+        switch state {
+        case .idle: return .idle
+        case .working: return .working
+        case .done: return .done
+        case .blocked: return .blocked
+        case .failed: return .error
+        }
+    }
+
+    private static func agentNeed(_ need: TerminalProgramStatus.Need) -> ListResult.AgentNeed {
+        switch need {
+        case .permission: return .permission
+        case .question: return .question
+        case .auth: return .auth
+        }
     }
 
     private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
@@ -2330,15 +2403,68 @@ final class WindowController: NSObject {
         }
     }
 
-    func pane(token: Int) -> (tab: TabID, pane: PaneHandle)? {
+    func pane(token: Int) -> (tab: TabID, pane: PaneHandle)? { pane { $0.token == token } }
+
+    private func pane(surface: SurfaceID) -> PaneHandle? { pane { $0.surfaceID == surface }?.pane }
+
+    private func pane(where matches: (PaneHandle) -> Bool) -> (tab: TabID, pane: PaneHandle)? {
         for workspace in workspaces {
             for id in workspace.tabIDs {
-                if let pane = workspace.controller(id)?.paneHandles.first(where: { $0.token == token }) {
-                    return (id, pane)
-                }
+                if let pane = workspace.controller(id)?.paneHandles.first(where: matches) { return (id, pane) }
             }
         }
         return nil
+    }
+
+    func panes(childOf parent: Int) -> [(tab: TabID, pane: PaneHandle)] {
+        workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in
+                (workspace.controller(id)?.paneHandles ?? []).filter { $0.record.parent == parent }.map { (id, $0) }
+            }
+        }
+    }
+
+    // A task pasted into an idle agent shows no change until the agent reports again.
+    func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
+        if firstTasks.awaitsPickup(pane.surfaceID) { return true }
+        let listed = listing(of: pane, in: tab)
+        guard let agent = listed.agent else { return listed.busy }
+        return agent.status.map { $0 == .working } ?? (agent.state == .working)
+    }
+
+    private func recordExit(_ exit: LaunchedPaneExit, in tab: TabID) {
+        var exit = exit
+        exit.pane = controller(tab)?.paneHandles.first { $0.token == exit.token }.map { listing(of: $0, in: tab) }
+        launchedPaneExits.record(exit)
+    }
+
+    func panes(named name: String) -> [(tab: TabID, pane: PaneHandle)] {
+        workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in
+                (workspace.controller(id)?.paneHandles ?? []).filter { $0.record.name == name }.map { (id, $0) }
+            }
+        }
+    }
+
+    func updateRecord(pane token: Int, _ change: (inout PaneRecord) -> Void) {
+        guard let (tab, _) = pane(token: token) else { return }
+        controller(tab)?.updateRecord(pane: token, change)
+        renderAgents()
+    }
+
+    func deliverFirstTask(_ task: String, toPane token: Int, settle: @escaping (FirstTask) -> Void) {
+        guard let (_, handle) = pane(token: token) else { return settle(.held(.notReady)) }
+        let surface = handle.surface
+        firstTasks.await(
+            handle.surfaceID,
+            send: { [weak surface] in
+                surface?.paste(task)
+                surface?.submit()
+            },
+            settle: { [weak self] outcome in
+                self?.updateRecord(pane: token) { $0.firstTask = outcome }
+                settle(outcome)
+            })
     }
 
     func holdsWorkspace(_ id: WorkspaceID) -> Bool { workspaces.contains { $0.id == id } }
@@ -2365,7 +2491,7 @@ final class WindowController: NSObject {
 
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
 
-    func openTab(in id: WorkspaceID, cwd: URL?, command: String?) -> TabID? {
+    func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
         return openTab(in: workspace, cwd: cwd, command: command)
     }
@@ -2382,25 +2508,34 @@ final class WindowController: NSObject {
         appendUnconfiguredWorkspace(at: folder, named: name).id
     }
 
-    func closeStakes(tab id: TabID) -> CloseStakes? {
+    func closeStakes(tab id: TabID, sparingWorkOf spared: Int? = nil) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
         if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
-        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
+        let children = childStakes(closing: [id], sparingWorkOf: spared)
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
+        let busy = tab.paneHandles.filter { $0.surface.isBusy && $0.token != spared }
+        let running = spared == nil ? isRunning(tab: id) : !busy.isEmpty || floats.hasBusyInScope(id)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(tab: id),
-            panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)),
-            floats: floats.runningTitles(scope: id) + (closesWindow ? floats.runningTitles(scope: nil) : []))
+            closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
+            isRunning: running || children.isRunning,
+            panes: busy.map { listing(of: $0, onHost: workspace.host != nil) }
+                + children.listings,
+            floats: floats.runningTitles(scope: id) + children.floatTitles
+                + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
     func closeStakes(workspace id: WorkspaceID) -> CloseStakes? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
         if workspace.host != nil { return CloseStakes(closesWindow: false, isRunning: false, panes: [], floats: []) }
-        let closesWindow = closesWindow(closing: workspace)
+        let children = childStakes(closing: Set(workspace.tabIDs))
+        let closesWindow = closesWindow(closing: workspace) || children.closesWindow
         let tabs = workspace.tabIDs.compactMap(workspace.controller)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(workspace: workspace),
-            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
-            floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) }
+            closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
+            isRunning: isRunning(workspace: workspace) || children.isRunning,
+            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map { listing(of: $0, onHost: false) }
+                + children.listings,
+            floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
@@ -2409,16 +2544,178 @@ final class WindowController: NSObject {
         return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
     }
 
-    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: String?) -> PaneSplitResult? {
+    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?) -> PaneSplitResult? {
         controller(tab)?.split(pane: token, axis: axis, command: command)
     }
 
-    func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
+    func closeStakes(pane: PaneHandle, in tab: TabID, closedByItsParent: Bool = false) -> CloseStakes? {
         guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
-        if c.isSinglePane { return closeStakes(tab: tab) }
-        let busy = pane.surface.isBusy
-        return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+        let spared = closedByItsParent ? pane.token : nil
+        if c.isSinglePane { return closeStakes(tab: tab, sparingWorkOf: spared) }
+        let busy = !closedByItsParent && pane.surface.isBusy
+        let children = childStakes(closing: [], panes: [pane.token], sparingWorkOf: spared)
+        return CloseStakes(
+            closesWindow: children.closesWindow, closesOtherWindows: children.otherWindows.count,
+            isRunning: busy || children.isRunning,
+            panes: (busy ? [listing(of: pane, in: tab)] : [])
+                + children.listings,
+            floats: children.floatTitles + (children.closesWindow ? floats.runningTitles(scope: nil) : []))
+    }
+
+    private struct FamilyTab: Hashable {
+        let window: ObjectIdentifier
+        let tab: TabID
+    }
+
+    private struct FamilyPane {
+        let window: WindowController
+        let tab: TabID
+        let pane: PaneHandle
+
+        var key: FamilyTab { FamilyTab(window: ObjectIdentifier(window), tab: tab) }
+    }
+
+    @MainActor
+    private struct ChildStakes {
+        let running: [FamilyPane]
+        let floats: [(window: WindowController, title: String)]
+        let closesWindow: Bool
+        let otherWindows: [WindowController]
+
+        var isRunning: Bool { !running.isEmpty || !floats.isEmpty }
+        var floatTitles: [String] { floats.map(\.title) }
+        var listings: [ListResult.Pane] { running.map { $0.window.listing(of: $0.pane, in: $0.tab) } }
+        var names: [String] { names(of: running) + floatTitles }
+
+        func names(outside window: WindowController) -> [String] {
+            names(of: running.filter { $0.window !== window }) + floats.filter { $0.window !== window }.map(\.title)
+        }
+
+        func held(by window: WindowController) -> ChildStakes {
+            ChildStakes(
+                running: running.filter { $0.window === window }, floats: floats.filter { $0.window === window },
+                closesWindow: closesWindow, otherWindows: [])
+        }
+
+        private func names(of panes: [FamilyPane]) -> [String] {
+            panes.map(\.pane).map { pane in
+                pane.drawer.map(WindowController.drawerName) ?? pane.record.name
+                    ?? (pane.surface.title.isEmpty ? "pane \(pane.token)" : pane.surface.title)
+            }
+        }
+    }
+
+    private var familyWindows: [WindowController] {
+        let windows = appWindows?() ?? []
+        return windows.contains { $0 === self } ? windows : [self] + windows
+    }
+
+    private func childStakes(closing tabs: Set<TabID>, panes: Set<Int> = [], sparingWorkOf spared: Int? = nil)
+        -> ChildStakes
+    {
+        let closing = Set(tabs.map { FamilyTab(window: ObjectIdentifier(self), tab: $0) })
+        return familyStakes(closing: closing, panes: panes, sparingWorkOf: spared)
+    }
+
+    // Every window's tabs at the path close together, and each window counts only the children it holds.
+    private func removalStakes(atPath path: URL) -> ChildStakes {
+        let closing = familyWindows.flatMap { window in
+            window.allTabIDs.filter { window.isClosedByRemoval($0, atPath: path) }.map {
+                FamilyTab(window: ObjectIdentifier(window), tab: $0)
+            }
+        }
+        return familyStakes(closing: Set(closing), panes: [], sparingWorkOf: nil).held(by: self)
+    }
+
+    // Children close after their parent, wherever they are in any window, so the warning has to count them first.
+    // A child that is its tab's last pane takes the tab, with its drawers and floats, so those count too.
+    private func familyStakes(closing tabs: Set<FamilyTab>, panes: Set<Int>, sparingWorkOf spared: Int?)
+        -> ChildStakes
+    {
+        let windows = familyWindows
+        let every = windows.flatMap { window in
+            window.workspaces.flatMap { workspace in
+                workspace.tabIDs.flatMap { id in
+                    (workspace.controller(id)?.paneHandles ?? []).map { FamilyPane(window: window, tab: id, pane: $0) }
+                }
+            }
+        }
+        var closing = panes.union(every.filter { tabs.contains($0.key) }.map(\.pane.token))
+        var children: [FamilyPane] = []
+        var lineage: Set<Int> = spared.map { [$0] } ?? []
+        var cascadedTabs: [FamilyTab] = []
+        let tabCloses = { (key: FamilyTab) in
+            tabs.contains(key)
+                || every.filter { $0.key == key && $0.pane.drawer == nil }.allSatisfy {
+                    closing.contains($0.pane.token)
+                }
+        }
+        var grew = true
+        while grew {
+            grew = false
+            for entry in every where !closing.contains(entry.pane.token) && Self.closesWith(entry.pane, closing) {
+                closing.insert(entry.pane.token)
+                children.append(entry)
+                if Self.closesWith(entry.pane, lineage) { lineage.insert(entry.pane.token) }
+                grew = true
+            }
+            for key in Set(every.map(\.key))
+            where !tabs.contains(key) && !cascadedTabs.contains(key) && tabCloses(key) {
+                cascadedTabs.append(key)
+                for drawer in every where drawer.key == key && drawer.pane.drawer != nil {
+                    closing.insert(drawer.pane.token)
+                    children.append(drawer)
+                }
+                grew = true
+            }
+        }
+        guard !children.isEmpty else {
+            return ChildStakes(running: [], floats: [], closesWindow: false, otherWindows: [])
+        }
+        let empties = { (window: WindowController) in
+            !window.workspaces.isEmpty
+                && window.workspaces.allSatisfy {
+                    $0.host == nil
+                        && $0.tabIDs.allSatisfy { tabCloses(FamilyTab(window: ObjectIdentifier(window), tab: $0)) }
+                }
+        }
+        let otherWindows = windows.filter { $0 !== self && empties($0) }
+        let floats =
+            cascadedTabs.flatMap { key in
+                windows.first { ObjectIdentifier($0) == key.window }.map { window in
+                    window.floats.runningTitles(scope: key.tab).map { (window: window, title: $0) }
+                } ?? []
+            }
+            + otherWindows.flatMap { window in
+                window.floats.runningTitles(scope: nil).map { (window: window, title: $0) }
+            }
+        return ChildStakes(
+            running: children.filter { $0.pane.surface.isBusy && (spared == nil || !lineage.contains($0.pane.token)) },
+            floats: floats, closesWindow: empties(self), otherWindows: otherWindows)
+    }
+
+    private static func closesWith(_ pane: PaneHandle, _ closing: Set<Int>) -> Bool {
+        guard let parent = pane.record.parent, !pane.record.outlivesParent else { return false }
+        return closing.contains(parent)
+    }
+
+    // Async: a release lands mid-rebuild of the canvas it came from, which may hold a child too.
+    private func closeChildren(of parents: [Int]) {
+        guard !didTearDown else { return }
+        let parents = Set(parents)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.didTearDown else { return }
+            let children = self.workspaces.flatMap { workspace in
+                workspace.tabIDs.flatMap { id in
+                    (workspace.controller(id)?.paneHandles ?? []).filter { Self.closesWith($0, parents) }.map(\.token)
+                }
+            }
+            for token in children {
+                guard let (tab, _) = self.pane(token: token) else { continue }
+                self.removePane(token, in: tab)
+            }
+        }
     }
 
     private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
@@ -2437,11 +2734,14 @@ final class WindowController: NSObject {
 
     func closeStakes(atPath path: URL) -> CloseStakes {
         let tabs = allTabIDs.filter { isClosedByRemoval($0, atPath: path) }
-        let closesWindow = closedByRemoval(atPath: path).thisWindow
+        let children = removalStakes(atPath: path)
+        let closesWindow = closedByRemoval(atPath: path).thisWindow || children.closesWindow
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: tabs.contains(where: isRunning(tab:)),
-            panes: tabs.compactMap(controller).flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
-            floats: tabs.flatMap { floats.runningTitles(scope: $0) }
+            closesWindow: closesWindow, isRunning: tabs.contains(where: isRunning(tab:)) || children.isRunning,
+            panes: tabs.flatMap { tab in
+                (controller(tab)?.paneHandles ?? []).filter(\.surface.isBusy).map { listing(of: $0, in: tab) }
+            } + children.listings,
+            floats: tabs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
@@ -2802,10 +3102,18 @@ final class WindowController: NSObject {
         if lastPane, let workspace = activeWorkspace, let tab = workspace.activeID, holdsAwaitingLogin(tab: tab) {
             return confirmAbandoningLogin(of: workspace, closing: .tab)
         }
-        let closesWindow = lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace)
+        let tab = activeWorkspace?.activeID
+        let children =
+            lastPane
+            ? childStakes(closing: Set([tab].compactMap { $0 }))
+            : childStakes(closing: [], panes: Set([tab.flatMap(focusedPane(of:))?.token].compactMap { $0 }))
+        let closesWindow =
+            lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace) || children.closesWindow
         let needsConfirm =
             closesWindow
+            || !children.otherWindows.isEmpty
             || active.focusedPaneIsBusy
+            || children.isRunning
             || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
             if active.closeFocused() == false { activeWorkspace?.activeID.map { closeTab($0) } }
@@ -2816,11 +3124,13 @@ final class WindowController: NSObject {
             closesWindow ? .lastPane(running: windowIsRunning) : (lastPane ? .tab : .pane)
         let names =
             closesWindow
-            ? runningNamesInWindow()
-            : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
+            ? runningNamesInWindow() + children.names(outside: self)
+            : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : []) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
+            message: CloseWarning.message(
+                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
             if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
@@ -2876,14 +3186,21 @@ final class WindowController: NSObject {
     private func requestCloseTab(_ id: TabID) {
         guard let workspace = workspace(of: id) else { return }
         if holdsAwaitingLogin(tab: id) { return confirmAbandoningLogin(of: workspace, closing: .tab) }
-        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
-        guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
+        let children = childStakes(closing: [id])
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
+        guard closesWindow || isRunning(tab: id) || children.isRunning || !children.otherWindows.isEmpty else {
+            closeTab(id)
+            return
+        }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
-        let names = closesWindow ? runningNamesInWindow() : hiddenRunningNames(inTab: id)
+        let names =
+            closesWindow
+            ? runningNamesInWindow() + children.names(outside: self) : hiddenRunningNames(inTab: id) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names),
+            message: CloseWarning.message(
+                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTab(id) }
     }
@@ -2898,17 +3215,23 @@ final class WindowController: NSObject {
             Log.info("ssh host disconnected", category: .workspace)
             return disconnect(workspace)
         }
-        let closesWindow = closesWindow(closing: workspace)
-        guard closesWindow || isRunning(workspace: workspace) else {
+        let children = childStakes(closing: Set(workspace.tabIDs))
+        let closesWindow = closesWindow(closing: workspace) || children.closesWindow
+        guard closesWindow || isRunning(workspace: workspace) || children.isRunning || !children.otherWindows.isEmpty
+        else {
             closeTabs(of: workspace) { closeTab($0) }
             return
         }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastWorkspace(running: windowIsRunning) : .workspace(workspace.name)
-        let names = closesWindow ? runningNamesInWindow() : runningTabNames(in: workspace)
+        let names =
+            closesWindow
+            ? runningNamesInWindow() + children.names(outside: self)
+            : runningTabNames(in: workspace) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names),
+            message: CloseWarning.message(
+                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTabs(of: workspace) { self?.closeTab($0) } }
     }
@@ -2930,13 +3253,16 @@ final class WindowController: NSObject {
     }
 
     private func requestCloseWindow() {
-        guard windowIsRunning else {
+        let children = childStakes(closing: Set(allTabIDs))
+        guard windowIsRunning || children.isRunning || !children.otherWindows.isEmpty else {
             window.close()
             return
         }
         presentConfirm(
             variant: .warning, title: CloseWarning.Subject.window.title,
-            message: CloseWarning.message(closing: .window, naming: runningNamesInWindow()),
+            message: CloseWarning.message(
+                closing: .window, naming: runningNamesInWindow() + children.names(outside: self),
+                closingOtherWindows: children.otherWindows.count),
             confirmLabel: "Close"
         ) { [weak self] in self?.window.close() }
     }
@@ -3009,6 +3335,11 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
+        c.onLaunchedPaneExited = { [weak self] exit in
+            self?.recordExit(exit, in: id)
+            self?.helperExited(exit)
+        }
+        c.onPaneTokensReleased = { [weak self] tokens in self?.familyWindows.forEach { $0.closeChildren(of: tokens) } }
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -3042,8 +3373,11 @@ final class WindowController: NSObject {
             ids.forEach { self?.attention.register($0, tab: id) }
         }
         c.onSurfacesReleased = { [weak self] ids in
+            self?.paneWaits.panesClosed(ids)
+            self?.paneDrafts.panesClosed(ids)
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
+                self?.firstTasks.release($0)
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
@@ -3057,6 +3391,11 @@ final class WindowController: NSObject {
         c.onCommandFinished = { [weak self] surface, result in
             self?.commandFinished(surface: surface, id: id, result: result)
         }
+    }
+
+    private func helperExited(_ exit: LaunchedPaneExit) {
+        guard let (_, pane) = pane(token: exit.token) else { return }
+        noteHelper(pane.surfaceID, .exited(code: exit.exitCode), answering: .exited)
     }
 
     // The banner lands on `owner`: a hidden Scratch asking for input is usually not in the active tab.
@@ -3194,7 +3533,7 @@ final class WindowController: NSObject {
         message: String
     ) {
         guard let surface else { return }
-        agents.identify(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
+        identifyAgent(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
         if !notification.body.isEmpty, agentStates.status(of: surface) == nil {
             agents.setMessage(surface, notification.body)
         }
@@ -3239,6 +3578,8 @@ final class WindowController: NSObject {
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
+            if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
+            if let surface, self.listedProcesses.contains(surface) { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -3277,10 +3618,13 @@ final class WindowController: NSObject {
             }
             var joined = false
             if !self.agents.contains(surface), let name = AgentRules.agentName(matching: title) {
-                self.agents.identify(surface, name: name, source: .signal)
+                self.identifyAgent(surface, name: name, source: .signal)
                 joined = true
             }
-            guard self.agents.contains(surface) else { return }
+            guard self.agents.contains(surface) else {
+                if self.listedProcesses.contains(surface) { self.renderAgents() }
+                return
+            }
             let previous = self.agentStates.title(of: surface)
             self.agentStates.noteTitle(title, of: surface)
             if self.attention.agentWait(of: surface) != nil, self.agentStates.status(of: surface) == nil,
@@ -3313,10 +3657,13 @@ final class WindowController: NSObject {
 
     private func programStatusChanged(surface: SurfaceID, status: TerminalProgramStatus?) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.agents.agents[surface]?.hasExited != true else { return }
+            guard let self else { return }
+            let settlesFirstTask = self.firstTasks.isAwaiting(surface)
+            if let status { self.firstTasks.report(status, from: surface) }
+            guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }
-                self.agents.identify(surface, name: name, source: .signal)
+                self.identifyAgent(surface, name: name, source: .signal)
             }
             guard self.agents.contains(surface) else { return }
             let previous = self.agentStates.status(of: surface)
@@ -3327,7 +3674,33 @@ final class WindowController: NSObject {
                 self.raiseAsk(surface)
             }
             self.renderAgents()
+            let stopped = previous?.state == .working && status?.state != .working
+            if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
+                self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
+            }
+            if stopped { self.paneWaits.agentStopped(surface) }
         }
+    }
+
+    // Entering `blocked` is its own note, so a helper that stops to ask sends one note, not two.
+    private static func helperChange(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?)
+        -> HelperNote.Change?
+    {
+        if case .blocked(let need) = status?.state {
+            if case .blocked = previous?.state { return nil }
+            return .blocked(need.map(agentNeed))
+        }
+        guard previous?.state == .working, status?.state != .working else { return nil }
+        return .stopped(status.map { agentStatus($0.state) })
+    }
+
+    // Read before the change reaches `paneWaits`, which drops the waits it answers.
+    private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
+        guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
+        onHelperNote?(
+            HelperNote(
+                helper: pane.token, name: pane.record.name, parent: parent, change: change,
+                answeredWaits: reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
     }
 
     private static func asks(_ status: TerminalProgramStatus) -> Bool {
@@ -3545,6 +3918,12 @@ final class WindowController: NSObject {
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
+    func keyReachedFocus() {
+        guard !search.isEditing, let surface = presentFocusedSurface else { return }
+        paneDrafts.typed(into: surface)
+        answerTypedAgent()
+    }
+
     func answerTypedAgent() {
         guard !search.isEditing, let surface = presentFocusedSurface,
             attention.agentWait(of: surface) != nil, !awaitsSignalAnswer(surface)
@@ -3573,12 +3952,57 @@ final class WindowController: NSObject {
         guard let name = AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) else {
             return
         }
-        agents.identify(surface, name: name, source: .launch)
+        identifyAgent(surface, name: name, source: .launch)
         renderAgents()
     }
 
+    private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
+        agents.identify(surface, name: name, source: source)
+        guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
+        claudeSetupOffer?.claudeStarted { [weak self] in self?.presentClaudeSetupOffer() }
+    }
+
+    private func presentClaudeSetupOffer() {
+        weak var toast: ToastView?
+        let actions = [
+            ToastAction(title: "Set up", kind: .primary) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                ClaudeCodeSetup.refresh(applying: .install) { self?.showClaudeSetupResult($0) }
+            },
+            ToastAction(title: "Don't ask again", kind: .cancel) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                self?.claudeSetupOffer?.declineForGood()
+            },
+        ]
+        let content = ToastContent(
+            variant: .info, title: "Teach Claude Code to use zen?",
+            message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName))
+        let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        toast = shown
+    }
+
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static func claudeSetupOfferMessage(in folder: String) -> String {
+        "The zen skill and a session hook,\nin \(folder)"
+    }
+
+    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        switch result {
+        case .success:
+            toasts.show(
+                ToastContent(
+                    variant: .positive, title: "Claude Code can use zen",
+                    message: "New Claude sessions load the zen skill."))
+        case .failure(let error):
+            let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
+            let shown = toasts.showSticky(content, actions: [], showsClose: true)
+            shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        }
+    }
+
     private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {
-        agents.identify(surface, name: name.isEmpty ? nil : name, source: .signal)
+        identifyAgent(surface, name: name.isEmpty ? nil : name, source: .signal)
         agents.setMessage(surface, message)
     }
 
@@ -3633,7 +4057,25 @@ final class WindowController: NSObject {
             if !agent.hasExited, agents.agents[id]?.hasExited == true { exitsAwaitingResult.insert(id) }
             if agentStates.isHoldingIdle(id) { deriveAgentState(id) }
         }
-        if !settling.isEmpty || agents.agents != before { renderAgents() }
+        let processesExited = trackProcessExits()
+        if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
+    }
+
+    private func processFinished(_ surface: SurfaceID) {
+        exitedProcesses.insert(surface)
+        renderAgents()
+    }
+
+    private func trackProcessExits() -> Bool {
+        let parented = panesBySurface().values.filter { $0.record.parent != nil }
+        let ids = Set(parented.map(\.surfaceID))
+        processBusy.keep(only: ids)
+        exitedProcesses.formIntersection(ids)
+        let fell = parented.filter {
+            agents.agents[$0.surfaceID] == nil && processBusy.fell($0.surfaceID, isBusy: $0.surface.isBusy)
+        }
+        exitedProcesses.formUnion(fell.map(\.surfaceID))
+        return !fell.isEmpty
     }
 
     private func terminalSurface(_ id: SurfaceID) -> TerminalSurface? {
@@ -3652,15 +4094,17 @@ final class WindowController: NSObject {
         {
             agents.drop(id)
             agentStates.drop(id)
+            exitedProcesses.insert(id)
         }
         let items = agentItems()
+        listedProcesses = Set(items.filter { !$0.showsState }.map(\.id))
         sidebar.renderAgents(items)
         renderTabChips(agents: items)
     }
 
     private func agentItems() -> [SidebarAgentItem] {
-        typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
-        let located = agents.agents.compactMap { id, agent -> Ranked? in
+        let panes = panesBySurface()
+        let agentRows = agents.agents.compactMap { id, agent -> AgentFamilies.Member? in
             guard let place = agentPlace(id) else { return nil }
             let wait = attention.agentWait(of: id)
             let state = AttentionTone(wait: wait, working: attention.isWorking(id))
@@ -3668,17 +4112,41 @@ final class WindowController: NSObject {
             let paneTitle =
                 agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
-            let item = SidebarAgentItem(
+            var item = SidebarAgentItem(
                 id: id, state: state, summary: title, detail: place.name, message: message)
-            return (item, attention.agentSince(of: id), place.position)
+            item.mark = agent.name.flatMap { $0.isEmpty ? nil : ProcessIcon.forAgent($0).mark }
+            let pane = panes[id]
+            return AgentFamilies.Member(
+                item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
+                parent: pane?.record.parent, isAgent: true)
         }
-        return located.sorted { a, b in
-            if a.item.state.rank != b.item.state.rank { return a.item.state.rank < b.item.state.rank }
-            if a.item.state.isWaiting, a.since != b.since {
-                return (a.since ?? .distantFuture) < (b.since ?? .distantFuture)
+        let processRows = panes.values.compactMap { pane -> AgentFamilies.Member? in
+            guard pane.record.parent != nil, agents.agents[pane.surfaceID] == nil,
+                !exitedProcesses.contains(pane.surfaceID),
+                let place = agentPlace(pane.surfaceID)
+            else { return nil }
+            let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
+            let item = SidebarAgentItem(
+                id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
+            return AgentFamilies.Member(
+                item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
+                isAgent: false)
+        }
+        return AgentFamilies.arrange(agentRows + processRows)
+    }
+
+    private static let unnamedProcess = "process"
+
+    private func panesBySurface() -> [SurfaceID: PaneHandle] {
+        var panes: [SurfaceID: PaneHandle] = [:]
+        for workspace in workspaces {
+            for tab in workspace.tabIDs {
+                for pane in workspace.controller(tab)?.paneHandles ?? [] {
+                    panes[pane.surfaceID] = pane
+                }
             }
-            return a.position.lexicographicallyPrecedes(b.position)
-        }.map(\.item)
+        }
+        return panes
     }
 
     // Sidebar position, so rows sharing a state keep still: workspace, tab, then the surface within it.
@@ -3786,6 +4254,8 @@ final class WindowController: NSObject {
     }
 
     func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }
+
+    func pollTitlesForTesting() { refreshTitlesFromCWD() }
 
     func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
 
@@ -4022,14 +4492,28 @@ final class WindowController: NSObject {
     // A tab shows what its agents' rows show, so it reads the same items, after their rows.
     private func renderTabChips(agents: [SidebarAgentItem]) {
         let tones = Dictionary(grouping: agents) { attention.tab(of: $0.id) }.mapValues { Set($0.map(\.state)) }
+        tabProcesses = Dictionary(uniqueKeysWithValues: activeTabIDs.map { ($0, processIcon(of: $0)) })
         let items = activeTabIDs.enumerated().map { i, id in
             TabBarItem(
                 id: id, index: i + 1,
                 title: title(of: id),
                 isActive: id == activeWorkspace?.activeID,
-                indicator: Self.indicator(for: tones[id] ?? []))
+                indicator: Self.indicator(for: tones[id] ?? []),
+                process: tabProcesses[id] ?? nil)
         }
         tabBar.render(items)
+    }
+
+    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
+    private func processIcon(of id: TabID) -> ProcessIcon? {
+        guard let controller = workspace(of: id)?.controller(id), let surfaceID = controller.focusedPaneSurfaceID,
+            let surface = controller.surface(surfaceID)
+        else { return nil }
+        if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
+            return ProcessIcon.forAgent(name)
+        }
+        guard let group = surface.foregroundProcessGroupID else { return .shell }
+        return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {
@@ -4122,7 +4606,8 @@ final class WindowController: NSObject {
 
 extension WindowController: NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard windowIsRunning else { return true }
+        let children = childStakes(closing: Set(allTabIDs))
+        guard windowIsRunning || children.isRunning || !children.otherWindows.isEmpty else { return true }
         requestCloseWindow()
         return false
     }

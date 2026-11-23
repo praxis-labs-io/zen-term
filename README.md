@@ -38,6 +38,12 @@ sudo mkdir -p /usr/local/bin
 sudo ln -s /Applications/ZenTerm.app/Contents/MacOS/zen /usr/local/bin/zen
 ```
 
+`zen setup claude` teaches Claude Code to use `zen`: it installs a zen skill and a
+session hook in `~/.claude`, and `zen setup claude --remove` takes them out again.
+The skill shows Claude how to start helper agents and long-running commands in
+panes and wait on them. ZenTerm offers the setup when it sees Claude
+start in a pane, and Settings > General turns it on or off.
+
 The [zen CLI Guide](https://zenterm.io/docs/cli) covers the rest.
 
 ## What it does
