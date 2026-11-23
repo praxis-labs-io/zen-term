@@ -507,6 +507,26 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(menu.isOpen)
     }
 
+    func test_aWorkspaceClosedElsewhere_closesItsRowsMenu_beforeTheNextClick() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        let alpha = try XCTUnwrap(c.activeWorkspaceIDForTesting)
+        try openWorkspace(named: "Beta", in: c)
+
+        try rightClick(rows(of: c)[1])
+        XCTAssertTrue(menu.isOpen)
+        for tab in c.tabIDsForTesting(workspace: alpha) { c.closeTabForTesting(tab: tab) }
+        XCTAssertEqual(titles(of: c), [startFolderName, "Beta"])
+
+        NSApp.sendEvent(
+            try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: NSPoint(x: 600, y: 300), modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+
+        XCTAssertFalse(menu.isOpen)
+    }
+
     private func renameCard(in c: WindowController) throws -> RenameOverlay {
         try XCTUnwrap(descendants(of: c.window.contentView!).compactMap { $0 as? RenameOverlay }.first)
     }
