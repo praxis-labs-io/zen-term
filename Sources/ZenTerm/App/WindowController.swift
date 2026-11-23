@@ -3679,11 +3679,20 @@ final class WindowController: NSObject {
             }
             self.renderAgents()
             let stopped = previous?.state == .working && status?.state != .working
-            if previous?.state != .working, status?.state == .working { self.helpersReported.remove(surface) }
+            if Self.startsTurn(from: previous, to: status) { self.helpersReported.remove(surface) }
             if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
                 self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
             }
             if stopped { self.paneWaits.agentStopped(surface) }
+        }
+    }
+
+    // Leaving a block resumes the turn the agent was in, so only a start from rest begins a new one.
+    private static func startsTurn(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?) -> Bool {
+        guard status?.state == .working else { return false }
+        switch previous?.state {
+        case nil, .idle, .done, .failed: return true
+        case .working, .blocked: return false
         }
     }
 

@@ -714,4 +714,24 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(answered?.isSuccess, true, "\(answered as Any)")
         XCTAssertEqual(helper.inputs, before + (try Self.pressed(["down", "enter"])))
     }
+
+    func test_aReportHoldsThroughABlockInTheSameTurn() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try send("2 bugs", from: helper, to: parent)
+        report(.blocked(.permission), from: helper)
+        report(.working, from: helper)
+
+        report(.done, from: helper)
+
+        let token = try token(of: helper)
+        XCTAssertEqual(
+            parent.inputs,
+            try note("2 bugs", from: helper)
+                + note("review is blocked on a permission prompt; that decision is the user's", from: helper)
+                + note("review is working again; wait on it with zen wait \(token)", from: helper))
+    }
 }
