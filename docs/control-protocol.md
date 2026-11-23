@@ -378,6 +378,8 @@ with `enter` sends it:
   child answers the same change, when one it holds on its `children` watches the child, since
   that wait reports the change, or for the report that settles `first_task`, which `pane.run`
   answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
+- There is no `stopped` note when the child sent its parent a `pane.send` since its `status` last
+  became `working`, since that message carries the news.
 - A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
   until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
   dropped.

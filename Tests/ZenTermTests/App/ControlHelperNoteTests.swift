@@ -142,6 +142,16 @@ final class ControlHelperNoteTests: WindowTestCase {
         return [.paste("<zen from=\"\(sender)\" reply=\"\(reply)\">\(text)</zen>"), .submit]
     }
 
+    private func send(_ text: String, from sender: RecordingSurface, to pane: RecordingSurface) throws {
+        let answer = Answer()
+        responder.respond(
+            to: ControlRequest(
+                id: 4, cmd: .paneSend, args: ControlArgs(pane: .token(try token(of: pane)), text: text, enter: true),
+                caller: ControlCaller(pane: try token(of: sender)))
+        ) { answer.reply = $0 }
+        XCTAssertEqual(answer.reply?.isSuccess, true, "\(answer.reply as Any)")
+    }
+
     private func type(into surface: RecordingSurface, in c: WindowController) throws {
         let place = try XCTUnwrap(c.pane(token: try token(of: surface)))
         c.focus(place.pane.surfaceID, in: place.tab)
@@ -426,5 +436,66 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(heard.exitCode, 3)
         XCTAssertTrue(heard.text?.hasPrefix("review: 2 bugs") == true, "\(String(describing: heard.text))")
         XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_aHelperThatReportedToItsParentStopsWithoutANote() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+
+        report(.working, from: helper)
+        try send("2 bugs", from: helper, to: parent)
+        report(.working, from: helper)
+        report(.done, from: helper)
+
+        XCTAssertEqual(parent.inputs, try note("2 bugs", from: helper))
+    }
+
+    func test_aReportCountsOnlyUntilTheHelpersNextTurn() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try send("2 bugs", from: helper, to: parent)
+        report(.done, from: helper)
+
+        report(.working, from: helper)
+        report(.done, from: helper)
+
+        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, try note("2 bugs", from: helper) + note(read, from: helper))
+    }
+
+    func test_aMessageToAnotherPaneIsNotAReport() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        let sibling = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+        try send("go", from: helper, to: sibling)
+
+        report(.done, from: helper)
+
+        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, try note(read, from: helper))
+    }
+
+    func test_aReportStillLetsABlockedNoteThrough() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try send("2 bugs", from: helper, to: parent)
+
+        report(.blocked(.permission), from: helper)
+
+        XCTAssertEqual(
+            parent.inputs,
+            try note("2 bugs", from: helper)
+                + note("review is blocked on a permission prompt; that decision is the user's", from: helper))
     }
 }

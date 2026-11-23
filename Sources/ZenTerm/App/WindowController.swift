@@ -59,6 +59,7 @@ final class WindowController: NSObject {
     private var processBusy = BusyFallWatch()
     private var exitedProcesses: Set<SurfaceID> = []
     private var listedProcesses: Set<SurfaceID> = []
+    private var helpersReported: Set<SurfaceID> = []
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -2424,6 +2425,8 @@ final class WindowController: NSObject {
         }
     }
 
+    func helperReported(_ surface: SurfaceID) { helpersReported.insert(surface) }
+
     // A task pasted into an idle agent shows no change until the agent reports again.
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
         if firstTasks.awaitsPickup(pane.surfaceID) { return true }
@@ -3381,6 +3384,7 @@ final class WindowController: NSObject {
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
+                self?.helpersReported.remove($0)
             }
             self?.renderAgents()
         }
@@ -3675,6 +3679,7 @@ final class WindowController: NSObject {
             }
             self.renderAgents()
             let stopped = previous?.state == .working && status?.state != .working
+            if previous?.state != .working, status?.state == .working { self.helpersReported.remove(surface) }
             if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
                 self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
             }
@@ -3697,6 +3702,7 @@ final class WindowController: NSObject {
     // Read before the change reaches `paneWaits`, which drops the waits it answers.
     private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
         guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
+        if case .stopped = change, helpersReported.contains(surface) { return }
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,

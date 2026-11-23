@@ -613,7 +613,8 @@ person's last key into each surface from `KeyInterceptor`'s keys the chrome did 
 path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
-`onHelperNote`. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
+`onHelperNote`. A child's `pane.send` to its parent marks it in its window until its next turn,
+which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
 parent is blocked and `PaneDrafts` while it has a draft. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker

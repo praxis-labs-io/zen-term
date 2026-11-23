@@ -149,10 +149,17 @@ extension ControlResponder {
         }
         guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
         paste(request.args.text ?? "", from: request.caller?.pane, into: place, enter: request.args.enter == true)
+        noteReport(from: request.caller?.pane, to: place.pane.token)
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }
         hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
+    }
+
+    // A helper's message to its parent already carries the news its `stopped` note would.
+    private func noteReport(from sender: Int?, to token: Int) {
+        guard let sender, let helper = locate(pane: sender), helper.pane.record.parent == token else { return }
+        helper.window.helperReported(helper.pane.surfaceID)
     }
 
     // A permission prompt or a question is the user's to answer, and a paste would answer it for them.
