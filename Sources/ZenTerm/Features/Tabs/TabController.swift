@@ -280,7 +280,7 @@ final class TabController: NSObject {
 
     init(
         initialCWD: URL?, initialCommand: PaneProgram? = nil, env: [String: String] = [:], backingScale: CGFloat? = nil,
-        isToolFloatOpen: @escaping () -> Bool = { false },
+        isToolFloatOpen: @escaping () -> Bool = { false }, readsForeground: Bool = true,
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
     ) {
@@ -292,7 +292,8 @@ final class TabController: NSObject {
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env, backingScale: backingScale,
-            isToolFloatOpen: isToolFloatOpen, makeSurface: makeSurface, startSurface: startSurface)
+            isToolFloatOpen: isToolFloatOpen, readsForeground: readsForeground, makeSurface: makeSurface,
+            startSurface: startSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()

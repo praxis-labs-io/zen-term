@@ -8,6 +8,7 @@ import XCTest
 final class PaneCanvasControllerTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
+    private let jobs = ProgramJobs()
 
     override func setUp() {
         super.setUp()
@@ -23,6 +24,7 @@ final class PaneCanvasControllerTests: WindowTestCase {
     }
 
     override func tearDown() {
+        jobs.stopAll()
         controller.shutdown()
         controller = nil
         window = nil
@@ -283,5 +285,51 @@ final class PaneCanvasControllerTests: WindowTestCase {
         controller.focusActivePane()
 
         XCTAssertEqual(moves, 1, "focus returning from a drawer is a real move")
+    }
+
+    func test_aTildeTitle_readsAsTheHomeFolder() throws {
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
+        surface.title = "~"
+
+        XCTAssertEqual(controller.title, PathDisplay.homeName)
+    }
+
+    func test_aHostPane_isNeverNamedForTheLocalSsh() throws {
+        let host = PaneCanvasController(readsForeground: false, makeSurface: { RecordingSurface() })
+        host.start()
+        defer { host.shutdown() }
+        let surface = try XCTUnwrap(host.surface(for: host.focusedLeafID) as? RecordingSurface)
+        surface.currentDirectory = URL(fileURLWithPath: "/tmp/api", isDirectory: true)
+        let ssh = Process()
+        ssh.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        ssh.arguments = ["30"]
+        try ssh.run()
+        defer { ssh.terminate() }
+        surface.foregroundProcessGroupID = ssh.processIdentifier
+
+        XCTAssertEqual(host.title, "api")
+    }
+
+    func test_aPaneRunName_outranksTheProgramRunningInIt() throws {
+        let token = try XCTUnwrap(controller.focusedPaneToken)
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
+        surface.foregroundProcessGroupID = try jobs.start(named: "python3")
+        controller.updateRecord(token: token) { $0.name = "server" }
+
+        XCTAssertEqual(controller.title, "server")
+    }
+
+    func test_aShellStartedAtThePrompt_readsAsTheFolder() throws {
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
+        surface.currentDirectory = URL(fileURLWithPath: "/tmp/api", isDirectory: true)
+        surface.foregroundProcessGroupID = try jobs.startWithoutArguments(named: "zsh")
+
+        XCTAssertEqual(controller.title, "api")
+    }
+
+    func test_anEmptyOrShellCommand_namesNoJob() {
+        XCTAssertNil(PaneCanvasController.jobName(fromCommand: ""))
+        XCTAssertNil(PaneCanvasController.jobName(fromCommand: "zsh"))
+        XCTAssertEqual(PaneCanvasController.jobName(fromCommand: "sudo"), "sudo")
     }
 }

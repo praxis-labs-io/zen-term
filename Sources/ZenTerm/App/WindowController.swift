@@ -864,7 +864,7 @@ final class WindowController: NSObject {
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             backingScale: window.backingScaleFactor,
-            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
+            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false }, readsForeground: connection == nil,
             startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
