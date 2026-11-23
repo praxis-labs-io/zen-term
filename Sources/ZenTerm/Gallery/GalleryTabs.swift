@@ -6,7 +6,7 @@
         private static let longTitle = "a-workspace-name-long-enough-to-truncate-in-its-chip"
 
         static func sections() -> [GallerySection] {
-            [tabBar(), workspaceChips()]
+            [tabBar(), processChips(), workspaceChips()]
         }
 
         static func renameChip() -> WorkspaceTabChip {
@@ -36,11 +36,20 @@
                 bar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             ])
             bar.render([
-                TabBarItem(id: TabID(1), index: 1, title: "active", isActive: true, indicator: nil),
-                TabBarItem(id: TabID(2), index: 2, title: "hover", isActive: false, indicator: .dot(.blocked)),
-                TabBarItem(id: TabID(3), index: 3, title: "blocked", isActive: false, indicator: .dot(.blocked)),
-                TabBarItem(id: TabID(4), index: 4, title: "done", isActive: false, indicator: .dot(.done)),
-                TabBarItem(id: TabID(5), index: 5, title: "working", isActive: false, indicator: .spinner),
+                TabBarItem(
+                    id: TabID(1), index: 1, title: "active", isActive: true, indicator: nil, process: .shell),
+                TabBarItem(
+                    id: TabID(2), index: 2, title: "hover", isActive: false, indicator: .dot(.blocked),
+                    process: ProcessIcon.forProgram("nvim")),
+                TabBarItem(
+                    id: TabID(3), index: 3, title: "blocked", isActive: false, indicator: .dot(.blocked),
+                    process: ProcessIcon.forAgent("claude")),
+                TabBarItem(
+                    id: TabID(4), index: 4, title: "done", isActive: false, indicator: .dot(.done),
+                    process: ProcessIcon.forAgent("codex")),
+                TabBarItem(
+                    id: TabID(5), index: 5, title: "working", isActive: false, indicator: .spinner,
+                    process: ProcessIcon.forAgent("gemini")),
                 TabBarItem(id: TabID(6), index: 6, title: longTitle, isActive: false, indicator: nil),
             ])
             bar.forceHoverForGallery(tab: TabID(2))
@@ -49,6 +58,20 @@
                 rows: [
                     GallerySection.Row(label: "Active, hover over a dot, blocked, done, working, long", samples: [bar])
                 ])
+        }
+
+        private static func processChips() -> GallerySection {
+            let icons: [ProcessIcon] = [
+                ProcessIcon.forAgent("claude"), ProcessIcon.forAgent("codex"), ProcessIcon.forAgent("gemini"),
+                ProcessIcon.forAgent("pi"), ProcessIcon.forProgram("docker"), .shell, .unknownAgent, .worktree,
+            ]
+            return GallerySection(
+                title: "IconBadge: process chips",
+                rows: [IconBadge.Size.small, .regular].map { size in
+                    GallerySection.Row(
+                        label: "Brand, artwork, generic, worktree",
+                        samples: icons.map { IconBadge(process: $0, size: size) })
+                })
         }
 
         private static func workspaceChips() -> GallerySection {

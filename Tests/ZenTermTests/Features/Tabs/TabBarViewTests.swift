@@ -22,6 +22,57 @@ final class TabBarViewTests: WindowTestCase {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, indicator: nil)
     }
 
+    func test_aTabRunningAProgram_leadsWithItsChip_andItsLabelStartsAfterIt() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        var nvim = item(1, "zen-term", index: 1, active: true)
+        nvim.process = ProcessIcon.forProgram("nvim")
+        let plain = item(2, "notes", index: 2)
+
+        tabBar.render([nvim, plain])
+        tabBar.layoutSubtreeIfNeeded()
+
+        let chips = tabBar.chipsForTesting
+        let badge = try XCTUnwrap(chips[0].processBadgeForTesting, "a tab running nvim shows a chip")
+        XCTAssertEqual(badge.process?.name, "Neovim")
+        XCTAssertEqual(badge.frame.minX, ChromeMetrics.Spacing.s4)
+        XCTAssertEqual(badge.frame.midY, chips[0].bounds.midY, accuracy: 0.5)
+        XCTAssertEqual(chips[0].labelFrameForTesting.minX, badge.frame.maxX + ChromeMetrics.Spacing.s4)
+        XCTAssertNil(chips[1].processBadgeForTesting, "a tab with no process shows no chip")
+        XCTAssertEqual(chips[1].labelFrameForTesting.minX, TabChip.labelInset)
+    }
+
+    func test_aShortTitle_centersTheChipAndLabelTogether_soTheGapStaysTight() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        var tab = item(1, "a", index: 1, active: true)
+        tab.process = .shell
+        tabBar.render([tab])
+        tabBar.layoutSubtreeIfNeeded()
+
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.first)
+        let badge = try XCTUnwrap(chip.processBadgeForTesting)
+        XCTAssertEqual(chip.labelFrameForTesting.minX, badge.frame.maxX + ChromeMetrics.Spacing.s4)
+        XCTAssertEqual(
+            badge.frame.minX - ChromeMetrics.Spacing.s4,
+            chip.bounds.width - TabChip.labelInset
+                - chip.labelFrameForTesting.minX - chip.textWidth, accuracy: 0.5,
+            "the slack splits evenly either side of chip and label")
+    }
+
+    func test_aKeptChip_swapsToTheNewProgramsMark() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        var tab = item(1, "zen-term", index: 1, active: true)
+        tab.process = .shell
+        tabBar.render([tab])
+
+        tab.process = ProcessIcon.forProgram("lazygit")
+        tabBar.render([tab])
+
+        XCTAssertEqual(try XCTUnwrap(tabBar.chipsForTesting.first?.processBadgeForTesting).process?.name, "Git")
+    }
+
     func test_hoveringAChip_layingOutItsCloseButton_conflictsWithNoConstraint() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)

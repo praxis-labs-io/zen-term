@@ -34,9 +34,9 @@ final class TerminalTabChip: TabChip {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func update(index: Int, title: String, isCurrent: Bool, indicator: Indicator?) {
+    func update(index: Int, title: String, isCurrent: Bool, indicator: Indicator?, process: ProcessIcon?) {
         tabIndex = index
-        apply(title: title, isCurrent: isCurrent, isClosable: true, indicator: indicator)
+        apply(title: title, isCurrent: isCurrent, isClosable: true, indicator: indicator, process: process)
     }
 
     override func viewDidMoveToWindow() {
