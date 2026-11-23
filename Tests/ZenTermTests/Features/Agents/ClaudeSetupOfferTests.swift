@@ -239,6 +239,18 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         XCTAssertEqual(try installedSkill(), edited)
     }
 
+    func test_anEditedSetupIsNotOfferedOnceSetupWasDeclined() throws {
+        defaults.set(true, forKey: ClaudeSetupOffer.declinedKey)
+        try install(skill: edited)
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+        settle()
+
+        XCTAssertNil(toast(titled: Self.updateTitle, in: c))
+        XCTAssertEqual(try installedSkill(), edited)
+    }
+
     func test_updateReplacesAnEditedSetup() throws {
         try install(skill: edited)
         let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))

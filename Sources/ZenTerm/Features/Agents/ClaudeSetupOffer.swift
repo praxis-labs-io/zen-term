@@ -32,7 +32,8 @@ final class ClaudeSetupOffer {
     private func isShown(_ startup: ClaudeCodeSetup.Startup) -> Bool {
         switch startup {
         case .notInstalled: !defaults.bool(forKey: Self.declinedKey)
-        case .edited(let version): defaults.string(forKey: Self.skippedVersionKey) != version
+        case .edited(let version):
+            !defaults.bool(forKey: Self.declinedKey) && defaults.string(forKey: Self.skippedVersionKey) != version
         case .updated, .updateFailed: true
         case .current: false
         }
