@@ -14,7 +14,7 @@ extension ControlResponder {
             guard let parent = parentPlace(of: note) else { return }
             paneDrafts.hold(parent.pane.surfaceID, hangup: ControlHangup()) { [self] in
                 guard let place = parentPlace(of: note), place.window.runsAgent(place.pane),
-                    place.pane.surface.isStarted
+                    place.pane.surface.isStarted, note.outlivesHelper || locate(pane: note.helper) != nil
                 else { return }
                 if isBlocked() { return hold(note, by: cap) }
                 paste(note.text, from: note.helper, into: place, enter: true)

@@ -14,6 +14,12 @@ struct HelperNote: Equatable {
     let change: Change
     let answeredWaits: Set<SurfaceID>
 
+    // An exit closes the helper's pane, so only its note still means something once the pane is gone.
+    var outlivesHelper: Bool {
+        if case .exited = change { return true }
+        return false
+    }
+
     var text: String {
         let who = name.map(ZenEnvelope.escaped) ?? "pane \(helper)"
         switch change {

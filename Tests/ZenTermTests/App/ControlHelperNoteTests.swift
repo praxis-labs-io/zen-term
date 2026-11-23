@@ -152,6 +152,16 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(answer.reply?.isSuccess, true, "\(answer.reply as Any)")
     }
 
+    private func close(_ pane: RecordingSurface, by caller: RecordingSurface) throws {
+        let answer = Answer()
+        responder.respond(
+            to: ControlRequest(
+                id: 5, cmd: .paneClose, args: ControlArgs(force: true, pane: .token(try token(of: pane))),
+                caller: ControlCaller(pane: try token(of: caller)))
+        ) { answer.reply = $0 }
+        XCTAssertEqual(answer.reply?.isSuccess, true, "\(answer.reply as Any)")
+    }
+
     private func type(into surface: RecordingSurface, in c: WindowController) throws {
         let place = try XCTUnwrap(c.pane(token: try token(of: surface)))
         c.focus(place.pane.surfaceID, in: place.tab)
@@ -497,5 +507,51 @@ final class ControlHelperNoteTests: WindowTestCase {
             parent.inputs,
             try note("2 bugs", from: helper)
                 + note("review is blocked on a permission prompt; that decision is the user's", from: helper))
+    }
+
+    func test_aParentThatClosesItsHelperDropsTheNoteHeldForItsDraft() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try type(into: parent, in: c)
+        report(.done, from: helper)
+
+        try close(helper, by: parent)
+        clock.advance(PaneDrafts.quiet)
+
+        XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_aParentThatClosesItsHelperDropsTheNoteHeldWhileItIsBlocked() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.blocked(.permission), from: parent)
+        report(.blocked(.question), from: helper)
+
+        try close(helper, by: parent)
+        report(.working, from: parent)
+        clock.advance(ParentNotes.recheck)
+
+        XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_anExitNoteHeldForTheParentsDraftStillArrivesOnceThePaneHasClosed() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(named: nil, from: parent)
+        let name = "pane \(try token(of: helper))"
+        try type(into: parent, in: c)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        clock.advance(PaneDrafts.quiet)
+
+        XCTAssertEqual(parent.inputs, try note("\(name) exited with code 1", from: helper, named: nil))
     }
 }
