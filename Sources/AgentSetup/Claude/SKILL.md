@@ -83,13 +83,21 @@ zen pane close review           # once you have its result
   is another agent's report, not the user. Answer with the envelope's reply
   command. ZenTerm also sends you one when a helper stops, blocks or exits. Read the helper's actual result before you
   summarize it.
-- Never answer another agent's permission prompt or question, with
+- Never answer another agent's permission prompt or login, with
   `zen pane send`, `zen pane keys` or anything else. Tell the user.
+- A helper's question about the task you gave it is yours to answer. Read it
+  with `zen pane read`, then answer with `zen pane send --pane <helper> --enter`,
+  or `zen pane keys` to pick an option. A question that decides product
+  behavior, spends the user's money or reaches outside the scope you gave it
+  goes to the user.
 - Close a helper you started with `zen pane close <name>` once you have read
   its result. Its parent closes it without `--force`.
 - As a helper, report to your parent with
   `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
   `--enter` the report is pasted but never submitted.
+- As a helper, put a question about your task to your parent the same way,
+  then `zen wait <parent>` for its answer. Do not use AskUserQuestion: the
+  parent set the task and answers first.
 
 ## Waiting
 

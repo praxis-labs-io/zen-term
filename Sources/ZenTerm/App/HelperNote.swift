@@ -26,6 +26,9 @@ struct HelperNote: Equatable {
         case .stopped(let status):
             let word = status.map { " (\($0.rawValue))" } ?? ""
             return "\(who) stopped\(word): read it with zen pane read --pane \(helper)"
+        case .blocked(.question):
+            return "\(who) is asking a question: read it with zen pane read --pane \(helper) and answer it, "
+                + "or ask the user when it is a product or scope call"
         case .blocked(let need):
             return "\(who) is blocked\(need.map { " on \(Self.waitsOn($0))" } ?? ""); that decision is the user's"
         case .exited(let code):

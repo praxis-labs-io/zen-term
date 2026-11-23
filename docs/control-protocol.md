@@ -301,7 +301,9 @@ waiting for its connection. Nothing is sent.
 Into a pane that runs an agent:
 
 - `refused` while its `status` is `blocked`, since what it waits on is the user's decision.
-  `force` sends anyway. A `working` agent takes the text into its running turn.
+  `force` sends anyway. A `pane.run` parent's send to its child blocked on a `question` is not
+  refused, since a question about the task is the parent's to answer; a `permission` or `auth`
+  block refuses the parent too. A `working` agent takes the text into its running turn.
 - It holds while the person is typing into the pane: until 2 seconds after their last key
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
@@ -372,8 +374,9 @@ with `enter` sends it:
 | `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
 | `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
 
-- A child without a name is `pane 34`. `blocked` names `a permission prompt`, `a question` or
-  `a login` when the program says which.
+- A child without a name is `pane 34`. `blocked` names `a permission prompt` or `a login` when
+  the program says which. A child blocked on a question sends
+  `review is asking a question: read it with zen pane read --pane 34 and answer it, or ask the user when it is a product or scope call`.
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
   child answers the same change, when one it holds on its `children` watches the child, since
   that wait reports the change, or for the report that settles `first_task`, which `pane.run`

@@ -127,7 +127,9 @@ extension ControlResponder {
         switch pane(request.args.pane, for: request) {
         case .failure(let error): reply(.failure(error))
         case .success(let place):
-            if let refusal = Self.refusal(sending: place, force: request.args.force) { return reply(.failure(refusal)) }
+            if let refusal = Self.refusal(sending: place, from: request.caller?.pane, force: request.args.force) {
+                return reply(.failure(refusal))
+            }
             let token = place.pane.token
             guard place.window.runsAgent(place.pane) else {
                 return deliver(to: token, for: request, hangup: hangup, reply: reply)
@@ -144,7 +146,9 @@ extension ControlResponder {
     ) {
         let found = pane(.token(token), for: request).flatMap { place -> Result<PanePlace, ControlError> in
             guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
-            if let refusal = Self.refusal(sending: place, force: request.args.force) { return .failure(refusal) }
+            if let refusal = Self.refusal(sending: place, from: request.caller?.pane, force: request.args.force) {
+                return .failure(refusal)
+            }
             return .success(place)
         }
         guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
@@ -162,11 +166,12 @@ extension ControlResponder {
         helper.window.helperReported(helper.pane.surfaceID)
     }
 
-    // A permission prompt or a question is the user's to answer, and a paste would answer it for them.
-    static func refusal(sending place: PanePlace, force: Bool?) -> ControlError? {
+    // A paste would answer the prompt, which is the user's, except a helper's question about the task its parent set.
+    static func refusal(sending place: PanePlace, from sender: Int?, force: Bool?) -> ControlError? {
         guard force != true, let agent = place.window.listing(of: place.pane, in: place.tab).agent,
             agent.status == .blocked
         else { return nil }
+        if agent.kind == .question, let sender, sender == place.pane.record.parent { return nil }
         let waitsOn = agent.kind.map { " for \($0.rawValue)" } ?? ""
         return ControlError(
             .refused,

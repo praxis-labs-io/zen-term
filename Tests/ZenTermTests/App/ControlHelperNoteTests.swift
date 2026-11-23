@@ -143,13 +143,25 @@ final class ControlHelperNoteTests: WindowTestCase {
     }
 
     private func send(_ text: String, from sender: RecordingSurface, to pane: RecordingSurface) throws {
+        let reply = try sending(text, from: sender, to: pane)
+        XCTAssertEqual(reply?.isSuccess, true, "\(reply as Any)")
+    }
+
+    private func sending(_ text: String, from sender: RecordingSurface, to pane: RecordingSurface) throws
+        -> ControlReply?
+    {
         let answer = Answer()
         responder.respond(
             to: ControlRequest(
                 id: 4, cmd: .paneSend, args: ControlArgs(pane: .token(try token(of: pane)), text: text, enter: true),
                 caller: ControlCaller(pane: try token(of: sender)))
         ) { answer.reply = $0 }
-        XCTAssertEqual(answer.reply?.isSuccess, true, "\(answer.reply as Any)")
+        return answer.reply
+    }
+
+    private static func errorCode(of reply: ControlReply?) -> ControlErrorCode? {
+        guard case .failure(let error) = reply else { return nil }
+        return error.code
     }
 
     private func close(_ pane: RecordingSurface, by caller: RecordingSurface) throws {
@@ -553,5 +565,63 @@ final class ControlHelperNoteTests: WindowTestCase {
         clock.advance(PaneDrafts.quiet)
 
         XCTAssertEqual(parent.inputs, try note("\(name) exited with code 1", from: helper, named: nil))
+    }
+
+    func test_aHelperBlockedOnAQuestionTellsItsParentToAnswerIt() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+
+        report(.blocked(.question), from: helper)
+
+        let token = try token(of: helper)
+        let ask =
+            "review is asking a question: read it with zen pane read --pane \(token) and answer it, "
+            + "or ask the user when it is a product or scope call"
+        XCTAssertEqual(parent.inputs, try note(ask, from: helper))
+    }
+
+    func test_aParentAnswersItsHelpersQuestion() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.blocked(.question), from: helper)
+
+        try send("use the staging bucket", from: parent, to: helper)
+
+        let from = try token(of: parent)
+        let reply = "zen pane send --pane \(from) --enter"
+        XCTAssertEqual(
+            helper.inputs.suffix(2),
+            [.paste("<zen from=\"\(from)\" reply=\"\(reply)\">use the staging bucket</zen>"), .submit])
+    }
+
+    func test_aHelpersQuestionIsNotAnotherPanesToAnswer() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try runHelper(from: parent)
+        let sibling = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+        report(.blocked(.question), from: helper)
+
+        let reply = try sending("yes", from: sibling, to: helper)
+
+        XCTAssertEqual(Self.errorCode(of: reply), .refused)
+    }
+
+    func test_aHelpersPermissionPromptOrLoginStaysTheUsers_evenForItsParent() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+
+        for need in [TerminalProgramStatus.Need.permission, .auth] {
+            report(.blocked(need), from: helper)
+            XCTAssertEqual(Self.errorCode(of: try sending("yes", from: parent, to: helper)), .refused, "\(need)")
+            report(.working, from: helper)
+        }
     }
 }
