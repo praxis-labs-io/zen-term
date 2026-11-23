@@ -37,7 +37,7 @@ enum AgentFamilies {
             family.map { member in
                 var item = member.item
                 let nested = heads[item.id] != nil
-                item.role = member.isAgent ? (nested ? .helper : .agent) : .process(nested: nested)
+                item.role = member.isAgent ? (nested ? .helper : .agent) : .process
                 if let starter = starters[item.id], nested, starter.item.id != heads[item.id] {
                     item.startedBy = starter.item.summary
                 }

@@ -401,8 +401,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still
   leaves, and a busy reading falling (`BusyFallWatch`, the roster's rule) is the backstop;
   a parented pane whose agent left is never one. A pane with no agent above it is not listed, so
-  a process run from a plain shell, or one whose agent left or whose agent's pane closed, has no
-  row. A helper whose agent is gone lists top-level as an agent. A family sorts by its most
+  a process run from a plain shell, or one with no agent left anywhere above it, has no row.
+  Ownership passes through any open pane, so a process under a helper whose agent left still
+  lists under the agent above that helper. A helper whose agent is gone lists top-level as an agent. A family sorts by its most
   urgent member.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
