@@ -1,26 +1,11 @@
 import AppKit
 
-// A sidebar row's right-click menu: mouse picks an item, Esc or a click elsewhere closes it.
 @MainActor
 final class SidebarRowMenu {
     struct Item {
         let title: String
         let action: KeyInterceptor.ReservedChord?
         let run: () -> Void
-    }
-
-    private struct Press: Sendable {
-        let isKey: Bool
-        let isEscape: Bool
-        let windowNumber: Int
-        let location: NSPoint
-
-        init(_ event: NSEvent) {
-            isKey = event.type == .keyDown
-            isEscape = isKey && KeyboardFocus.key(for: event) == .escape
-            windowNumber = event.windowNumber
-            location = event.locationInWindow
-        }
     }
 
     private static let rowHeight: CGFloat = ChromeMetrics.Height.control
@@ -45,9 +30,8 @@ final class SidebarRowMenu {
 
     private var popover: ListPopover?
     private(set) weak var anchor: NSView?
-    private var monitor: Any?
     private var itemViews: [ListRow] = []
-    private var dismissObservers: [NSObjectProtocol] = []
+    private var highlighted: Int?
 
     var isOpen: Bool { popover?.isOpen == true }
 
@@ -55,10 +39,10 @@ final class SidebarRowMenu {
     // Not `isOpen`: ListPopover's own close clears the card before calling back, so by then the menu reads shut.
     private var hasIssuedCover = false
 
-    func open(_ groups: [[Item]], from row: NSView) {
+    func open(_ groups: [[Item]], from row: NSView, highlightingFirst: Bool = false) {
         close()
         let groups = groups.filter { !$0.isEmpty }
-        guard !groups.isEmpty, let window = row.window else { return }
+        guard !groups.isEmpty, row.window != nil else { return }
         let popover = ListPopover(anchor: row)
         popover.onSelfClose = { [weak self] in self?.close() }
         var rows: [ListPopover.Row] = []
@@ -70,20 +54,19 @@ final class SidebarRowMenu {
                     item.run()
                 }
             }
+            for (offset, view) in views.enumerated() {
+                let index = itemViews.count + offset
+                view.onPointerEnter = { [weak self] in self?.highlight(index) }
+            }
             itemViews += views
             rows += views.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
         }
         popover.open(rows: rows)
         self.popover = popover
         anchor = row
-        let dismissingEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]
-        monitor = NSEvent.addLocalMonitorForEvents(matching: dismissingEvents) { [weak self] event in
-            let press = Press(event)
-            return MainActor.assumeIsolated { self?.swallows(press) ?? false } ? nil : event
-        }
-        dismissObservers = HoverCardView.windowDismissObservers(in: window) { [weak self] in self?.close() }
         hasIssuedCover = true
         onOpenChanged?(true)
+        if highlightingFirst { moveHighlight(1) }
     }
 
     func close() {
@@ -94,26 +77,27 @@ final class SidebarRowMenu {
         popover = nil
         anchor = nil
         itemViews = []
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
-        dismissObservers.forEach { NotificationCenter.default.removeObserver($0) }
-        dismissObservers = []
+        highlighted = nil
     }
 
-    func filter(_ event: NSEvent) -> NSEvent? { swallows(Press(event)) ? nil : event }
+    func moveHighlight(_ delta: Int) {
+        guard isOpen, let next = KeyboardFocus.step(from: highlighted, delta: delta, count: itemViews.count)
+        else { return }
+        highlight(next)
+    }
 
-    private func swallows(_ press: Press) -> Bool {
-        guard let popover, popover.isOpen, let window = anchor?.window, let content = window.contentView else {
-            return false
-        }
-        if press.isKey {
-            close()
-            return press.isEscape
-        }
-        let isOnCard = popover.cardFrame.contains(content.convert(press.location, from: nil))
-        if press.windowNumber == window.windowNumber, !isOnCard { close() }
-        return false
+    private func highlight(_ index: Int) {
+        guard isOpen, itemViews.indices.contains(index) else { return }
+        highlighted = index
+        for (position, row) in itemViews.enumerated() { row.isHighlighted = position == index }
+    }
+
+    func chooseHighlighted() -> Bool {
+        guard isOpen, let highlighted, itemViews.indices.contains(highlighted) else { return false }
+        itemViews[highlighted].onChoose()
+        return true
     }
 
     var itemViewsForTesting: [ListRow] { itemViews }
+    var highlightedTitleForTesting: String? { highlighted.map { itemViews[$0].title } }
 }

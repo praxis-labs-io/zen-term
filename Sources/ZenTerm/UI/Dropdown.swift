@@ -29,6 +29,7 @@ final class Dropdown: PopoverPicker {
 
     var itemsForTesting: [DropdownItem] { items }
     var highlightedRowForTesting: NSView? { highlightedRow() }
+    var rowViewsForTesting: [ListRow] { rowViews.map(\.row) }
     var isHighlightedRowVisibleForTesting: Bool {
         guard let row = highlightedRow(), let clip = row.enclosingScrollView?.contentView else { return false }
         return clip.bounds.intersects(row.convert(row.bounds, to: clip))
@@ -119,7 +120,7 @@ final class Dropdown: PopoverPicker {
                 title: item.title, note: item.note, leading: item.swatch.map { .swatch($0) },
                 trailing: item.isSelected ? .check : nil)
             let row = ListRow(content) { [weak self] in self?.pick(index) }
-            row.setHoverSuppressed(true)
+            row.onPointerEnter = { [weak self] in self?.highlightPointed(index) }
             rowViews.append((index, row))
             lines.append(ListPopover.Row(view: row, height: Self.rowHeight))
         }

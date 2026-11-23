@@ -60,6 +60,8 @@ final class WindowController: NSObject {
     private var processBusy = BusyFallWatch()
     private var exitedProcesses: Set<SurfaceID> = []
     private var listedProcesses: [SurfaceID: ProcessIcon] = [:]
+    private var helpersReported: Set<SurfaceID> = []
+    private var blocksParentsAnswered: Set<SurfaceID> = []
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -427,7 +429,7 @@ final class WindowController: NSObject {
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
         let firstWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), isConfigured: false, name: Self.unconfiguredName(among: []),
+            id: WorkspaceID(raw: 1), isConfigured: false, name: nil,
             folder: initialCWD ?? ShellLaunch.defaultCWD, firstTab: firstID)
         workspaces = [firstWorkspace]
         selection = .workspace(firstWorkspace)
@@ -774,6 +776,7 @@ final class WindowController: NSObject {
             }
         }
         if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
+        if refreshWorkspaceNames() { changed = true }
         if changed { renderTabBar() }
         if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(programIcon) != shown }) {
             renderAgents()
@@ -783,6 +786,19 @@ final class WindowController: NSObject {
         trackAgentExits()
         checkForRemovedWorktrees()
         sidebar.refreshBranches()
+    }
+
+    private var shownWorkspaceNames: [WorkspaceID: String] = [:]
+
+    // A session's name follows its active tab's folder, so the pickers here and in other windows re-read it.
+    @discardableResult
+    private func refreshWorkspaceNames() -> Bool {
+        let names = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0.name) })
+        guard names != shownWorkspaceNames else { return false }
+        shownWorkspaceNames = names
+        refreshOpenPicker()
+        onOpenWorkspacesChanged?()
+        return true
     }
 
     private var isCheckingForRemovedWorktrees = false
@@ -862,7 +878,7 @@ final class WindowController: NSObject {
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             backingScale: window.backingScaleFactor,
-            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
+            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false }, readsForeground: connection == nil,
             startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
@@ -882,13 +898,6 @@ final class WindowController: NSObject {
     private func mintWorkspaceID() -> WorkspaceID {
         defer { nextWorkspaceID += 1 }
         return WorkspaceID(raw: nextWorkspaceID)
-    }
-
-    private static func unconfiguredName(among names: [String]) -> String {
-        let taken = Set(names)
-        var number = 1
-        while taken.contains("Workspace \(number)") { number += 1 }
-        return "Workspace \(number)"
     }
 
     enum SlideEdge { case fromRight, fromLeft, fromBottom, fromTop }
@@ -1761,8 +1770,9 @@ final class WindowController: NSObject {
         let overlay = ReportIssueOverlay(
             report: .current(),
             onOpenURL: { [weak self] url in
-                NSWorkspace.shared.open(url)
+                guard NSWorkspace.shared.open(url) else { return "Couldn't open your browser." }
                 self?.closeModal()
+                return nil
             },
             onExportDiagnostics: { [weak self] in self?.exportDiagnostics() },
             onCancel: { [weak self] in self?.closeModal() })
@@ -2136,12 +2146,10 @@ final class WindowController: NSObject {
                 editing: workspace,
                 existingTitles: existingTitles,
                 onSubmit: { [weak self] built in
-                    if let originalTitle {
-                        self?.submitWorkspace(
-                            built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
-                    } else {
-                        self?.submitNewWorkspace(built)
-                    }
+                    guard let self else { return nil }
+                    guard let originalTitle else { return self.submitNewWorkspace(built) }
+                    return self.submitWorkspace(
+                        built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
                 },
                 onCancel: done,
                 onDismiss: { [weak self] in self?.closeModal() },
@@ -2153,30 +2161,30 @@ final class WindowController: NSObject {
         }
     }
 
-    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String, then done: @escaping () -> Void) {
+    private func submitWorkspace(
+        _ ws: Workspace, replacing originalTitle: String, then done: @escaping () -> Void
+    ) -> String? {
         do {
             try WorkspacesWriter.update(ws, originalTitle: originalTitle)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Save Workspace",
-                    message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
         done()
+        return nil
     }
 
-    private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
+    private static func workspaceWriteFailure(_ error: Error) -> String {
+        "Couldn't write the workspaces file: \(error.localizedDescription)"
+    }
+
+    private func deleteWorkspace(_ ws: Workspace, then done: @escaping () -> Void) -> String? {
         do {
             try WorkspacesWriter.remove(title: ws.title)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Delete Workspace",
-                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
-        (done ?? reopenSettingsOnWorkspaces)()
+        done()
+        return nil
     }
 
     // Leaves Settings open: rebuilding it would lose the user's place in the list mid-⌥↓.
@@ -2202,18 +2210,15 @@ final class WindowController: NSObject {
         openSettings(landing: .workspaces)
     }
 
-    private func submitNewWorkspace(_ ws: Workspace) {
+    private func submitNewWorkspace(_ ws: Workspace) -> String? {
         do {
             try WorkspacesWriter.append(ws)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Save Workspace",
-                    message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
         closeModal()
         openWorkspace(ws)
+        return nil
     }
 
     private func runCommand(_ chord: KeyInterceptor.ReservedChord) {
@@ -2430,6 +2435,13 @@ final class WindowController: NSObject {
         }
     }
 
+    func helperReported(_ surface: SurfaceID) { helpersReported.insert(surface) }
+
+    func helperHeardFromParent(_ surface: SurfaceID) {
+        helpersReported.remove(surface)
+        if case .blocked = agentStates.status(of: surface)?.state { blocksParentsAnswered.insert(surface) }
+    }
+
     // Only an agent that reports its status shows when it picks a task up.
     func noteTaskSubmitted(to pane: PaneHandle) {
         guard runsAgent(pane), let status = agentStates.status(of: pane.surfaceID), TaskPickups.isReady(status)
@@ -2503,6 +2515,8 @@ final class WindowController: NSObject {
 
     func sessionCWD(of id: WorkspaceID) -> URL? { workspaces.first { $0.id == id }?.activeController?.sessionCWD }
 
+    func removedWorktree(of id: WorkspaceID) -> WorktreeOrigin? { workspaces.first { $0.id == id }?.removedWorktree }
+
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
 
     func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {
@@ -2558,8 +2572,10 @@ final class WindowController: NSObject {
         return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
     }
 
-    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?) -> PaneSplitResult? {
-        controller(tab)?.split(pane: token, axis: axis, command: command)
+    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?, cwd: URL?)
+        -> PaneSplitResult?
+    {
+        controller(tab)?.split(pane: token, axis: axis, command: command, cwd: cwd)
     }
 
     func closeStakes(pane: PaneHandle, in tab: TabID, closedByItsParent: Bool = false) -> CloseStakes? {
@@ -2781,12 +2797,11 @@ final class WindowController: NSObject {
     }
 
     private func appendUnconfiguredWorkspace(at folder: URL, named name: String? = nil) -> WorkspaceController {
-        appendWorkspace(
-            named: name ?? Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+        appendWorkspace(named: name, at: folder, config: nil)
     }
 
     private func appendWorkspace(
-        named name: String, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
+        named name: String?, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
     ) -> WorkspaceController {
         Log.info("workspace opened", category: .workspace)
         let tabs = (0..<(config?.tabs.count ?? 1)).map { _ in mintTabID() }
@@ -3346,6 +3361,7 @@ final class WindowController: NSObject {
             guard let self, let workspace = self.workspace(of: id), let c = workspace.controller(id)
             else { return }
             workspace.setTitle(c.title, for: id)
+            self.refreshWorkspaceNames()
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
@@ -3396,6 +3412,8 @@ final class WindowController: NSObject {
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
+                self?.helpersReported.remove($0)
+                self?.blocksParentsAnswered.remove($0)
             }
             self?.renderAgents()
         }
@@ -3695,11 +3713,30 @@ final class WindowController: NSObject {
             }
             self.renderAgents()
             let stopped = previous?.state == .working && status?.state != .working
-            if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
+            if Self.startsTurn(from: previous, to: status) { self.helpersReported.remove(surface) }
+            let answeredByParent =
+                Self.leavesBlock(from: previous, to: status)
+                && self.blocksParentsAnswered.remove(surface) != nil
+            if !settlesFirstTask, !answeredByParent, let change = Self.helperChange(from: previous, to: status) {
                 self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
             }
             if stopped { self.paneWaits.agentStopped(surface) }
         }
+    }
+
+    // Leaving a block resumes the turn the agent was in, so only a start from rest begins a new one.
+    private static func startsTurn(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?) -> Bool {
+        guard status?.state == .working else { return false }
+        switch previous?.state {
+        case nil, .idle, .done, .failed: return true
+        case .working, .blocked: return false
+        }
+    }
+
+    private static func leavesBlock(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?) -> Bool {
+        guard case .blocked = previous?.state else { return false }
+        if case .blocked = status?.state { return false }
+        return true
     }
 
     // Entering `blocked` is its own note, so a helper that stops to ask sends one note, not two.
@@ -3710,6 +3747,7 @@ final class WindowController: NSObject {
             if case .blocked = previous?.state { return nil }
             return .blocked(need.map(agentNeed))
         }
+        if case .blocked = previous?.state, status?.state == .working { return .resumed }
         guard previous?.state == .working, status?.state != .working else { return nil }
         return .stopped(status.map { agentStatus($0.state) })
     }
@@ -3717,10 +3755,13 @@ final class WindowController: NSObject {
     // Read before the change reaches `paneWaits`, which drops the waits it answers.
     private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
         guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
+        if case .stopped = change, helpersReported.contains(surface) { return }
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,
-                answeredWaits: reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
+                answeredWaits: change == .resumed
+                    ? paneWaits.callers(watching: surface)
+                    : reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
     }
 
     private static func asks(_ status: TerminalProgramStatus) -> Bool {
@@ -3979,25 +4020,51 @@ final class WindowController: NSObject {
     private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
         agents.identify(surface, name: name, source: source)
         guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
-        claudeSetupOffer?.claudeStarted { [weak self] in self?.presentClaudeSetupOffer() }
+        claudeSetupOffer?.claudeStarted { [weak self] in self?.showClaudeStartup($0) }
     }
 
-    private func presentClaudeSetupOffer() {
+    private func showClaudeStartup(_ startup: ClaudeCodeSetup.Startup) {
+        switch startup {
+        case .notInstalled:
+            presentClaudeSetupPrompt(
+                title: "Teach Claude Code to use zen?",
+                message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName),
+                confirm: "Set up", decline: "Don't ask again",
+                onConfirmed: { [weak self] in self?.showClaudeSetupResult($0) },
+                onDeclined: { [weak self] in self?.claudeSetupOffer?.declineForGood() })
+        case .edited(let version):
+            presentClaudeSetupPrompt(
+                title: "Update zen for Claude Code?", message: Self.claudeUpdateOfferMessage,
+                confirm: "Update", decline: "Skip this version",
+                onConfirmed: { [weak self] in self?.showClaudeUpdateResult($0) },
+                onDeclined: { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) })
+        case .updated:
+            showClaudeUpdated()
+        case .updateFailed(let error):
+            showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
+        case .current:
+            break
+        }
+    }
+
+    private func presentClaudeSetupPrompt(
+        title: String, message: String, confirm: String, decline: String,
+        onConfirmed: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void,
+        onDeclined: @escaping () -> Void
+    ) {
         weak var toast: ToastView?
         let actions = [
-            ToastAction(title: "Set up", kind: .primary) { [weak self] in
+            ToastAction(title: confirm, kind: .primary) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                ClaudeCodeSetup.refresh(applying: .install) { self?.showClaudeSetupResult($0) }
+                ClaudeCodeSetup.refresh(applying: .install, completion: onConfirmed)
             },
-            ToastAction(title: "Don't ask again", kind: .cancel) { [weak self] in
+            ToastAction(title: decline, kind: .cancel) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                self?.claudeSetupOffer?.declineForGood()
+                onDeclined()
             },
         ]
-        let content = ToastContent(
-            variant: .info, title: "Teach Claude Code to use zen?",
-            message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName))
-        let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+        let shown = toasts.showSticky(
+            ToastContent(variant: .info, title: title, message: message), actions: actions, showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
         toast = shown
     }
@@ -4007,6 +4074,9 @@ final class WindowController: NSObject {
         "The zen skill and a session hook,\nin \(folder)"
     }
 
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static let claudeUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
+
     private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
         switch result {
         case .success:
@@ -4015,10 +4085,28 @@ final class WindowController: NSObject {
                     variant: .positive, title: "Claude Code can use zen",
                     message: "New Claude sessions load the zen skill."))
         case .failure(let error):
-            let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
-            let shown = toasts.showSticky(content, actions: [], showsClose: true)
-            shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+            showClaudeSetupFailure(error, title: "Couldn't set up Claude Code")
         }
+    }
+
+    private func showClaudeUpdateResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        switch result {
+        case .success: showClaudeUpdated()
+        case .failure(let error): showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
+        }
+    }
+
+    static let claudeUpdateFailedTitle = "Couldn't update zen"
+
+    private func showClaudeUpdated() {
+        toasts.show(
+            ToastContent(variant: .info, title: "Updated zen for Claude Code", message: "New Claude sessions load it."))
+    }
+
+    private func showClaudeSetupFailure(_ error: ClaudeSetupError, title: String) {
+        let content = ToastContent(variant: .warning, title: title, message: error.message)
+        let shown = toasts.showSticky(content, actions: [], showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
     }
 
     private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {

@@ -22,6 +22,11 @@ final class ClaudeSetupFilesTests: XCTestCase {
         try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
         try Data("skill".utf8).write(to: claude.appendingPathComponent("SKILL.md"))
         try Data("hook".utf8).write(to: claude.appendingPathComponent(ClaudeSetup.hookFileName))
+        try Data("aaa\nbbb\n".utf8).write(to: claude.appendingPathComponent(ClaudeSetupFiles.shippedDigestsFileName))
+        try Data(
+            #"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleVersion</key>"#
+                .appending("<string>412</string></dict></plist>").utf8
+        ).write(to: contents.appendingPathComponent("Info.plist"))
         let macOS = contents.appendingPathComponent("MacOS")
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
         let zen = macOS.appendingPathComponent("zen")
@@ -40,7 +45,10 @@ final class ClaudeSetupFilesTests: XCTestCase {
     func test_readsTheFilesInTheAppsResources() throws {
         let files = ClaudeSetupFiles.bundled(beside: try makeApp())
 
-        XCTAssertEqual(files, ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8)))
+        XCTAssertEqual(
+            files,
+            ClaudeSetupFiles(
+                skill: Data("skill".utf8), hook: Data("hook".utf8), shippedDigests: ["aaa", "bbb"], build: 412))
     }
 
     func test_readsThemThroughASymlinkToZen() throws {
@@ -61,6 +69,27 @@ final class ClaudeSetupFilesTests: XCTestCase {
 
         XCTAssertTrue(String(decoding: files.skill, as: UTF8.self).hasPrefix("---\nname: zen\n"))
         XCTAssertTrue(String(decoding: files.hook, as: UTF8.self).hasPrefix("#!/bin/bash\n"))
+    }
+
+    func test_theShippedListNamesTheSkillAndHookThisBuildShips() throws {
+        let files = try XCTUnwrap(shipped)
+
+        for (name, data) in [("SKILL.md", files.skill), (ClaudeSetup.hookFileName, files.hook)] {
+            let digest = ClaudeSetupFiles.digest(of: data)
+            XCTAssertTrue(
+                files.isShipped(data),
+                "\(name) changed. Add the line \(digest) to Sources/AgentSetup/Claude/"
+                    + "\(ClaudeSetupFiles.shippedDigestsFileName), so the next build can replace this copy.")
+        }
+    }
+
+    func test_theVersionChangesWithEitherFile() {
+        let base = ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8))
+
+        XCTAssertEqual(
+            base.version, ClaudeSetupFiles(skill: base.skill, hook: base.hook, shippedDigests: ["x"]).version)
+        XCTAssertNotEqual(base.version, ClaudeSetupFiles(skill: Data("skill2".utf8), hook: base.hook).version)
+        XCTAssertNotEqual(base.version, ClaudeSetupFiles(skill: base.skill, hook: Data("hook2".utf8)).version)
     }
 
     func test_shippedCopyHasNoEmDashes() throws {
@@ -88,7 +117,8 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertEqual(
             lines[1],
             #"You are helper `review`, started by pane 31. When done or stuck, report with "#
-                + #"`zen pane send --pane 31 --enter "<result>"`, then stop."#)
+                + #"`zen pane send --pane 31 --enter "<result>"`, then stop. Put a question about your task to "#
+                + #"pane 31 the same way and `zen wait 31` for the answer, not AskUserQuestion."#)
     }
 
     func test_shippedHookHasNoHelperLineWithoutAParent() throws {

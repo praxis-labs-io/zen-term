@@ -60,14 +60,7 @@ final class SSHHostChordTests: WindowTestCase {
         try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == host })
     }
 
-    private func click(_ row: NSView) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NSView) throws { try sendClick(to: row) }
 
     private func selected(_ c: WindowController) -> String? { c.selectedHostForTesting?.alias }
 

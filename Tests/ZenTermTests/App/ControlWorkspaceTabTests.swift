@@ -54,6 +54,8 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         return c
     }
 
+    private var startFolderName: String { PathDisplay.folderName(FileManager.default.temporaryDirectory) ?? "" }
+
     private var responder: ControlResponder {
         var responder = ControlResponder(
             windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first })
@@ -66,12 +68,12 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         return responder
     }
 
-    private func send(_ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), from pane: Int? = nil) throws
-        -> ControlReply
-    {
+    private func send(
+        _ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), from pane: Int? = nil, in folder: String? = nil
+    ) throws -> ControlReply {
         var reply: ControlReply?
         responder.respond(
-            to: ControlRequest(id: 1, cmd: cmd, args: args, caller: pane.map(ControlCaller.init(pane:)))
+            to: ControlRequest(id: 1, cmd: cmd, args: args, caller: pane.map { ControlCaller(pane: $0, cwd: folder) })
         ) { reply = $0 }
         return try XCTUnwrap(reply, "\(cmd.rawValue) never answered")
     }
@@ -152,6 +154,40 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         XCTAssertEqual(try error(send(.tabNew, ControlArgs(cwd: "relative"))).code, .badRequest)
         XCTAssertEqual(c.tabOrderForTesting.count, 3)
+    }
+
+    func test_tabNewStartsInTheCallersOwnFolder_notTheOneItsPaneLastReported() throws {
+        _ = makeWindow()
+        let first = try XCTUnwrap(spawned.first)
+        first.currentDirectory = URL(fileURLWithPath: "/tmp/reported")
+
+        _ = try result(send(.tabNew, from: try token(of: first), in: "/tmp/worktree"), as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, "/tmp/worktree")
+
+        _ = try result(
+            send(.tabNew, ControlArgs(cwd: "/tmp/given"), from: try token(of: first), in: "/tmp/worktree"),
+            as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, "/tmp/given")
+    }
+
+    func test_tabNewFromARemovedWorktree_startsInItsParentsFolder_unlessGivenOne() throws {
+        let c = makeWindow()
+        let tree = FileManager.default.temporaryDirectory.appendingPathComponent("zt-control-alpha-one")
+        c.openWorkspaceForTesting(
+            Workspace(title: "alpha: one", path: tree, tabs: [], env: [:]),
+            origin: WorktreeOrigin(
+                parent: alpha(), worktree: Worktree(path: tree, branch: "one", head: "0000000", isLocked: false)))
+        let caller = try token(of: XCTUnwrap(spawned.last))
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        _ = try result(
+            send(.tabNew, from: caller, in: tree.appendingPathComponent("Sources").path), as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, folder.path)
+
+        _ = try result(send(.tabNew, ControlArgs(cwd: tree.path), from: caller, in: tree.path), as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, tree.path)
     }
 
     func test_tabNewWhileSettingsIsUpLeavesSettingsUp() throws {
@@ -280,7 +316,7 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         _ = makeWindow()
         _ = makeWindow()
 
-        XCTAssertEqual(try error(send(.workspaceSwitch, ControlArgs(workspace: "Workspace 1"))).code, .ambiguous)
+        XCTAssertEqual(try error(send(.workspaceSwitch, ControlArgs(workspace: startFolderName))).code, .ambiguous)
     }
 
     func test_workspaceNewAppendsAnUnconfiguredWorkspaceAtThePath() throws {
@@ -289,14 +325,14 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         let made = try result(send(.workspaceNew, ControlArgs(path: folder.path)), as: WorkspaceResult.self)
 
-        XCTAssertEqual(made.workspace?.title, "Workspace 2")
+        XCTAssertEqual(made.workspace?.title, PathDisplay.folderName(folder))
         XCTAssertEqual(made.workspace?.folder, folder.path)
         XCTAssertEqual(made.workspace?.configured, false)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
         XCTAssertEqual(try error(send(.workspaceNew, ControlArgs(path: "relative"))).code, .badRequest)
     }
 
-    func test_workspaceNewWithATitle_namesIt_andAnEmptyOneFallsBackToWorkspaceN() throws {
+    func test_workspaceNewWithATitle_namesIt_andAnEmptyOneFallsBackToItsFolder() throws {
         _ = makeWindow()
 
         let named = try result(send(.workspaceNew, ControlArgs(title: "scratch")), as: WorkspaceResult.self)
@@ -304,8 +340,8 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         let blank = try result(send(.workspaceNew, ControlArgs(title: "   ")), as: WorkspaceResult.self)
 
         XCTAssertEqual(named.workspace?.title, "scratch")
-        XCTAssertEqual(plain.workspace?.title, "Workspace 2")
-        XCTAssertEqual(blank.workspace?.title, "Workspace 3")
+        XCTAssertEqual(plain.workspace?.title, PathDisplay.homeName)
+        XCTAssertEqual(blank.workspace?.title, PathDisplay.homeName)
     }
 
     private func listedTitles() throws -> [String] {
@@ -318,10 +354,10 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         c.openWorkspaceForTesting(alpha())
 
         _ = try result(send(.workspaceRename, ControlArgs(workspace: folder.path, title: "api")), as: NoPayload.self)
-        XCTAssertEqual(try listedTitles(), ["Workspace 1", "api"])
+        XCTAssertEqual(try listedTitles(), [startFolderName, "api"])
 
         _ = try result(send(.workspaceRename, ControlArgs(workspace: "api", title: "web")), as: NoPayload.self)
-        XCTAssertEqual(try listedTitles(), ["Workspace 1", "web"], "addressed by its current name")
+        XCTAssertEqual(try listedTitles(), [startFolderName, "web"], "addressed by its current name")
 
         _ = try result(send(.workspaceRename, ControlArgs(title: "home"), from: caller), as: NoPayload.self)
         XCTAssertEqual(try listedTitles(), ["home", "web"], "the caller's workspace, not the active one")
@@ -336,10 +372,10 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertEqual(try error(send(.workspaceRename, ControlArgs(workspace: "api"))).code, .badRequest)
 
         _ = try result(send(.workspaceRename, ControlArgs(workspace: "api", title: "  \n")), as: NoPayload.self)
-        XCTAssertEqual(try listedTitles(), ["Workspace 1", "alpha"], "whitespace clears, like an empty title")
+        XCTAssertEqual(try listedTitles(), [startFolderName, "alpha"], "whitespace clears, like an empty title")
 
         _ = try result(send(.workspaceRename, ControlArgs(workspace: "alpha", title: " api ")), as: NoPayload.self)
-        XCTAssertEqual(try listedTitles(), ["Workspace 1", "api"], "trimmed")
+        XCTAssertEqual(try listedTitles(), [startFolderName, "api"], "trimmed")
     }
 
     func test_workspaceOpenOfARenamedConfiguredWorkspace_returnsTheOpenOne() throws {
@@ -406,7 +442,7 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         let showing = c.activeWorkspaceIDForTesting
         c.presentConfirm(variant: .warning, title: "Close Tab", message: "", confirmLabel: "Close") {}
 
-        _ = try result(send(.workspaceClose, ControlArgs(workspace: "Workspace 1")), as: NoPayload.self)
+        _ = try result(send(.workspaceClose, ControlArgs(workspace: startFolderName)), as: NoPayload.self)
 
         XCTAssertEqual(c.workspaceIDsForTesting, [showing])
         XCTAssertTrue(c.isConfirmOpen, "closing a workspace in the background leaves the confirm up")

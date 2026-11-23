@@ -13,6 +13,7 @@ final class NavRow: ListRow {
     var onEnterDetail: (() -> Void)?
     var onSecondaryClick: (() -> Void)?
     var onReturn: (() -> Void)?
+    var onSpace: (() -> Void)?
     var onEscape: (() -> Void)?
     var onFocusChanged: (() -> Void)?
 
@@ -132,6 +133,7 @@ final class NavRow: ListRow {
         case .down: onArrowDown?()
         case .right, .tab(shift: false): onEnterDetail?()
         case .activate where onReturn != nil && KeyboardFocus.isReturn(event): onReturn?()
+        case .activate where onSpace != nil && KeyboardFocus.isSpace(event): onSpace?()
         case .escape where onEscape != nil && KeyboardFocus.isUnmodified(event): onEscape?()
         default: super.keyDown(with: event)
         }

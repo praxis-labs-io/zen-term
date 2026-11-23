@@ -125,14 +125,7 @@ final class AgentNestingTests: WindowTestCase {
         try XCTUnwrap(rows(c).first { $0.itemForTesting?.id == pane.id }, "no row for pane \(pane.token)")
     }
 
-    private func click(_ row: NSView) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NSView) throws { try sendClick(to: row) }
 
     func test_aChildPaneListsNestedUnderTheAgentThatStartedIt() throws {
         let c = makeWindow()

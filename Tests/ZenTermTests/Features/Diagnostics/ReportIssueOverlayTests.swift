@@ -6,6 +6,7 @@ import XCTest
 final class ReportIssueOverlayTests: WindowTestCase {
     private final class Sink {
         var opened: [URL] = []
+        var openFailure: String?
         var exported = 0
         var cancelled = 0
     }
@@ -24,7 +25,10 @@ final class ReportIssueOverlayTests: WindowTestCase {
         let sink = Sink()
         let overlay = ReportIssueOverlay(
             report: Self.sampleReport,
-            onOpenURL: { sink.opened.append($0) },
+            onOpenURL: {
+                sink.opened.append($0)
+                return sink.openFailure
+            },
             onExportDiagnostics: { sink.exported += 1 },
             onCancel: { sink.cancelled += 1 })
         let win = NSWindow(
@@ -107,6 +111,21 @@ final class ReportIssueOverlayTests: WindowTestCase {
                 whatHappened: "It closed the whole pane when I hit cmd-d",
                 report: Self.sampleReport
             ).body)
+    }
+
+    func test_aBrowserThatWontOpen_showsInline_andEditingClearsIt() throws {
+        let (overlay, sink) = mount()
+        sink.openFailure = "Couldn't open your browser."
+        titleField(overlay).setText("Split closes the pane")
+        whatHappened(overlay).setText("It closed the pane")
+
+        try XCTUnwrap(button(overlay, "Open on GitHub")).onTap()
+
+        let label = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? FormErrorLabel }.first { $0.stringValue == sink.openFailure })
+        XCTAssertFalse(label.isHidden)
+        titleField(overlay).onChange?()
+        XCTAssertTrue(label.isHidden)
     }
 
     func test_openOnGitHub_withEmptyRequiredField_doesNotOpen() {

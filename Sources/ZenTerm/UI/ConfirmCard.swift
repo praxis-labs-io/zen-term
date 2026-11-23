@@ -43,7 +43,7 @@ final class ConfirmCard: ModalShell, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func focusInitialResponder() { window?.makeFirstResponder(confirmButton) }
+    func focusInitialResponder() { window?.makeFirstResponder(cancelButton) }
 
     override func reapplyTheme() {
         super.reapplyTheme()

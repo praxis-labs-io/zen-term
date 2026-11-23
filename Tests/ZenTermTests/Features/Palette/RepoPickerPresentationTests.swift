@@ -11,6 +11,8 @@ final class RepoPickerPresentationTests: WindowTestCase {
     private var controller: WindowController?
     private var tempRoot: URL!
 
+    private var startFolderName: String { PathDisplay.folderName(FileManager.default.temporaryDirectory) ?? "" }
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
@@ -512,12 +514,13 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         pressReturn(in: try openPicker(in: c, on: "Alpha"))
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha"], "a new workspace goes at the end")
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha"], "a new workspace goes at the end")
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
-        XCTAssertEqual(c.tabOrderForTesting.count, 1, "it starts with its own tab, not one added to Workspace 1")
+        XCTAssertEqual(
+            c.tabOrderForTesting.count, 1, "it starts with its own tab, not one added to the first workspace")
         XCTAssertEqual(
             c.controllerForTesting(tab: firstTab)?.allSurfaces.first.map { $0 === firstSurface }, true,
-            "Workspace 1 keeps running behind it")
+            "the first workspace keeps running behind it")
         XCTAssertTrue(pickers(in: c).isEmpty, "the picker closes")
     }
 
@@ -534,7 +537,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         pressReturn(in: try openPicker(in: c, on: "Alpha"))
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
         XCTAssertTrue(c.controllerForTesting(tab: alphaTab)?.allSurfaces.first === alphaSurface)
     }
@@ -549,18 +552,18 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         pressReturn(in: try openPicker(in: c, on: "Alpha"))
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha"], "the same folder is the same workspace")
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha"], "the same folder is the same workspace")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
     }
 
-    func test_aConfiguredWorkspaceInTheHomeFolder_opensItsOwnWorkspace_notWorkspace1() throws {
+    func test_aConfiguredWorkspaceInTheHomeFolder_opensItsOwnWorkspace_notTheUnconfiguredOne() throws {
         try seedWorkspaces("[Dotfiles]\npath = ~\n")
         let c = makeWindow()
         let first = c.activeWorkspaceIDForTesting
 
         pressReturn(in: try openPicker(in: c, on: "Dotfiles"))
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Dotfiles"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Dotfiles"])
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
     }
 
@@ -573,7 +576,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         selectRow("feature/one", in: picker)
         pressReturn(in: picker)
         let worktree = c.activeWorkspaceIDForTesting
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha: feature/one"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha: feature/one"])
         c.handle(.selectWorkspace(1))
 
         picker = try openPicker(in: c)
@@ -581,7 +584,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         selectRow("Alpha: feature/one", in: picker)
         pressReturn(in: picker)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha: feature/one"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha: feature/one"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree)
     }
 }

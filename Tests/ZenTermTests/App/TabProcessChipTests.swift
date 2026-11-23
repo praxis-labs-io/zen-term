@@ -121,4 +121,34 @@ final class TabProcessChipTests: WindowTestCase {
         c.pollTitlesForTesting()
         XCTAssertEqual(try chipProcess(in: c), .shell, "back at the prompt, the shell chip returns")
     }
+
+    func test_aTabIsNamedForTheProgramInItsFocusedPane_andForItsFolderBackAtThePrompt() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        pane.currentDirectory = URL(fileURLWithPath: "/tmp/api", isDirectory: true)
+        pane.title = "~/tmp/api"
+        c.pollTitlesForTesting()
+        XCTAssertEqual(c.tabTitlesForTesting.first, "api", "at a prompt, the folder outranks the shell's path title")
+
+        pane.foregroundProcessGroupID = try jobs.start(named: "nvim")
+        pane.title = "nvim Sources/App.swift"
+        c.pollTitlesForTesting()
+        XCTAssertEqual(c.tabTitlesForTesting.first, "nvim", "a job is named for its program, not its command line")
+
+        pane.foregroundProcessGroupID = nil
+        c.pollTitlesForTesting()
+        XCTAssertEqual(c.tabTitlesForTesting.first, "api")
+    }
+
+    func test_aRenamedTab_keepsItsName_whateverRunsInIt() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        let id = try XCTUnwrap(c.activeTabIDForTesting)
+        c.renameTab(id, to: "api server")
+
+        pane.foregroundProcessGroupID = try jobs.start(named: "htop")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(c.tabTitlesForTesting.first, "api server")
+    }
 }

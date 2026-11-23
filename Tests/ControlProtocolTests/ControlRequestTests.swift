@@ -17,6 +17,12 @@ final class ControlRequestTests: XCTestCase {
             ControlRequest(id: 7, cmd: .list, caller: ControlCaller(pane: 31)))
     }
 
+    func test_theCallerCarriesItsFolder() {
+        XCTAssertEqual(
+            try decode(#"{"v":1,"id":7,"cmd":"pane.run","caller":{"pane":31,"cwd":"/w/app"}}"#).get().caller,
+            ControlCaller(pane: 31, cwd: "/w/app"))
+    }
+
     func test_decodesWithATrailingNewlineAndUnknownFields() {
         XCTAssertEqual(
             try decode("{\"v\":1,\"id\":2,\"cmd\":\"hello\",\"args\":{\"x\":1}}\n").get(),

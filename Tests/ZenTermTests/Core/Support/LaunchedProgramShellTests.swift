@@ -8,12 +8,15 @@ import XCTest
 final class LaunchedProgramShellTests: XCTestCase {
     private final class Recorder: NSObject, TerminalSurfaceDelegate {
         var events: [String] = []
+        var titles: [String] = []
 
         func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
             events.append("finished \(result.exitCode.map(String.init) ?? "nil")")
         }
 
         func surfaceDidExit(_ s: TerminalSurface, code: Int32?) { events.append("exited") }
+
+        func surface(_ s: TerminalSurface, titleDidChange title: String) { titles.append(title) }
     }
 
     private var originalConfig: GeneralConfig!
@@ -83,6 +86,13 @@ final class LaunchedProgramShellTests: XCTestCase {
         let (surface, recorder) = try launch(command, in: shell, exitClosesPane: false)
         run { recorder.events.contains(where: finished) || recorder.events.contains("exited") }
         run { recorder.events.contains("exited") || atShell(surface) }
+        return recorder.events
+    }
+
+    // The shell is still the foreground group between the done mark and its own exit, so wait for the exit itself.
+    private func events(keepingUntilItsShellExits command: String, in shell: String) throws -> [String] {
+        let (_, recorder) = try launch(command, in: shell, exitClosesPane: false)
+        run { recorder.events.contains(where: finished) && recorder.events.contains("exited") }
         return recorder.events
     }
 
@@ -179,8 +189,11 @@ final class LaunchedProgramShellTests: XCTestCase {
     }
 
     func test_aKeptPaneWhoseCommandEndsInTheShellsOwnExitReportsItsCode() throws {
-        XCTAssertEqual(try events(keeping: "exit 5", in: "/bin/zsh").sorted(), ["exited", "finished 5"])
-        XCTAssertEqual(try events(keeping: "sleep 1; exit 2", in: "/bin/bash").sorted(), ["exited", "finished 2"])
+        XCTAssertEqual(
+            try events(keepingUntilItsShellExits: "exit 5", in: "/bin/zsh").sorted(), ["exited", "finished 5"])
+        XCTAssertEqual(
+            try events(keepingUntilItsShellExits: "sleep 1; exit 2", in: "/bin/bash").sorted(),
+            ["exited", "finished 2"])
     }
 
     func test_aKeptPaneReportsItsCommandsCodeOnceAndStaysOpen() throws {
@@ -210,6 +223,14 @@ final class LaunchedProgramShellTests: XCTestCase {
                     foregroundProgram(of: surface, becoming: "claude"), "claude", "\(shell), closes \(closes)")
             }
         }
+    }
+
+    func test_aLaunchedCommandOf256BytesOrMoreTitlesItsPane() throws {
+        let command = "true " + String(repeating: "x", count: 300)
+        let expected = "true " + String(repeating: "x", count: 247) + "\u{2026}"
+        let recorder = try launch(command, in: "/bin/zsh").recorder
+        run { recorder.titles.contains(expected) || recorder.events.contains("exited") }
+        XCTAssertTrue(recorder.titles.contains(expected), "\(recorder.titles)")
     }
 
     func test_interruptingTheForegroundGroupEndsTheLaunchedCommandWithItsCode() throws {

@@ -61,12 +61,14 @@ final class CarryPickerTests: WindowTestCase {
         press(list, " ", code: 49)
     }
 
+    // Esc goes through the app: the open list's own event monitor is what takes it.
     private func press(_ list: CheckboxDropdown, _ chars: String, code: UInt16) {
-        list.keyDown(
-            with: NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: 0, context: nil, characters: chars, charactersIgnoringModifiers: chars,
-                isARepeat: false, keyCode: code)!)
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: list.window?.windowNumber ?? 0, context: nil, characters: chars,
+            charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code)!
+        guard code != 53 else { return NSApp.sendEvent(event) }
+        list.keyDown(with: event)
     }
 
     func test_beforeAFolderIsChosen_itSaysSoRatherThanShowingAnEmptyList() {

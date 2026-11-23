@@ -17,10 +17,10 @@ class PopoverPicker: NSView {
         equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset)
     private let queryField = NSTextField()
     private let chevron = NSImageView()
-    /// A window resize closes the card without `closeList`, so the self-close hook repeats that cleanup.
     private lazy var popover: ListPopover = {
-        let popover = ListPopover(anchor: self)
+        let popover = ListPopover(anchor: self, anchorToggles: true)
         popover.onSelfClose = { [weak self] in self?.finishClosing() }
+        popover.absorbsEscape = { [weak self] in self?.clearQuery() ?? false }
         return popover
     }()
     private var isEditing = false
@@ -38,6 +38,7 @@ class PopoverPicker: NSView {
     var listCardFrameForTesting: NSRect { popover.cardFrame }
     var queryFieldTextColorForTesting: NSColor? { queryField.textColor }
     func openListForTesting() { openList() }
+    func listFilterForTesting(_ event: NSEvent) -> NSEvent? { popover.filterForTesting(event) }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
 
     func typeForTesting(_ text: String) {
@@ -126,10 +127,8 @@ class PopoverPicker: NSView {
         showFocus()
         return true
     }
-    /// Handing focus to the query field on open is not losing focus, or opening would close the list.
     override func resignFirstResponder() -> Bool {
         isFocusedStop = false
-        if !isEditing { closeList() }
         restyle()
         return super.resignFirstResponder()
     }
@@ -161,7 +160,6 @@ class PopoverPicker: NSView {
             case .up: moveHighlight(-1)
             case .down: moveHighlight(1)
             case .activate: pickHighlighted()
-            case .escape: escapePressed()
             default: break
             }
             return
@@ -176,15 +174,9 @@ class PopoverPicker: NSView {
         }
     }
 
-    /// Closes before taking focus: focusing first would end the field's edit and close the list inside the focus change.
     override func mouseDown(with event: NSEvent) {
-        if popover.isOpen {
-            closeList()
-            window?.makeFirstResponder(self)
-        } else {
-            window?.makeFirstResponder(self)
-            openList()
-        }
+        window?.makeFirstResponder(self)
+        openList()
     }
 
     /// The label and chevron are controls that would swallow the click, so the whole view takes it.
@@ -220,11 +212,12 @@ class PopoverPicker: NSView {
         listDidClose()
     }
 
-    private func escapePressed() {
-        guard !query.isEmpty else { return closeList() }
+    private func clearQuery() -> Bool {
+        guard !query.isEmpty else { return false }
         query = ""
         queryField.stringValue = ""
         rerenderList()
+        return true
     }
 
     private func beginEditing() {
@@ -260,6 +253,12 @@ class PopoverPicker: NSView {
         revealHighlight()
     }
 
+    func highlightPointed(_ index: Int) {
+        guard popover.isOpen, index != highlighted, visible.contains(index) else { return }
+        highlighted = index
+        renderRows()
+    }
+
     private func revealHighlight() {
         guard let row = highlightedRow() else { return }
         popover.reveal(row)
@@ -288,8 +287,7 @@ class PopoverPicker: NSView {
 
     private func rebuildOpenList() {
         guard popover.isOpen else { return }
-        popover.close()
-        popover.open(rows: listRows())
+        popover.replace(rows: listRows())
         renderRows()
         revealHighlight()
     }
@@ -326,11 +324,6 @@ class PopoverPicker: NSView {
 }
 
 extension PopoverPicker: NSTextFieldDelegate {
-    func controlTextDidEndEditing(_ obj: Notification) {
-        guard isEditing, window?.firstResponder !== self else { return }
-        closeList()
-    }
-
     func controlTextDidChange(_ obj: Notification) {
         query = queryField.stringValue
         rerenderList()
@@ -343,7 +336,6 @@ extension PopoverPicker: NSTextFieldDelegate {
         case #selector(NSResponder.moveDown(_:)): moveHighlight(1)
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
             pickHighlighted()
-        case #selector(NSResponder.cancelOperation(_:)): escapePressed()
         case #selector(NSResponder.insertTab(_:)):
             closeList()
             onTab?()

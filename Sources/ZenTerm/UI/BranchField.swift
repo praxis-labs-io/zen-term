@@ -27,6 +27,7 @@ final class BranchField: NSView, ThemeReapplying {
 
     #if DEBUG
         var matchesForTesting: [String] { matches }
+        func listFilterForTesting(_ event: NSEvent) -> NSEvent? { popover.filterForTesting(event) }
         var highlightedForTesting: String? {
             matches.indices.contains(highlighted) ? matches[highlighted] : nil
         }
@@ -61,12 +62,6 @@ final class BranchField: NSView, ThemeReapplying {
         box.onSubmit = { [weak self] in
             self?.closeList()
             self?.onSubmit?()
-        }
-        box.onEndEditing = { [weak self] in self?.closeList() }
-        box.onEscape = { [weak self] in
-            guard let self, self.isListOpen else { return false }
-            self.closeList()
-            return true
         }
     }
 
@@ -111,9 +106,15 @@ final class BranchField: NSView, ThemeReapplying {
             (delta < 0 ? onArrowUp : onArrowDown)?()
             return
         }
-        guard !matches.isEmpty else { return }
-        highlighted = (highlighted + delta + matches.count) % matches.count
+        guard let next = KeyboardFocus.step(from: highlighted, delta: delta, count: matches.count) else { return }
+        highlighted = next
         renderRows()
+    }
+
+    private func highlightPointed(_ index: Int) {
+        guard popover.isOpen, index != highlighted, rowViews.indices.contains(index) else { return }
+        highlighted = index
+        for (position, row) in rowViews.enumerated() { row.isHighlighted = position == index }
     }
 
     private func enter() {
@@ -162,15 +163,15 @@ final class BranchField: NSView, ThemeReapplying {
     }
 
     private func rerenderList() {
-        closeList()
-        openList()
+        popover.replace(rows: buildRows())
+        renderRows()
     }
 
     private func buildRows() -> [ListPopover.Row] {
-        rowViews = matches.map { branch in
+        rowViews = matches.enumerated().map { index, branch in
             let content = ListRow.Content(title: branch, note: notes[branch], leading: .symbol("arrow.branch"))
             let row = ListRow(content) { [weak self] in self?.commit(branch) }
-            row.setHoverSuppressed(true)
+            row.onPointerEnter = { [weak self] in self?.highlightPointed(index) }
             return row
         }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }

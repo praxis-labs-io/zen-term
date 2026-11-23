@@ -5,6 +5,11 @@ import XCTest
 @testable import ZenTerm
 
 final class DropdownTests: WindowTestCase {
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        Motion.isReduceMotionEnabled = { true }
+    }
+
     func test_selectedIndex_reflectsInitAndSetItems() {
         let items = [
             DropdownItem(title: "A", group: nil, note: nil, isSelected: true),
@@ -63,13 +68,11 @@ final class DropdownTests: WindowTestCase {
         dropdown.openListForTesting()
         XCTAssertTrue(dropdown.isPopoverOpen)
 
-        let esc = NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
-            isARepeat: false, keyCode: 53)!
-        dropdown.keyDown(with: esc)
+        NSApp.sendEvent(Self.escape(in: window))
 
-        XCTAssertFalse(dropdown.isPopoverOpen, "Esc in the dropdown's keyDown closes the list")
+        XCTAssertFalse(dropdown.isPopoverOpen, "Esc closes the list")
+        XCTAssertFalse(
+            window.contentView!.subviews.contains { $0 is ShadowCardView }, "the card left the window")
     }
 
     func test_removingHostFromWindow_closesOpenList() {
@@ -128,7 +131,7 @@ final class DropdownTests: WindowTestCase {
 
         XCTAssertTrue(dropdown.isEditingForTesting)
 
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
+        NSApp.sendEvent(Self.escape(in: dropdown.window!))
         XCTAssertFalse(dropdown.isEditingForTesting, "closing hands the button back to its title")
     }
 
@@ -155,11 +158,11 @@ final class DropdownTests: WindowTestCase {
         let dropdown = filterFixture()
         dropdown.typeForTesting("n")
 
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
+        NSApp.sendEvent(Self.escape(in: dropdown.window!))
         XCTAssertEqual(dropdown.queryForTesting, "")
         XCTAssertTrue(dropdown.isPopoverOpen, "the first Esc clears the filter, it does not close")
 
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
+        NSApp.sendEvent(Self.escape(in: dropdown.window!))
         XCTAssertFalse(dropdown.isPopoverOpen)
     }
 
@@ -181,7 +184,7 @@ final class DropdownTests: WindowTestCase {
         dropdown.onArrowDown = { movedDown = true }
         let window = dropdown.window
 
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
+        NSApp.sendEvent(Self.escape(in: window!))
 
         XCTAssertFalse(dropdown.isPopoverOpen)
         XCTAssertFalse(dropdown.isEditingForTesting)
@@ -196,6 +199,65 @@ final class DropdownTests: WindowTestCase {
             with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
             windowNumber: 0, context: nil, characters: "\u{F701}",
             charactersIgnoringModifiers: "\u{F701}", isARepeat: false, keyCode: 125)!
+    }
+
+    func test_thePointerMovesTheHighlight_andTheArrowContinuesFromIt() throws {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+        let rows = dropdown.rowViewsForTesting
+        let hover = Theme.current.chrome.fill(.hover).cgColor
+        let enter = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: dropdown.window?.windowNumber ?? 0, context: nil, eventNumber: 0, trackingNumber: 0,
+                userData: nil))
+
+        rows[2].mouseEntered(with: enter)
+        XCTAssertEqual(dropdown.highlightedIndexForTesting, 2)
+        XCTAssertEqual(rows.map { $0.layer?.backgroundColor == hover }, [false, false, true, false, false])
+
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        XCTAssertEqual(
+            rows.map { $0.layer?.backgroundColor == hover }, [false, false, false, true, false], "two rows are lit")
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(picked, 3, "Down did not continue from the pointer's row")
+    }
+
+    func test_aRowPicksOnRelease_andNotWhenTheReleaseLandsOffIt() throws {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+        let row = dropdown.rowViewsForTesting[3]
+        let inside = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
+        func event(_ type: NSEvent.EventType, at point: NSPoint) throws -> NSEvent {
+            try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: 1))
+        }
+
+        row.mouseDown(with: try event(.leftMouseDown, at: inside))
+        XCTAssertNil(picked, "the press picked the row")
+        row.mouseUp(with: try event(.leftMouseUp, at: NSPoint(x: inside.x + 400, y: inside.y)))
+        XCTAssertNil(picked, "a release off the row picked it")
+        XCTAssertTrue(dropdown.isPopoverOpen)
+
+        try sendClick(to: row)
+        XCTAssertEqual(picked, 3)
+        XCTAssertFalse(dropdown.isPopoverOpen)
+    }
+
+    func test_theArrowStopsAtTheEnds() {
+        var picked: Int?
+        let first = filterFixture { picked = $0 }
+        _ = first.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
+        _ = first.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(picked, 0, "Up wrapped from the first row")
+
+        let last = filterFixture(selectedIndex: 4) { picked = $0 }
+        _ = last.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = last.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(picked, 4, "Down wrapped from the last row")
     }
 
     func test_committingAFilteredRow_selectsThatItem_notItsPosition() {
@@ -249,7 +311,7 @@ final class DropdownTests: WindowTestCase {
         XCTAssertNotEqual(
             dropdown.highlightedIndexForTesting, 2, "the query has to move the highlight off the selection")
 
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
+        NSApp.sendEvent(Self.escape(in: dropdown.window!))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertEqual(picked, 2, "Return after clearing the query changed the selection")
@@ -368,10 +430,73 @@ final class DropdownTests: WindowTestCase {
         let dropdown = filterFixture()
         XCTAssertTrue(dropdown.isPopoverOpen, "precondition")
 
-        dropdown.mouseDown(with: click())
+        NSApp.sendEvent(Self.click(at: NSPoint(x: dropdown.frame.midX, y: dropdown.frame.midY), in: dropdown.window!))
 
         XCTAssertFalse(dropdown.isPopoverOpen, "the click reopened the list it just closed")
         XCTAssertFalse(dropdown.isEditingForTesting)
+        XCTAssertTrue(dropdown.window?.firstResponder === dropdown, "the closed button keeps focus")
+    }
+
+    @MainActor
+    func test_aClickOutsideTheList_closesIt() {
+        let dropdown = filterFixture()
+        dropdown.typeForTesting("n")
+
+        NSApp.sendEvent(Self.click(at: NSPoint(x: 380, y: 20), in: dropdown.window!))
+
+        XCTAssertFalse(dropdown.isPopoverOpen)
+        XCTAssertFalse(dropdown.isEditingForTesting)
+        XCTAssertEqual(dropdown.queryForTesting, "", "a stale query survived the click")
+    }
+
+    @MainActor
+    func test_aClickOnTheButton_goesNoFurther() {
+        let dropdown = filterFixture()
+        let window = dropdown.window!
+        let click = Self.click(at: NSPoint(x: dropdown.frame.midX, y: dropdown.frame.midY), in: window)
+
+        XCTAssertNil(
+            dropdown.listFilterForTesting(click), "the button's own click would reopen the list it just closed")
+        XCTAssertFalse(dropdown.isPopoverOpen)
+    }
+
+    @MainActor
+    func test_shiftEscape_stillClosesTheListFirst() {
+        let dropdown = filterFixture()
+        let window = dropdown.window!
+        let shiftEscape = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: window.windowNumber,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false,
+            keyCode: 53)!
+
+        NSApp.sendEvent(shiftEscape)
+
+        XCTAssertFalse(dropdown.isPopoverOpen, "ModalEscape takes any Esc, so the list has to take it first")
+    }
+
+    @MainActor
+    func test_escapeDuringComposition_leavesTheListForTheInputMethod() throws {
+        let dropdown = filterFixture()
+        let window = dropdown.window!
+        let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+        editor.setMarkedText(
+            "k", selectedRange: NSRange(location: 1, length: 0),
+            replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertTrue(editor.hasMarkedText(), "precondition: the query is mid-composition")
+
+        NSApp.sendEvent(Self.escape(in: window))
+
+        XCTAssertTrue(dropdown.isPopoverOpen, "the Esc belongs to the marked text")
+    }
+
+    @MainActor
+    func test_aClickOnTheList_leavesItOpenForTheRow() {
+        let dropdown = filterFixture()
+        let card = dropdown.listCardFrameForTesting
+
+        NSApp.sendEvent(Self.click(at: NSPoint(x: card.midX, y: card.maxY - 2), in: dropdown.window!))
+
+        XCTAssertTrue(dropdown.isPopoverOpen, "a click inside the card's inset is not a click outside it")
     }
 
     @MainActor
@@ -444,9 +569,16 @@ final class DropdownTests: WindowTestCase {
         TerminalColor(red: 255 - color.red, green: 255 - color.green, blue: 255 - color.blue)
     }
 
-    private func click() -> NSEvent {
+    private static func click(at point: NSPoint, in window: NSWindow) -> NSEvent {
         NSEvent.mouseEvent(
-            with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    }
+
+    private static func escape(in window: NSWindow) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false,
+            keyCode: 53)!
     }
 }

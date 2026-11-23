@@ -105,6 +105,27 @@ final class SettingsOverlayNavTests: WindowTestCase {
             "Down from the last section row focuses the Report button")
     }
 
+    func test_upFromTheFirstNavRow_staysOnIt() {
+        let overlay = SettingsOverlay(sections: [BareSection(), BareSection()], capturer: nil, onClose: {})
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+        window = win
+        let rows = descendants(of: overlay).compactMap { $0 as? NavRow }
+        XCTAssertEqual(rows.count, 2)
+        win.makeFirstResponder(rows[0])
+
+        rows[0].keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "\u{F700}", charactersIgnoringModifiers: "\u{F700}",
+                isARepeat: false, keyCode: 126)!)
+
+        XCTAssertIdentical(win.firstResponder, rows[0], "Up wrapped from the first section")
+    }
+
     private final class CountingCapturer: KeybindCapturing {
         private(set) var endCount = 0
         func beginCapture(_ handler: @escaping (NSEvent) -> Void) {}

@@ -64,7 +64,7 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  AgentSetup         Foundation leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  AgentSetup         Foundation + CryptoKit leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
   zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 
@@ -86,6 +86,9 @@ and rebases any that fail. `ghostty-program-status.patch` makes termio answer th
 support query and raise `GHOSTTY_ACTION_PROGRAM_STATUS` with the program's own report (state,
 kind, app, decoded msg and title), dropping reports about a sub-record (`id=`). The answer
 matters as much as the action: Claude Code sends 7501 only to a terminal that answers its query.
+`ghostty-surface-birth-overrides.patch` keeps a new surface's command, environment, initial
+input and `wait-after-command` when its config is rebuilt at birth for a color scheme that
+differs from the one the app config was built with.
 
 **Never call `Bundle.module` in shippable code.** In a real `.app` it checks the
 bundle root and a build-machine path, then `fatalError`s, so it works on the build
@@ -117,8 +120,8 @@ share `SystemReport`, and never carry the environment or config.
   without the line: only `window-theme` may move.
 - **A surface is born with the app's color scheme.** A program can ask before
   `ghostty_surface_set_color_scheme` lands, so `GhosttyApp` moves the app's scheme to the
-  theme's before each birth. It re-pushes the app config on a move: a surface born while
-  the app's scheme and its config's disagree loses its command, directory and environment.
+  theme's before each birth, and libghostty rebuilds the new surface's config for that
+  scheme, keeping its overrides through `ghostty-surface-birth-overrides.patch`.
 - **Shader paths are absolute** (a relative one resolves against the temp config file).
   Shaders get sRGB colors; use them raw. Layer opacity follows `background-alpha` only.
   Only MIT-licensed shaders are bundleable.
@@ -198,8 +201,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 
 - **A window starts with one workspace, with no config entry**, and shows either a workspace
   or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
-  config entry is named "Workspace N", the lowest number no open workspace in the window holds,
+  config entry is named for its active tab's focused pane's folder, live, by the
+  `PathDisplay.folderName` its tab's name reads (so at home it reads as the home folder's name),
   or the ⌘P query when New Workspace is chosen with one (its row reads `New Workspace “<query>”`).
+  Two can share a name. A name change re-reads every picker (`refreshWorkspaceNames`).
   Rename Workspace pins a session name over that given name (`pinnedName ?? givenName`), the
   way Rename Tab pins a tab's. It is never written to the workspaces file, so a configured
   workspace keeps its config title as its identity, and empty clears it. A renamed worktree
@@ -295,8 +300,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   non-flag argument after its interpreter (`brew` runs as `bash`). A group whose arguments cannot
   be read (a setuid program) is an unknown program, never the resting shell. A focused drawer does not
   change it, as it does not change the title. The title poll re-renders the tab bar when a
-  tab's chip changes. A tab is named for its pane's folder, so one at home reads as the user's
-  name, never a lone `~`.
+  tab's chip changes.
+- **A tab is named for its focused pane's job, else its folder** (`PaneCanvasController.title`):
+  a `zen pane run --name` first, then the job's program by the same reading as its chip, and back
+  at the prompt, or in a shell started from it (`zsh`, `nix develop`), the folder. The OSC
+  title is used only when there is no folder, since the shell's title is its prompt path or the command
+  line it runs. `PathDisplay.folderName` is the one name for a folder, so the home folder reads
+  as its own name, never a lone `~`. A host's tab skips the job (`readsForeground`), since its
+  foreground job is the local `ssh`. Rename Tab's `pinnedTitle` outranks all of it.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.
@@ -480,7 +491,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`NavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
-  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row); a local event monitor closes it on Esc or a click outside it.
+  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row).
+  Space opens it on the focused row. Focus stays on the row, whose ↑/↓ walk the menu and
+  ↵ chooses; Esc closes it back to the row.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**
   `SidebarEdgeReveal` watches an 8pt strip there, measured from where a hand aiming at the
   edge comes to rest, and floats `SidebarColumn` as a card over the panes after a hold.
@@ -525,8 +538,27 @@ New modal surfaces compose the existing primitives.
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
   back one step, a click outside closes the stack), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
+- **Forms share one scaffold.** `FormValidation` collects each field's message through
+  `LabeledField.setMessage` and focuses the first invalid field on submit.
+  `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
+  or delete (a config write, git, the browser) shows in a `FormErrorLabel` above the action
+  bar, never a toast.
+- **Popovers:** `ListPopover` is every anchored list (dropdowns, `BranchField`, the sidebar
+  row menu, the icon grid) and owns its dismissal: a local event monitor closes it on Esc
+  or a click outside the card, and when the window resizes, resigns key or closes. A click
+  outside still lands, except on a toggle's own anchor (`anchorToggles`), where it would reopen
+  the list. Esc during input-method composition is left to the marked text. Owners only hear
+  `onSelfClose`; `absorbsEscape` lets a typed query take the first Esc. It opens and closes
+  through `Motion.springScaleFade`.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
-  submits, Esc cancels. Every card is fully operable without a mouse.
+  submits, Esc cancels. A card with a single field (rename) submits on Return. Every card is fully
+  operable without a mouse.
+- **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
+  (files or config), and a toast confirm when it only ends running processes (closing a
+  pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
+  form hosts its card through `ConfirmSlot`; Cancel hands focus back to the button that
+  opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
+  only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.
 - **Scrolling lists** use a flipped document (`FlippedView`) plus `SlimScroller`, and no
@@ -589,7 +621,7 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
   what it declines; a key it `owns` passes `passThroughGuard` to reach it as a key event
-  (⌘↩ in the report, worktree, tool float and workspace forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes
+  (⌘↩ in the report, worktree, tool float, workspace and remote host forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes
   reading chords to its own buffer (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
   otherwise consumed app-wide and those keys belong to shells and TUIs. A focused sidebar
@@ -628,8 +660,10 @@ person's last key into each surface from `KeyInterceptor`'s keys the chrome did 
 path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
-`onHelperNote`. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
-parent is blocked and `PaneDrafts` while it has a draft. A token resolves to its window, tab and surface by walking the windows
+`onHelperNote`. A child's submitted `pane.send` to its parent marks it in its window until its next turn or its parent's
+next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
+parent is blocked and `PaneDrafts` while it has a draft. `pane.send`, `pane.keys` and a held note
+all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
 and leaves hosts out. `action` hands its keymap action
@@ -785,8 +819,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
   on Connect reconnects. A host leaving the `ssh-host` lines, from Settings or a hand edit, disconnects in every
-  window and lands the way a removed host's Connect screen does. Settings warns first, in a
-  `ConfirmCard` over Settings, when the host is open in any window.
+  window and lands the way a removed host's Connect screen does. Settings always confirms in a
+  `ConfirmCard` over the form, naming what ends when the host is open in any window.
 - **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
   makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the
@@ -858,7 +892,7 @@ workspace's entry fresh for the card. Settings does not list them.
   A clean main checkout moves to the local default after the folder claim, and back on failure.
 
 The create card replaces the picker and reopens it on cancel. `BranchField` is a `FieldBox`
-plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
+plus `ListPopover`. `CreateTarget` carries the repo to
 branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
 (create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
 result through the chrome, and the control socket passes nothing and opens it headless
@@ -906,8 +940,10 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   any window refreshes when it flips. A toast says so once and offers Close Workspace, ⌘⇧⌫
   on its picker row does the same, and the mark clears if `.git` comes back. It never auto-closes, because
   an agent in its panes may still be running. A session that would inherit a folder inside it
-  (a split, drawer or float, and a tab or window under `tab-inherit-cwd`) starts at the parent
-  workspace's folder instead (`WorktreeOrigin.relocating`).
+  (a split, drawer or float, a tab or window under `tab-inherit-cwd`, and a tab `zen` opens in
+  its caller's folder) starts at the parent workspace's folder instead
+  (`WorktreeOrigin.relocating`). A `cwd` passed to `zen tab new` or `zen pane run` is used as
+  given.
 
 ### Subprocess and GitCommand
 

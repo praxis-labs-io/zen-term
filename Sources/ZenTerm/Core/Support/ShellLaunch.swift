@@ -62,7 +62,24 @@ enum ShellLaunch {
     private static func titling(_ command: String, for shell: String) -> String {
         let title = String(
             command.unicodeScalars.map { $0.properties.generalCategory == .control ? " " : Character($0) })
-        return "printf '\\033]2;%s\\007' \(singleQuoted(title, for: shell)); "
+        return "printf '\\033]2;%s\\007' \(singleQuoted(cutToTitleLimit(title), for: shell)); "
+    }
+
+    // libghostty ignores an OSC 2 title of 256 bytes or more, which a command with an absolute path easily reaches.
+    private static let titleByteLimit = 255
+
+    private static func cutToTitleLimit(_ title: String) -> String {
+        guard title.utf8.count > titleByteLimit else { return title }
+        let ellipsis = "\u{2026}"
+        let budget = titleByteLimit - ellipsis.utf8.count
+        var fitted = ""
+        var bytes = 0
+        for character in title {
+            bytes += character.utf8.count
+            guard bytes <= budget else { break }
+            fitted.append(character)
+        }
+        return fitted + ellipsis
     }
 
     // fish reads `\\` and `\'` as escapes inside single quotes, where a POSIX shell takes every byte literally.

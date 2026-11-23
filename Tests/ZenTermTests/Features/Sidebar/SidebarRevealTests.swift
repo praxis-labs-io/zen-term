@@ -78,14 +78,7 @@ final class SidebarRevealTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
-    private func click(_ row: NavRow) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NavRow) throws { try sendClick(to: row) }
 
     private func settle() {
         let done = expectation(description: "the fade finishes")

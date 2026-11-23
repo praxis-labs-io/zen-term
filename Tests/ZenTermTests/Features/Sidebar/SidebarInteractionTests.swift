@@ -85,14 +85,7 @@ final class SidebarInteractionTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
-    private func click(_ row: NavRow) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NavRow) throws { try sendClick(to: row) }
 
     private func rowFillEdge(in controller: WindowController) throws -> CGFloat {
         let row = try XCTUnwrap(modals(NavRow.self, in: controller).first, "a workspace row")
@@ -217,7 +210,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(controller.sidebarForTesting.isRevealed, "yielding gives the panes the room, it does not float")
     }
 
-    func test_dockedAtTheMinimumWidth_withAUserFloat_theTabBarKeepsRoom() throws {
+    func test_atTheMinimumWidth_withAUserFloat_theTabBarKeepsRoomAfterAShortName() throws {
         var config = GeneralConfig.current
         config.floats = [
             ToolFloat(
@@ -227,13 +220,19 @@ final class SidebarInteractionTests: WindowTestCase {
         ]
         GeneralConfig.setCurrentForTesting(config)
         let controller = makeController()
+        controller.renameWorkspace(controller.activeWorkspaceIDForTesting, to: "ab")
         controller.window.setContentSize(controller.window.contentMinSize)
 
+        let sidebar = controller.sidebarForTesting
         let bar = frame(of: try tabBar(in: controller), in: controller)
         let dock = frame(of: controller.dockForTesting, in: controller)
+        let lead = frame(of: sidebar.lead, in: controller)
 
-        let footer = frame(of: controller.sidebarForTesting.footer, in: controller)
-        XCTAssertGreaterThanOrEqual(bar.minX, footer.maxX, "the tab bar starts after the docked sidebar's footer")
+        XCTAssertFalse(sidebar.isDocked, "precondition: the minimum width is below the dockable width")
+        XCTAssertTrue(sidebar.footer.isHiddenOrHasHiddenAncestor, "the yielded sidebar's footer is off screen")
+        XCTAssertGreaterThanOrEqual(
+            bar.minX + TabBarView.leadingInset, lead.minX + sidebar.lead.contentWidth,
+            "the first tab starts after the name")
         XCTAssertGreaterThan(bar.width, 0, "the tab bar keeps room between the sidebar and the toolbar")
         XCTAssertLessThanOrEqual(bar.maxX, dock.minX)
     }
@@ -242,7 +241,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1:")
+        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "\(PathDisplay.homeName):")
     }
 
     func test_collapsedLead_truncatesALongWorkspaceNameAtATabTitlesWidth() throws {
@@ -397,13 +396,7 @@ final class SidebarInteractionTests: WindowTestCase {
         try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
         let row = controller.sidebarForTesting.view.rowsForTesting[1]
 
-        let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
-        row.mouseDown(
-            with: try XCTUnwrap(
-                NSEvent.mouseEvent(
-                    with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                    windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
-                    clickCount: 1, pressure: 1)))
+        try sendClick(to: row)
 
         XCTAssertTrue(
             controller.window.firstResponder === apiPane.view, "the click switches, and the pane has the keys")
@@ -430,7 +423,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         controller.window.sendEvent(typed(0, "a", [], in: controller))
         controller.window.sendEvent(typed(49, " ", [], in: controller))
-        XCTAssertEqual(recorder.keyCodes, [0, 49], "a letter and Space go unhandled, so AppKit beeps")
+        XCTAssertEqual(recorder.keyCodes, [0], "a letter goes unhandled, so AppKit beeps; Space opens the row menu")
     }
 
     private final class KeyRecorder: NSResponder {
@@ -1417,6 +1410,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let otherSurface = try XCTUnwrap(surfaces.last)
         controller.activateWorkspaceForTesting(home)
         let focusesBefore = otherSurface.focusCount
+        controller.window.layoutIfNeeded()
 
         try click(controller.sidebarForTesting.view.rowsForTesting[1])
 

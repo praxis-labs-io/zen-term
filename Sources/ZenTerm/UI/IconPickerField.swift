@@ -13,7 +13,7 @@ final class IconPickerField: NSView, ThemeReapplying {
     private var isFocusedStop = false { didSet { restyle() } }
 
     private lazy var popover: ListPopover = {
-        let popover = ListPopover(anchor: self)
+        let popover = ListPopover(anchor: self, anchorToggles: true)
         popover.onSelfClose = { [weak self] in
             self?.cells = []
             self?.restyle()
@@ -101,12 +101,9 @@ final class IconPickerField: NSView, ThemeReapplying {
         restyle()
         renderClosed()
         guard popover.isOpen else { return }
-        let kept = highlighted
-        closePopover()
-        openPopover()
-        highlighted = kept
+        popover.replace(content: buildGrid())
         refreshHighlight()
-        if cells.indices.contains(kept) { popover.reveal(cells[kept]) }
+        if cells.indices.contains(highlighted) { popover.reveal(cells[highlighted]) }
     }
 
     private func renderClosed() {
@@ -139,7 +136,6 @@ final class IconPickerField: NSView, ThemeReapplying {
         if window == nil { closePopover() }
     }
 
-    /// Esc closes the grid here: a bare Esc reaches `keyDown` before the card root's `performKeyEquivalent`.
     override func keyDown(with event: NSEvent) {
         if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
@@ -148,7 +144,6 @@ final class IconPickerField: NSView, ThemeReapplying {
             case .up: moveVertically(-1)
             case .down: moveVertically(1)
             case .activate: commitHighlight()
-            case .escape: closePopover()
             default: break
             }
             return

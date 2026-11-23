@@ -13,6 +13,7 @@ extension ControlResponder {
             return reply(.failure(ControlError(.badRequest, "output needs wait.")))
         }
         if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
+        if let problem = Self.cwdProblem(request.args) { return reply(.failure(problem)) }
         let name = request.args.name
         if let name {
             guard ControlAddress.Pane.isValidName(name) else {
@@ -30,14 +31,15 @@ extension ControlResponder {
         let opened = pane(request.args.pane, for: request).flatMap {
             place -> Result<(WindowController, Int), ControlError> in
             if let direction = request.args.split {
-                return split(place, direction, running: program, focus: focus).map { (place.window, $0) }
+                let cwd = callerFolder(as: place.pane.token, for: request)
+                return split(place, direction, running: program, cwd: cwd, focus: focus).map { (place.window, $0) }
             }
             guard let workspace = place.window.workspaceID(of: place.tab) else {
                 return .failure(ControlError(.notFound, "That workspace is gone."))
             }
             return openTab(
-                in: WorkspacePlace(window: place.window, id: workspace), cwd: place.pane.cwd, explicitCWD: false,
-                running: program, focus: focus
+                in: WorkspacePlace(window: place.window, id: workspace), cwd: startFolder(of: place, for: request),
+                explicitCWD: request.args.cwd != nil, running: program, focus: focus
             ).map { (place.window, $0.pane) }
         }
         switch opened {
@@ -56,6 +58,17 @@ extension ControlResponder {
                 answer(PaneRunResult(pane: token, firstTask: outcome), for: request, hangup: hangup, reply: reply)
             }
         }
+    }
+
+    private static func cwdProblem(_ args: ControlArgs) -> ControlError? {
+        guard let cwd = args.cwd else { return nil }
+        if args.split != nil { return ControlError(.badRequest, "pane.run takes a cwd or a split, not both.") }
+        return cwd.hasPrefix("/") ? nil : ControlError(.badRequest, "\(cwd) is not an absolute path.")
+    }
+
+    private func startFolder(of place: PanePlace, for request: ControlRequest) -> URL? {
+        if let cwd = request.args.cwd { return URL(fileURLWithPath: cwd, isDirectory: true) }
+        return callerFolder(as: place.pane.token, for: request) ?? place.pane.cwd
     }
 
     // The wait's answer carries the pane as `pane.get` reports it, its `first_task` included.

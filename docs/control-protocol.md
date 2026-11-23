@@ -54,6 +54,7 @@ carries `caller.pane` only when it is the inherited socket.
 - `args`: an object of the command's arguments. Optional, and absent or `null` means none.
   A field of the wrong type is a `bad_request`.
 - `caller.pane`: the client's `$ZEN_PANE`, when it runs in a pane. Optional.
+- `caller.cwd`: the client's own working folder, absolute, sent with `caller.pane`. Optional.
 
 Unknown fields are ignored, in `args` too.
 
@@ -158,7 +159,7 @@ is listed from its first opening until it closes, shown or hidden.
 - `key`: the window is the key window.
 - `folder`: absent for a remote host's workspace.
 - A workspace's `title` is its current name: a rename's while one is set, else its config
-  title or "Workspace N".
+  title, else the name it opened with, else its active tab's folder.
 - `host`: present for a remote host's workspace, as `{"alias":"devbox","state":"connected"}`.
   `state` is `connecting` or `connected`. A host whose login failed is left out.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
@@ -223,8 +224,8 @@ Opens a workspace with no config entry at the end of the caller's window's sideb
 ### `workspace.rename`
 
 `args`: `workspace`, `title` (required). Names the workspace for this session; the
-workspaces file is never written. An empty `title` gives it back its config title or
-"Workspace N". A host's workspace is `refused`: its name is its Settings display name.
+workspaces file is never written. An empty `title` gives it back its config title, the
+name it opened with, or its active tab's folder. A host's workspace is `refused`: its name is its Settings display name.
 
 ### `workspace.close`
 
@@ -237,10 +238,13 @@ screen when it was showing the workspace.
 
 `args`: `workspace`, `cwd` (absolute), `cmd`, `focus`.
 
-Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`,
-else in the caller's folder when the caller is in that workspace, else where a new tab
-in the app would. A host's tab starts the host's login shell over its connection, so
-`cmd` or `cwd` for a host is `refused`.
+Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`.
+Else, when the caller is in that workspace, it starts in `caller.cwd`, else in the folder
+the caller's pane last reported. Otherwise it starts where a new tab in the app would. An
+inherited folder inside a removed worktree starts at the parent workspace's folder instead;
+`cwd` is used as given. A
+host's tab starts the host's login shell over its connection, so `cmd` or `cwd` for a host
+is `refused`.
 
 ```json
 {"tab":"w1.t14","pane":31}
@@ -267,7 +271,9 @@ on it would.
 
 `args`: `pane`, `dir` (required, `right` or `down`), `cmd`, `focus`.
 
-Splits the pane, starting the new one in its folder, running `cmd` in a shell or a shell.
+Splits the pane, running `cmd` in a shell or a shell. The new pane starts in `caller.cwd`
+when the pane is the caller's, else in the folder the pane last reported. A folder inside a
+removed worktree starts at the parent workspace's folder instead.
 Focus stays on the pane that had it. A drawer does not split. `refused` when the pane's tab
 is in Focus Mode or `cmd` is given for a host's pane, and `failed` when the pane is too small
 to split.
@@ -301,7 +307,9 @@ waiting for its connection. Nothing is sent.
 Into a pane that runs an agent:
 
 - `refused` while its `status` is `blocked`, since what it waits on is the user's decision.
-  `force` sends anyway. A `working` agent takes the text into its running turn.
+  `force` sends anyway. A `pane.run` parent's send to its child blocked on a `question` is not
+  refused, since a question about the task is the parent's to answer; a `permission` or `auth`
+  block refuses the parent too. A `working` agent takes the text into its running turn.
 - It holds while the person is typing into the pane: until 2 seconds after their last key
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
@@ -315,12 +323,16 @@ Into a pane that runs an agent:
 
 ### `pane.run`
 
-`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`,
-`outlive_parent`, `wait`, `timeout`, `output`.
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `cwd` (absolute),
+`focus`, `keep`, `outlive_parent`, `wait`, `timeout`, `output`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
-it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
-starting in that pane's folder. With `split` it splits `pane` the way `pane.split` does, and is
+it opens a tab behind the active one in the workspace of `pane` (the caller's by default). It
+starts in `cwd`, else in `caller.cwd` when `pane` is the caller's, else in the folder that pane
+last reported. An inherited folder inside a removed worktree starts at the parent workspace's
+folder instead; `cwd` is used as given. A pane launched as `cd <folder> && <program>` never
+reports `<folder>`, which is why `caller.cwd` comes first. `cwd` that is not absolute, or sent with `split`, is a
+`bad_request`. With `split` it splits `pane` the way `pane.split` does, and is
 refused or fails the same way. `focus` shows the new pane.
 
 A pane closes the children it started when it closes, and they close theirs, wherever they are
@@ -371,27 +383,38 @@ with `enter` sends it:
 | --------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `stopped` | The child's `status` left `working`, but not to `blocked`. | `review stopped (done): read it with zen pane read --pane 34`           |
 | `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
+| `resumed` | The child's `status` went from `blocked` to `working`.     | `review is working again; wait on it with zen wait 34`                  |
 | `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
 
-- A child without a name is `pane 34`. `blocked` names `a permission prompt`, `a question` or
-  `a login` when the program says which.
+- A child without a name is `pane 34`. `blocked` names `a permission prompt` or `a login` when
+  the program says which. A child blocked on a question sends
+  `review is asking a question: read it with zen pane read --pane 34 and answer it, or ask the user when it is a product or scope call`.
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
   child answers the same change, when one it holds on its `children` watches the child, since
   that wait reports the change, or for the report that settles `first_task`, which `pane.run`
-  answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
+  answers with. No wait answers `resumed`, so any wait the parent holds on the child stands in
+  for it, and there is none when the parent sent or pressed anything into the child while it was
+  `blocked`, since the parent answered it. A pane run with `keep` stays open when its program exits, and sends no `exited`.
+- There is no `stopped` note when the child submitted a `pane.send` to its parent (text with `enter`) since its turn began,
+  when its `status` last became `working` from anything but `blocked`, since that message carries
+  the news, unless the parent has sent or pressed anything into it since. A `stopped`, `blocked` or `resumed`
+  note still held when the child's pane closes, as when the parent closes it, is dropped, and so
+  is a `blocked` note still held once the child's `status` has left `blocked`.
 - A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
   until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
   dropped.
 
 ### `pane.keys`
 
-`args`: `pane`, `keys` (required), a list of key names.
+`args`: `pane`, `keys` (required), a list of key names, `force`.
 
 Presses each key in order as a keystroke, not a paste, so a menu or a prompt reads it as
 the key: `enter`, `escape`, `tab`, `shift-tab`, `backspace`, `space`, `up`, `down`, `left`,
 `right`, `home`, `end`, `pageup`, `pagedown`, and `ctrl-a` through `ctrl-z`. A name that is
 not a key is `bad_request` naming it, and nothing is pressed. `failed` when the pane has not
-started.
+started. Into an agent whose `status` is `blocked`, it is `refused` without `force` under
+`pane.send`'s rule: a `pane.run` parent's keys into its child blocked on a `question` are not
+refused, and a `permission` or `auth` block refuses everyone. Nothing is pressed.
 
 ### `pane.interrupt`
 
@@ -578,9 +601,9 @@ rest print nothing. `zen pane get` takes the pane as its argument, this pane by 
 `zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
 `zen wait` does. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
-a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
+`zen pane keys <pane> <key>... [--force]` takes the keys as arguments, and a name that is not a
+key is a usage error.
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
 `-h` prints the help, and `-- --help` runs `--help`. A pane argument,

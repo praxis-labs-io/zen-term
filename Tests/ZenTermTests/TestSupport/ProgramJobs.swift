@@ -8,9 +8,21 @@ final class ProgramJobs {
     private var jobs: [Process] = []
 
     func start(named name: String, file: StaticString = #filePath, line: UInt = #line) throws -> pid_t {
+        try start(name, exec: "exec {'/bin/sleep'} '\(name)', '30'", file: file, line: line)
+    }
+
+    // A shell started at a prompt runs with no arguments, so this one reads stdin and never ends on its own.
+    func startWithoutArguments(named name: String, file: StaticString = #filePath, line: UInt = #line) throws -> pid_t {
+        try start(name, exec: "exec {'/bin/cat'} '\(name)'", stdin: Pipe(), file: file, line: line)
+    }
+
+    private func start(
+        _ name: String, exec script: String, stdin: Pipe? = nil, file: StaticString, line: UInt
+    ) throws -> pid_t {
         let job = Process()
         job.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        job.arguments = ["-e", "exec {'/bin/sleep'} '\(name)', '30'"]
+        job.arguments = ["-e", script]
+        if let stdin { job.standardInput = stdin }
         try job.run()
         jobs.append(job)
         let pid = job.processIdentifier

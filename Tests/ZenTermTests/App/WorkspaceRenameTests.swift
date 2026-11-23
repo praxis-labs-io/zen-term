@@ -11,6 +11,8 @@ final class WorkspaceRenameTests: WindowTestCase {
     private var controllers: [WindowController] = []
     private var root = FileManager.default.temporaryDirectory
 
+    private var rootName: String { PathDisplay.folderName(root) ?? "" }
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
@@ -73,18 +75,18 @@ final class WorkspaceRenameTests: WindowTestCase {
                 .compactMap { ($0 as? NSTextField)?.stringValue },
             ["Rename Workspace"])
         XCTAssertEqual(card.nameFieldForTesting.text, "api")
-        XCTAssertEqual(card.nameFieldForTesting.placeholder, "Workspace 1", "the given name, as the reset hint")
+        XCTAssertEqual(card.nameFieldForTesting.placeholder, rootName, "the given name, as the reset hint")
     }
 
     func test_committing_renamesTheWindowTitleAndTheSidebarRow() throws {
         let controller = makeWindow()
         controller.openWorkspaceForTesting(Workspace(title: "Alpha", path: root, tabs: [.init()], env: [:]))
-        XCTAssertEqual(sidebarTitles(controller), ["Workspace 1", "Alpha"])
+        XCTAssertEqual(sidebarTitles(controller), [rootName, "Alpha"])
 
         try rename(controller, to: "api")
 
         XCTAssertEqual(controller.window.title, "api")
-        XCTAssertEqual(sidebarTitles(controller), ["Workspace 1", "api"])
+        XCTAssertEqual(sidebarTitles(controller), [rootName, "api"])
         XCTAssertNil(renameCard(controller), "the card closes on commit")
     }
 
@@ -104,14 +106,14 @@ final class WorkspaceRenameTests: WindowTestCase {
         let controller = makeWindow()
         try rename(controller, to: "api")
         try rename(controller, to: "   ")
-        XCTAssertEqual(controller.window.title, "Workspace 1")
+        XCTAssertEqual(controller.window.title, rootName)
 
         controller.openWorkspaceForTesting(Workspace(title: "Alpha", path: root, tabs: [.init()], env: [:]))
         try rename(controller, to: "api")
         try rename(controller, to: "")
 
         XCTAssertEqual(controller.window.title, "Alpha")
-        XCTAssertEqual(sidebarTitles(controller), ["Workspace 1", "Alpha"])
+        XCTAssertEqual(sidebarTitles(controller), [rootName, "Alpha"])
     }
 
     func test_theChord_togglesTheCardClosed() throws {
@@ -122,15 +124,15 @@ final class WorkspaceRenameTests: WindowTestCase {
         controller.handle(.renameWorkspace)
 
         XCTAssertFalse(controller.isModalOverlayOpen)
-        XCTAssertEqual(controller.window.title, "Workspace 1", "closing is not committing")
+        XCTAssertEqual(controller.window.title, rootName, "closing is not committing")
     }
 
-    func test_renamingWorkspaceOne_freesItsNumberForTheNextNewWorkspace() throws {
+    func test_renamingTheFirstWorkspace_leavesTheNextNewOneNamedForItsFolder() throws {
         let controller = makeWindow()
         try rename(controller, to: "api")
 
         controller.handle(.newWorkspace)
 
-        XCTAssertEqual(sidebarTitles(controller), ["api", "Workspace 1"])
+        XCTAssertEqual(sidebarTitles(controller), ["api", PathDisplay.homeName])
     }
 }

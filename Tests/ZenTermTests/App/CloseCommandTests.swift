@@ -426,9 +426,9 @@ final class CloseCommandTests: WindowTestCase {
 
         c.handle(.closeWindow)
 
+        let name = try XCTUnwrap(PathDisplay.folderName(root))
         XCTAssertTrue(
-            toastTexts(in: c).contains(
-                "Closing this window will stop everything running in it, including Workspace 1."))
+            toastTexts(in: c).contains("Closing this window will stop everything running in it, including \(name)."))
     }
 
     func test_closeTab_withOnlyAVisiblePaneRunning_namesNothing() throws {

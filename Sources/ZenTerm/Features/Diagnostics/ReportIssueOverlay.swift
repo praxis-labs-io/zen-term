@@ -4,7 +4,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
 
     private let report: SystemReport
-    private let onOpenURL: (URL) -> Void
+    private let onOpenURL: (URL) -> String?
     private let onExportDiagnostics: () -> Void
 
     private let header = ModalHeader(title: "Report an Issue")
@@ -18,12 +18,12 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
 
     private let exportButton = AppButton(title: "Export Diagnostics…", variant: .secondary)
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
-    private let openButton = AppButton(
-        title: "Open on GitHub", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+    private let openButton = ModalShell.submitButton(title: "Open on GitHub")
+    private let errorLabel = FormErrorLabel(maximumLines: 3)
 
     init(
         report: SystemReport,
-        onOpenURL: @escaping (URL) -> Void, onExportDiagnostics: @escaping () -> Void,
+        onOpenURL: @escaping (URL) -> String?, onExportDiagnostics: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.report = report
@@ -73,7 +73,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
 
         let footer = buildFooter()
 
-        let content = NSStackView(views: [header, titleGroup, whatGroup, envGroup, footer])
+        let content = NSStackView(views: [header, titleGroup, whatGroup, envGroup, errorLabel, footer])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = ChromeMetrics.Spacing.modalSectionGap
@@ -153,35 +153,35 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
 
     private func submit() {
         guard !isDismissing else { return }
-        if let firstInvalid = validate(includeRequired: true) {
-            window?.makeFirstResponder(firstInvalid)
-            return
-        }
+        errorLabel.clear()
+        let validation = validate(submitting: true)
+        guard validation.isValid else { return validation.revealFirstInvalid() }
         let issue = IssueReport(
             title: titleField.text.trimmingCharacters(in: .whitespacesAndNewlines),
             whatHappened: whatHappened.text.trimmingCharacters(in: .whitespacesAndNewlines),
             report: report)
-        onOpenURL(issue.url)
+        if let failure = onOpenURL(issue.url) {
+            errorLabel.show(failure)
+            focus(openButton)
+        }
     }
 
     @discardableResult
-    private func validate(includeRequired: Bool) -> NSView? {
-        var firstInvalid: NSView?
+    private func validate(submitting: Bool) -> FormValidation {
+        var validation = FormValidation()
         let title = titleField.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let what = whatHappened.text.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let titleMessage = (includeRequired && title.isEmpty) ? "Add a title." : nil
-        titleGroup?.setMessage(titleMessage)
-        if titleMessage != nil { firstInvalid = titleField.field }
-
-        let whatMessage = (includeRequired && what.isEmpty) ? "Describe what happened." : nil
-        whatGroup?.setMessage(whatMessage)
-        if whatMessage != nil, firstInvalid == nil { firstInvalid = whatHappened.textView }
-
-        return firstInvalid
+        validation.flag(
+            titleGroup, submitting && title.isEmpty ? "Add a title." : nil, at: titleField.field)
+        validation.flag(
+            whatGroup, submitting && what.isEmpty ? "Describe what happened." : nil, at: whatHappened.textView)
+        return validation
     }
 
-    private func refreshValidity() { validate(includeRequired: false) }
+    private func refreshValidity() {
+        errorLabel.clear()
+        validate(submitting: false)
+    }
 
     private static func vStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: views)

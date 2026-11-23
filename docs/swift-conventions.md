@@ -27,6 +27,11 @@ is actually reached; a copy of the guard in `AppDelegate` never runs. `PaneCanva
 **Never present a sheet inside `mouseDown`.** A `beginSheetModal(for:)` before the matching `mouseUp`
 is silently dropped. Present from a control's action (fires on `mouseUp`) or defer a runloop turn.
 
+**An unhandled `mouseUp` climbs the responder chain to the view around it.** A control that acts on
+its press and leaves `mouseUp` to `super` hands the release to its superview, so a row that chooses on
+release fires under a click on its own button. Choose only on a release whose press the view took
+(`ListRow`).
+
 **Some keys never reach `keyDown`, because key-equivalent dispatch takes them first.** Ctrl-Return
 goes to a context-menu equivalent, Ctrl-/ is offered to the first view in the hierarchy (and beeps),
 and a command key can arrive only through `doCommand(by:)`. `GhosttyHostView.performKeyEquivalent`

@@ -82,7 +82,9 @@ final class SocketDiscoveryTests: XCTestCase {
         let path = try resolve(environment: environment).get()
 
         XCTAssertEqual(path, inherited)
-        XCTAssertEqual(ConnectionOptions.caller(for: path, environment: environment), ControlCaller(pane: 31))
+        XCTAssertEqual(
+            ConnectionOptions.caller(for: path, environment: environment, cwd: "/w/app"),
+            ControlCaller(pane: 31, cwd: "/w/app"))
     }
 
     func test_aDeadInheritedSocketFallsBackToTheLiveOne_withNoCallerPane() throws {
@@ -126,6 +128,7 @@ final class SocketDiscoveryTests: XCTestCase {
         let environment = ["ZEN_CONTROL_SOCK": "/a/control.1.sock", "ZEN_PANE": "31"]
         XCTAssertNil(ConnectionOptions.caller(for: "/b/control.2.sock", environment: environment))
         XCTAssertEqual(
-            ConnectionOptions.caller(for: "/a/control.1.sock", environment: environment), ControlCaller(pane: 31))
+            ConnectionOptions.caller(for: "/a/control.1.sock", environment: environment, cwd: "/w"),
+            ControlCaller(pane: 31, cwd: "/w"))
     }
 }

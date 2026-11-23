@@ -131,14 +131,7 @@ final class SidebarAgentsTests: WindowTestCase {
         while c.focusedSurfaceIDForTesting != agent.id { c.handle(.nextPane) }
     }
 
-    private func click(_ row: NSView) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NSView) throws { try sendClick(to: row) }
 
     private func hover(_ row: SidebarAgentRow, in c: WindowController) throws {
         TooltipPresenter.shared.dismiss()
@@ -407,12 +400,13 @@ final class SidebarAgentsTests: WindowTestCase {
         let agent = try focusedAgent(c)
         c.identifyAgentForTesting(agent.id, name: "claude")
         XCTAssertEqual(c.agentRowForTesting(agent.id)?.summary, "claude", "no title falls back to the name")
-        XCTAssertEqual(c.agentRowForTesting(agent.id)?.detail, "Workspace 1", "the second line is the place alone")
+        XCTAssertEqual(
+            c.agentRowForTesting(agent.id)?.detail, PathDisplay.homeName, "the second line is the place alone")
 
         retitle(agent, "✳ Fix the sidebar")
         XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition: the title moved no state")
         XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the sidebar", "a new pane title re-renders the row")
-        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Claude Code, Idle, Workspace 1")
+        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Claude Code, Idle, \(PathDisplay.homeName)")
 
         retitle(agent, "✳ Review the diff")
         XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Review the diff", "and so does the next")
@@ -423,7 +417,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(
             row.accessibilityLabel(), "Review the diff, Wants to run swift test",
             "VoiceOver names the row before its ask, or two asking rows sound alike")
-        XCTAssertEqual(row.accessibilityValue() as? String, "Claude Code, Waiting, Workspace 1")
+        XCTAssertEqual(row.accessibilityValue() as? String, "Claude Code, Waiting, \(PathDisplay.homeName)")
         try hover(row, in: c)
         XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test", "the tooltip keeps the ask")
     }

@@ -125,6 +125,8 @@ final class TabController: NSObject {
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? liveTitle }
     var liveTitle: String { paneCanvas.title }
+    // The folder the tab's name reads, which a focused drawer does not change.
+    var paneFolder: URL? { paneCanvas.focusedCWD }
     // Falls back to the pane, because nil reads downstream as "no repository".
     var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 
@@ -280,7 +282,7 @@ final class TabController: NSObject {
 
     init(
         initialCWD: URL?, initialCommand: PaneProgram? = nil, env: [String: String] = [:], backingScale: CGFloat? = nil,
-        isToolFloatOpen: @escaping () -> Bool = { false },
+        isToolFloatOpen: @escaping () -> Bool = { false }, readsForeground: Bool = true,
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
     ) {
@@ -292,7 +294,8 @@ final class TabController: NSObject {
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env, backingScale: backingScale,
-            isToolFloatOpen: isToolFloatOpen, makeSurface: makeSurface, startSurface: startSurface)
+            isToolFloatOpen: isToolFloatOpen, readsForeground: readsForeground, makeSurface: makeSurface,
+            startSurface: startSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()
@@ -340,9 +343,10 @@ final class TabController: NSObject {
         if isZoomed { toastZoomBlocked("split"); return }
         paneCanvas.split(axis)
     }
-    func split(pane token: Int, axis: SplitAxis, command: PaneProgram?) -> PaneSplitResult {
+    func split(pane token: Int, axis: SplitAxis, command: PaneProgram?, cwd: URL?) -> PaneSplitResult {
         if isZoomed { return .focusMode }
-        return paneCanvas.split(token: token, axis: axis, command: command).map { .opened(token: $0) } ?? .tooSmall
+        return paneCanvas.split(token: token, axis: axis, command: command, cwd: cwd).map { .opened(token: $0) }
+            ?? .tooSmall
     }
 
     func close(pane token: Int) { paneCanvas.close(token: token) }

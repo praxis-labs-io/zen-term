@@ -142,6 +142,7 @@ final class AppButton: NSButton, HoverSuppressing {
             } else {
                 (onTab ?? onArrowDown)?()
             }
+        case .activate where variant == .destructive && !KeyboardFocus.isReturn(event): return
         case .activate: fire()
         default: super.keyDown(with: event)
         }

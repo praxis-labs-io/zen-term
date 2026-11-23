@@ -61,6 +61,10 @@ final class ChildrenWait {
         }
     }
 
+    func watches(_ surface: SurfaceID) -> Bool {
+        watches.contains { $0.probe.watched.surfaceID == surface && $0.probe.isWatching }
+    }
+
     func cancel() { finish() }
 
     private func heard(_ answer: PaneWait.Answer, from token: Int) {

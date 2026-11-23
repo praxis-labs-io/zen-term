@@ -32,8 +32,15 @@ final class BranchFieldTests: XCTestCase {
             Notification(name: NSControl.textDidChangeNotification, object: field.box.field))
     }
 
-    @discardableResult
-    private func escape() -> Bool {
+    private func pressEscape() {
+        NSApp.sendEvent(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!)
+    }
+
+    private func fieldClaimsEscape() -> Bool {
         field.box.control(
             field.box.field, textView: NSTextView(),
             doCommandBy: #selector(NSResponder.cancelOperation(_:)))
@@ -138,15 +145,27 @@ final class BranchFieldTests: XCTestCase {
     func test_escapeTakesTheListDownAndKeepsTheCard() {
         type("zen")
 
-        XCTAssertTrue(escape(), "the field consumed Esc")
+        pressEscape()
+
         XCTAssertFalse(field.isListOpen)
         XCTAssertEqual(field.text, "zen")
+    }
+
+    func test_aClickInTheField_closesTheListAndReachesTheField() {
+        type("zen")
+        let point = field.convert(NSPoint(x: field.bounds.midX, y: field.bounds.midY), to: nil)
+        let click = NSEvent.mouseEvent(
+            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+
+        XCTAssertTrue(field.listFilterForTesting(click) === click, "the click goes on to place the caret")
+        XCTAssertFalse(field.isListOpen)
     }
 
     func test_escapeWithNoListIsNotConsumed() {
         type("qqqq")
 
-        XCTAssertFalse(escape())
+        XCTAssertFalse(fieldClaimsEscape(), "Esc goes on to the card, which closes")
     }
 
     func test_closingTheListLeavesTheTypedTextAlone() {
