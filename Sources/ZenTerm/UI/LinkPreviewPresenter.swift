@@ -45,7 +45,7 @@ final class LinkPreviewPresenter {
     private func teardown() {
         owner = nil
         shownURL = nil
-        preview?.removeFromSuperview()
+        preview?.dismiss()
         preview = nil
         if let ownerWatch { NSEvent.removeMonitor(ownerWatch) }
         ownerWatch = nil

@@ -50,6 +50,22 @@ final class LinkPreviewTests: WindowTestCase {
         XCTAssertTrue(shownPreviews().isEmpty, "leaving the link left the preview mounted")
     }
 
+    func test_aPreview_fadesInAndOutRatherThanPopping() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let surface = try XCTUnwrap(controller.allSurfaces.first)
+
+        controller.surface(surface, hoveredLinkDidChange: "https://example.com/docs")
+        let preview = try XCTUnwrap(shownPreviews().first)
+        let fadeIn = try XCTUnwrap(preview.layer?.animation(forKey: "motion.opacity") as? CABasicAnimation)
+        XCTAssertEqual(fadeIn.fromValue as? Float, 0)
+
+        controller.surface(surface, hoveredLinkDidChange: nil)
+
+        XCTAssertNotNil(preview.superview, "the preview leaves by fading, not by vanishing")
+        XCTAssertEqual(preview.layer?.opacity, 0)
+        waitUntil(preview.superview == nil, "the faded preview to unmount")
+    }
+
     func test_showingAPreview_conflictsWithNoConstraint() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
 
