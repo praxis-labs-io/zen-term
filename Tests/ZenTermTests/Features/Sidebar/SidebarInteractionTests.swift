@@ -217,7 +217,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(controller.sidebarForTesting.isRevealed, "yielding gives the panes the room, it does not float")
     }
 
-    func test_dockedAtTheMinimumWidth_withAUserFloat_theTabBarKeepsRoom() throws {
+    func test_atTheMinimumWidth_withAUserFloat_theTabBarKeepsRoomAfterAShortName() throws {
         var config = GeneralConfig.current
         config.floats = [
             ToolFloat(
@@ -227,13 +227,19 @@ final class SidebarInteractionTests: WindowTestCase {
         ]
         GeneralConfig.setCurrentForTesting(config)
         let controller = makeController()
+        controller.renameWorkspace(controller.activeWorkspaceIDForTesting, to: "ab")
         controller.window.setContentSize(controller.window.contentMinSize)
 
+        let sidebar = controller.sidebarForTesting
         let bar = frame(of: try tabBar(in: controller), in: controller)
         let dock = frame(of: controller.dockForTesting, in: controller)
+        let lead = frame(of: sidebar.lead, in: controller)
 
-        let footer = frame(of: controller.sidebarForTesting.footer, in: controller)
-        XCTAssertGreaterThanOrEqual(bar.minX, footer.maxX, "the tab bar starts after the docked sidebar's footer")
+        XCTAssertFalse(sidebar.isDocked, "precondition: the minimum width is below the dockable width")
+        XCTAssertTrue(sidebar.footer.isHiddenOrHasHiddenAncestor, "the yielded sidebar's footer is off screen")
+        XCTAssertGreaterThanOrEqual(
+            bar.minX + TabBarView.leadingInset, lead.minX + sidebar.lead.contentWidth,
+            "the first tab starts after the name")
         XCTAssertGreaterThan(bar.width, 0, "the tab bar keeps room between the sidebar and the toolbar")
         XCTAssertLessThanOrEqual(bar.maxX, dock.minX)
     }
@@ -242,7 +248,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1:")
+        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "\(PathDisplay.homeName):")
     }
 
     func test_collapsedLead_truncatesALongWorkspaceNameAtATabTitlesWidth() throws {

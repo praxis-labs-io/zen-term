@@ -125,6 +125,8 @@ final class TabController: NSObject {
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? liveTitle }
     var liveTitle: String { paneCanvas.title }
+    // The folder the tab's name reads, which a focused drawer does not change.
+    var paneFolder: URL? { paneCanvas.focusedCWD }
     // Falls back to the pane, because nil reads downstream as "no repository".
     var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 

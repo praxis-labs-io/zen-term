@@ -178,7 +178,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
 
         XCTAssertEqual(
             c.closedByRemoval(atPath: root), ClosedByRemoval(thisWindow: true),
-            "Workspace 1 opened in root too, so nothing is left to hold the window")
+            "the first workspace opened in root too, so nothing is left to hold the window")
     }
 
     func test_closingTheActiveWorkspace_underSettings_leavesSettingsTheKeyboard() throws {

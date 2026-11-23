@@ -159,7 +159,7 @@ is listed from its first opening until it closes, shown or hidden.
 - `key`: the window is the key window.
 - `folder`: absent for a remote host's workspace.
 - A workspace's `title` is its current name: a rename's while one is set, else its config
-  title or "Workspace N".
+  title, else the name it opened with, else its active tab's folder.
 - `host`: present for a remote host's workspace, as `{"alias":"devbox","state":"connected"}`.
   `state` is `connecting` or `connected`. A host whose login failed is left out.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
@@ -224,8 +224,8 @@ Opens a workspace with no config entry at the end of the caller's window's sideb
 ### `workspace.rename`
 
 `args`: `workspace`, `title` (required). Names the workspace for this session; the
-workspaces file is never written. An empty `title` gives it back its config title or
-"Workspace N". A host's workspace is `refused`: its name is its Settings display name.
+workspaces file is never written. An empty `title` gives it back its config title, the
+name it opened with, or its active tab's folder. A host's workspace is `refused`: its name is its Settings display name.
 
 ### `workspace.close`
 

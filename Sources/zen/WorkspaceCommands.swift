@@ -34,7 +34,7 @@ struct WorkspaceCommands: ParsableCommand {
         @Argument(help: "Its folder. The home folder by default.")
         var path: String?
 
-        @Option(help: "Its name. Workspace N by default.")
+        @Option(help: "Its name. Its active tab's folder by default.")
         var title: String?
 
         @Flag(help: "Switch to it.")
