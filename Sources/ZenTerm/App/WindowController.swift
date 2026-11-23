@@ -3582,7 +3582,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
-            if let surface, self.listedProcesses[surface] != nil { self.processFinished(surface) }
+            if let surface, self.isProcessPane(surface) { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -4064,6 +4064,11 @@ final class WindowController: NSObject {
         if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
     }
 
+    // Unlisted too: a pane with no agent above it can gain one later, and must not return as live.
+    private func isProcessPane(_ surface: SurfaceID) -> Bool {
+        agents.agents[surface] == nil && panesBySurface()[surface]?.record.parent != nil
+    }
+
     private func processFinished(_ surface: SurfaceID) {
         exitedProcesses.insert(surface)
         renderAgents()
@@ -4140,7 +4145,10 @@ final class WindowController: NSObject {
                 item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
                 isAgent: false)
         }
-        return AgentFamilies.arrange(agentRows + processRows)
+        let parents = Dictionary(
+            panes.values.compactMap { pane in pane.record.parent.map { (pane.token, $0) } },
+            uniquingKeysWith: { first, _ in first })
+        return AgentFamilies.arrange(agentRows + processRows, parents: parents)
     }
 
     private static let unnamedProcess = "process"

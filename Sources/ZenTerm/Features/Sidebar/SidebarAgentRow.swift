@@ -4,7 +4,7 @@ struct SidebarAgentItem: Equatable {
     enum Role: Equatable {
         case agent
         case helper
-        case process(nested: Bool)
+        case process
     }
 
     let id: SurfaceID
@@ -108,8 +108,8 @@ final class SidebarAgentRow: SidebarJumpRow {
                     leadingOnTitleLine: true))
         case .helper:
             render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: true))
-        case .process(let nested):
-            render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: nested))
+        case .process:
+            render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: true))
         }
     }
 
