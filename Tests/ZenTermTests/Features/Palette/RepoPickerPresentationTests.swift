@@ -416,7 +416,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let card = try XCTUnwrap(createCards(in: c).first)
         card.beginWork("Creating spike")
 
-        c.handle(.toggleCommandPalette)
+        c.openReportIssue()
 
         waitForPendingLoads()
         XCTAssertTrue(createCards(in: c).isEmpty, "the gate closed it out from under the create")

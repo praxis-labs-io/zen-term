@@ -616,7 +616,9 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   would drop. App-global
   chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
-  open card, which stays open. A card is offered every other chord first
+  open card, which stays open. A chord that opens another surface (the palette, the workspace
+  picker, Settings, Report Issue, New Tool, a float) replaces the palette, picker or Settings, and
+  does nothing over a form. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
   what it declines; a key it `owns` passes `passThroughGuard` to reach it as a key event
   (⌘↩ in the report, worktree, tool float, workspace and remote host forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes
