@@ -488,7 +488,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`NavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
-  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row); a local event monitor closes it on Esc or a click outside it.
+  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row).
+  Space opens it on the focused row. Focus stays on the row, whose ↑/↓ walk the menu and
+  ↵ chooses; Esc closes it back to the row.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**
   `SidebarEdgeReveal` watches an 8pt strip there, measured from where a hand aiming at the
   edge comes to rest, and floats `SidebarColumn` as a card over the panes after a hold.
@@ -538,6 +540,13 @@ New modal surfaces compose the existing primitives.
   `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
   or delete (a config write, git, the browser) shows in a `FormErrorLabel` above the action
   bar, never a toast.
+- **Popovers:** `ListPopover` is every anchored list (dropdowns, `BranchField`, the sidebar
+  row menu, the icon grid) and owns its dismissal: a local event monitor closes it on Esc
+  or a click outside the card, and when the window resizes, resigns key or closes. A click
+  outside still lands, except on a toggle's own anchor (`anchorToggles`), where it would reopen
+  the list. Esc during input-method composition is left to the marked text. Owners only hear
+  `onSelfClose`; `absorbsEscape` lets a typed query take the first Esc. It opens and closes
+  through `Motion.springScaleFade`.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. A card with a single field (rename) submits on Return. Every card is fully
   operable without a mouse.
@@ -880,7 +889,7 @@ workspace's entry fresh for the card. Settings does not list them.
   A clean main checkout moves to the local default after the folder claim, and back on failure.
 
 The create card replaces the picker and reopens it on cancel. `BranchField` is a `FieldBox`
-plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
+plus `ListPopover`. `CreateTarget` carries the repo to
 branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
 (create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
 result through the chrome, and the control socket passes nothing and opens it headless

@@ -34,17 +34,18 @@ final class CheckboxDropdownTests: WindowTestCase {
         36: "\r", 51: "\u{7f}", 53: "\u{1b}", 125: "\u{F701}", 126: "\u{F700}",
     ]
 
-    /// Sends the key to whatever holds focus, the query field's editor while the list is open.
+    // Esc goes through the app: the open list's own event monitor is what takes it.
     private func press(_ dropdown: CheckboxDropdown, _ chars: String, code: UInt16, shift: Bool = false) {
         let characters = chars.isEmpty ? Self.unprinted[code] ?? "" : chars
         var flags: NSEvent.ModifierFlags = shift ? [.shift] : []
         if code == 125 || code == 126 { flags.formUnion([.function, .numericPad]) }
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
+            charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
+        guard code != 53 else { return NSApp.sendEvent(event) }
         let target: NSResponder = window?.firstResponder ?? dropdown
-        target.keyDown(
-            with: NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
-                windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
-                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!)
+        target.keyDown(with: event)
     }
 
     func test_reapplyTheme_rebuildsTheOpenListSoItIsNotStale() throws {
@@ -257,12 +258,15 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(toggled, [])
     }
 
-    func test_focusLossClosesTheList() {
+    func test_theWindowResigningKey_closesTheList() {
         let dropdown = makeDropdown()
         press(dropdown, " ", code: 49)
         XCTAssertTrue(dropdown.isPopoverOpen)
-        window?.makeFirstResponder(nil)
-        XCTAssertFalse(dropdown.isPopoverOpen, "an outside click moves focus, which must close the list")
+
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+
+        waitUntil(!dropdown.isPopoverOpen, "the list to close with the window's focus")
+        XCTAssertFalse(dropdown.isEditingForTesting)
     }
 
     func test_tabAndLeft_bubbleWhileClosed() {

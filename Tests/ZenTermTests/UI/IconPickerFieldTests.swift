@@ -4,6 +4,11 @@ import XCTest
 @testable import ZenTerm
 
 final class IconPickerFieldTests: WindowTestCase {
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        Motion.isReduceMotionEnabled = { true }
+    }
+
     func test_removingHostFromWindow_closesOpenGrid() {
         let field = IconPickerField(selected: "hammer")
         field.translatesAutoresizingMaskIntoConstraints = true

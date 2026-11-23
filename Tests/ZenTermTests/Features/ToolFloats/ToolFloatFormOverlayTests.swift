@@ -390,16 +390,20 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window), "Tab from Cancel reaches Delete")
     }
 
-    func test_iconGrid_escKeyDown_closesGrid() {
+    func test_iconGrid_escape_closesGrid() {
         let (overlay, _, sink) = mount()
         let picker = picker(in: overlay)
         window!.makeFirstResponder(picker)
         picker.openForTesting()
         XCTAssertTrue(picker.isPopoverOpen)
 
-        picker.keyDown(with: keyDown("\u{1b}", code: 53))
+        NSApp.sendEvent(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window!.windowNumber, context: nil, characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!)
 
-        XCTAssertFalse(picker.isPopoverOpen, "Esc in the picker's keyDown closes the grid")
+        XCTAssertFalse(picker.isPopoverOpen, "Esc closes the grid")
         XCTAssertEqual(sink.cancelled, 0, "closing the grid must not cancel the form")
         XCTAssertTrue(window!.firstResponder === picker, "Esc leaves focus on the field")
     }

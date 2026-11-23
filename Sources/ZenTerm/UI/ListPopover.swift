@@ -8,12 +8,31 @@ final class ListPopover {
         let height: CGFloat
     }
 
+    private struct Press: Sendable {
+        let isKey: Bool
+        let isEscape: Bool
+        let windowNumber: Int
+        let location: NSPoint
+
+        init(_ event: NSEvent) {
+            isKey = event.type == .keyDown
+            isEscape = isKey && KeyboardFocus.key(for: event) == .escape
+            windowNumber = event.windowNumber
+            location = event.locationInWindow
+        }
+    }
+
     private unowned let anchor: NSView
-    private var card: NSView?
+    /// Swallows a click on the anchor: a toggle's own click would reopen the list it just closed.
+    private let anchorToggles: Bool
+    private var card: PopoverCard?
     private weak var scroll: FadingScrollView?
     private var resizeObserver: NSObjectProtocol?
+    private var dismissObservers: [NSObjectProtocol] = []
+    private var monitor: Any?
 
     var onSelfClose: (() -> Void)?
+    var absorbsEscape: (() -> Bool)?
 
     private static let minWidth: CGFloat = 180
     private static let maxHeight: CGFloat = 260
@@ -25,12 +44,15 @@ final class ListPopover {
     /// Overlay scrollers draw over content, so without this lane the bar covers the content's trailing edge.
     private static let scrollerGutter: CGFloat = ChromeMetrics.Spacing.s16
 
-    init(anchor: NSView) {
+    init(anchor: NSView, anchorToggles: Bool = false) {
         self.anchor = anchor
+        self.anchorToggles = anchorToggles
     }
 
     deinit {
         if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        dismissObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        if let monitor { NSEvent.removeMonitor(monitor) }
     }
 
     var isOpen: Bool { card != nil }
@@ -39,32 +61,58 @@ final class ListPopover {
 
     var cardForTesting: NSView? { card }
 
+    func filterForTesting(_ event: NSEvent) -> NSEvent? { swallows(Press(event)) ? nil : event }
+
     func open(rows: [Row]) {
         guard let (window, contentView) = openingContext() else { return }
-        let (stack, contentHeight) = rowStack(rows)
-        let (built, _) = assembleCard(around: stack)
-        built.frame.size = anchoredSize(contentHeight: contentHeight)
-        present(built, in: window, on: contentView)
+        present(rowsCard(rows), in: window, on: contentView)
     }
 
     func open(content: NSView) {
         guard let (window, contentView) = openingContext() else { return }
+        present(contentCard(content, in: contentView), in: window, on: contentView)
+    }
+
+    /// Skips the entrance motion, or every keystroke of a filter would flash the card.
+    func replace(rows: [Row]) {
+        guard let contentView = unmountForReplace() else { return }
+        mount(rowsCard(rows), on: contentView)
+    }
+
+    func replace(content: NSView) {
+        guard let contentView = unmountForReplace() else { return }
+        mount(contentCard(content, in: contentView), on: contentView)
+    }
+
+    private func unmountForReplace() -> NSView? {
+        guard let old = card, let contentView = anchor.window?.contentView else { return nil }
+        old.removeFromSuperview()
+        return contentView
+    }
+
+    private func rowsCard(_ rows: [Row]) -> PopoverCard {
+        let (stack, contentHeight) = rowStack(rows)
+        let (built, _) = assembleCard(around: stack)
+        built.frame.size = anchoredSize(contentHeight: contentHeight)
+        return built
+    }
+
+    private func contentCard(_ content: NSView, in contentView: NSView) -> PopoverCard {
         let (built, trailing) = assembleCard(around: content)
         let (size, scrolls) = naturalSize(of: content, in: contentView)
         built.frame.size = size
         if scrolls { trailing.constant -= Self.scrollerGutter }
-        present(built, in: window, on: contentView)
+        return built
     }
 
     func reveal(_ row: NSView) { scroll?.reveal(row) }
 
     func close() {
-        card?.removeFromSuperview()
-        card = nil
-        if let resizeObserver {
-            NotificationCenter.default.removeObserver(resizeObserver)
-            self.resizeObserver = nil
-        }
+        guard let card else { return }
+        self.card = nil
+        stopDismissing()
+        card.isClosing = true
+        Motion.springScaleFade(card, appearing: false) { [weak card] in card?.removeFromSuperview() }
     }
 
     func reposition() {
@@ -87,20 +135,63 @@ final class ListPopover {
         return (window, contentView)
     }
 
-    /// Observes resize with `queue: nil`, which runs synchronously; a queue would leave the card stranded for a turn.
-    private func present(_ built: NSView, in window: NSWindow, on contentView: NSView) {
+    private func present(_ built: PopoverCard, in window: NSWindow, on contentView: NSView) {
+        mount(built, on: contentView)
+        startDismissing(in: window)
+        Motion.springScaleFade(built, appearing: true)
+    }
+
+    private func mount(_ built: PopoverCard, on contentView: NSView) {
         contentView.addSubview(built)
         card = built
         reposition()
+    }
+
+    /// Observes resize with `queue: nil`, which runs synchronously; a queue would leave the card stranded for a turn.
+    private func startDismissing(in window: NSWindow) {
         resizeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResizeNotification, object: window, queue: nil
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, self.isOpen else { return }
-                self.close()
-                self.onSelfClose?()
-            }
+            MainActor.assumeIsolated { self?.dismiss() }
         }
+        dismissObservers = HoverCardView.windowDismissObservers(in: window) { [weak self] in self?.dismiss() }
+        let dismissingEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]
+        monitor = NSEvent.addLocalMonitorForEvents(matching: dismissingEvents) { [weak self] event in
+            let press = Press(event)
+            return MainActor.assumeIsolated { self?.swallows(press) ?? false } ? nil : event
+        }
+    }
+
+    private func stopDismissing() {
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        resizeObserver = nil
+        dismissObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        dismissObservers = []
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+
+    private func dismiss() {
+        guard isOpen else { return }
+        close()
+        onSelfClose?()
+    }
+
+    private func swallows(_ press: Press) -> Bool {
+        guard let card, let window = anchor.window, press.windowNumber == window.windowNumber,
+            let contentView = window.contentView
+        else { return false }
+        if press.isKey {
+            guard press.isEscape else { return false }
+            if let editor = window.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
+            if absorbsEscape?() == true { return true }
+            dismiss()
+            return true
+        }
+        if card.frame.contains(contentView.convert(press.location, from: nil)) { return false }
+        let hit = contentView.hitTest(contentView.superview?.convert(press.location, from: nil) ?? press.location)
+        dismiss()
+        return anchorToggles && hit?.isDescendant(of: anchor) == true
     }
 
     private func anchoredSize(contentHeight: CGFloat) -> NSSize {
@@ -139,7 +230,7 @@ final class ListPopover {
         return (stack, contentHeight)
     }
 
-    private func assembleCard(around content: NSView) -> (card: NSView, trailing: NSLayoutConstraint) {
+    private func assembleCard(around content: NSView) -> (card: PopoverCard, trailing: NSLayoutConstraint) {
         content.translatesAutoresizingMaskIntoConstraints = false
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
@@ -148,7 +239,7 @@ final class ListPopover {
         let scroll = FadingScrollView(document: doc)
         self.scroll = scroll
 
-        let card = ShadowCardView()
+        let card = PopoverCard()
         CardChrome.apply(to: card, tier: .overlay)
         card.translatesAutoresizingMaskIntoConstraints = true
         card.addSubview(scroll)
@@ -169,4 +260,11 @@ final class ListPopover {
         ])
         return (card, trailing)
     }
+}
+
+/// A closing card still fades on screen, and a click landing on it must not choose a row of a list that is gone.
+private final class PopoverCard: ShadowCardView {
+    var isClosing = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? { isClosing ? nil : super.hitTest(point) }
 }

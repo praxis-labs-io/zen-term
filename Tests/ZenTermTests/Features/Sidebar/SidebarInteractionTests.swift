@@ -436,7 +436,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         controller.window.sendEvent(typed(0, "a", [], in: controller))
         controller.window.sendEvent(typed(49, " ", [], in: controller))
-        XCTAssertEqual(recorder.keyCodes, [0, 49], "a letter and Space go unhandled, so AppKit beeps")
+        XCTAssertEqual(recorder.keyCodes, [0], "a letter goes unhandled, so AppKit beeps; Space opens the row menu")
     }
 
     private final class KeyRecorder: NSResponder {

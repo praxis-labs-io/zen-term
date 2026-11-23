@@ -27,6 +27,7 @@ final class BranchField: NSView, ThemeReapplying {
 
     #if DEBUG
         var matchesForTesting: [String] { matches }
+        func listFilterForTesting(_ event: NSEvent) -> NSEvent? { popover.filterForTesting(event) }
         var highlightedForTesting: String? {
             matches.indices.contains(highlighted) ? matches[highlighted] : nil
         }
@@ -61,12 +62,6 @@ final class BranchField: NSView, ThemeReapplying {
         box.onSubmit = { [weak self] in
             self?.closeList()
             self?.onSubmit?()
-        }
-        box.onEndEditing = { [weak self] in self?.closeList() }
-        box.onEscape = { [weak self] in
-            guard let self, self.isListOpen else { return false }
-            self.closeList()
-            return true
         }
     }
 
@@ -162,8 +157,8 @@ final class BranchField: NSView, ThemeReapplying {
     }
 
     private func rerenderList() {
-        closeList()
-        openList()
+        popover.replace(rows: buildRows())
+        renderRows()
     }
 
     private func buildRows() -> [ListPopover.Row] {

@@ -30,6 +30,8 @@ enum KeyboardFocus {
         (event.keyCode == 36 || event.keyCode == 76) && isUnmodified(event)
     }
 
+    static func isSpace(_ event: NSEvent) -> Bool { event.keyCode == 49 && isUnmodified(event) }
+
     static func isUnmodified(_ event: NSEvent) -> Bool {
         event.modifierFlags.intersection(reservableModifiers).isEmpty
     }
