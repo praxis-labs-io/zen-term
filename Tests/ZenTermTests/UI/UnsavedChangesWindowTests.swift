@@ -118,6 +118,21 @@ final class UnsavedChangesWindowTests: WindowTestCase {
         XCTAssertEqual(sink.dismissed, 0)
     }
 
+    func test_keepEditing_afterTheFocusedDrawerClosed_focusesTheForm() throws {
+        let (shell, _) = makeWorkspaceForm()
+        let form = try XCTUnwrap(shell as? WorkspaceFormOverlay)
+        try type("api", intoFieldAt: 0, of: form)
+        form.drawingForTesting.rail(.right)?.onOpen?()
+        XCTAssertNotNil(form.drawingForTesting.focusedRegion)
+
+        _ = form.performKeyEquivalent(with: try escapeKey())
+        XCTAssertNotNil(confirmCard(in: form))
+        _ = form.performKeyEquivalent(with: try escapeKey())
+        waitUntil(!form.isShowingOverlaidCard, "Esc on the card to return to the form")
+
+        XCTAssertTrue(KeyboardFocus.isFocused(form.titleFieldForTesting.field, in: form.window))
+    }
+
     func test_toolFloatForm_changingASegmentIsAChange() throws {
         let (form, sink) = makeToolFloatForm()
         let segment = try XCTUnwrap(descendants(of: form).compactMap { $0 as? SegmentedControl }.first)

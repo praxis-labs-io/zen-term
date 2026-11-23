@@ -97,6 +97,10 @@ class ModalShell: NSView, ThemeReapplying {
     }
 
     private func refocus(_ view: NSView?, selecting selection: NSRange?) {
+        guard let view, view.window === window, !view.isHiddenOrHasHiddenAncestor else {
+            (self as? ModalOverlay)?.focusInitialResponder()
+            return
+        }
         focus(view)
         guard let selection, let editor = window?.firstResponder as? NSTextView else { return }
         editor.setSelectedRange(selection)
