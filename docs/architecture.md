@@ -115,6 +115,10 @@ share `SystemReport`, and never carry the environment or config.
   from conditional theme state, which follows the pane's scheme only when `theme` is a
   light/dark pair with differing paths. The files hold only comments. On a pin bump, diff `ghostty +show-config` with and
   without the line: only `window-theme` may move.
+- **A surface is born with the app's color scheme.** A program can ask before
+  `ghostty_surface_set_color_scheme` lands, so `GhosttyApp` moves the app's scheme to the
+  theme's before each birth. It re-pushes the app config on a move: a surface born while
+  the app's scheme and its config's disagree loses its command, directory and environment.
 - **Shader paths are absolute** (a relative one resolves against the temp config file).
   Shaders get sRGB colors; use them raw. Layer opacity follows `background-alpha` only.
   Only MIT-licensed shaders are bundleable.
