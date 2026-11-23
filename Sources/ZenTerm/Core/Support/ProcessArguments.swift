@@ -31,4 +31,32 @@ enum ProcessArguments {
         let name = last.hasPrefix("-") ? String(last.dropFirst()) : last
         return name.isEmpty ? nil : name
     }
+
+    // A script runs as its interpreter, so its own name is the first argument that is not a flag.
+    nonisolated static func scriptName(in arguments: [String]) -> String? {
+        guard let program = arguments.first.flatMap(programName(from:)),
+            interpreters.contains(withoutVersion(program.lowercased()))
+        else { return nil }
+        for argument in arguments.dropFirst() {
+            if inlineCodeFlags.contains(argument) { return nil }
+            if !argument.hasPrefix("-") { return programName(from: argument) }
+        }
+        return nil
+    }
+
+    nonisolated static func commandName(from arguments: [String]) -> String? {
+        scriptName(in: arguments) ?? arguments.first.flatMap(programName(from:))
+    }
+
+    // `python3.12` runs as itself, not as `python`.
+    nonisolated static func withoutVersion(_ program: String) -> String {
+        String(program.reversed().drop { $0.isNumber || $0 == "." }.reversed())
+    }
+
+    private nonisolated static let interpreters: Set<String> = [
+        "python", "bash", "sh", "zsh", "dash", "node", "ruby", "perl",
+    ]
+
+    // `bash -c` and `perl -e` run the code that follows, so no argument names a script.
+    private nonisolated static let inlineCodeFlags: Set<String> = ["-c", "-e"]
 }

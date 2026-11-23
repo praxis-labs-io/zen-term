@@ -284,4 +284,27 @@ final class PaneCanvasControllerTests: WindowTestCase {
 
         XCTAssertEqual(moves, 1, "focus returning from a drawer is a real move")
     }
+
+    func test_aTildeTitle_readsAsTheHomeFolder() throws {
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
+        surface.title = "~"
+
+        XCTAssertEqual(controller.title, PathDisplay.homeName)
+    }
+
+    func test_aHostPane_isNeverNamedForTheLocalSsh() throws {
+        let host = PaneCanvasController(readsForeground: false, makeSurface: { RecordingSurface() })
+        host.start()
+        defer { host.shutdown() }
+        let surface = try XCTUnwrap(host.surface(for: host.focusedLeafID) as? RecordingSurface)
+        surface.currentDirectory = URL(fileURLWithPath: "/tmp/api", isDirectory: true)
+        let ssh = Process()
+        ssh.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        ssh.arguments = ["30"]
+        try ssh.run()
+        defer { ssh.terminate() }
+        surface.foregroundProcessGroupID = ssh.processIdentifier
+
+        XCTAssertEqual(host.title, "api")
+    }
 }

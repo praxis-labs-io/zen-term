@@ -290,8 +290,13 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   non-flag argument after its interpreter (`brew` runs as `bash`). A group whose arguments cannot
   be read (a setuid program) is an unknown program, never the resting shell. A focused drawer does not
   change it, as it does not change the title. The title poll re-renders the tab bar when a
-  tab's chip changes. A tab is named for its pane's folder, so one at home reads as the user's
-  name, never a lone `~`.
+  tab's chip changes.
+- **A tab is named for its focused pane's job, else its folder** (`PaneCanvasController.title`):
+  the job's program by the same reading as its chip, back at the prompt the folder, and the OSC
+  title only when there is no folder, since the shell's title is its prompt path or the command
+  line it runs. `PathDisplay.folderName` is the one name for a folder, so the home folder reads
+  as its own name, never a lone `~`. A host's tab skips the job (`readsForeground`), since its
+  foreground job is the local `ssh`. Rename Tab's `pinnedTitle` outranks all of it.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.

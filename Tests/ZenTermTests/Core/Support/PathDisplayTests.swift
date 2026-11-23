@@ -22,6 +22,16 @@ final class PathDisplayTests: XCTestCase {
         XCTAssertEqual(PathDisplay.abbreviatingHome("/tmp/scratch"), "/tmp/scratch")
     }
 
+    func test_folderName_ofTheHomeFolder_isItsOwnName_neverATilde() {
+        XCTAssertEqual(PathDisplay.folderName(URL(fileURLWithPath: home, isDirectory: true)), PathDisplay.homeName)
+        XCTAssertNotEqual(PathDisplay.homeName, "~")
+        XCTAssertEqual(PathDisplay.folderName(fromTitle: "~"), PathDisplay.homeName)
+    }
+
+    func test_folderName_ofTheRoot_isNone() {
+        XCTAssertNil(PathDisplay.folderName(URL(fileURLWithPath: "/")))
+    }
+
     func test_isDirectory_trueForExistingDir() {
         XCTAssertTrue(PathDisplay.isDirectory(URL(fileURLWithPath: NSTemporaryDirectory())))
     }
