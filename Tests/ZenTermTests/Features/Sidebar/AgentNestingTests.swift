@@ -138,7 +138,7 @@ final class AgentNestingTests: WindowTestCase {
         let process = try run("htop", from: root, in: c)
 
         XCTAssertEqual(items(c).map(\.id), [root.id, helper.id, process.id])
-        XCTAssertEqual(items(c).map(\.role), [.agent, .helper, .process(nested: true)])
+        XCTAssertEqual(items(c).map(\.role), [.agent, .helper, .process])
         let parentRow = try row(of: root, in: c)
         XCTAssertFalse(parentRow.isNestedForTesting)
         XCTAssertEqual(parentRow.leadingSymbolForTesting, "claude", "a top-level agent leads with its mark")
@@ -232,7 +232,7 @@ final class AgentNestingTests: WindowTestCase {
         let process = try run("htop", from: shell, in: c)
 
         XCTAssertEqual(items(c).map(\.id), [root.id, shell.id, process.id])
-        XCTAssertEqual(items(c).map(\.role), [.agent, .process(nested: true), .process(nested: true)])
+        XCTAssertEqual(items(c).map(\.role), [.agent, .process, .process])
         XCTAssertNil(try row(of: process, in: c).itemForTesting?.startedBy, "the shell is no agent to name")
     }
 
@@ -317,6 +317,22 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertNotNil(c.pane(token: process.token), "precondition: the kept pane is still open")
     }
 
+    func test_aHiddenProcessThatFinished_staysGone_whenItsParentBecomesAnAgent() throws {
+        let c = makeWindow()
+        let shell = try rootPane(c)
+        let process = try run("make", from: shell, keep: true, in: c)
+        XCTAssertEqual(items(c).map(\.id), [], "precondition: no agent owns it yet")
+
+        process.surface.delegate?.surface(
+            process.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        drainMainQueue()
+        report(.working, from: shell)
+        c.trackAgentExitsForTesting()
+
+        XCTAssertNotNil(c.pane(token: process.token), "precondition: the kept pane is still open")
+        XCTAssertEqual(items(c).map(\.id), [shell.id], "a finished process came back as a live row")
+    }
+
     func test_aKeptHelperWhoseAgentLeftIsNotListedAsAProcess() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
@@ -339,7 +355,7 @@ final class AgentNestingTests: WindowTestCase {
 
         XCTAssertEqual(items(c).map(\.id), [root.id, helper.id, grandchild.id])
         let row = try row(of: grandchild, in: c)
-        XCTAssertEqual(row.itemForTesting?.role, .process(nested: true))
+        XCTAssertEqual(row.itemForTesting?.role, .process)
         XCTAssertEqual(row.itemForTesting?.startedBy, helperTitle)
         XCTAssertEqual(row.tooltipForTesting, "Started by \(helperTitle)")
         XCTAssertNil(try self.row(of: helper, in: c).itemForTesting?.startedBy, "its parent is the top agent")

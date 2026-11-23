@@ -3579,7 +3579,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
-            if let surface, self.listedProcesses.contains(surface) { self.processFinished(surface) }
+            if let surface, self.isProcessPane(surface) { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -4059,6 +4059,11 @@ final class WindowController: NSObject {
         }
         let processesExited = trackProcessExits()
         if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
+    }
+
+    // Unlisted too: a pane with no agent above it can gain one later, and must not return as live.
+    private func isProcessPane(_ surface: SurfaceID) -> Bool {
+        agents.agents[surface] == nil && panesBySurface()[surface]?.record.parent != nil
     }
 
     private func processFinished(_ surface: SurfaceID) {
