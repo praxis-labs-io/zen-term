@@ -153,16 +153,18 @@ extension ControlResponder {
         }
         guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
         paste(request.args.text ?? "", from: request.caller?.pane, into: place, enter: request.args.enter == true)
-        noteReport(from: request.caller?.pane, to: place.pane.token)
+        noteDelivery(from: request.caller?.pane, to: place)
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }
         hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
     }
 
-    // A helper's message to its parent already carries the news its `stopped` note would.
-    private func noteReport(from sender: Int?, to token: Int) {
-        guard let sender, let helper = locate(pane: sender), helper.pane.record.parent == token else { return }
+    // A helper's message to its parent already carries the news its `stopped` note would, until the parent answers.
+    private func noteDelivery(from sender: Int?, to place: PanePlace) {
+        guard let sender else { return }
+        if place.pane.record.parent == sender { return place.window.helperHeardFromParent(place.pane.surfaceID) }
+        guard let helper = locate(pane: sender), helper.pane.record.parent == place.pane.token else { return }
         helper.window.helperReported(helper.pane.surfaceID)
     }
 
@@ -235,6 +237,7 @@ extension ControlResponder {
                 pressed.append(typed)
             }
             pressed.forEach(surface.press)
+            noteDelivery(from: request.caller?.pane, to: place)
             return .success(NoPayload())
         }
     }

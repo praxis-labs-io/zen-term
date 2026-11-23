@@ -734,4 +734,19 @@ final class ControlHelperNoteTests: WindowTestCase {
                 + note("review is blocked on a permission prompt; that decision is the user's", from: helper)
                 + note("review is working again; wait on it with zen wait \(token)", from: helper))
     }
+
+    func test_aQuestionToTheParentIsNotAReportOnceTheParentAnswersIt() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try send("which bucket?", from: helper, to: parent)
+        try send("staging", from: parent, to: helper)
+
+        report(.done, from: helper)
+
+        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, try note("which bucket?", from: helper) + note(read, from: helper))
+    }
 }

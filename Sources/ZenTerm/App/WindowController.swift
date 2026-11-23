@@ -2427,6 +2427,8 @@ final class WindowController: NSObject {
 
     func helperReported(_ surface: SurfaceID) { helpersReported.insert(surface) }
 
+    func helperHeardFromParent(_ surface: SurfaceID) { helpersReported.remove(surface) }
+
     // A task pasted into an idle agent shows no change until the agent reports again.
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
         if firstTasks.awaitsPickup(pane.surfaceID) { return true }
