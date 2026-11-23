@@ -562,11 +562,15 @@ final class SidebarNewWorktreeTests: WindowTestCase {
                 charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
     }
 
+    private func pressSpace(in c: WindowController) throws {
+        let space = try key(" ", code: 49, in: c)
+        let passed = try XCTUnwrap(interceptor(for: c).route(space), "Space is no chord, so it reaches the row")
+        c.window.sendEvent(passed)
+    }
+
     private func pressCommandK(in c: WindowController) throws {
-        let keys = KeyInterceptor()
-        keys.setKeymap(KeymapDefaults.map)
-        keys.onReservedChord = { c.handle($0) }
-        XCTAssertNil(keys.route(try key("k", code: 40, flags: .command, in: c)), "⌘K is claimed, not passed on")
+        XCTAssertNil(
+            interceptor(for: c).route(try key("k", code: 40, flags: .command, in: c)), "⌘K is claimed, not passed on")
     }
 
     private func focusRow(_ row: NavRow, in c: WindowController) {
@@ -605,12 +609,12 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(menu.isOpen, "only Esc, a click outside or the window going away closes the menu")
     }
 
-    func test_commandK_onAFocusedRow_opensItsMenu_highlightingTheFirstItem() throws {
+    func test_space_onAFocusedRow_opensItsMenu_highlightingTheFirstItem() throws {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)
         focusRow(row, in: c)
 
-        try pressCommandK(in: c)
+        try pressSpace(in: c)
 
         XCTAssertTrue(menu.isOpen)
         XCTAssertTrue(menu.anchor === row)
@@ -619,9 +623,24 @@ final class SidebarNewWorktreeTests: WindowTestCase {
             menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "", ""], "the keycaps stay on the items")
     }
 
-    func test_commandK_withAPaneFocused_stillClearsTheScreen() throws {
+    func test_space_withTheMenuOpen_keepsItsHighlight() throws {
         let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        focusRow(row, in: c)
+        try pressSpace(in: c)
+        c.window.sendEvent(try key("\u{F701}", code: 125, flags: [.function, .numericPad], in: c))
+
+        try pressSpace(in: c)
+
+        XCTAssertTrue(menu.isOpen)
+        XCTAssertEqual(menu.highlightedTitleForTesting, "Rename Workspace…", "a second Space does not reopen the menu")
+    }
+
+    func test_commandK_onAFocusedRow_clearsTheScreen_andOpensNoMenu() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
         let surface = try XCTUnwrap(c.anyTerminalSurface as? RecordingSurface)
+        focusRow(row, in: c)
 
         try pressCommandK(in: c)
 
@@ -633,7 +652,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)
         focusRow(row, in: c)
-        try pressCommandK(in: c)
+        try pressSpace(in: c)
 
         c.window.sendEvent(try key("\u{F701}", code: 125, flags: [.function, .numericPad], in: c))
         XCTAssertEqual(menu.highlightedTitleForTesting, "Rename Workspace…")
@@ -665,8 +684,8 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)
         focusRow(row, in: c)
-        try pressCommandK(in: c)
-        XCTAssertTrue(menu.isOpen, "precondition: ⌘K opened the menu")
+        try pressSpace(in: c)
+        XCTAssertTrue(menu.isOpen, "precondition: Space opened the menu")
 
         NSApp.sendEvent(try key("\u{1b}", code: 53, in: c))
 

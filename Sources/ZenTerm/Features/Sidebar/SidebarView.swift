@@ -366,6 +366,10 @@ final class SidebarView: NSView, ThemeReapplying {
             self.rowMenu.close()
             self.onActivate(id)
         }
+        row.onSpace = { [weak self, weak row] in
+            guard let self, let row, !self.isMenuOpen(on: row) else { return }
+            self.rowMenu.open(self.menuItems(for: id), from: row, highlightingFirst: true)
+        }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onSecondaryClick = { [weak self, weak row] in
             guard let self, let row else { return }
@@ -437,12 +441,6 @@ final class SidebarView: NSView, ThemeReapplying {
 
     private func arrow(_ delta: Int, on row: NavRow?) {
         if isMenuOpen(on: row) { rowMenu.moveHighlight(delta) } else { moveFocus(delta) }
-    }
-
-    func openMenuOnFocusedRow() -> Bool {
-        guard let id = focusedRow, let row = rows[id] else { return false }
-        rowMenu.open(menuItems(for: id), from: row, highlightingFirst: true)
-        return rowMenu.isOpen
     }
 
     var hasFocus: Bool { focusStops.contains { KeyboardFocus.isFocused($0, in: window) } }

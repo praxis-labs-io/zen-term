@@ -380,8 +380,6 @@ final class SidebarController {
 
     var focusedStop: SidebarFocusStop? { view.focusedStop }
 
-    func openMenuOnFocusedRow() -> Bool { view.openMenuOnFocusedRow() }
-
     @discardableResult
     func focusRow(_ id: SidebarRowID) -> Bool { isShown && view.focusRow(id) }
 

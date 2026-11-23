@@ -489,8 +489,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   (`NavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
   workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row).
-  ⌘K (`clear_screen`'s chord) opens it on the focused row instead of clearing a pane. Focus
-  stays on the row, whose ↑/↓ walk the menu and ↵ chooses; Esc closes it back to the row.
+  Space opens it on the focused row. Focus stays on the row, whose ↑/↓ walk the menu and
+  ↵ chooses; Esc closes it back to the row.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**
   `SidebarEdgeReveal` watches an 8pt strip there, measured from where a hand aiming at the
   edge comes to rest, and floats `SidebarColumn` as a card over the panes after a hold.
