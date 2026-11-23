@@ -59,6 +59,7 @@ enum ProcessArguments {
         let interpreter = withoutVersion(program.lowercased())
         guard shells.contains(interpreter) || interpreters.contains(interpreter) else { return .notAnInterpreter }
         let codeLetters = inlineCodeLetters[interpreter] ?? []
+        let takesValue = valueFlags[interpreter] ?? []
         var skipsValue = false
         var namesModule = false
         for argument in arguments.dropFirst() {
@@ -69,12 +70,12 @@ enum ProcessArguments {
             if argument.hasPrefix("--") {
                 let flag = String(argument.prefix { $0 != "=" })
                 if longInlineCodeFlags.contains(flag) { return .inlineCode }
-                skipsValue = valueFlags.contains(argument)
+                skipsValue = takesValue.contains(argument)
                 continue
             }
             if argument.hasPrefix("-"), argument.count > 1 {
                 if argument.dropFirst().contains(where: codeLetters.contains) { return .inlineCode }
-                skipsValue = valueFlags.contains(argument)
+                skipsValue = takesValue.contains(argument)
                 continue
             }
             guard argument.contains("/") || argument.contains("."), let name = programName(from: argument) else {
@@ -103,7 +104,9 @@ enum ProcessArguments {
     private nonisolated static let longInlineCodeFlags: Set<String> = ["--eval", "--print", "--command"]
 
     // The argument after these is their value (`python -W ignore`, `bash --rcfile`), never the script.
-    private nonisolated static let valueFlags: Set<String> = [
-        "-o", "-O", "-W", "-X", "-I", "-r", "--rcfile", "--init-file", "--require",
+    private nonisolated static let valueFlags: [String: Set<String>] = [
+        "bash": ["-o", "-O", "--rcfile", "--init-file"], "sh": ["-o"], "zsh": ["-o"], "dash": ["-o"],
+        "ksh": ["-o"], "fish": ["-C", "--init-command"], "python": ["-W", "-X"], "node": ["-r", "--require"],
+        "ruby": ["-I", "-r"],
     ]
 }

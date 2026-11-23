@@ -30,6 +30,8 @@ final class ProcessArgumentsTests: XCTestCase {
         XCTAssertEqual(ProcessArguments.commandName(from: ["python3", "-W", "ignore", "train.py"]), "train.py")
         XCTAssertEqual(ProcessArguments.commandName(from: ["bash", "-o", "pipefail", "./deploy.sh"]), "deploy.sh")
         XCTAssertEqual(ProcessArguments.commandName(from: ["python3", "-m", "pytest"]), "pytest")
+        XCTAssertEqual(ProcessArguments.commandName(from: ["python3", "-O", "manage.py", "runserver"]), "manage.py")
+        XCTAssertEqual(ProcessArguments.commandName(from: ["python3", "-I", "train.py", "input.json"]), "train.py")
         XCTAssertEqual(ProcessArguments.commandName(from: ["python3", "-u", "serve"]), "python3")
     }
 
