@@ -337,6 +337,18 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertNotIdentical(second, first, "a new warning opens even while the old one is leaving")
     }
 
+    func test_commandReturnWithTheRemoveWarningUp_doesNotSave() throws {
+        removalConsequence = "disconnect it and stop everything running in it"
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        XCTAssertNotNil(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+
+        submitByChord()
+
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(removed, 0)
+    }
+
     func test_aSubmit_clearsAnEarlierFailure() throws {
         removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
         let overlay = mount(devbox, removable: true)
