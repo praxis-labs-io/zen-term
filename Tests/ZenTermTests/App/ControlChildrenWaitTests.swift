@@ -211,6 +211,26 @@ final class ControlChildrenWaitTests: WindowTestCase {
         XCTAssertEqual(news(got), [try token(of: child): .stopped])
     }
 
+    private func sendFollowUp(_ text: String, to child: RecordingSurface, from caller: Int) throws {
+        let sent = request(
+            .paneSend, ControlArgs(pane: .token(try token(of: child)), text: text, enter: true), from: caller)
+        waitUntil(sent.reply != nil, "the send to answer")
+        XCTAssertEqual(child.inputs.last, .submit)
+    }
+
+    func test_anIdleChildSentASlashCommandStaysFinished_sinceACommandStartsNoTurn() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        try sendFollowUp("/clear", to: child, from: caller)
+
+        let got = try result(waitOnChildren(.all, from: caller))
+
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(news(got), [try token(of: child): nil])
+    }
+
     func test_aCallerWithNoChildrenHearsSoAtOnce() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))
