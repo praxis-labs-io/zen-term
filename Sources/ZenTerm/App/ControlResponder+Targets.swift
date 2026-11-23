@@ -104,6 +104,14 @@ extension ControlResponder {
         guard case .success(let context) = caller(request), context.window === place.window,
             context.workspace == place.id
         else { return nil }
-        return context.pane?.cwd
+        return context.pane.flatMap { callerFolder(as: $0.token, for: request) } ?? context.pane?.cwd
+    }
+
+    // A pane launched as `cd <dir> && <program>` never reports `<dir>`, so the caller's own folder is the truer one.
+    func callerFolder(as pane: Int, for request: ControlRequest) -> URL? {
+        guard let caller = request.caller, caller.pane == pane, let cwd = caller.cwd, cwd.hasPrefix("/") else {
+            return nil
+        }
+        return URL(fileURLWithPath: cwd, isDirectory: true)
     }
 }

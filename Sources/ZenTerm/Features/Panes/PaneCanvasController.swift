@@ -416,15 +416,17 @@ final class PaneCanvasController: NSObject {
         guard split(tree.focusedLeaf, axis: axis, command: nil, focusing: true) != nil else { NSSound.beep(); return }
     }
 
-    func split(token: Int, axis: SplitAxis, command: PaneProgram?) -> Int? {
+    func split(token: Int, axis: SplitAxis, command: PaneProgram?, cwd: URL?) -> Int? {
         guard let leaf = leafID(token: token) else { return nil }
         let keepsKeyFocus = holdsKeyFocusInCanvas
-        guard let opened = split(leaf, axis: axis, command: command, focusing: false) else { return nil }
+        guard let opened = split(leaf, axis: axis, command: command, cwd: cwd, focusing: false) else { return nil }
         if keepsKeyFocus { registry.surface(for: tree.focusedLeaf)?.focus() }
         return tokenByLeaf[opened]
     }
 
-    private func split(_ source: PaneID, axis: SplitAxis, command: PaneProgram?, focusing: Bool) -> PaneID? {
+    private func split(
+        _ source: PaneID, axis: SplitAxis, command: PaneProgram?, cwd: URL? = nil, focusing: Bool
+    ) -> PaneID? {
         guard let host = hostByLeaf[source] else { return nil }
         let size = host.bounds.size
         let extent = (axis == .vertical) ? size.width : size.height
@@ -433,7 +435,7 @@ final class PaneCanvasController: NSObject {
         let focused = tree.focusedLeaf
         let newLeaf = mintPaneID()
         let newSplit = mintSplitID()
-        let inherited = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
+        let inherited = cwd ?? registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
         cwdByLeaf[newLeaf] = removedWorktree()?.relocating(inherited) ?? inherited
         if let command { startupCommandByLeaf[newLeaf] = command }
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: newSplit)

@@ -2572,8 +2572,10 @@ final class WindowController: NSObject {
         return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
     }
 
-    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?) -> PaneSplitResult? {
-        controller(tab)?.split(pane: token, axis: axis, command: command)
+    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?, cwd: URL?)
+        -> PaneSplitResult?
+    {
+        controller(tab)?.split(pane: token, axis: axis, command: command, cwd: cwd)
     }
 
     func closeStakes(pane: PaneHandle, in tab: TabID, closedByItsParent: Bool = false) -> CloseStakes? {

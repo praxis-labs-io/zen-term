@@ -63,12 +63,12 @@ final class ControlPaneTests: WindowTestCase {
         return responder
     }
 
-    private func send(_ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), from pane: Int? = nil) throws
-        -> ControlReply
-    {
+    private func send(
+        _ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), from pane: Int? = nil, in folder: String? = nil
+    ) throws -> ControlReply {
         var reply: ControlReply?
         responder.respond(
-            to: ControlRequest(id: 1, cmd: cmd, args: args, caller: pane.map(ControlCaller.init(pane:)))
+            to: ControlRequest(id: 1, cmd: cmd, args: args, caller: pane.map { ControlCaller(pane: $0, cwd: folder) })
         ) { reply = $0 }
         return try XCTUnwrap(reply, "\(cmd.rawValue) never answered")
     }
@@ -114,6 +114,31 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertTrue(c.focusedSurfaceForTesting === caller)
         XCTAssertTrue(c.window.firstResponder === caller.view, "the rebuild dropped the caller's keyboard focus")
         XCTAssertTrue(raised.isEmpty)
+    }
+
+    func test_splittingTheCallerStartsInItsOwnFolder_notTheOneItsPaneLastReported() throws {
+        _ = makeWindow()
+        let caller = try XCTUnwrap(spawned.first)
+        caller.currentDirectory = URL(fileURLWithPath: "/tmp/reported")
+
+        let opened = try result(
+            send(.paneSplit, ControlArgs(dir: .right), from: try token(of: caller), in: "/tmp/worktree"),
+            as: PaneResult.self)
+
+        XCTAssertEqual(try surface(opened.pane).lastConfig?.workingDirectory?.path, "/tmp/worktree")
+    }
+
+    func test_splittingAnotherPaneStartsWhereThatPaneIs_notInTheCallersFolder() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let other = try result(send(.paneSplit, ControlArgs(dir: .right), from: caller), as: PaneResult.self).pane
+        try surface(other).currentDirectory = URL(fileURLWithPath: "/tmp/other")
+
+        let opened = try result(
+            send(.paneSplit, ControlArgs(pane: .token(other), dir: .down), from: caller, in: "/tmp/worktree"),
+            as: PaneResult.self)
+
+        XCTAssertEqual(try surface(opened.pane).lastConfig?.workingDirectory?.path, "/tmp/other")
     }
 
     func test_splitWithFocusMovesFocusToTheNewPane() throws {
