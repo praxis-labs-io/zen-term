@@ -76,14 +76,20 @@ final class SettingsGeneralSection: SettingsFormSection {
         switch result {
         case .success(let state):
             claudeSetupState = state
-            row?.showMessage(
-                state == .outdated ? "An older version is installed. Choose On to update it." : nil,
-                kind: .diagnostic)
+            row?.showMessage(Self.claudeSetupCaption(for: state), kind: .diagnostic)
         case .failure(let error):
             row?.showMessage(error.message)
         }
         claudeSetupControl?.setSelection(claudeSetupState == .notInstalled ? 1 : 0)
         claudeSetupControl?.isEnabled = true
+    }
+
+    private static func claudeSetupCaption(for state: ClaudeSetup.State) -> String? {
+        switch state {
+        case .outdated: "An older version is installed. Choose On to update it."
+        case .edited: "Your copy has edits. Choose On to replace it."
+        case .notInstalled, .current: nil
+        }
     }
 
     private static let dismissals: [GeneralConfig.ToastDismissal] = [.off, .sticky, .auto]

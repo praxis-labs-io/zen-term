@@ -18,6 +18,13 @@ final class ClaudeSetupTests: XCTestCase {
 
     private var setup: ClaudeSetup { ClaudeSetup(configRoot: root, files: files) }
 
+    private func newer(skill: Data? = nil, hook: Data? = nil) -> ClaudeSetup {
+        let shipped = Set([files.skill, files.hook].map(ClaudeSetupFiles.digest(of:)))
+        return ClaudeSetup(
+            configRoot: root,
+            files: ClaudeSetupFiles(skill: skill ?? files.skill, hook: hook ?? files.hook, shippedDigests: shipped))
+    }
+
     private func writeSettings(_ text: String) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try Data(text.utf8).write(to: setup.settingsURL)
@@ -80,8 +87,7 @@ final class ClaudeSetupTests: XCTestCase {
 
     func test_newBundledFilesUpdateOnlyWhatChanged() throws {
         _ = try setup.install()
-        let newer = ClaudeSetup(
-            configRoot: root, files: ClaudeSetupFiles(skill: Data("skill v2\n".utf8), hook: files.hook))
+        let newer = newer(skill: Data("skill v2\n".utf8))
 
         XCTAssertEqual(try newer.state(), .outdated)
         XCTAssertEqual(try newer.install(), ["Updated the zen skill at \(setup.skillURL.path)"])
@@ -91,11 +97,52 @@ final class ClaudeSetupTests: XCTestCase {
 
     func test_aNewBundledHookReadsAsOutdated() throws {
         _ = try setup.install()
-        let newer = ClaudeSetup(
-            configRoot: root, files: ClaudeSetupFiles(skill: files.skill, hook: Data("hook v2\n".utf8)))
+        let newer = newer(hook: Data("hook v2\n".utf8))
 
         XCTAssertEqual(try newer.state(), .outdated)
         XCTAssertEqual(try newer.install(), ["Updated the session hook at \(setup.hookURL.path)"])
+        XCTAssertEqual(try newer.state(), .current)
+    }
+
+    func test_aSkillNoBuildShippedReadsAsEdited() throws {
+        _ = try setup.install()
+        try Data("skill v1\nmy own rule\n".utf8).write(to: setup.skillURL)
+
+        XCTAssertEqual(try newer(skill: Data("skill v2\n".utf8)).state(), .edited)
+    }
+
+    func test_aHookNoBuildShippedReadsAsEdited() throws {
+        _ = try setup.install()
+        try Data("hook v1\necho mine\n".utf8).write(to: setup.hookURL)
+
+        XCTAssertEqual(try newer(skill: Data("skill v2\n".utf8)).state(), .edited)
+    }
+
+    func test_anEditMatchingThisBuildReadsAsCurrent() throws {
+        _ = try setup.install()
+        try Data("skill v2\n".utf8).write(to: setup.skillURL)
+
+        XCTAssertEqual(try newer(skill: Data("skill v2\n".utf8)).state(), .current)
+    }
+
+    func test_aRemovedPartReadsAsEdited() throws {
+        _ = try setup.install()
+        try FileManager.default.removeItem(at: setup.skillURL)
+        XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)
+
+        _ = try setup.install()
+        var settings = try ClaudeSettings.read(at: setup.settingsURL)
+        _ = settings.unregister()
+        try settings.write(to: setup.settingsURL)
+        XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)
+    }
+
+    func test_installReplacesAnEditedSkill() throws {
+        _ = try setup.install()
+        try Data("my own skill\n".utf8).write(to: setup.skillURL)
+        let newer = newer(skill: Data("skill v2\n".utf8))
+
+        XCTAssertEqual(try newer.install(), ["Updated the zen skill at \(setup.skillURL.path)"])
         XCTAssertEqual(try newer.state(), .current)
     }
 
@@ -108,7 +155,7 @@ final class ClaudeSetupTests: XCTestCase {
             ]}}
             """)
 
-        XCTAssertEqual(try setup.state(), .outdated)
+        XCTAssertEqual(try setup.state(), .edited)
         _ = try setup.install()
 
         XCTAssertEqual(try sessionStartCommands(), [setup.hookCommand, "bash $HOME/.claude/hooks/other.sh"])

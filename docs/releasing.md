@@ -26,7 +26,9 @@ symlink resolves. Moving or renaming the binary breaks every installed link.
 
 `zen setup claude` reads the skill and hook it installs from
 `Contents/Resources/ZenTerm_AgentSetup.bundle`, found the same way, so an app update ships
-new copies and a rerun of setup installs them.
+new copies. The app installs them when Claude next starts. When a part is missing, or an
+installed file matches no digest in `shipped-digests.txt` beside them, that is the user's
+edit, so the app asks first.
 
 ## zen-term-releases stays archived
 

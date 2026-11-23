@@ -1,7 +1,7 @@
-import AgentSetup
 import AppKit
 import XCTest
 
+@testable import AgentSetup
 @testable import ZenTerm
 
 final class SettingsGeneralSectionTests: WindowTestCase {
@@ -16,7 +16,11 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         ClaudeCodeSetup.configRootOverrideForTesting = tempRoot.appendingPathComponent("claude")
-        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8))
+        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
+            skill: Data("skill".utf8), hook: Data("hook".utf8),
+            shippedDigests: [
+                ClaudeSetupFiles.digest(of: Data("older".utf8)), ClaudeSetupFiles.digest(of: Data("hook".utf8)),
+            ])
         AppConfig.reload()
     }
 
@@ -177,6 +181,24 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(control.selectedIndex, 1)
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills/zen/SKILL.md").path))
+    }
+
+    func test_claudeSetup_anEditedInstallSaysChoosingOnReplacesIt() throws {
+        _ = try ClaudeSetup(
+            configRoot: claudeRoot, files: ClaudeSetupFiles(skill: Data("mine".utf8), hook: Data("hook".utf8))
+        )
+        .install()
+        let control = claudeSetupControl()
+
+        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertEqual(claudeSetupMessage(), "Your copy has edits. Choose On to replace it.")
+
+        press(Self.rightKey, on: control)
+        press(Self.leftKey, on: control)
+
+        XCTAssertNil(claudeSetupMessage())
+        XCTAssertEqual(
+            try Data(contentsOf: claudeRoot.appendingPathComponent("skills/zen/SKILL.md")), Data("skill".utf8))
     }
 
     func test_claudeSetup_anOlderInstallSaysChoosingOnUpdatesIt() throws {

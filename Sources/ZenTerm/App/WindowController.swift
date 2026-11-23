@@ -4022,25 +4022,47 @@ final class WindowController: NSObject {
     private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
         agents.identify(surface, name: name, source: source)
         guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
-        claudeSetupOffer?.claudeStarted { [weak self] in self?.presentClaudeSetupOffer() }
+        claudeSetupOffer?.claudeStarted { [weak self] in self?.showClaudeStartup($0) }
     }
 
-    private func presentClaudeSetupOffer() {
+    private func showClaudeStartup(_ startup: ClaudeCodeSetup.Startup) {
+        switch startup {
+        case .notInstalled:
+            presentClaudeSetupPrompt(
+                title: "Teach Claude Code to use zen?",
+                message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName),
+                confirm: "Set up", decline: "Don't ask again"
+            ) { [weak self] in self?.claudeSetupOffer?.declineForGood() }
+        case .edited(let version):
+            presentClaudeSetupPrompt(
+                title: "Update zen for Claude Code?", message: Self.claudeUpdateOfferMessage,
+                confirm: "Update", decline: "Skip this version"
+            ) { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) }
+        case .updated:
+            showClaudeUpdated()
+        case .updateFailed(let error):
+            showClaudeSetupFailure(error)
+        case .current:
+            break
+        }
+    }
+
+    private func presentClaudeSetupPrompt(
+        title: String, message: String, confirm: String, decline: String, onDecline: @escaping () -> Void
+    ) {
         weak var toast: ToastView?
         let actions = [
-            ToastAction(title: "Set up", kind: .primary) { [weak self] in
+            ToastAction(title: confirm, kind: .primary) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 ClaudeCodeSetup.refresh(applying: .install) { self?.showClaudeSetupResult($0) }
             },
-            ToastAction(title: "Don't ask again", kind: .cancel) { [weak self] in
+            ToastAction(title: decline, kind: .cancel) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                self?.claudeSetupOffer?.declineForGood()
+                onDecline()
             },
         ]
-        let content = ToastContent(
-            variant: .info, title: "Teach Claude Code to use zen?",
-            message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName))
-        let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+        let shown = toasts.showSticky(
+            ToastContent(variant: .info, title: title, message: message), actions: actions, showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
         toast = shown
     }
@@ -4050,6 +4072,9 @@ final class WindowController: NSObject {
         "The zen skill and a session hook,\nin \(folder)"
     }
 
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static let claudeUpdateOfferMessage = "Your copy has edits, and updating\nreplaces them."
+
     private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
         switch result {
         case .success:
@@ -4058,10 +4083,19 @@ final class WindowController: NSObject {
                     variant: .positive, title: "Claude Code can use zen",
                     message: "New Claude sessions load the zen skill."))
         case .failure(let error):
-            let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
-            let shown = toasts.showSticky(content, actions: [], showsClose: true)
-            shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+            showClaudeSetupFailure(error)
         }
+    }
+
+    private func showClaudeUpdated() {
+        toasts.show(
+            ToastContent(variant: .info, title: "Updated zen for Claude Code", message: "New Claude sessions load it."))
+    }
+
+    private func showClaudeSetupFailure(_ error: ClaudeSetupError) {
+        let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
+        let shown = toasts.showSticky(content, actions: [], showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
     }
 
     private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {
