@@ -86,6 +86,13 @@ final class LaunchedProgramShellTests: XCTestCase {
         return recorder.events
     }
 
+    // The shell is still the foreground group between the done mark and its own exit, so wait for the exit itself.
+    private func events(keepingUntilItsShellExits command: String, in shell: String) throws -> [String] {
+        let (_, recorder) = try launch(command, in: shell, exitClosesPane: false)
+        run { recorder.events.contains(where: finished) && recorder.events.contains("exited") }
+        return recorder.events
+    }
+
     private func finished(_ event: String) -> Bool { event.hasPrefix("finished") }
 
     private func atShell(_ surface: GhosttySurface) -> Bool {
@@ -179,8 +186,11 @@ final class LaunchedProgramShellTests: XCTestCase {
     }
 
     func test_aKeptPaneWhoseCommandEndsInTheShellsOwnExitReportsItsCode() throws {
-        XCTAssertEqual(try events(keeping: "exit 5", in: "/bin/zsh").sorted(), ["exited", "finished 5"])
-        XCTAssertEqual(try events(keeping: "sleep 1; exit 2", in: "/bin/bash").sorted(), ["exited", "finished 2"])
+        XCTAssertEqual(
+            try events(keepingUntilItsShellExits: "exit 5", in: "/bin/zsh").sorted(), ["exited", "finished 5"])
+        XCTAssertEqual(
+            try events(keepingUntilItsShellExits: "sleep 1; exit 2", in: "/bin/bash").sorted(),
+            ["exited", "finished 2"])
     }
 
     func test_aKeptPaneReportsItsCommandsCodeOnceAndStaysOpen() throws {
