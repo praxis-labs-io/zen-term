@@ -53,8 +53,14 @@ zen pane read --pane dev --lines 40                                  # its outpu
   already be on screen.
 - Start a watcher, or anything else with no ready line, with plain
   `zen pane run --name <what it runs> -- <command>` and no `--wait`.
-- The pane starts in your shell's current folder. `--cwd <folder>` starts it
-  somewhere else.
+- The command must show its output in the pane as it runs, so the user sees it
+  working. Never filter it through `tail` or `grep`, or redirect it only to a
+  file. To also save it, use `2>&1 | tee <file>`. A pipe ends with `tee`'s
+  exit code, so under zsh or bash start the command with `set -o pipefail;`
+  when the code matters. Read the result with `zen wait`, `zen pane read`, or
+  the file.
+- The pane starts in your shell's current folder, so don't prefix the command
+  with `cd`. `--cwd <folder>` starts it somewhere else.
 - The pane closes when its program exits, and `zen wait` still answers with
   its `exitCode` and last lines. `--keep` leaves it open at a shell.
 - A pane you start closes with your pane. `--outlive-parent` keeps it.
