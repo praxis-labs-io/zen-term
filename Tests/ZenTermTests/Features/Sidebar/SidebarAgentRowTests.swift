@@ -148,5 +148,7 @@ final class SidebarAgentRowTests: WindowTestCase {
         XCTAssertGreaterThan(frame(workspace).width, 0)
         XCTAssertEqual(frame(mark).midY, frame(title).midY, accuracy: 0.5, "the chip centers on the title's line")
         XCTAssertLessThan(frame(workspace).maxY, frame(title).minY, "the workspace line sits under the title")
+        XCTAssertEqual(
+            frame(workspace).minX, frame(title).minX, accuracy: 0.5, "the workspace line starts with the title's text")
     }
 }

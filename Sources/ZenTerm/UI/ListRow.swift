@@ -217,7 +217,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         line.textColor = chrome.ink(.muted)
         line.lineBreakMode = content.subtitleTruncation
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let lines = NSStackView(views: [glyph.map { Self.titleLine(leading: $0, title: title) } ?? title, line])
+        let lines = NSStackView(views: [
+            glyph.map { Self.titleLine(leading: $0, title: title) } ?? title,
+            glyph.map { Self.indented(line, past: $0) } ?? line,
+        ])
         lines.orientation = .vertical
         lines.alignment = .leading
         lines.spacing = Self.lineGap
@@ -226,11 +229,22 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         return lines
     }
 
+    // The second line starts where the title's text does, not under the glyph.
+    private static func indented(_ line: NSTextField, past glyph: NSView) -> NSView {
+        let inset = NSStackView(views: [line])
+        inset.edgeInsets = NSEdgeInsets(top: 0, left: glyph.fittingSize.width + titleLineGap, bottom: 0, right: 0)
+        inset.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        inset.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return inset
+    }
+
+    private static let titleLineGap = ChromeMetrics.Spacing.s6
+
     private static func titleLine(leading glyph: NSView, title: NSTextField) -> NSView {
         let line = NSStackView(views: [glyph, title])
         line.orientation = .horizontal
         line.alignment = .centerY
-        line.spacing = ChromeMetrics.Spacing.s6
+        line.spacing = titleLineGap
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         line.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return line
