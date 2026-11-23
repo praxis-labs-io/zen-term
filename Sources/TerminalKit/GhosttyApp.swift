@@ -25,6 +25,8 @@ final class GhosttyApp {
     // libghostty keeps a reference to the config it was created with, so it is freed only after a swap.
     private var config: ghostty_config_t
     private var lastConfigText: String?
+    private(set) var appliedTheme: TerminalTheme?
+    private(set) var appliedBehavior: TerminalBehavior?
     // Building a config is a synchronous file round-trip; `ghostty_surface_update_config` copies, so sharing is safe.
     private var surfaceConfigCache: [String: ghostty_config_t] = [:]
     private var focusObservers: [NSObjectProtocol] = []
@@ -45,6 +47,8 @@ final class GhosttyApp {
         ghostty_config_finalize(cfg)
         Self.logDiagnostics(of: cfg, context: "init")
         config = cfg
+        appliedTheme = theme
+        appliedBehavior = behavior
 
         var runtime = ghostty_runtime_config_s(
             userdata: nil,
@@ -95,7 +99,7 @@ final class GhosttyApp {
         ]
     }
 
-    func updateConfig(theme: TerminalTheme, behavior: TerminalBehavior) {
+    func updateConfig(theme: TerminalTheme?, behavior: TerminalBehavior?) {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
         guard text != lastConfigText else { return }
         guard let cfg = ghostty_config_new() else { return }
@@ -112,6 +116,8 @@ final class GhosttyApp {
         config = cfg
         ghostty_config_free(old)
         lastConfigText = text
+        appliedTheme = theme
+        appliedBehavior = behavior
         clearSurfaceConfigCache()
         tick()
     }

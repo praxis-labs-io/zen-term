@@ -31,7 +31,10 @@ final class ColorSchemeReportTests: XCTestCase {
     func test_bornDarkWhileTheAppIsLightStillRunsItsCommand() throws {
         _ = NSApplication.shared
         let light = Self.theme(background: Self.lightBackground)
-        GhosttyApp.shared(theme: light, behavior: .default).updateConfig(theme: light, behavior: .default)
+        let app = GhosttyApp.shared(theme: light, behavior: .default)
+        let previous = (theme: app.appliedTheme, behavior: app.appliedBehavior)
+        defer { app.updateConfig(theme: previous.theme, behavior: previous.behavior) }
+        app.updateConfig(theme: light, behavior: .default)
         let replies = try schemeReplies(background: Self.darkBackground, queries: 1)
         XCTAssertEqual(replies.first, Self.darkReply, "the dark pane's own command must run and report dark")
     }
