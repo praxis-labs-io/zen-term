@@ -180,6 +180,9 @@ In Progress, In Review, Done.
 - **Branch names come from the ticket's `gitBranchName` field, verbatim.** Do not
   abbreviate the slug, and do not add or drop a prefix. Reference the issue id in
   commits and PRs so Linear auto-links.
+- **A PR that resolves a GitHub issue says `Closes #N` in its body.** A `ZEN-`
+  reference never closes a GitHub issue. Before opening a PR, check
+  `gh issue list` for one it resolves.
 - Every ticket needs a project, a priority, a label, and a status. No orphans. The
   four durable projects are by kind of work: **Polish & Bugs** (rough edge while
   using it), **Feature Backlog** (want a new capability), **Performance and

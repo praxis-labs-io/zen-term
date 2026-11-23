@@ -127,6 +127,8 @@ a system report. It is the fastest way to file a bug that someone can act on.
 For a pull request:
 
 - One branch, one pull request, one subject.
+- If it fixes an issue, write `Closes #123` in its description so merging closes the
+  issue.
 - `bin/check` green before you open it. Open it as a draft and mark it ready when
   you are done, so CI runs once rather than on every push.
 - Tests belong in the same commit as the behavior they verify.
