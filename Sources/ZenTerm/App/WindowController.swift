@@ -22,6 +22,7 @@ final class WindowController: NSObject {
     private let agents = AgentRoster()
     private let agentStates = AgentStateTracker()
     private let firstTasks: FirstTaskDelivery
+    private let taskPickups = TaskPickups()
     private(set) var launchedPaneExits = LaunchedPaneExits()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
@@ -2424,9 +2425,15 @@ final class WindowController: NSObject {
         }
     }
 
-    // A task pasted into an idle agent shows no change until the agent reports again.
+    // Only an agent that reports its status shows when it picks a task up.
+    func noteTaskSubmitted(to pane: PaneHandle) {
+        guard runsAgent(pane), let status = agentStates.status(of: pane.surfaceID), TaskPickups.isReady(status)
+        else { return }
+        taskPickups.submitted(to: pane.surfaceID)
+    }
+
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
-        if firstTasks.awaitsPickup(pane.surfaceID) { return true }
+        if taskPickups.awaitsPickup(pane.surfaceID) { return true }
         let listed = listing(of: pane, in: tab)
         guard let agent = listed.agent else { return listed.busy }
         return agent.status.map { $0 == .working } ?? (agent.state == .working)
@@ -2455,11 +2462,13 @@ final class WindowController: NSObject {
     func deliverFirstTask(_ task: String, toPane token: Int, settle: @escaping (FirstTask) -> Void) {
         guard let (_, handle) = pane(token: token) else { return settle(.held(.notReady)) }
         let surface = handle.surface
+        let surfaceID = handle.surfaceID
         firstTasks.await(
-            handle.surfaceID,
-            send: { [weak surface] in
+            surfaceID,
+            send: { [weak self, weak surface] in
                 surface?.paste(task)
                 surface?.submit()
+                self?.taskPickups.submitted(to: surfaceID)
             },
             settle: { [weak self] outcome in
                 self?.updateRecord(pane: token) { $0.firstTask = outcome }
@@ -3378,6 +3387,7 @@ final class WindowController: NSObject {
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
                 self?.firstTasks.release($0)
+                self?.taskPickups.release($0)
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
@@ -3659,7 +3669,10 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let settlesFirstTask = self.firstTasks.isAwaiting(surface)
-            if let status { self.firstTasks.report(status, from: surface) }
+            if let status {
+                self.taskPickups.report(status, from: surface)
+                self.firstTasks.report(status, from: surface)
+            }
             guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }

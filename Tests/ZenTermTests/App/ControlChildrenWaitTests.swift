@@ -185,6 +185,32 @@ final class ControlChildrenWaitTests: WindowTestCase {
         XCTAssertEqual(news(got), [try token(of: child): .stopped])
     }
 
+    func test_anIdleChildSentAFollowUpCountsAsWorkingUntilItsStatusMovesOn() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        let sent = request(
+            .paneSend, ControlArgs(pane: .token(try token(of: child)), text: "now fix y.swift", enter: true),
+            from: caller)
+        waitUntil(sent.reply != nil, "the send to answer")
+        XCTAssertEqual(child.inputs.last, .submit)
+        let answer = waitOnChildren(.all, from: caller)
+        settle(0.6)
+        XCTAssertNil(answer.reply, "an idle child with a follow-up just sent answered as finished")
+
+        report(.idle, from: child)
+        report(.working, from: child)
+        settle(0.6)
+        XCTAssertNil(answer.reply)
+
+        report(.done, from: child)
+
+        let got = try result(answer)
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(news(got), [try token(of: child): .stopped])
+    }
+
     func test_aCallerWithNoChildrenHearsSoAtOnce() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))

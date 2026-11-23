@@ -606,7 +606,9 @@ last read (`OutputWatch`), and the foreground group returning to the shell (`For
 connection's thread checks for a hangup while it waits and drops the hold. A hangup is the write
 side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `shutdown(SHUT_WR)`.
 A wait on the caller's children (`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
-as a single pane's does. A pane `pane.run` opened leaves its exit in its window's
+as a single pane's does. A task submitted to a ready agent, a run's first task or a `pane.send`
+with `enter`, sits in its window's `TaskPickups` until the agent's next report past `idle` or
+`done`, and the child counts as working meanwhile. A pane `pane.run` opened leaves its exit in its window's
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent holds in `PaneDrafts`, also app-wide, which `WindowController.keyReachedFocus` feeds the
 person's last key into each surface from `KeyInterceptor`'s keys the chrome did not claim, the

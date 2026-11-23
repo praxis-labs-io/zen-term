@@ -171,6 +171,7 @@ extension ControlResponder {
         let surface = place.pane.surface
         if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
         if enter { surface.submit() }
+        if enter, !text.isEmpty { place.window.noteTaskSubmitted(to: place.pane) }
         paneWaits.sent(to: place.pane.surfaceID)
     }
 
