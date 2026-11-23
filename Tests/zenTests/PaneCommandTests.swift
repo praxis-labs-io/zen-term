@@ -42,6 +42,10 @@ final class PaneCommandTests: XCTestCase {
         let keys = try XCTUnwrap(try Zen.parseAsRoot(["pane", "keys", "34", "down", "enter"]) as? PaneCommands.Keys)
         XCTAssertEqual(keys.pane, 34)
         XCTAssertEqual(keys.keys, [.down, .enter])
+        XCTAssertEqual(keys.args, ControlArgs(force: false, pane: 34, keys: ["down", "enter"]))
+        let forced = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "keys", "34", "enter", "--force"]) as? PaneCommands.Keys)
+        XCTAssertEqual(forced.args, ControlArgs(force: true, pane: 34, keys: ["enter"]))
 
         let interrupt = try XCTUnwrap(try Zen.parseAsRoot(["pane", "interrupt", "34"]) as? PaneCommands.Interrupt)
         XCTAssertEqual(interrupt.pane, 34)

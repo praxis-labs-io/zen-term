@@ -392,13 +392,15 @@ with `enter` sends it:
 
 ### `pane.keys`
 
-`args`: `pane`, `keys` (required), a list of key names.
+`args`: `pane`, `keys` (required), a list of key names, `force`.
 
 Presses each key in order as a keystroke, not a paste, so a menu or a prompt reads it as
 the key: `enter`, `escape`, `tab`, `shift-tab`, `backspace`, `space`, `up`, `down`, `left`,
 `right`, `home`, `end`, `pageup`, `pagedown`, and `ctrl-a` through `ctrl-z`. A name that is
 not a key is `bad_request` naming it, and nothing is pressed. `failed` when the pane has not
-started.
+started. Into an agent whose `status` is `blocked`, it is `refused` without `force` under
+`pane.send`'s rule: a `pane.run` parent's keys into its child blocked on a `question` are not
+refused, and a `permission` or `auth` block refuses everyone. Nothing is pressed.
 
 ### `pane.interrupt`
 
@@ -582,8 +584,8 @@ rest print nothing. `zen pane get` takes the pane as its argument, this pane by 
 `zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
 `zen wait` does. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
-a usage error.
+`zen pane keys <pane> <key>... [--force]` takes the keys as arguments, and a name that is not a
+key is a usage error.
 `zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or

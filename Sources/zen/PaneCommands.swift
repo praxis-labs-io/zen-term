@@ -218,8 +218,12 @@ struct PaneCommands: ParsableCommand {
         @Argument(help: ArgumentHelp("The keys.", discussion: Keys.names))
         var keys: [PaneKey]
 
+        @Flag(help: "Press them into an agent that is waiting on the user.")
+        var force = false
+
+        var args: ControlArgs { ControlArgs(force: force, pane: pane, keys: keys.map(\.name)) }
+
         func run() throws {
-            let args = ControlArgs(pane: pane, keys: keys.map(\.name))
             _ = try connection.client().send(.paneKeys, args, expecting: NoPayload.self)
         }
     }

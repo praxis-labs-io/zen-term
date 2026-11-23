@@ -127,7 +127,7 @@ extension ControlResponder {
         switch pane(request.args.pane, for: request) {
         case .failure(let error): reply(.failure(error))
         case .success(let place):
-            if let refusal = Self.refusal(sending: place, from: request.caller?.pane, force: request.args.force) {
+            if let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) {
                 return reply(.failure(refusal))
             }
             let token = place.pane.token
@@ -146,7 +146,7 @@ extension ControlResponder {
     ) {
         let found = pane(.token(token), for: request).flatMap { place -> Result<PanePlace, ControlError> in
             guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
-            if let refusal = Self.refusal(sending: place, from: request.caller?.pane, force: request.args.force) {
+            if let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) {
                 return .failure(refusal)
             }
             return .success(place)
@@ -166,8 +166,19 @@ extension ControlResponder {
         helper.window.helperReported(helper.pane.surfaceID)
     }
 
-    // A paste would answer the prompt, which is the user's, except a helper's question about the task its parent set.
-    static func refusal(sending place: PanePlace, from sender: Int?, force: Bool?) -> ControlError? {
+    enum Delivery {
+        case paste, keys
+
+        fileprivate var verbs: (done: String, to: String) {
+            switch self {
+            case .paste: return ("sent", "send")
+            case .keys: return ("pressed", "press")
+            }
+        }
+    }
+
+    // Input would answer the prompt, which is the user's, except a helper's question about the task its parent set.
+    static func refusal(_ delivery: Delivery, into place: PanePlace, from sender: Int?, force: Bool?) -> ControlError? {
         guard force != true, let agent = place.window.listing(of: place.pane, in: place.tab).agent,
             agent.status == .blocked
         else { return nil }
@@ -176,7 +187,7 @@ extension ControlResponder {
         return ControlError(
             .refused,
             "Pane \(place.pane.token)'s agent is waiting on the user\(waitsOn), and that decision is the user's. "
-                + "Nothing was sent. Pass --force to send anyway.")
+                + "Nothing was \(delivery.verbs.done). Pass --force to \(delivery.verbs.to) anyway.")
     }
 
     func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool) {
@@ -213,6 +224,9 @@ extension ControlResponder {
         return pane(request.args.pane, for: request).flatMap { place in
             let surface = place.pane.surface
             guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
+            if let refusal = Self.refusal(.keys, into: place, from: request.caller?.pane, force: request.args.force) {
+                return .failure(refusal)
+            }
             var pressed: [TerminalKey] = []
             for key in keys {
                 guard let typed = TerminalKey(paneKey: key) else {

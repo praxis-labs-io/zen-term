@@ -84,7 +84,9 @@ zen pane close review           # once you have its result
   command. ZenTerm also sends you one when a helper stops, blocks, works again after a block, or exits. Read the helper's actual result before you
   summarize it.
 - Never answer another agent's permission prompt or login, with
-  `zen pane send`, `zen pane keys` or anything else. Tell the user.
+  `zen pane send`, `zen pane keys` or anything else. Tell the user. ZenTerm
+  refuses both into an agent waiting on the user, except a helper's question
+  from its parent.
 - A helper's question about the task you gave it is yours to answer. Read it
   with `zen pane read`, then answer with `zen pane send --pane <helper> --enter`,
   or `zen pane keys` to pick an option. A question that decides product

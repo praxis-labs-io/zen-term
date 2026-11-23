@@ -159,6 +159,22 @@ final class ControlHelperNoteTests: WindowTestCase {
         return answer.reply
     }
 
+    private func pressing(
+        _ keys: [String], from sender: RecordingSurface, to pane: RecordingSurface, force: Bool? = nil
+    ) throws -> ControlReply? {
+        let answer = Answer()
+        responder.respond(
+            to: ControlRequest(
+                id: 6, cmd: .paneKeys, args: ControlArgs(force: force, pane: .token(try token(of: pane)), keys: keys),
+                caller: ControlCaller(pane: try token(of: sender)))
+        ) { answer.reply = $0 }
+        return answer.reply
+    }
+
+    private static func pressed(_ names: [String]) throws -> [RecordingSurface.Input] {
+        try names.map { .press(try XCTUnwrap(PaneKey(name: $0).flatMap(TerminalKey.init(paneKey:)))) }
+    }
+
     private static func errorCode(of reply: ControlReply?) -> ControlErrorCode? {
         guard case .failure(let error) = reply else { return nil }
         return error.code
@@ -658,5 +674,44 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         XCTAssertEqual(parent.inputs, [])
         XCTAssertNil(resumed.reply, "the note answered the parent's wait")
+    }
+
+    func test_keysIntoAPermissionPromptOrLoginAreRefused_forItsParentAndAStranger_andForcePressesThem() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try runHelper(from: parent)
+        let stranger = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+
+        for need in [TerminalProgramStatus.Need.permission, .auth] {
+            report(.blocked(need), from: helper)
+            let before = helper.inputs
+            for caller in [parent, stranger] {
+                XCTAssertEqual(
+                    Self.errorCode(of: try pressing(["enter"], from: caller, to: helper)), .refused, "\(need)")
+            }
+            XCTAssertEqual(helper.inputs, before, "\(need)")
+            let forced = try pressing(["enter"], from: stranger, to: helper, force: true)
+            XCTAssertEqual(forced?.isSuccess, true, "\(forced as Any)")
+            XCTAssertEqual(helper.inputs, before + (try Self.pressed(["enter"])))
+            report(.working, from: helper)
+        }
+    }
+
+    func test_keysIntoAHelpersQuestionComeFromItsParent_andAreRefusedForAnyoneElse() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try runHelper(from: parent)
+        let stranger = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+        report(.blocked(.question), from: helper)
+        let before = helper.inputs
+
+        XCTAssertEqual(Self.errorCode(of: try pressing(["down"], from: stranger, to: helper)), .refused)
+        XCTAssertEqual(helper.inputs, before)
+
+        let answered = try pressing(["down", "enter"], from: parent, to: helper)
+        XCTAssertEqual(answered?.isSuccess, true, "\(answered as Any)")
+        XCTAssertEqual(helper.inputs, before + (try Self.pressed(["down", "enter"])))
     }
 }

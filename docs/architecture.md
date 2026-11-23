@@ -615,7 +615,8 @@ starts in `WindowController` on the 7501 change or the launched pane's exit, whi
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
 `onHelperNote`. A child's `pane.send` to its parent marks it in its window until its next turn,
 which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
-parent is blocked and `PaneDrafts` while it has a draft. A token resolves to its window, tab and surface by walking the windows
+parent is blocked and `PaneDrafts` while it has a draft. `pane.send`, `pane.keys` and a held note
+all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
 and leaves hosts out. `action` hands its keymap action

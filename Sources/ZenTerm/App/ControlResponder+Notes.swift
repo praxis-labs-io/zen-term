@@ -8,7 +8,7 @@ extension ControlResponder {
 
     private func hold(_ note: HelperNote, by cap: Date) {
         let isBlocked = { [self] in
-            parentPlace(of: note).map { Self.refusal(sending: $0, from: nil, force: nil) != nil } ?? false
+            parentPlace(of: note).map { Self.refusal(.paste, into: $0, from: nil, force: nil) != nil } ?? false
         }
         parentNotes.hold(by: cap, whileBlocked: isBlocked) { [self] in
             guard let parent = parentPlace(of: note) else { return }
