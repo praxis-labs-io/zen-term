@@ -25,6 +25,8 @@ final class GhosttyApp {
     // libghostty keeps a reference to the config it was created with, so it is freed only after a swap.
     private var config: ghostty_config_t
     private var lastConfigText: String?
+    private(set) var appliedTheme: TerminalTheme?
+    private(set) var appliedBehavior: TerminalBehavior?
     // Building a config is a synchronous file round-trip; `ghostty_surface_update_config` copies, so sharing is safe.
     private var surfaceConfigCache: [String: ghostty_config_t] = [:]
     private var focusObservers: [NSObjectProtocol] = []
@@ -45,6 +47,8 @@ final class GhosttyApp {
         ghostty_config_finalize(cfg)
         Self.logDiagnostics(of: cfg, context: "init")
         config = cfg
+        appliedTheme = theme
+        appliedBehavior = behavior
 
         var runtime = ghostty_runtime_config_s(
             userdata: nil,
@@ -65,7 +69,7 @@ final class GhosttyApp {
             fatalError("ghostty_app_new failed")
         }
         self.app = app
-        seedColorScheme(for: theme)
+        adoptColorScheme(for: theme)
         ghostty_app_set_focus(app, NSApp.isActive)
         observeAppFocus()
     }
@@ -95,7 +99,7 @@ final class GhosttyApp {
         ]
     }
 
-    func updateConfig(theme: TerminalTheme, behavior: TerminalBehavior) {
+    func updateConfig(theme: TerminalTheme?, behavior: TerminalBehavior?) {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
         guard text != lastConfigText else { return }
         guard let cfg = ghostty_config_new() else { return }
@@ -112,25 +116,19 @@ final class GhosttyApp {
         config = cfg
         ghostty_config_free(old)
         lastConfigText = text
+        appliedTheme = theme
+        appliedBehavior = behavior
         clearSurfaceConfigCache()
         tick()
     }
 
     // A new surface's child can ask for the scheme before `ghostty_surface_set_color_scheme` lands.
-    func seedColorScheme(for theme: TerminalTheme?) {
-        guard adoptColorScheme(for: theme) else { return }
-        ghostty_app_update_config(app, config)
-    }
-
-    // libghostty drops a new surface's command when the app's scheme differs from its config's, so a change re-pushes config.
-    @discardableResult
-    private func adoptColorScheme(for theme: TerminalTheme?) -> Bool {
-        guard let background = theme?.background else { return false }
+    func adoptColorScheme(for theme: TerminalTheme?) {
+        guard let background = theme?.background else { return }
         let scheme = Self.colorScheme(of: background)
-        guard scheme != colorScheme else { return false }
+        guard scheme != colorScheme else { return }
         colorScheme = scheme
         ghostty_app_set_color_scheme(app, scheme)
-        return true
     }
 
     // From the background, not `effectiveAppearance`, which reads light for a dark theme on a light system.
