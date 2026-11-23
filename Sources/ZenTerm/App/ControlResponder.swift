@@ -210,7 +210,8 @@ struct ControlResponder {
                     "A tab on \(ControlAddress.hostPrefix + host.alias) takes no cmd or cwd. "
                         + "It starts the host's login shell."))
         }
-        let cwd = cwd ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
+        let inherited = explicitCWD ? cwd : place.window.removedWorktree(of: place.id)?.relocating(cwd) ?? cwd
+        let cwd = inherited ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
         guard let tab = place.window.openTab(in: place.id, cwd: cwd, command: command),
             let pane = place.window.firstPaneToken(of: tab)
         else { return .failure(ControlError(.failed, "The tab could not be opened.")) }

@@ -2517,6 +2517,8 @@ final class WindowController: NSObject {
 
     func sessionCWD(of id: WorkspaceID) -> URL? { workspaces.first { $0.id == id }?.activeController?.sessionCWD }
 
+    func removedWorktree(of id: WorkspaceID) -> WorktreeOrigin? { workspaces.first { $0.id == id }?.removedWorktree }
+
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
 
     func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {

@@ -240,7 +240,9 @@ screen when it was showing the workspace.
 
 Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`.
 Else, when the caller is in that workspace, it starts in `caller.cwd`, else in the folder
-the caller's pane last reported. Otherwise it starts where a new tab in the app would. A
+the caller's pane last reported. Otherwise it starts where a new tab in the app would. An
+inherited folder inside a removed worktree starts at the parent workspace's folder instead;
+`cwd` is used as given. A
 host's tab starts the host's login shell over its connection, so `cmd` or `cwd` for a host
 is `refused`.
 
@@ -270,7 +272,8 @@ on it would.
 `args`: `pane`, `dir` (required, `right` or `down`), `cmd`, `focus`.
 
 Splits the pane, running `cmd` in a shell or a shell. The new pane starts in `caller.cwd`
-when the pane is the caller's, else in the folder the pane last reported.
+when the pane is the caller's, else in the folder the pane last reported. A folder inside a
+removed worktree starts at the parent workspace's folder instead.
 Focus stays on the pane that had it. A drawer does not split. `refused` when the pane's tab
 is in Focus Mode or `cmd` is given for a host's pane, and `failed` when the pane is too small
 to split.
@@ -326,8 +329,9 @@ Into a pane that runs an agent:
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
 it opens a tab behind the active one in the workspace of `pane` (the caller's by default). It
 starts in `cwd`, else in `caller.cwd` when `pane` is the caller's, else in the folder that pane
-last reported. A pane launched as `cd <folder> && <program>` never reports `<folder>`, which is
-why `caller.cwd` comes first. `cwd` that is not absolute, or sent with `split`, is a
+last reported. An inherited folder inside a removed worktree starts at the parent workspace's
+folder instead; `cwd` is used as given. A pane launched as `cd <folder> && <program>` never
+reports `<folder>`, which is why `caller.cwd` comes first. `cwd` that is not absolute, or sent with `split`, is a
 `bad_request`. With `split` it splits `pane` the way `pane.split` does, and is
 refused or fails the same way. `focus` shows the new pane.
 
