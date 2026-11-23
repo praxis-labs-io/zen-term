@@ -647,6 +647,20 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertFalse(menu.isOpen)
     }
 
+    func test_return_withAClickedMenuAndNothingHighlighted_activatesTheRow() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        let repoWorkspace = try XCTUnwrap(c.workspaceIDsForTesting.last)
+        focusRow(row, in: c)
+        try rightClick(row, in: c)
+        XCTAssertNil(menu.highlightedTitleForTesting, "precondition: a click opens with nothing highlighted")
+
+        c.window.sendEvent(try key("\r", code: 36, in: c))
+
+        XCTAssertFalse(menu.isOpen)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, repoWorkspace)
+    }
+
     func test_escape_closesAKeyboardMenu_andLeavesFocusOnTheRow() throws {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)

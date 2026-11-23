@@ -391,6 +391,52 @@ final class DropdownTests: WindowTestCase {
     }
 
     @MainActor
+    func test_aClickOnTheButton_goesNoFurther() {
+        let dropdown = filterFixture()
+        let window = dropdown.window!
+        var reached = false
+        let later = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            reached = true
+            return event
+        }
+        defer { later.map(NSEvent.removeMonitor) }
+
+        NSApp.sendEvent(Self.click(at: NSPoint(x: dropdown.frame.midX, y: dropdown.frame.midY), in: window))
+
+        XCTAssertFalse(dropdown.isPopoverOpen)
+        XCTAssertFalse(reached, "the button's own click would reopen the list it just closed")
+    }
+
+    @MainActor
+    func test_shiftEscape_stillClosesTheListFirst() {
+        let dropdown = filterFixture()
+        let window = dropdown.window!
+        let shiftEscape = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: window.windowNumber,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false,
+            keyCode: 53)!
+
+        NSApp.sendEvent(shiftEscape)
+
+        XCTAssertFalse(dropdown.isPopoverOpen, "ModalEscape takes any Esc, so the list has to take it first")
+    }
+
+    @MainActor
+    func test_escapeDuringComposition_leavesTheListForTheInputMethod() throws {
+        let dropdown = filterFixture()
+        let window = dropdown.window!
+        let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+        editor.setMarkedText(
+            "k", selectedRange: NSRange(location: 1, length: 0),
+            replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertTrue(editor.hasMarkedText(), "precondition: the query is mid-composition")
+
+        NSApp.sendEvent(Self.escape(in: window))
+
+        XCTAssertTrue(dropdown.isPopoverOpen, "the Esc belongs to the marked text")
+    }
+
+    @MainActor
     func test_aClickOnTheList_leavesItOpenForTheRow() {
         let dropdown = filterFixture()
         let card = dropdown.listCardFrameForTesting

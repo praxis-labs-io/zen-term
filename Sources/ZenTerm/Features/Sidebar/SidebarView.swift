@@ -301,8 +301,8 @@ final class SidebarView: NSView, ThemeReapplying {
     }
 
     private func wire(_ row: SidebarJumpRow) {
-        row.onArrowUp = { [weak self] in self?.arrow(-1) }
-        row.onArrowDown = { [weak self] in self?.arrow(1) }
+        row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+        row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
     }
@@ -357,12 +357,14 @@ final class SidebarView: NSView, ThemeReapplying {
                 Self.selectShortcut(self?.numbers[id])
             }
         }
-        row.onArrowUp = { [weak self] in self?.arrow(-1) }
-        row.onArrowDown = { [weak self] in self?.arrow(1) }
+        row.onArrowUp = { [weak self, weak row] in self?.arrow(-1, on: row) }
+        row.onArrowDown = { [weak self, weak row] in self?.arrow(1, on: row) }
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
-        row.onReturn = { [weak self] in
+        row.onReturn = { [weak self, weak row] in
             guard let self else { return }
-            if self.rowMenu.isOpen { self.rowMenu.chooseHighlighted() } else { self.onActivate(id) }
+            if self.isMenuOpen(on: row), self.rowMenu.chooseHighlighted() { return }
+            self.rowMenu.close()
+            self.onActivate(id)
         }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onSecondaryClick = { [weak self, weak row] in
@@ -431,9 +433,10 @@ final class SidebarView: NSView, ThemeReapplying {
         rowMenu.close()
     }
 
-    // The menu leaves focus on its row, so the row's arrows walk the menu while it is up.
-    private func arrow(_ delta: Int) {
-        if rowMenu.isOpen { rowMenu.moveHighlight(delta) } else { moveFocus(delta) }
+    private func isMenuOpen(on row: NavRow?) -> Bool { rowMenu.isOpen && row != nil && rowMenu.anchor === row }
+
+    private func arrow(_ delta: Int, on row: NavRow?) {
+        if isMenuOpen(on: row) { rowMenu.moveHighlight(delta) } else { moveFocus(delta) }
     }
 
     func openMenuOnFocusedRow() -> Bool {

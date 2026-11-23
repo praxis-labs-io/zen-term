@@ -16,13 +16,15 @@ final class ListPopover {
 
         init(_ event: NSEvent) {
             isKey = event.type == .keyDown
-            isEscape = isKey && KeyboardFocus.key(for: event) == .escape && KeyboardFocus.isUnmodified(event)
+            isEscape = isKey && KeyboardFocus.key(for: event) == .escape
             windowNumber = event.windowNumber
             location = event.locationInWindow
         }
     }
 
     private unowned let anchor: NSView
+    /// Swallows a click on the anchor: a toggle's own click would reopen the list it just closed.
+    private let anchorToggles: Bool
     private var card: PopoverCard?
     private weak var scroll: FadingScrollView?
     private var resizeObserver: NSObjectProtocol?
@@ -30,7 +32,6 @@ final class ListPopover {
     private var monitor: Any?
 
     var onSelfClose: (() -> Void)?
-    /// Asked first, so a typed query takes the first Esc and the list the second.
     var absorbsEscape: (() -> Bool)?
 
     private static let minWidth: CGFloat = 180
@@ -43,8 +44,9 @@ final class ListPopover {
     /// Overlay scrollers draw over content, so without this lane the bar covers the content's trailing edge.
     private static let scrollerGutter: CGFloat = ChromeMetrics.Spacing.s16
 
-    init(anchor: NSView) {
+    init(anchor: NSView, anchorToggles: Bool = false) {
         self.anchor = anchor
+        self.anchorToggles = anchorToggles
     }
 
     deinit {
@@ -61,29 +63,44 @@ final class ListPopover {
 
     func open(rows: [Row]) {
         guard let (window, contentView) = openingContext() else { return }
-        let (stack, contentHeight) = rowStack(rows)
-        let (built, _) = assembleCard(around: stack)
-        built.frame.size = anchoredSize(contentHeight: contentHeight)
-        present(built, in: window, on: contentView)
-    }
-
-    /// Skips the entrance motion, or every keystroke of a filter would flash the card.
-    func replace(rows: [Row]) {
-        guard let old = card, let contentView = anchor.window?.contentView else { return }
-        old.removeFromSuperview()
-        let (stack, contentHeight) = rowStack(rows)
-        let (built, _) = assembleCard(around: stack)
-        built.frame.size = anchoredSize(contentHeight: contentHeight)
-        mount(built, on: contentView)
+        present(rowsCard(rows), in: window, on: contentView)
     }
 
     func open(content: NSView) {
         guard let (window, contentView) = openingContext() else { return }
+        present(contentCard(content, in: contentView), in: window, on: contentView)
+    }
+
+    /// Skips the entrance motion, or every keystroke of a filter would flash the card.
+    func replace(rows: [Row]) {
+        guard let contentView = unmountForReplace() else { return }
+        mount(rowsCard(rows), on: contentView)
+    }
+
+    func replace(content: NSView) {
+        guard let contentView = unmountForReplace() else { return }
+        mount(contentCard(content, in: contentView), on: contentView)
+    }
+
+    private func unmountForReplace() -> NSView? {
+        guard let old = card, let contentView = anchor.window?.contentView else { return nil }
+        old.removeFromSuperview()
+        return contentView
+    }
+
+    private func rowsCard(_ rows: [Row]) -> PopoverCard {
+        let (stack, contentHeight) = rowStack(rows)
+        let (built, _) = assembleCard(around: stack)
+        built.frame.size = anchoredSize(contentHeight: contentHeight)
+        return built
+    }
+
+    private func contentCard(_ content: NSView, in contentView: NSView) -> PopoverCard {
         let (built, trailing) = assembleCard(around: content)
         let (size, scrolls) = naturalSize(of: content, in: contentView)
         built.frame.size = size
         if scrolls { trailing.constant -= Self.scrollerGutter }
-        present(built, in: window, on: contentView)
+        return built
     }
 
     func reveal(_ row: NSView) { scroll?.reveal(row) }
@@ -158,21 +175,21 @@ final class ListPopover {
         onSelfClose?()
     }
 
-    /// A click on the anchor closes the list and goes no further, or the anchor's own click would reopen it.
     private func swallows(_ press: Press) -> Bool {
         guard let card, let window = anchor.window, press.windowNumber == window.windowNumber,
             let contentView = window.contentView
         else { return false }
         if press.isKey {
             guard press.isEscape else { return false }
+            if let editor = window.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
             if absorbsEscape?() == true { return true }
             dismiss()
             return true
         }
         if card.frame.contains(contentView.convert(press.location, from: nil)) { return false }
-        let onAnchor = anchor.bounds.contains(anchor.convert(press.location, from: nil))
+        let hit = contentView.hitTest(contentView.superview?.convert(press.location, from: nil) ?? press.location)
         dismiss()
-        return onAnchor
+        return anchorToggles && hit?.isDescendant(of: anchor) == true
     }
 
     private func anchoredSize(contentHeight: CGFloat) -> NSSize {

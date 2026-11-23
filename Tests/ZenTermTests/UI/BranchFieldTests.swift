@@ -151,6 +151,25 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(field.text, "zen")
     }
 
+    func test_aClickInTheField_closesTheListAndReachesTheField() {
+        type("zen")
+        var reached = false
+        let later = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            reached = true
+            return event
+        }
+        defer { later.map(NSEvent.removeMonitor) }
+        let point = field.convert(NSPoint(x: field.bounds.midX, y: field.bounds.midY), to: nil)
+
+        NSApp.sendEvent(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+
+        XCTAssertFalse(field.isListOpen)
+        XCTAssertTrue(reached, "the click goes on to place the caret")
+    }
+
     func test_escapeWithNoListIsNotConsumed() {
         type("qqqq")
 

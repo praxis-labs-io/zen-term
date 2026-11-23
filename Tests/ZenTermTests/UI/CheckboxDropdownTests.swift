@@ -34,7 +34,7 @@ final class CheckboxDropdownTests: WindowTestCase {
         36: "\r", 51: "\u{7f}", 53: "\u{1b}", 125: "\u{F701}", 126: "\u{F700}",
     ]
 
-    /// Sends the key to whatever holds focus, the query field's editor while the list is open, and Esc to the list's monitor.
+    // Esc goes through the app: the open list's own event monitor is what takes it.
     private func press(_ dropdown: CheckboxDropdown, _ chars: String, code: UInt16, shift: Bool = false) {
         let characters = chars.isEmpty ? Self.unprinted[code] ?? "" : chars
         var flags: NSEvent.ModifierFlags = shift ? [.shift] : []

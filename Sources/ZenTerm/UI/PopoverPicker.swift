@@ -18,7 +18,7 @@ class PopoverPicker: NSView {
     private let queryField = NSTextField()
     private let chevron = NSImageView()
     private lazy var popover: ListPopover = {
-        let popover = ListPopover(anchor: self)
+        let popover = ListPopover(anchor: self, anchorToggles: true)
         popover.onSelfClose = { [weak self] in self?.finishClosing() }
         popover.absorbsEscape = { [weak self] in self?.clearQuery() ?? false }
         return popover

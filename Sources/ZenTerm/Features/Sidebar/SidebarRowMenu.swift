@@ -1,6 +1,5 @@
 import AppKit
 
-// A sidebar row's menu, opened by right-click or ⌘K: a click or ↑/↓ and Return picks an item.
 @MainActor
 final class SidebarRowMenu {
     struct Item {
@@ -77,7 +76,6 @@ final class SidebarRowMenu {
         highlighted = nil
     }
 
-    // The keyboard cursor suppresses hover, or the hovered item and the cursor's item would both look chosen.
     func moveHighlight(_ delta: Int) {
         guard isOpen, let next = KeyboardFocus.step(from: highlighted, delta: delta, count: itemViews.count)
         else { return }
@@ -88,9 +86,10 @@ final class SidebarRowMenu {
         }
     }
 
-    func chooseHighlighted() {
-        guard isOpen, let highlighted, itemViews.indices.contains(highlighted) else { return }
+    func chooseHighlighted() -> Bool {
+        guard isOpen, let highlighted, itemViews.indices.contains(highlighted) else { return false }
         itemViews[highlighted].onChoose()
+        return true
     }
 
     var itemViewsForTesting: [ListRow] { itemViews }

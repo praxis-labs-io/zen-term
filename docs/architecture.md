@@ -537,10 +537,11 @@ New modal surfaces compose the existing primitives.
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Popovers:** `ListPopover` is every anchored list (dropdowns, `BranchField`, the sidebar
   row menu, the icon grid) and owns its dismissal: a local event monitor closes it on Esc
-  or a click outside the card (a click on its anchor closes it and goes no further), and it
-  closes when the window resizes, resigns key or closes. Owners only hear `onSelfClose`;
-  `absorbsEscape` lets a typed query take the first Esc. It opens and closes through
-  `Motion.springScaleFade`.
+  or a click outside the card, and when the window resizes, resigns key or closes. A click
+  outside still lands, except on a toggle's own anchor (`anchorToggles`), where it would reopen
+  the list. Esc during input-method composition is left to the marked text. Owners only hear
+  `onSelfClose`; `absorbsEscape` lets a typed query take the first Esc. It opens and closes
+  through `Motion.springScaleFade`.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. Every card is fully operable without a mouse.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
