@@ -232,7 +232,8 @@ enum Motion {
             completion?()
             return
         }
-        let from = layer.opacity
+        let interrupted = layer.animation(forKey: "motion.opacity") != nil ? layer.presentation() : nil
+        let from = interrupted?.opacity ?? layer.opacity
         layer.opacity = opacity
         let anim = CABasicAnimation(keyPath: "opacity")
         anim.fromValue = from
