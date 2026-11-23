@@ -74,16 +74,24 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertEqual(config.workingDirectory, URL(fileURLWithPath: "/work"))
     }
 
-    func test_aProgramThatClosesItsPaneEndsWithItsExitMark_andStartsNoShell() {
+    func test_aProgramThatClosesItsPaneMarksItsExitOnTheShellsExit_andStartsNoShell() {
         withConfig(shell: "/bin/zsh")
         let config = ShellLaunch.program("npm test", cwd: nil, exitClosesPane: true)
         XCTAssertEqual(
             config.args,
             [
                 "-l", "-i", "-c",
-                "printf '\\033]2;%s\\007' 'npm test'; printf '\\033]133;C\\007'; npm test; "
-                    + "printf '\\033]133;D;%d\\007' $?; ",
+                "printf '\\033]2;%s\\007' 'npm test'; trap 'printf \"\\033]133;D;%d\\007\" \"$?\"' EXIT; "
+                    + "printf '\\033]133;C\\007'; npm test",
             ])
+    }
+
+    func test_aProgramThatClosesItsPaneUnderFish_marksItsExitInline() {
+        withConfig(shell: "/usr/local/bin/fish")
+        XCTAssertEqual(
+            ShellLaunch.program("npm test", cwd: nil, exitClosesPane: true).args.last,
+            "printf '\\033]2;%s\\007' 'npm test'; printf '\\033]133;C\\007'; npm test; "
+                + "printf '\\033]133;D;%d\\007' $status; ")
     }
 
     func test_program_doesNotRearmIntegration_forANonZshShell() {

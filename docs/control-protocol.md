@@ -449,7 +449,8 @@ Holds until something happens to the pane, then answers once with why:
 - The program is the pane's foreground job, an agent included. A pane at a shell prompt waits
   for the next command to finish. An agent that sends no `status` waits as a plain program does.
 - `exitCode` is the shell's report through its integration, and is absent when the shell
-  integration is off. `text` is the last 40 lines. Both are absent for a pane that closed,
+  integration is off. Under fish, a `pane.run` command that ends in fish's own `exit`
+  reports none. `text` is the last 40 lines. Both are absent for a pane that closed,
   unless `pane.run` opened it.
 - `output` is matched within one line of the screen's rows, without escapes, so a newline in it
   is a `bad_request`. Text that scrolls more than a

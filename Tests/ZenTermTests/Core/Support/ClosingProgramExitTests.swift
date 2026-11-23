@@ -66,4 +66,10 @@ final class ClosingProgramExitTests: XCTestCase {
         XCTAssertEqual(try events(running: "(exit 7)", in: "/bin/zsh").sorted(), ["exited", "finished 7"])
         XCTAssertEqual(try events(running: "true", in: "/bin/bash").sorted(), ["exited", "finished 0"])
     }
+
+    func test_aCommandEndingInTheShellsOwnExitStillReportsItsCode() throws {
+        XCTAssertEqual(try events(running: "exit 3", in: "/bin/zsh").sorted(), ["exited", "finished 3"])
+        XCTAssertEqual(try events(running: "sleep 1; exit 5", in: "/bin/bash").sorted(), ["exited", "finished 5"])
+        XCTAssertEqual(try events(running: "exit 6", in: "/bin/sh").sorted(), ["exited", "finished 6"])
+    }
 }
