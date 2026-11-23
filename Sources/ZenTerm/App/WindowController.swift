@@ -60,6 +60,7 @@ final class WindowController: NSObject {
     private var exitedProcesses: Set<SurfaceID> = []
     private var listedProcesses: Set<SurfaceID> = []
     private var helpersReported: Set<SurfaceID> = []
+    private var blocksParentsAnswered: Set<SurfaceID> = []
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -2427,7 +2428,10 @@ final class WindowController: NSObject {
 
     func helperReported(_ surface: SurfaceID) { helpersReported.insert(surface) }
 
-    func helperHeardFromParent(_ surface: SurfaceID) { helpersReported.remove(surface) }
+    func helperHeardFromParent(_ surface: SurfaceID) {
+        helpersReported.remove(surface)
+        if case .blocked = agentStates.status(of: surface)?.state { blocksParentsAnswered.insert(surface) }
+    }
 
     // A task pasted into an idle agent shows no change until the agent reports again.
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
@@ -3387,6 +3391,7 @@ final class WindowController: NSObject {
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
                 self?.helpersReported.remove($0)
+                self?.blocksParentsAnswered.remove($0)
             }
             self?.renderAgents()
         }
@@ -3682,7 +3687,10 @@ final class WindowController: NSObject {
             self.renderAgents()
             let stopped = previous?.state == .working && status?.state != .working
             if Self.startsTurn(from: previous, to: status) { self.helpersReported.remove(surface) }
-            if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
+            let answeredByParent =
+                Self.leavesBlock(from: previous, to: status)
+                && self.blocksParentsAnswered.remove(surface) != nil
+            if !settlesFirstTask, !answeredByParent, let change = Self.helperChange(from: previous, to: status) {
                 self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
             }
             if stopped { self.paneWaits.agentStopped(surface) }
@@ -3696,6 +3704,12 @@ final class WindowController: NSObject {
         case nil, .idle, .done, .failed: return true
         case .working, .blocked: return false
         }
+    }
+
+    private static func leavesBlock(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?) -> Bool {
+        guard case .blocked = previous?.state else { return false }
+        if case .blocked = status?.state { return false }
+        return true
     }
 
     // Entering `blocked` is its own note, so a helper that stops to ask sends one note, not two.
