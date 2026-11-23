@@ -55,10 +55,13 @@ zen pane read --pane dev --lines 40                                  # its outpu
   `zen pane run --name <what it runs> -- <command>` and no `--wait`.
 - The command must show its output in the pane as it runs, so the user sees it
   working. Never filter it through `tail` or `grep`, or redirect it only to a
-  file. To also save it, use `2>&1 | tee <file>`. A pipe ends with `tee`'s
-  exit code, so under zsh or bash start the command with `set -o pipefail;`
-  when the code matters. Read the result with `zen wait`, `zen pane read`, or
-  the file.
+  file. To also save it, run
+  `bash -o pipefail -c '<cmd> 2>&1 | tee <file>'`, which keeps the command's
+  exit code instead of `tee`'s in any shell. Some tools buffer when piped, so
+  use their unbuffered mode, or `script -q <file> <command>`, when live output
+  matters. Read the result with `zen wait`, `zen pane read`, or the file.
+- A command with `;` or `|` goes to `zen pane run` as one quoted argument:
+  `zen pane run --name build --wait -- 'make clean; make'`.
 - The pane starts in your shell's current folder, so don't prefix the command
   with `cd`. `--cwd <folder>` starts it somewhere else.
 - The pane closes when its program exits, and `zen wait` still answers with
