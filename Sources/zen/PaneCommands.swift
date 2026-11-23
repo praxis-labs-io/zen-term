@@ -30,6 +30,9 @@ struct PaneCommands: ParsableCommand {
         @Option(help: "The pane to split, or whose workspace gets the tab. This pane by default.")
         var pane: ControlAddress.Pane?
 
+        @Option(help: "The folder to start in, instead of this one.")
+        var cwd: String?
+
         @Flag(help: "Show it.")
         var focus = false
 
@@ -88,10 +91,15 @@ struct PaneCommands: ParsableCommand {
             }
         }
 
-        func run() throws {
-            let args = ControlArgs(
-                cmd: commandLine, focus: focus, pane: pane, name: name, output: output, timeout: wait ? timeout : nil,
+        func args(in folder: String) throws -> ControlArgs {
+            ControlArgs(
+                cwd: try cwd.map { try CommandPath.folder($0, in: folder) }, cmd: commandLine, focus: focus, pane: pane,
+                name: name, output: output, timeout: wait ? timeout : nil,
                 task: task, split: split, keep: keep, outliveParent: outliveParent, wait: wait)
+        }
+
+        func run() throws {
+            let args = try args(in: FileManager.default.currentDirectoryPath)
             var client = try connection.client()
             client.replyTimeout = ControlClient.replyTimeout(for: .paneRun, args)
             if wait {

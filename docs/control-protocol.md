@@ -54,6 +54,7 @@ carries `caller.pane` only when it is the inherited socket.
 - `args`: an object of the command's arguments. Optional, and absent or `null` means none.
   A field of the wrong type is a `bad_request`.
 - `caller.pane`: the client's `$ZEN_PANE`, when it runs in a pane. Optional.
+- `caller.cwd`: the client's own working folder, absolute, sent with `caller.pane`. Optional.
 
 Unknown fields are ignored, in `args` too.
 
@@ -317,12 +318,15 @@ Into a pane that runs an agent:
 
 ### `pane.run`
 
-`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`,
-`outlive_parent`, `wait`, `timeout`, `output`.
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `cwd` (absolute),
+`focus`, `keep`, `outlive_parent`, `wait`, `timeout`, `output`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
-it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
-starting in that pane's folder. With `split` it splits `pane` the way `pane.split` does, and is
+it opens a tab behind the active one in the workspace of `pane` (the caller's by default). It
+starts in `cwd`, else in `caller.cwd` when `pane` is the caller's, else in the folder that pane
+last reported. A pane launched as `cd <folder> && <program>` never reports `<folder>`, which is
+why `caller.cwd` comes first. `cwd` that is not absolute, or sent with `split`, is a
+`bad_request`. With `split` it splits `pane` the way `pane.split` does, and is
 refused or fails the same way. `focus` shows the new pane.
 
 A pane closes the children it started when it closes, and they close theirs, wherever they are
@@ -589,7 +593,7 @@ rest print nothing. `zen pane get` takes the pane as its argument, this pane by 
 `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys <pane> <key>... [--force]` takes the keys as arguments, and a name that is not a
 key is a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
 `-h` prints the help, and `-- --help` runs `--help`. A pane argument,

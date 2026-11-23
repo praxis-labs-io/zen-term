@@ -14,10 +14,12 @@ struct ConnectionOptions: ParsableArguments {
     }
 
     /// A pane token is only meaningful to the instance that minted it, which is the one in `$ZEN_CONTROL_SOCK`.
-    static func caller(for path: String, environment: [String: String]) -> ControlCaller? {
+    static func caller(
+        for path: String, environment: [String: String], cwd: String = FileManager.default.currentDirectoryPath
+    ) -> ControlCaller? {
         guard path == environment[ControlEndpoint.environmentKey],
             let pane = environment["ZEN_PANE"].flatMap(Int.init)
         else { return nil }
-        return ControlCaller(pane: pane)
+        return ControlCaller(pane: pane, cwd: cwd)
     }
 }

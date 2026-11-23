@@ -104,6 +104,22 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(server.commandLine, "npm run dev")
     }
 
+    func test_runCwdIsAFolderResolvedFromHere() throws {
+        let here = FileManager.default.temporaryDirectory.appendingPathComponent("zen-cwd-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: here.appendingPathComponent("app"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: here) }
+
+        let run = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--cwd", "app", "claude"]) as? PaneCommands.Run)
+        XCTAssertEqual(try run.args(in: here.path).cwd, here.appendingPathComponent("app").standardizedFileURL.path)
+        XCTAssertNil(
+            try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "claude"]) as? PaneCommands.Run).args(in: here.path).cwd)
+
+        let missing = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "run", "--cwd", "gone", "claude"]) as? PaneCommands.Run)
+        XCTAssertThrowsError(try missing.args(in: here.path))
+    }
+
     func test_runSendsOneArgumentAsALineAndQuotesSeveral() throws {
         let separated = try XCTUnwrap(
             try Zen.parseAsRoot(["pane", "run", "--name", "dev", "--", "sh", "-c", "sleep 1"]) as? PaneCommands.Run)

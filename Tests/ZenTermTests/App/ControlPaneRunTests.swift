@@ -75,6 +75,23 @@ final class ControlPaneRunTests: WindowTestCase {
         try XCTUnwrap(send(cmd, args, from: pane)(), "\(cmd.rawValue) did not answer at once")
     }
 
+    private func run(_ args: ControlArgs, from pane: Int, in folder: String) throws -> ControlReply {
+        var reply: ControlReply?
+        responder.respond(
+            to: ControlRequest(id: 1, cmd: .paneRun, args: args, caller: ControlCaller(pane: pane, cwd: folder))
+        ) { reply = $0 }
+        return try XCTUnwrap(reply)
+    }
+
+    private func folder(_ name: String) throws -> String {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("zen-run-\(name)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url.path
+    }
+
+    private func startFolder(of token: Int) throws -> String? { try surface(token).lastConfig?.workingDirectory?.path }
+
     private func run(_ args: ControlArgs, from pane: Int?) throws -> PaneRunResult {
         try XCTUnwrap(try answer(.paneRun, args, from: pane).get() as? PaneRunResult)
     }
@@ -125,6 +142,56 @@ final class ControlPaneRunTests: WindowTestCase {
         let launched = script(of: try surface(opened.pane))
         XCTAssertTrue(launched.contains("claude; "), launched)
         XCTAssertFalse(launched.contains("exec "), "a launched pane started a shell after its program")
+    }
+
+    func test_runStartsInTheCallersOwnFolder_notTheOneItsPaneLastReported() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let reported = try startFolder(of: run(ControlArgs(cmd: "htop"), from: caller).pane)
+        let worktree = try folder("worktree")
+        XCTAssertNotEqual(reported, worktree)
+
+        let opened = try XCTUnwrap(
+            try run(ControlArgs(cmd: "bin/check"), from: caller, in: worktree).get() as? PaneRunResult)
+
+        XCTAssertEqual(try startFolder(of: opened.pane), worktree)
+    }
+
+    func test_cwdOverridesTheCallersFolder() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let asked = try folder("asked")
+
+        let reply = try run(ControlArgs(cwd: asked, cmd: "htop"), from: caller, in: try folder("caller"))
+
+        let opened = try XCTUnwrap(try reply.get() as? PaneRunResult)
+        XCTAssertEqual(try startFolder(of: opened.pane), asked)
+    }
+
+    func test_cwdMustBeAbsolute_andTakesNoSplit() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let tabs = c.listing().workspaces.flatMap(\.tabs).count
+
+        let relative = try answer(.paneRun, ControlArgs(cwd: "relative/dir", cmd: "htop"), from: caller)
+        XCTAssertEqual(error(relative)?.code, .badRequest)
+        let split = try answer(
+            .paneRun, ControlArgs(cwd: try folder("split"), cmd: "htop", split: .right), from: caller)
+        XCTAssertEqual(error(split)?.code, .badRequest)
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).count, tabs)
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).flatMap(\.panes).count, 1)
+    }
+
+    func test_runIntoAnotherPanesWorkspaceStartsWhereThatPaneIs_notInTheCallersFolder() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let other = try run(ControlArgs(cmd: "htop"), from: nil).pane
+        let reported = try startFolder(of: run(ControlArgs(cmd: "htop", pane: .token(other)), from: nil).pane)
+
+        let reply = try run(ControlArgs(cmd: "htop", pane: .token(other)), from: caller, in: try folder("caller"))
+
+        let opened = try XCTUnwrap(try reply.get() as? PaneRunResult)
+        XCTAssertEqual(try startFolder(of: opened.pane), reported)
     }
 
     func test_splitPutsTheHelperBesideThePane_andFocusShowsIt() throws {
