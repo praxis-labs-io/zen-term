@@ -195,12 +195,12 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `hoverIntent` | The delay before a tooltip or hover card shows |
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
 | `springScaleFade` | Modals, toasts and floats appearing and leaving |
-| `fade` | Plain opacity changes |
+| `fade` | Plain opacity changes, tooltips and the link preview |
 | `crossfade` | A process chip swapping its mark when its program changes |
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
-| `slideFade` | The collapsed sidebar's hover reveal |
+| `slideFade` | The collapsed sidebar's hover reveal, the find bar and the mode header |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
 

@@ -306,7 +306,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
   stack, modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in
-  `select`/`addTab`/`closeTab` keeps a card from outliving its tab.
+  `select`/`addTab`/`closeTab` keeps a card from outliving its tab. An open modal suppresses
+  hover on every `HoverSuppressing` view outside it, and on close lifts only the ones it suppressed.
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
   columns and crashes TUIs.
 - **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy
