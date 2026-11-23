@@ -64,6 +64,18 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
         return c.window.performKeyEquivalent(with: routed)
     }
 
+    private func deliver(_ code: UInt16, flags: NSEvent.ModifierFlags, in c: WindowController) throws {
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "\r",
+                charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: code))
+        NSApp.postEvent(event, atStart: true)
+        _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .default, dequeue: true)
+        guard try !press(code, flags: flags, in: c) else { return }
+        c.window.firstResponder?.keyDown(with: event)
+    }
+
     private final class Sink {
         var submitCount = 0
     }
@@ -71,7 +83,11 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
     private func makeReportIssue(_ sink: Sink) throws -> ReportIssueOverlay {
         let report = SystemReport(appVersion: "0.3.0", build: "1", osVersion: "15.5", architecture: "arm64")
         let form = ReportIssueOverlay(
-            report: report, onOpenURL: { _ in sink.submitCount += 1 }, onExportDiagnostics: {}, onCancel: {})
+            report: report,
+            onOpenURL: { _ in
+                sink.submitCount += 1
+                return nil
+            }, onExportDiagnostics: {}, onCancel: {})
         try field(form, placeholder: "A short summary").setText("Split closes the pane")
         try XCTUnwrap(descendants(of: form).compactMap { $0 as? TextAreaBox }.first).setText("It closed the pane")
         return form
@@ -115,6 +131,21 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
         return form
     }
 
+    private func makeWorkspace(_ sink: Sink) throws -> WorkspaceFormOverlay {
+        let form = WorkspaceFormOverlay(
+            existingTitles: [],
+            onSubmit: { _ in
+                sink.submitCount += 1
+                return nil
+            }, onCancel: {}, onDismiss: {})
+        form.folderFieldForTesting.setText(FileManager.default.temporaryDirectory.path)
+        return form
+    }
+
+    private func button(_ title: String, in form: NSView) throws -> AppButton {
+        try XCTUnwrap(descendants(of: form).compactMap { $0 as? AppButton }.first { $0.title == title })
+    }
+
     private func focus(_ view: NSView, in c: WindowController) {
         XCTAssertTrue(c.window.makeFirstResponder(view))
         XCTAssertTrue(KeyboardFocus.isFocused(view, in: c.window), "the \(type(of: view)) has focus")
@@ -156,16 +187,85 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
         XCTAssertEqual(sink.submitCount, 1)
     }
 
-    func test_return_submitsAddSSHHostFromTheHostField() throws {
+    func test_commandReturn_submitsAddSSHHostFromTheHostField() throws {
         let c = makeWindow()
         let sink = Sink()
         let form = try makeAddSSHHost(sink)
         present(form, in: c)
-        focus(try XCTUnwrap(descendants(of: form).compactMap { $0 as? FieldBox }.first).field, in: c)
+        focus(try field(form, placeholder: "user@host or alias").field, in: c)
 
-        XCTAssertTrue(try press(36, flags: [], in: c))
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
 
         XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_commandReturn_submitsAddSSHHostFromTheCancelButton() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeAddSSHHost(sink)
+        present(form, in: c)
+        focus(try button("Cancel", in: form), in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_return_advancesAddSSHHostFromHostToNameToAdd_withoutSubmitting() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeAddSSHHost(sink)
+        present(form, in: c)
+        focus(try field(form, placeholder: "user@host or alias").field, in: c)
+
+        try deliver(36, flags: [], in: c)
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(try field(form, placeholder: "Shown in place of the host").field, in: c.window))
+        try deliver(36, flags: [], in: c)
+        XCTAssertTrue(KeyboardFocus.isFocused(try button("Add", in: form), in: c.window))
+
+        XCTAssertEqual(sink.submitCount, 0)
+    }
+
+    func test_return_advancesReportIssueFromTheTitle_withoutSubmitting() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeReportIssue(sink)
+        present(form, in: c)
+        focus(try field(form, placeholder: "A short summary").field, in: c)
+
+        try deliver(36, flags: [], in: c)
+
+        let whatHappened = try XCTUnwrap(descendants(of: form).compactMap { $0 as? TextAreaBox }.first)
+        XCTAssertTrue(KeyboardFocus.isFocused(whatHappened.textView, in: c.window))
+        XCTAssertEqual(sink.submitCount, 0)
+    }
+
+    func test_commandReturn_submitsTheWorkspaceFormFromTheNameField() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeWorkspace(sink)
+        present(form, in: c)
+        focus(form.titleFieldForTesting.field, in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_everyFormsPrimaryButton_showsTheSubmitKeycap() throws {
+        let sink = Sink()
+        let primaries: [(NSView, String)] = [
+            (try makeReportIssue(sink), "Open on GitHub"),
+            (try makeNewWorktree(sink), "Create Worktree"),
+            (makeToolFloat(sink), "Save"),
+            (try makeAddSSHHost(sink), "Add"),
+            (try makeWorkspace(sink), "Add Workspace"),
+        ]
+        for (form, title) in primaries {
+            XCTAssertEqual(try button(title, in: form).keycapForTesting?.shortcut, "⌘⏎", title)
+            XCTAssertTrue(try XCTUnwrap(form as? ModalOverlay).owns(ModalShell.submitChord), title)
+        }
     }
 
     func test_commandReturn_submitsReportIssueFromTheExportButton() throws {

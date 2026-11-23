@@ -67,16 +67,23 @@ final class AddSSHHostOverlayTests: WindowTestCase {
             .first { !$0.isHidden && $0.textColor == Theme.current.chrome.destructive.nsColor }?.stringValue
     }
 
-    func test_returnOnHost_movesToName_andReturnOnName_submitsTheTrimmedHostWithNoName() {
+    func test_returnAdvancesHostToNameToAdd_andCommandReturnSubmitsTheTrimmedHostWithNoName() throws {
         let overlay = mount()
         field(in: overlay).setText("  deploy@10.0.0.5 ")
 
         pressReturn(in: field(in: overlay))
-        XCTAssertEqual(submitted, [])
         XCTAssertIdentical(window?.firstResponder, nameField(in: overlay).field.currentEditor())
         pressReturn(in: nameField(in: overlay))
+        XCTAssertTrue(isFocused(button("Add", in: overlay)))
+        XCTAssertEqual(submitted, [])
+        submitByChord()
 
         XCTAssertEqual(submitted, [SSHHostEntry(alias: "deploy@10.0.0.5")])
+    }
+
+    func test_theAddButton_showsTheSubmitKeycap() throws {
+        let add = try XCTUnwrap(button("Add", in: mount()))
+        XCTAssertEqual(add.keycapForTesting?.shortcut, "⌘⏎")
     }
 
     func test_aTypedName_isSubmittedTrimmed() {
@@ -84,7 +91,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         field(in: overlay).setText("deploy@10.0.0.5")
         nameField(in: overlay).setText("  Deploy box ")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(submitted, [SSHHostEntry(alias: "deploy@10.0.0.5", name: "Deploy box")])
     }
@@ -94,7 +101,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         field(in: overlay).setText("deploy@10.0.0.5")
         nameField(in: overlay).setText("The \"box\"")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(visibleMessage(in: overlay), "Can't contain \".")
         XCTAssertEqual(submitted, [])
@@ -104,7 +111,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let overlay = mount()
         field(in: overlay).setText("   ")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(submitted, [])
         XCTAssertEqual(visibleMessage(in: overlay), "Enter a host.")
@@ -115,7 +122,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         for text in ["dev box", "dev,box"] {
             field(in: overlay).setText(text)
 
-            pressReturn(in: nameField(in: overlay))
+            submitByChord()
 
             XCTAssertEqual(visibleMessage(in: overlay), "Can't contain spaces, commas, # or \".", text)
         }
@@ -126,7 +133,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let overlay = mount()
         field(in: overlay).setText("-oProxyCommand=x")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(visibleMessage(in: overlay), "Can't start with -.")
         XCTAssertEqual(submitted, [])
@@ -136,7 +143,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let overlay = mount()
         field(in: overlay).setText("devbox:")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(visibleMessage(in: overlay), "Can't end with :.")
         XCTAssertEqual(submitted, [])
@@ -148,7 +155,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         field(in: overlay).setText("devbox")
         nameField(in: overlay).setText("Build box")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(visibleMessage(in: overlay), "Already added.")
         XCTAssertIdentical(window?.firstResponder, field(in: overlay).field.currentEditor())
@@ -185,7 +192,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
 
         save.keyDown(with: returnKey())
         nameField(in: overlay).setText("   ")
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(
             submitted, [SSHHostEntry(alias: "devbox", name: "Builder"), SSHHostEntry(alias: "devbox", name: nil)])
@@ -195,10 +202,17 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let overlay = mount(.edit(SSHHostEntry(alias: "devbox"), address: nil))
         nameField(in: overlay).setText("The \"box\"")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(visibleMessage(in: overlay), "Can't contain \".")
         XCTAssertEqual(submitted, [])
+    }
+
+    private func submitByChord() {
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0, context: nil,
+            characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+        XCTAssertTrue(window?.performKeyEquivalent(with: event) == true, "⌘Return reaches the form's submit")
     }
 
     private func returnKey() -> NSEvent {
@@ -212,7 +226,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let overlay = mount(.edit(SSHHostEntry(alias: "devbox"), address: nil))
         nameField(in: overlay).setText("Build")
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         let label = try XCTUnwrap(
             descendants(of: overlay).compactMap { $0 as? NSTextField }.first { $0.stringValue == submitFailure })
@@ -257,12 +271,12 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertFalse(descendants(of: overlay).contains { $0 is ConfirmCard })
     }
 
-    func test_returnWhileDismissing_doesNotSubmit() {
+    func test_commandReturnWhileDismissing_doesNotSubmit() {
         let overlay = mount()
         field(in: overlay).setText("deploy@10.0.0.5")
         overlay.animateOut {}
 
-        pressReturn(in: nameField(in: overlay))
+        submitByChord()
 
         XCTAssertEqual(submitted, [])
     }

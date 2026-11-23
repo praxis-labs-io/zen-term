@@ -28,7 +28,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     private lazy var nameGroup = LabeledField(caption: nameCaption, control: nameField)
     private let errorLabel = FormErrorLabel()
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
-    private let submitButton = AppButton(title: "", variant: .primary, keyEquivalent: "\r")
+    private lazy var submitButton = ModalShell.submitButton(title: editing == nil ? "Add" : "Save")
     private let removeButton = AppButton(title: "Remove", variant: .destructive)
 
     private var editing: (entry: SSHHostEntry, address: String?)? {
@@ -49,21 +49,9 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    static func problem(with host: String) -> String? {
-        if host.isEmpty { return "Enter a host." }
-        if host.contains(where: { $0.isWhitespace || ",#\"".contains($0) }) {
-            return "Can't contain spaces, commas, # or \"."
-        }
-        if host.hasPrefix("-") { return "Can't start with -." }
-        if host.hasSuffix(":") { return "Can't end with :." }
-        return nil
-    }
-
-    static func problem(withName name: String) -> String? {
-        name.contains("\"") ? "Can't contain \"." : nil
-    }
-
     override var isShowingOverlaidCard: Bool { confirm.isShowing }
+
+    func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
     func focusInitialResponder() {
         if let card = confirm.card { return card.focusInitialResponder() }
@@ -77,8 +65,6 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        submitButton.setTitle(editing == nil ? "Add" : "Save")
-
         hostField.onEnter = { [weak self] in self?.focus(self?.nameField.field) }
         hostField.onArrowDown = { [weak self] in self?.focus(self?.nameField.field) }
         hostField.onSubmit = { [weak self] in self?.submit() }
@@ -89,7 +75,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         hostField.onTab = { [weak self] in self?.focus(self?.nameField.field) }
         hostField.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
 
-        nameField.onEnter = { [weak self] in self?.submit() }
+        nameField.onEnter = { [weak self] in self?.focus(self?.submitButton) }
         nameField.onSubmit = { [weak self] in self?.submit() }
         nameField.onChange = { [weak self] in
             self?.nameGroup.setMessage(nil)
@@ -192,31 +178,37 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     private func submit() {
         guard !isDismissing else { return }
-        guard let host = submittedHost() else { return }
-        let name = nameField.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let problem = Self.problem(withName: name) {
-            nameGroup.setMessage(problem)
-            focus(nameField.field)
-            return
-        }
-        if let failure = onSubmit(SSHHostEntry(alias: host, name: name.isEmpty ? nil : name)) {
+        let validation = validate()
+        guard validation.isValid else { return validation.revealFirstInvalid() }
+        let name = enteredName
+        if let failure = onSubmit(SSHHostEntry(alias: enteredHost, name: name.isEmpty ? nil : name)) {
             errorLabel.show(failure)
             focusInitialResponder()
         }
     }
 
-    private func submittedHost() -> String? {
-        let taken: Set<String>
-        switch mode {
-        case .edit(let entry, _): return entry.alias
-        case .add(let aliases): taken = aliases
+    private var enteredHost: String {
+        editing?.entry.alias ?? hostField.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var enteredName: String { nameField.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func validate() -> FormValidation {
+        var validation = FormValidation()
+        if case .add(let taken) = mode {
+            validation.flag(hostGroup, Self.hostProblem(enteredHost, taken: taken), at: hostField.field)
         }
-        let host = hostField.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let problem = Self.problem(with: host) ?? (taken.contains(host) ? "Already added." : nil) else {
-            return host
+        validation.flag(nameGroup, enteredName.contains("\"") ? "Can't contain \"." : nil, at: nameField.field)
+        return validation
+    }
+
+    private static func hostProblem(_ host: String, taken: Set<String>) -> String? {
+        if host.isEmpty { return "Enter a host." }
+        if host.contains(where: { $0.isWhitespace || ",#\"".contains($0) }) {
+            return "Can't contain spaces, commas, # or \"."
         }
-        hostGroup.setMessage(problem)
-        focus(hostField.field)
-        return nil
+        if host.hasPrefix("-") { return "Can't start with -." }
+        if host.hasSuffix(":") { return "Can't end with :." }
+        return taken.contains(host) ? "Already added." : nil
     }
 }

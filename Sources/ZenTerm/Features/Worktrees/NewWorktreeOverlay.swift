@@ -28,9 +28,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private let phaseGroup = NSStackView()
 
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
-    private let createButton = AppButton(
-        title: "Create Worktree", variant: .primary, keyEquivalent: "\r",
-        keyEquivalentModifierMask: .command)
+    private let createButton = ModalShell.submitButton(title: "Create Worktree")
 
     private var isWorking = false
 
@@ -161,11 +159,11 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.createButton) }
         cancelButton.onTab = { [weak self] in self?.moveTab(1) }
         createButton.onBacktab = { [weak self] in self?.moveTab(-1) }
-        let footer = ModalActionBar(leading: [phaseGroup], trailing: [cancelButton, createButton])
+        let actionBar = ModalActionBar(leading: [phaseGroup], trailing: [cancelButton, createButton])
 
         return FormCard.content(
-            rows: [header, branchStack, baseGroup, carryGroup, errorLabel],
-            footer: footer, spacing: ChromeMetrics.Spacing.modalSectionGap)
+            rows: [header, branchStack, baseGroup, carryGroup],
+            footer: FormCard.footer(actionBar, failure: errorLabel), spacing: ChromeMetrics.Spacing.modalSectionGap)
     }
 
     private func verticalStops() -> [NSView] {
@@ -240,10 +238,8 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private func submit() {
         guard !isWorking, !confirm.isShowing else { return }
         branchField.closeList()
-        if let firstInvalid = validate(includeRequired: true) {
-            window?.makeFirstResponder(firstInvalid)
-            return
-        }
+        let validation = validate(submitting: true)
+        guard validation.isValid else { return validation.revealFirstInvalid() }
         guard case .mainCheckout = options.holders[branchName] else {
             onSubmit(request)
             return
@@ -304,7 +300,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
 
     /// Refuses a leading `-`: `worktree add -b -m` hands it to `git branch`, which renames the checked-out branch.
     @discardableResult
-    private func validate(includeRequired: Bool) -> NSView? {
+    private func validate(submitting: Bool) -> FormValidation {
         let branch = branchName
         var message: String?
         if branch.hasPrefix("-") {
@@ -321,12 +317,13 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
             message = "\(nested) already uses this name as a folder."
         } else if let parent = Self.branchAncestor(of: branch, in: options.branches) {
             message = "\(parent) is already a branch, so this can't be a folder."
-        } else if includeRequired, branch.isEmpty {
+        } else if submitting, branch.isEmpty {
             message = "Enter a branch name."
         }
-        branchGroup?.setMessage(message)
+        var validation = FormValidation()
+        validation.flag(branchGroup, message, at: branchField.field)
         renderBranchMode()
-        return message == nil ? nil : branchField.field
+        return validation
     }
 
     private func renderBranchMode() {
@@ -362,7 +359,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
 
     private func refreshValidity() {
         errorLabel.clear()
-        validate(includeRequired: false)
+        validate(submitting: false)
     }
 
     private func editWorkspace() {

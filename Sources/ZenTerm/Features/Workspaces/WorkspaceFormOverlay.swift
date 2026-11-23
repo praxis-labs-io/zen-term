@@ -8,12 +8,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private static let namePlaceholder = "Named after the folder"
     private static let launchFocusChord = Chord(command: true, key: "l")
 
-    private enum Problem {
-        case view(NSView)
-        case tabName(Int)
-        case command(Int, Workspace.Region)
-    }
-
     private enum FocusSpot {
         case chip
         case region(Workspace.Region)
@@ -22,7 +16,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     private let editingWorkspace: Workspace?
     private let existingTitles: Set<String>
-    private let onSubmit: (Workspace) -> Void
+    private let onSubmit: (Workspace) -> String?
     private let onDelete: (() -> Void)?
     private var form: WorkspaceForm
 
@@ -45,13 +39,13 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let notice = NSTextField(labelWithString: "")
     private let undoButton = AppButton(title: "Undo", variant: .secondary)
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
-    private let addButton = AppButton(
-        title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+    private lazy var addButton = ModalShell.submitButton(title: editingWorkspace == nil ? "Add Workspace" : "Save")
+    private let failureLabel = FormErrorLabel(maximumLines: 3)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
 
     init(
         editing: Workspace? = nil, existingTitles: Set<String>,
-        onSubmit: @escaping (Workspace) -> Void, onCancel: @escaping () -> Void,
+        onSubmit: @escaping (Workspace) -> String?, onCancel: @escaping () -> Void,
         onDismiss: @escaping () -> Void, onDelete: (() -> Void)? = nil
     ) {
         self.editingWorkspace = editing
@@ -221,7 +215,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         undoButton.onTap = { [weak self] in self?.undoRemoval() }
 
         cancelButton.onTap = { [weak self] in self?.closeForm() }
-        addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
         addButton.onTap = { [weak self] in self?.submit() }
         var leading: [NSView] = [notice, undoButton]
         if onDelete != nil {
@@ -239,7 +232,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
             button.onBacktab = { [weak self] in self?.moveTab(-1) }
         }
         wireFooterArrows()
-        return ModalActionBar(leading: leading, trailing: [cancelButton, addButton])
+        return FormCard.footer(
+            ModalActionBar(leading: leading, trailing: [cancelButton, addButton]), failure: failureLabel)
     }
 
     private func wireFooterArrows() {
@@ -473,28 +467,23 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     private func submit() {
         guard !isDismissing else { return }
-        if let problem = validate(includeRequired: true) {
-            reveal(problem)
-            return
-        }
+        failureLabel.clear()
+        let validation = validate(submitting: true)
+        guard validation.isValid else { return validation.revealFirstInvalid() }
         guard let workspace = buildWorkspace() else { return }
-        onSubmit(workspace)
+        if let failure = onSubmit(workspace) {
+            failureLabel.show(failure)
+            focus(addButton)
+        }
     }
 
-    private func reveal(_ problem: Problem) {
-        switch problem {
-        case .view(let view):
-            focus(view)
-        case .tabName(let index):
-            form.select(index)
-            renderTabs()
-            layoutSubtreeIfNeeded()
-            tabStrip.focusSelectedChip()
-        case .command(let index, let region):
-            form.select(index)
-            renderTabs()
-            layoutSubtreeIfNeeded()
-            drawing.focus(region)
+    private func reveal(tab index: Int, then focusIt: @escaping () -> Void) -> () -> Void {
+        { [weak self] in
+            guard let self else { return }
+            self.form.select(index)
+            self.renderTabs()
+            self.layoutSubtreeIfNeeded()
+            focusIt()
         }
     }
 
@@ -520,12 +509,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     /// Rejects `=` and `"` where they cannot round-trip: the format has no escaping.
     @discardableResult
-    private func validate(includeRequired: Bool) -> Problem? {
-        var first: Problem?
-        func flag(_ group: LabeledField?, field: NSView, _ message: String?) {
-            group?.setMessage(message)
-            if message != nil, first == nil { first = .view(field) }
-        }
+    private func validate(submitting: Bool) -> FormValidation {
+        var validation = FormValidation()
 
         let title = effectiveTitle
         var titleMessage: String?
@@ -535,24 +520,23 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
                 ? "The folder's name contains [ ] # or \". Type a name." : "Can't contain [ ] # or \"."
         } else if !title.isEmpty, existingTitles.contains(title) {
             titleMessage = "A workspace named \(title) already exists."
-        } else if includeRequired, title.isEmpty {
+        } else if submitting, title.isEmpty {
             titleMessage = "Enter a workspace name."
         }
-        flag(titleGroup, field: titleField.field, titleMessage)
+        validation.flag(titleGroup, titleMessage, at: titleField.field)
 
         let folderText = folderPicker.text.trimmingCharacters(in: .whitespaces)
         var folderMessage: String?
-        if includeRequired, folderText.isEmpty {
+        if submitting, folderText.isEmpty {
             folderMessage = "Choose or type a workspace folder."
         } else if folderText.contains("\"") {
             folderMessage = "The path can't contain a \" character."
         } else if !folderText.isEmpty, let folder = resolvedFolder(), !PathDisplay.isDirectory(folder) {
             folderMessage = "That folder doesn't exist."
         }
-        flag(folderGroup, field: folderPicker.field.field, folderMessage)
+        validation.flag(folderGroup, folderMessage, at: folderPicker.field.field)
 
-        let tabProblem = validateTabs()
-        if first == nil { first = tabProblem }
+        validateTabs(into: &validation)
 
         func keyIsBad(_ row: EnvRow) -> Bool { row.key.contains("=") || row.key.contains("\"") }
         let badEnvRow = envRows.first { keyIsBad($0) || $0.value.contains("\"") }
@@ -561,19 +545,19 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         } else {
             envError.show("Names can't use = or \" and values can't use \".")
         }
-        if let badEnvRow, first == nil {
-            first = .view(keyIsBad(badEnvRow) ? badEnvRow.keyBox.field : badEnvRow.valueBox.field)
+        if let badEnvRow {
+            let stop = keyIsBad(badEnvRow) ? badEnvRow.keyBox.field : badEnvRow.valueBox.field
+            validation.flag(true) { [weak self] in self?.focus(stop) }
         }
 
-        return first
+        return validation
     }
 
-    private func validateTabs() -> Problem? {
-        var first: Problem?
+    private func validateTabs(into validation: inout FormValidation) {
         var messages: [String] = []
         if let index = form.tabs.firstIndex(where: { $0.name?.contains("\"") == true }) {
             messages.append("Tab names can't contain a \" character.")
-            first = .tabName(index)
+            validation.flag(true, reveal: reveal(tab: index) { [weak self] in self?.tabStrip.focusSelectedChip() })
         }
         let badCommand = form.tabs.indices.lazy.compactMap { index in
             Workspace.Region.allCases.first { self.form.tabs[index].command(in: $0)?.contains("\"") == true }
@@ -581,13 +565,15 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         }.first
         if let (index, region) = badCommand {
             messages.append("Commands can't contain a \" character.")
-            if first == nil { first = .command(index, region) }
+            validation.flag(true, reveal: reveal(tab: index) { [weak self] in self?.drawing.focus(region) })
         }
         tabsGroup?.setMessage(messages.isEmpty ? nil : messages.joined(separator: " "))
-        return first
     }
 
-    private func refreshValidity() { validate(includeRequired: false) }
+    private func refreshValidity() {
+        failureLabel.clear()
+        validate(submitting: false)
+    }
 
     private static func vStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: views)
