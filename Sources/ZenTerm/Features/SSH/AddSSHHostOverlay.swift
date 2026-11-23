@@ -156,11 +156,13 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         guard !isDismissing else { return }
         guard let removal, let editing, confirm.card == nil else { return }
         errorLabel.clear()
-        guard let consequence = removal.consequence() else { return performRemoval() }
         let name = editing.entry.displayName
+        let message =
+            removal.consequence().map { "Removing \(name) will \($0)." }
+            ?? "Removing \(name) takes it off your remote hosts. Your SSH config stays."
         confirm.present(
             ConfirmCard(
-                title: "Remove \(name)", message: "Removing \(name) will \(consequence).",
+                title: "Remove \(name)", message: message,
                 confirmLabel: "Remove",
                 onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.removeButton) } },
                 onConfirm: { [weak self] in self?.confirm.dismiss { self?.performRemoval() } }))
