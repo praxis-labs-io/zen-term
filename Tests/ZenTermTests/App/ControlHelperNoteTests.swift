@@ -142,18 +142,20 @@ final class ControlHelperNoteTests: WindowTestCase {
         return [.paste("<zen from=\"\(sender)\" reply=\"\(reply)\">\(text)</zen>"), .submit]
     }
 
-    private func send(_ text: String, from sender: RecordingSurface, to pane: RecordingSurface) throws {
-        let reply = try sending(text, from: sender, to: pane)
+    private func send(_ text: String, from sender: RecordingSurface, to pane: RecordingSurface, enter: Bool = true)
+        throws
+    {
+        let reply = try sending(text, from: sender, to: pane, enter: enter)
         XCTAssertEqual(reply?.isSuccess, true, "\(reply as Any)")
     }
 
-    private func sending(_ text: String, from sender: RecordingSurface, to pane: RecordingSurface) throws
-        -> ControlReply?
-    {
+    private func sending(
+        _ text: String, from sender: RecordingSurface, to pane: RecordingSurface, enter: Bool = true
+    ) throws -> ControlReply? {
         let answer = Answer()
         responder.respond(
             to: ControlRequest(
-                id: 4, cmd: .paneSend, args: ControlArgs(pane: .token(try token(of: pane)), text: text, enter: true),
+                id: 4, cmd: .paneSend, args: ControlArgs(pane: .token(try token(of: pane)), text: text, enter: enter),
                 caller: ControlCaller(pane: try token(of: sender)))
         ) { answer.reply = $0 }
         return answer.reply
@@ -488,6 +490,22 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.done, from: helper)
 
         XCTAssertEqual(parent.inputs, try note("2 bugs", from: helper))
+    }
+
+    func test_anUnsubmittedPasteOrKeysToTheParentIsNotAReport() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try send("2 bugs", from: helper, to: parent, enter: false)
+        XCTAssertEqual(try pressing(["space"], from: helper, to: parent)?.isSuccess, true)
+        let before = parent.inputs
+
+        report(.done, from: helper)
+
+        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(Array(parent.inputs.dropFirst(before.count)), try note(read, from: helper))
     }
 
     func test_aReportCountsOnlyUntilTheHelpersNextTurn() throws {

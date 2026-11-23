@@ -155,7 +155,7 @@ extension ControlResponder {
         let text = request.args.text ?? ""
         let enter = request.args.enter == true
         paste(text, from: request.caller?.pane, into: place, enter: enter)
-        noteDelivery(from: request.caller?.pane, to: place)
+        noteDelivery(from: request.caller?.pane, to: place, submitted: enter && !text.isEmpty)
         if enter, Self.startsTurn(text) { place.window.noteTaskSubmitted(to: place.pane) }
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
@@ -164,10 +164,13 @@ extension ControlResponder {
     }
 
     // A helper's message to its parent already carries the news its `stopped` note would, until the parent answers.
-    private func noteDelivery(from sender: Int?, to place: PanePlace) {
+    // Only a submitted message is a helper's report; a parent's keys or paste can still answer its helper.
+    private func noteDelivery(from sender: Int?, to place: PanePlace, submitted: Bool) {
         guard let sender else { return }
         if place.pane.record.parent == sender { return place.window.helperHeardFromParent(place.pane.surfaceID) }
-        guard let helper = locate(pane: sender), helper.pane.record.parent == place.pane.token else { return }
+        guard submitted, let helper = locate(pane: sender), helper.pane.record.parent == place.pane.token else {
+            return
+        }
         helper.window.helperReported(helper.pane.surfaceID)
     }
 
@@ -242,7 +245,7 @@ extension ControlResponder {
                 pressed.append(typed)
             }
             pressed.forEach(surface.press)
-            noteDelivery(from: request.caller?.pane, to: place)
+            noteDelivery(from: request.caller?.pane, to: place, submitted: false)
             return .success(NoPayload())
         }
     }

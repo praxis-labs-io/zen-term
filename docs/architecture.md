@@ -625,7 +625,7 @@ person's last key into each surface from `KeyInterceptor`'s keys the chrome did 
 path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
-`onHelperNote`. A child's `pane.send` to its parent marks it in its window until its next turn or its parent's
+`onHelperNote`. A child's submitted `pane.send` to its parent marks it in its window until its next turn or its parent's
 next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
 parent is blocked and `PaneDrafts` while it has a draft. `pane.send`, `pane.keys` and a held note
 all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
