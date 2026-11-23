@@ -39,10 +39,18 @@ final class GhosttyPaneTextTests: XCTestCase {
     }
 
     private func lines(of surface: GhosttySurface, until done: ([String]) -> Bool) -> [String] {
+        poll({ surface.text(lastLines: 10_000)?.components(separatedBy: "\n") ?? [] }, until: done)
+    }
+
+    private func activeScreen(of surface: GhosttySurface, until done: ([String]) -> Bool) -> [String] {
+        poll({ surface.activeScreenText?.components(separatedBy: "\n").filter { !$0.isEmpty } ?? [] }, until: done)
+    }
+
+    private func poll(_ read: () -> [String], until done: ([String]) -> Bool) -> [String] {
         let deadline = Date().addingTimeInterval(10)
         var lines: [String] = []
         while Date() < deadline {
-            lines = surface.text(lastLines: 10_000)?.components(separatedBy: "\n") ?? []
+            lines = read()
             if done(lines) { return lines }
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
@@ -72,6 +80,7 @@ final class GhosttyPaneTextTests: XCTestCase {
         XCTAssertEqual(tail, (4901...5000).map(String.init))
     }
 
+    // `cellMetrics` moves before libghostty's io thread resizes the grid, so the screen is read once it spans the grid.
     func test_theActiveScreenIsTheBottomRowsEvenWhenScrolledBack() throws {
         let surface = try mounted("/bin/sh", ["-c", "seq 5000; sleep 100"])
         _ = lines(of: surface) { $0.contains("5000") }
@@ -79,9 +88,9 @@ final class GhosttyPaneTextTests: XCTestCase {
         surface.scroll(.top)
         _ = lines(of: surface) { _ in !(0..<rows).contains { surface.text(viewportRow: $0) == "5000" } }
 
-        let screen = surface.activeScreenText?.components(separatedBy: "\n").filter { !$0.isEmpty }
+        let screen = activeScreen(of: surface) { $0.count == rows - 1 }
 
-        XCTAssertEqual(screen?.last, "5000")
-        XCTAssertEqual(screen?.first, String(5000 - rows + 2), "the screen's rows, not the scrollback above them")
+        XCTAssertEqual(screen.last, "5000")
+        XCTAssertEqual(screen.first, String(5000 - rows + 2), "the screen's rows, not the scrollback above them")
     }
 }

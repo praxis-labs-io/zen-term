@@ -83,12 +83,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             ([cmd] + config.args).map(Self.shellWordQuote).joined(separator: " ")
         }
 
+        let ghosttyApp = GhosttyApp.shared(theme: config.theme, behavior: config.behavior)
+        ghosttyApp.seedColorScheme(for: config.theme)
         surfacePtr = Self.withConfigStrings(
             &cfg,
             workingDirectory: config.workingDirectory?.path,
             command: command,
             environment: config.environment
-        ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme, behavior: config.behavior).app, &$0) }
+        ) { ghostty_surface_new(ghosttyApp.app, &$0) }
 
         hostView.surfacePtr = surfacePtr
 
@@ -197,12 +199,11 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         adoptGridBaseline()
     }
 
-    // From the background, not `effectiveAppearance`, which reads light for a dark theme on a light system.
     private func syncColorScheme() {
         guard let surfacePtr, let background = backgroundOverride ?? lastTheme?.background else {
             return
         }
-        let scheme = background.isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT
+        let scheme = GhosttyApp.colorScheme(of: background)
         guard scheme != lastReportedScheme else { return }
         lastReportedScheme = scheme
         ghostty_surface_set_color_scheme(surfacePtr, scheme)
