@@ -19,6 +19,22 @@ private final class ButtonOverlay: NSView, ModalOverlay {
     func animateOut(completion: @escaping () -> Void) { completion() }
 }
 
+private final class IconPickerOverlay: NSView, ModalOverlay {
+    let picker = IconPickerField(selected: IconCatalog.defaultSymbol)
+
+    init() {
+        super.init(frame: .zero)
+        picker.frame = NSRect(x: 40, y: 200, width: 200, height: ChromeMetrics.Height.control)
+        addSubview(picker)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func focusInitialResponder() {}
+    func animateIn() {}
+    func animateOut(completion: @escaping () -> Void) { completion() }
+}
+
 @MainActor
 final class ModalHoverCoverTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -142,7 +158,7 @@ final class ModalHoverCoverTests: WindowTestCase {
         let c = makeWindow()
         let button = AppButton(title: "Retry", variant: .secondary)
         button.frame = NSRect(x: 40, y: 40, width: 80, height: ChromeMetrics.Height.control)
-        c.window.contentView?.addSubview(button)
+        c.window.contentView?.addSubview(button, positioned: .below, relativeTo: nil)
         c.presentModalForTesting(ButtonOverlay())
 
         button.mouseEntered(with: try crossing(.mouseEntered, over: button))
@@ -160,5 +176,20 @@ final class ModalHoverCoverTests: WindowTestCase {
         chip.mouseEntered(with: try crossing(.mouseEntered, over: chip))
 
         XCTAssertFalse(chip.isCloseVisibleForTesting, "the owner's flag and the modal's cover are separate")
+    }
+
+    func test_aPopoverOpenedInsideAModal_keepsItsHover() throws {
+        let c = makeWindow()
+        let overlay = IconPickerOverlay()
+        c.presentModalForTesting(overlay)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        overlay.picker.openForTesting()
+        let card = try XCTUnwrap(c.window.contentView?.subviews.last)
+        let cells = descendants(of: card).compactMap { $0 as? IconButton }
+        let cell = try XCTUnwrap(cells.last { $0 !== overlay.picker.highlightedCellForTesting })
+
+        cell.mouseEntered(with: try crossing(.mouseEntered, over: cell))
+
+        XCTAssertEqual(cell.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
     }
 }

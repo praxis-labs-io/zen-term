@@ -16,9 +16,25 @@ final class ControlState {
     var isHoverSuppressed: Bool { isOwnerSuppressed || isUnderHoverCover }
     var showsHover: Bool { isHovered && !isHoverSuppressed }
 
+    // A popover opened from inside the cover mounts on the content view, above the cover rather than in it.
     private var isUnderHoverCover: Bool {
-        guard let cover = (host.window as? HostWindow)?.hoverCover else { return false }
-        return !host.isDescendant(of: cover)
+        guard let cover = (host.window as? HostWindow)?.hoverCover, !host.isDescendant(of: cover) else { return false }
+        guard let shared = host.ancestorShared(with: cover),
+            let hostBranch = Self.branch(of: host, under: shared),
+            let coverBranch = Self.branch(of: cover, under: shared),
+            let hostIndex = shared.subviews.firstIndex(of: hostBranch),
+            let coverIndex = shared.subviews.firstIndex(of: coverBranch)
+        else { return true }
+        return hostIndex < coverIndex
+    }
+
+    private static func branch(of view: NSView, under ancestor: NSView) -> NSView? {
+        var view = view
+        while let parent = view.superview {
+            if parent === ancestor { return view }
+            view = parent
+        }
+        return nil
     }
 
     init(host: NSView, hoverChanged: @escaping () -> Void, focusChanged: @escaping () -> Void) {
