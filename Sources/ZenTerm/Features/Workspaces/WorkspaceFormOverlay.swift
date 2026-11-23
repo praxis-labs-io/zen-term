@@ -459,10 +459,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     private func performDelete() {
         errorLabel.clear()
-        if let failure = onDelete?() {
-            errorLabel.show(failure)
-            focus(deleteButton)
-        }
+        if let failure = onDelete?() { errorLabel.show(failure) }
+        if !isDismissing { focus(deleteButton) }
     }
 
     private var folderName: String { WorkspaceForm.folderName(folderPicker.text) }

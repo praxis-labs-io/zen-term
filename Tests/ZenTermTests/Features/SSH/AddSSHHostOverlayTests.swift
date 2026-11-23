@@ -390,7 +390,12 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
         let overlay = mount(devbox, removable: true)
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        try XCTUnwrap(button("Remove", in: card)).onTap()
         XCTAssertEqual(visibleMessage(in: overlay), removalFailure)
+        let cardLeft = expectation(
+            for: NSPredicate { _, _ in card.superview == nil }, evaluatedWith: nil)
+        wait(for: [cardLeft], timeout: 2)
         nameField(in: overlay).setText("The \"box\"")
 
         submitByChord()

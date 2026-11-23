@@ -147,6 +147,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
 
         delete.onTap()
+        try XCTUnwrap(button(in: try XCTUnwrap(confirmCard(in: overlay)), title: "Delete")).onTap()
 
         XCTAssertEqual(sink.deleted, 1)
         XCTAssertTrue(visibleText(in: overlay).contains(try XCTUnwrap(sink.deleteFailure)))

@@ -51,12 +51,6 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     override var isShowingOverlaidCard: Bool { confirm.isShowing }
 
-    // Save's plain-Return equivalent would otherwise answer a Return meant for the card's focused button.
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard confirm.isShowing else { return super.performKeyEquivalent(with: event) }
-        return confirm.card?.performKeyEquivalent(with: event) ?? false
-    }
-
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
     func focusInitialResponder() {
