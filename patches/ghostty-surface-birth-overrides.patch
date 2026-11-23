@@ -1,0 +1,15 @@
+diff --git i/src/Surface.zig w/src/Surface.zig
+index 369bb23..0d01b5a 100644
+--- i/src/Surface.zig
++++ w/src/Surface.zig
+@@ -499,6 +499,10 @@ pub fn init(
+         // don't need to dupe memory here because termio will derive
+         // it. We preserve this so directory inheritance works.
+         c.@"working-directory" = config_original.@"working-directory";
++        c.command = config_original.command;
++        c.@"wait-after-command" = config_original.@"wait-after-command";
++        c.env = config_original.env;
++        c.input = config_original.input;
+         break :config c;
+     } else config_original;
+ 

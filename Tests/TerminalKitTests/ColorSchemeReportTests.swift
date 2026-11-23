@@ -28,6 +28,14 @@ final class ColorSchemeReportTests: XCTestCase {
         XCTAssertEqual(replies.last, Self.lightReply, "the repaint to light must move the report")
     }
 
+    func test_bornDarkWhileTheAppIsLightStillRunsItsCommand() throws {
+        _ = NSApplication.shared
+        let light = Self.theme(background: Self.lightBackground)
+        GhosttyApp.shared(theme: light, behavior: .default).updateConfig(theme: light, behavior: .default)
+        let replies = try schemeReplies(background: Self.darkBackground, queries: 1)
+        XCTAssertEqual(replies.first, Self.darkReply, "the dark pane's own command must run and report dark")
+    }
+
     func test_steppedFontSizeSurvivesTheSchemePush() throws {
         let base = try schemeAndGrid(fontSize: 13)
         let stepped = try schemeAndGrid(fontSize: 26)

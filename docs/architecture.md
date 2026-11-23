@@ -86,6 +86,9 @@ and rebases any that fail. `ghostty-program-status.patch` makes termio answer th
 support query and raise `GHOSTTY_ACTION_PROGRAM_STATUS` with the program's own report (state,
 kind, app, decoded msg and title), dropping reports about a sub-record (`id=`). The answer
 matters as much as the action: Claude Code sends 7501 only to a terminal that answers its query.
+`ghostty-surface-birth-overrides.patch` keeps a new surface's command, environment, initial
+input and `wait-after-command` when its config is rebuilt at birth for a color scheme that
+differs from the one the app config was built with.
 
 **Never call `Bundle.module` in shippable code.** In a real `.app` it checks the
 bundle root and a build-machine path, then `fatalError`s, so it works on the build
@@ -117,8 +120,8 @@ share `SystemReport`, and never carry the environment or config.
   without the line: only `window-theme` may move.
 - **A surface is born with the app's color scheme.** A program can ask before
   `ghostty_surface_set_color_scheme` lands, so `GhosttyApp` moves the app's scheme to the
-  theme's before each birth. It re-pushes the app config on a move: a surface born while
-  the app's scheme and its config's disagree loses its command, directory and environment.
+  theme's before each birth, and libghostty rebuilds the new surface's config for that
+  scheme, keeping its overrides through `ghostty-surface-birth-overrides.patch`.
 - **Shader paths are absolute** (a relative one resolves against the temp config file).
   Shaders get sRGB colors; use them raw. Layer opacity follows `background-alpha` only.
   Only MIT-licensed shaders are bundleable.

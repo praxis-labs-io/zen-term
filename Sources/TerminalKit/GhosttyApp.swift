@@ -65,7 +65,7 @@ final class GhosttyApp {
             fatalError("ghostty_app_new failed")
         }
         self.app = app
-        seedColorScheme(for: theme)
+        adoptColorScheme(for: theme)
         ghostty_app_set_focus(app, NSApp.isActive)
         observeAppFocus()
     }
@@ -117,20 +117,12 @@ final class GhosttyApp {
     }
 
     // A new surface's child can ask for the scheme before `ghostty_surface_set_color_scheme` lands.
-    func seedColorScheme(for theme: TerminalTheme?) {
-        guard adoptColorScheme(for: theme) else { return }
-        ghostty_app_update_config(app, config)
-    }
-
-    // libghostty drops a new surface's command when the app's scheme differs from its config's, so a change re-pushes config.
-    @discardableResult
-    private func adoptColorScheme(for theme: TerminalTheme?) -> Bool {
-        guard let background = theme?.background else { return false }
+    func adoptColorScheme(for theme: TerminalTheme?) {
+        guard let background = theme?.background else { return }
         let scheme = Self.colorScheme(of: background)
-        guard scheme != colorScheme else { return false }
+        guard scheme != colorScheme else { return }
         colorScheme = scheme
         ghostty_app_set_color_scheme(app, scheme)
-        return true
     }
 
     // From the background, not `effectiveAppearance`, which reads light for a dark theme on a light system.

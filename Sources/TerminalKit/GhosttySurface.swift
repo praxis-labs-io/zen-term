@@ -84,7 +84,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         }
 
         let ghosttyApp = GhosttyApp.shared(theme: config.theme, behavior: config.behavior)
-        ghosttyApp.seedColorScheme(for: config.theme)
+        ghosttyApp.adoptColorScheme(for: config.theme)
         surfacePtr = Self.withConfigStrings(
             &cfg,
             workingDirectory: config.workingDirectory?.path,
