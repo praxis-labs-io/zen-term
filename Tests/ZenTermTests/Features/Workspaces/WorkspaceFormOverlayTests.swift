@@ -6,8 +6,10 @@ import XCTest
 final class WorkspaceFormOverlayTests: WindowTestCase {
     private final class Sink {
         var submitted: [Workspace] = []
+        var submitFailure: String?
         var cancelled = 0
         var deleted = 0
+        var deleteFailure: String?
     }
 
     private var window: NSWindow?
@@ -23,10 +25,17 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         let sink = Sink()
         let overlay = WorkspaceFormOverlay(
             editing: editing, existingTitles: existingTitles,
-            onSubmit: { sink.submitted.append($0) },
+            onSubmit: {
+                sink.submitted.append($0)
+                return sink.submitFailure
+            },
             onCancel: { sink.cancelled += 1 },
             onDismiss: {},
-            onDelete: withDelete ? { sink.deleted += 1 } : nil)
+            onDelete: withDelete
+                ? {
+                    sink.deleted += 1
+                    return sink.deleteFailure
+                } : nil)
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 900),
@@ -114,6 +123,35 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         _ = window?.contentView?.performKeyEquivalent(with: event)
 
         XCTAssertTrue(sink.submitted.isEmpty)
+    }
+
+    func test_aFailedSave_showsInlineAboveTheButtons_andEditingClearsIt() throws {
+        let (overlay, sink) = mount()
+        sink.submitFailure = "Couldn't write the workspaces file: the volume is read-only."
+        typeFolder(try makeRealDir().path, in: overlay)
+
+        try save(overlay)
+
+        XCTAssertEqual(sink.submitted.count, 1)
+        XCTAssertTrue(visibleText(in: overlay).contains(try XCTUnwrap(sink.submitFailure)))
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: overlay, title: "Add Workspace")), in: window))
+
+        overlay.titleFieldForTesting.onChange?()
+        XCTAssertFalse(visibleText(in: overlay).contains(try XCTUnwrap(sink.submitFailure)))
+    }
+
+    func test_aFailedDelete_showsInline_andFocusesDelete() throws {
+        let existing = Workspace(title: "api", path: try makeRealDir(), tabs: [], env: [:], carry: [])
+        let (overlay, sink) = mount(editing: existing, withDelete: true)
+        sink.deleteFailure = "Couldn't write the workspaces file: the volume is read-only."
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+
+        delete.onTap()
+        try XCTUnwrap(button(in: try XCTUnwrap(confirmCard(in: overlay)), title: "Delete")).onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+        XCTAssertTrue(visibleText(in: overlay).contains(try XCTUnwrap(sink.deleteFailure)))
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window))
     }
 
     func test_theAddCard_opensWithOneShellTab_focusedOnItsMainPane() throws {

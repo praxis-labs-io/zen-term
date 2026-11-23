@@ -1768,8 +1768,9 @@ final class WindowController: NSObject {
         let overlay = ReportIssueOverlay(
             report: .current(),
             onOpenURL: { [weak self] url in
-                NSWorkspace.shared.open(url)
+                guard NSWorkspace.shared.open(url) else { return "Couldn't open your browser." }
                 self?.closeModal()
+                return nil
             },
             onExportDiagnostics: { [weak self] in self?.exportDiagnostics() },
             onCancel: { [weak self] in self?.closeModal() })
@@ -2143,12 +2144,10 @@ final class WindowController: NSObject {
                 editing: workspace,
                 existingTitles: existingTitles,
                 onSubmit: { [weak self] built in
-                    if let originalTitle {
-                        self?.submitWorkspace(
-                            built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
-                    } else {
-                        self?.submitNewWorkspace(built)
-                    }
+                    guard let self else { return nil }
+                    guard let originalTitle else { return self.submitNewWorkspace(built) }
+                    return self.submitWorkspace(
+                        built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
                 },
                 onCancel: done,
                 onDismiss: { [weak self] in self?.closeModal() },
@@ -2160,30 +2159,30 @@ final class WindowController: NSObject {
         }
     }
 
-    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String, then done: @escaping () -> Void) {
+    private func submitWorkspace(
+        _ ws: Workspace, replacing originalTitle: String, then done: @escaping () -> Void
+    ) -> String? {
         do {
             try WorkspacesWriter.update(ws, originalTitle: originalTitle)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Save Workspace",
-                    message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
         done()
+        return nil
     }
 
-    private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
+    private static func workspaceWriteFailure(_ error: Error) -> String {
+        "Couldn't write the workspaces file: \(error.localizedDescription)"
+    }
+
+    private func deleteWorkspace(_ ws: Workspace, then done: @escaping () -> Void) -> String? {
         do {
             try WorkspacesWriter.remove(title: ws.title)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Delete Workspace",
-                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
-        (done ?? reopenSettingsOnWorkspaces)()
+        done()
+        return nil
     }
 
     // Leaves Settings open: rebuilding it would lose the user's place in the list mid-⌥↓.
@@ -2209,18 +2208,15 @@ final class WindowController: NSObject {
         openSettings(landing: .workspaces)
     }
 
-    private func submitNewWorkspace(_ ws: Workspace) {
+    private func submitNewWorkspace(_ ws: Workspace) -> String? {
         do {
             try WorkspacesWriter.append(ws)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Save Workspace",
-                    message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
         closeModal()
         openWorkspace(ws)
+        return nil
     }
 
     private func runCommand(_ chord: KeyInterceptor.ReservedChord) {

@@ -40,8 +40,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private var captureCloseTimer: DispatchWorkItem?
 
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
-    private let submitButton = AppButton(
-        title: "", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+    private lazy var submitButton = ModalShell.submitButton(title: editingFloat == nil ? "Add Tool Float" : "Save")
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
     private let errorLabel = FormErrorLabel(maximumLines: 3)
 
@@ -157,7 +156,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
             spacing: ChromeMetrics.Spacing.s6)
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
-        submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
         submitButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, submitButton] {
             button.isKeyboardFocusable = true
@@ -188,7 +186,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         }
         let actionBar = ModalActionBar(
             leading: onDelete == nil ? [] : [deleteButton], trailing: [cancelButton, submitButton])
-        let footer = Self.vStack([errorLabel, actionBar], spacing: ChromeMetrics.Spacing.s10)
+        let footer = FormCard.footer(actionBar, failure: errorLabel)
 
         return FormCard.content(
             rows: [
@@ -358,10 +356,8 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private func submit() {
         guard !isDismissing, !confirm.isShowing else { return }
         errorLabel.clear()
-        if let firstInvalid = validate(includeRequired: true) {
-            window?.makeFirstResponder(firstInvalid)
-            return
-        }
+        let validation = validate(submitting: true)
+        guard validation.isValid else { return validation.revealFirstInvalid() }
         guard let float = buildFloat() else { return }
         if let failure = onSubmit(float) {
             showFailure(failure)
@@ -418,12 +414,8 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
 
     /// The float grammar has no quote escape, so a `"` can't round-trip.
     @discardableResult
-    private func validate(includeRequired: Bool) -> NSView? {
-        var firstInvalid: NSView?
-        func flag(_ group: LabeledField?, field: NSView, _ message: String?) {
-            group?.setMessage(message)
-            if message != nil, firstInvalid == nil { firstInvalid = field }
-        }
+    private func validate(submitting: Bool) -> FormValidation {
+        var validation = FormValidation()
 
         let title = titleField.text.trimmingCharacters(in: .whitespaces)
         var titleMessage: String?
@@ -433,42 +425,40 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
             titleMessage = "Needs at least one letter or number."
         } else if !title.isEmpty, existingIDs.contains(ToolFloatParser.slug(forTitle: title)) {
             titleMessage = "A tool float with this title already exists."
-        } else if includeRequired, title.isEmpty {
+        } else if submitting, title.isEmpty {
             titleMessage = "Enter a title."
         }
-        flag(titleGroup, field: titleField.field, titleMessage)
+        validation.flag(titleGroup, titleMessage, at: titleField.field)
+
+        validation.flag(
+            chordGroup, submitting && capturedChord == nil ? "Set a shortcut (needs ⌘ ⇧ ⌥ or ⌃)." : nil,
+            at: chordChip)
 
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         var commandMessage: String?
         if command.contains("\"") {
             commandMessage = "Can't contain a \" character."
-        } else if includeRequired, command.isEmpty {
+        } else if submitting, command.isEmpty {
             commandMessage = "Enter a command."
         }
-        flag(commandGroup, field: commandField.field, commandMessage)
+        validation.flag(commandGroup, commandMessage, at: commandField.field)
 
         let dirText = dirPicker.text.trimmingCharacters(in: .whitespaces)
         var dirMessage: String?
         if dirText.contains("\"") {
             dirMessage = "Can't contain a \" character."
-        } else if includeRequired, let dirURL = ToolFloatParser.resolveDir(dirText),
+        } else if submitting, let dirURL = ToolFloatParser.resolveDir(dirText),
             !PathDisplay.isDirectory(dirURL)
         {
             dirMessage = "That folder doesn't exist."
         }
-        flag(dirGroup, field: dirPicker.field.field, dirMessage)
-
-        if includeRequired, capturedChord == nil {
-            flag(chordGroup, field: chordChip, "Set a shortcut (needs ⌘ ⇧ ⌥ or ⌃).")
-        } else {
-            chordGroup?.setMessage(nil)
-        }
+        validation.flag(dirGroup, dirMessage, at: dirPicker.field.field)
 
         let sizeField = firstInvalidSizeField()
-        sizeGroup?.setMessage(sizeField == nil ? nil : "Enter a number from 0.2 to 1.0.")
-        if let sizeField, firstInvalid == nil { firstInvalid = sizeField }
+        validation.flag(
+            sizeGroup, sizeField == nil ? nil : "Enter a number from 0.2 to 1.0.", at: sizeField ?? widthField.field)
 
-        return firstInvalid
+        return validation
     }
 
     private func firstInvalidSizeField() -> NSView? {
@@ -484,7 +474,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
 
     private func refreshValidity() {
         errorLabel.clear()
-        validate(includeRequired: false)
+        validate(submitting: false)
     }
 
     private func fraction(_ box: FieldBox) -> CGFloat {
