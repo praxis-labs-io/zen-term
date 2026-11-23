@@ -252,6 +252,21 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         XCTAssertEqual(try state(), .current)
     }
 
+    func test_aSetupALaterBuildInstalledIsLeftQuietly() throws {
+        let later = ClaudeSetupFiles(skill: Data("later skill".utf8), hook: files.hook, build: 20)
+        _ = try ClaudeSetup(configRoot: try claudeRoot(), files: later).install()
+        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
+            skill: files.skill, hook: files.hook, shippedDigests: files.shippedDigests, build: 10)
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+        settle()
+
+        XCTAssertNil(toast(titled: Self.updateTitle, in: c))
+        XCTAssertNil(toast(titled: Self.updatedTitle, in: c))
+        XCTAssertEqual(try installedSkill(), later.skill)
+    }
+
     func test_skipThisVersionStopsTheOfferUntilTheFilesChange() throws {
         try install(skill: edited)
         let first = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))

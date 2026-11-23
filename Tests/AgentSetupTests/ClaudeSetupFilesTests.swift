@@ -23,6 +23,10 @@ final class ClaudeSetupFilesTests: XCTestCase {
         try Data("skill".utf8).write(to: claude.appendingPathComponent("SKILL.md"))
         try Data("hook".utf8).write(to: claude.appendingPathComponent(ClaudeSetup.hookFileName))
         try Data("aaa\nbbb\n".utf8).write(to: claude.appendingPathComponent(ClaudeSetupFiles.shippedDigestsFileName))
+        try Data(
+            #"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleVersion</key>"#
+                .appending("<string>412</string></dict></plist>").utf8
+        ).write(to: contents.appendingPathComponent("Info.plist"))
         let macOS = contents.appendingPathComponent("MacOS")
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
         let zen = macOS.appendingPathComponent("zen")
@@ -42,7 +46,9 @@ final class ClaudeSetupFilesTests: XCTestCase {
         let files = ClaudeSetupFiles.bundled(beside: try makeApp())
 
         XCTAssertEqual(
-            files, ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8), shippedDigests: ["aaa", "bbb"]))
+            files,
+            ClaudeSetupFiles(
+                skill: Data("skill".utf8), hook: Data("hook".utf8), shippedDigests: ["aaa", "bbb"], build: 412))
     }
 
     func test_readsThemThroughASymlinkToZen() throws {

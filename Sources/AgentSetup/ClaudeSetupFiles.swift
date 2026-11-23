@@ -11,11 +11,14 @@ public struct ClaudeSetupFiles: Equatable, Sendable {
     public let hook: Data
     /// The SHA-256 hex digest of every skill and hook a build has shipped.
     public let shippedDigests: Set<String>
+    /// The `CFBundleVersion` of the app that ships these copies; nil for a build from source.
+    public let build: Int?
 
-    public init(skill: Data, hook: Data, shippedDigests: Set<String> = []) {
+    public init(skill: Data, hook: Data, shippedDigests: Set<String> = [], build: Int? = nil) {
         self.skill = skill
         self.hook = hook
         self.shippedDigests = shippedDigests
+        self.build = build
     }
 
     /// Names this pair of files: equal only for builds that ship the same skill and hook.
@@ -34,8 +37,9 @@ public struct ClaudeSetupFiles: Equatable, Sendable {
     /// Reads the copies shipped beside `executable`, following a symlink to it; nil when none are there.
     public static func bundled(beside executable: URL? = Bundle.main.executableURL) -> ClaudeSetupFiles? {
         guard let folder = executable?.resolvingSymlinksInPath().deletingLastPathComponent() else { return nil }
+        let contents = folder.deletingLastPathComponent()
         let candidates = [
-            folder.deletingLastPathComponent().appendingPathComponent("Resources/\(bundleName).bundle"),
+            contents.appendingPathComponent("Resources/\(bundleName).bundle"),
             folder.appendingPathComponent("\(bundleName).bundle"),
         ]
         for candidate in candidates {
@@ -47,8 +51,13 @@ public struct ClaudeSetupFiles: Equatable, Sendable {
             else { continue }
             let shipped = Set(
                 digests.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) })
-            return ClaudeSetupFiles(skill: skill, hook: hook, shippedDigests: shipped)
+            return ClaudeSetupFiles(skill: skill, hook: hook, shippedDigests: shipped, build: build(of: contents))
         }
         return nil
+    }
+
+    private static func build(of contents: URL) -> Int? {
+        let info = NSDictionary(contentsOf: contents.appendingPathComponent("Info.plist"))
+        return (info?["CFBundleVersion"] as? String).flatMap { Int($0) }
     }
 }

@@ -88,7 +88,7 @@ final class SettingsGeneralSection: SettingsFormSection {
         switch state {
         case .outdated: "An older version is installed. Choose On to update it."
         case .edited: "Your copy has edits. Choose On to replace it."
-        case .notInstalled, .current: nil
+        case .notInstalled, .newer, .current: nil
         }
     }
 

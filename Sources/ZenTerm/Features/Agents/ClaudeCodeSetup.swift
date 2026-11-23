@@ -48,7 +48,7 @@ enum ClaudeCodeSetup {
             switch try setup.state() {
             case .notInstalled: return .notInstalled
             case .edited: return .edited(version: setup.files.version)
-            case .current: return .current
+            case .current, .newer: return .current
             case .outdated:
                 do throws(ClaudeSetupError) {
                     _ = try setup.install()

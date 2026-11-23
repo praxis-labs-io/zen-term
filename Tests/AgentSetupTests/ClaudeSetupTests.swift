@@ -148,6 +148,35 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertEqual(try setup.state(), .edited)
     }
 
+    private func build(_ number: Int, skill: String, hook: String = "hook v1\n") -> ClaudeSetup {
+        ClaudeSetup(
+            configRoot: root,
+            files: ClaudeSetupFiles(skill: Data(skill.utf8), hook: Data(hook.utf8), build: number))
+    }
+
+    func test_filesALaterBuildInstalledAreLeftAlone() throws {
+        _ = try build(20, skill: "skill v2\n").install()
+
+        XCTAssertEqual(try build(10, skill: "skill v1\n").state(), .newer)
+        XCTAssertEqual(try build(20, skill: "skill v2\n").state(), .current)
+        XCTAssertEqual(try build(30, skill: "skill v3\n").state(), .edited)
+    }
+
+    func test_anEditAfterALaterBuildInstalledReadsAsEdited() throws {
+        _ = try build(20, skill: "skill v2\n").install()
+        try Data("skill v2\nmy own rule\n".utf8).write(to: setup.skillURL)
+
+        XCTAssertEqual(try build(10, skill: "skill v1\n").state(), .edited)
+    }
+
+    func test_anEarlierBuildInstallingAgainTakesTheStamp() throws {
+        _ = try build(20, skill: "skill v2\n").install()
+        _ = try build(10, skill: "skill v1\n").install()
+
+        XCTAssertEqual(try build(10, skill: "skill v1\n").state(), .current)
+        XCTAssertEqual(try build(15, skill: "skill v1.5\n").state(), .edited)
+    }
+
     func test_installReplacesAnEditedSkill() throws {
         _ = try setup.install()
         try Data("my own skill\n".utf8).write(to: setup.skillURL)
@@ -185,6 +214,15 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertNotNil((try settings()["hooks"] as? [String: Any])?["Stop"])
         XCTAssertEqual(try setup.state(), .notInstalled)
         XCTAssertEqual(try setup.remove(), [])
+    }
+
+    func test_removeDeletesTheStamp() throws {
+        _ = try build(20, skill: "skill v2\n").install()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: setup.stampURL.path))
+
+        _ = try setup.remove()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: setup.stampURL.path))
     }
 
     func test_removeDropsTheKeysItLeftEmpty() throws {

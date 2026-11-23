@@ -9,10 +9,13 @@ public struct ClaudeSetup: Sendable {
         /// A file holds edits no build shipped, a part is missing, or the SessionStart entry is not the one setup
         /// writes, so updating would undo the user's change.
         case edited
+        /// A later build installed these files and they are untouched, so this build must not replace them.
+        case newer
         case current
     }
 
     static let hookFileName = "zenterm-context.sh"
+    static let stampFileName = "zenterm-context.build"
 
     public let configRoot: URL
     public let files: ClaudeSetupFiles
@@ -34,6 +37,7 @@ public struct ClaudeSetup: Sendable {
     public var skillURL: URL { configRoot.appendingPathComponent("skills/zen/SKILL.md") }
     public var hookURL: URL { configRoot.appendingPathComponent("hooks/\(Self.hookFileName)") }
     public var settingsURL: URL { configRoot.appendingPathComponent("settings.json") }
+    var stampURL: URL { configRoot.appendingPathComponent("hooks/\(Self.stampFileName)") }
 
     var hookCommand: String { "bash '\(hookURL.path.replacingOccurrences(of: "'", with: "'\\''"))'" }
 
@@ -45,6 +49,7 @@ public struct ClaudeSetup: Sendable {
         if skill == nil, hook == nil, !settings.hasOwnEntry() { return .notInstalled }
         guard let skill, let hook, settings.isRegistered(command: hookCommand) else { return .edited }
         if skill == files.skill, hook == files.hook { return .current }
+        if try isFromNewerBuild(skill: skill, hook: hook) { return .newer }
         let isShipped = [(skill, files.skill), (hook, files.hook)].allSatisfy { $0 == $1 || files.isShipped($0) }
         return isShipped ? .outdated : .edited
     }
@@ -66,6 +71,9 @@ public struct ClaudeSetup: Sendable {
             let verb = wasRegistered ? "Updated" : "Added"
             changes.append("\(verb) the SessionStart entry in \(settingsURL.path)")
         }
+        if let build = files.build {
+            _ = try place(Data("\(build) \(files.version)\n".utf8), at: stampURL)
+        }
         return changes
     }
 
@@ -85,7 +93,15 @@ public struct ClaudeSetup: Sendable {
         if try delete(hookURL) {
             changes.append("Removed the session hook from \(hookURL.path)")
         }
+        _ = try delete(stampURL)
         return changes
+    }
+
+    private func isFromNewerBuild(skill: Data, hook: Data) throws(ClaudeSetupError) -> Bool {
+        guard let running = files.build, let stamp = try contents(of: stampURL) else { return false }
+        let fields = String(decoding: stamp, as: UTF8.self).split(whereSeparator: \.isWhitespace)
+        guard fields.count == 2, let installer = Int(fields[0]) else { return false }
+        return installer > running && fields[1] == ClaudeSetupFiles(skill: skill, hook: hook).version
     }
 
     private func contents(of url: URL) throws(ClaudeSetupError) -> Data? {
