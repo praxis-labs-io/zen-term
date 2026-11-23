@@ -198,8 +198,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 
 - **A window starts with one workspace, with no config entry**, and shows either a workspace
   or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
-  config entry is named "Workspace N", the lowest number no open workspace in the window holds,
+  config entry is named for its active tab's focused pane's folder, live, by the
+  `PathDisplay.folderName` its tab's name reads (so at home it reads as the home folder's name),
   or the ⌘P query when New Workspace is chosen with one (its row reads `New Workspace “<query>”`).
+  Two can share a name. A name change re-reads every picker (`refreshWorkspaceNames`).
   Rename Workspace pins a session name over that given name (`pinnedName ?? givenName`), the
   way Rename Tab pins a tab's. It is never written to the workspaces file, so a configured
   workspace keeps its config title as its identity, and empty clears it. A renamed worktree

@@ -15,6 +15,8 @@ final class ControlWorktreeTests: WindowTestCase {
     private var root: URL!
     private var repo: URL!
 
+    private var startFolderName: String { PathDisplay.folderName(FileManager.default.temporaryDirectory) ?? "" }
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
@@ -145,7 +147,7 @@ final class ControlWorktreeTests: WindowTestCase {
         let made = try result(
             send(.worktreeCreate, ControlArgs(branch: "feat/x", open: true), from: caller), as: WorktreeResult.self)
 
-        XCTAssertEqual(names(in: c), ["Workspace 1", "Repo", "Repo: feat/x", "Other"])
+        XCTAssertEqual(names(in: c), [startFolderName, "Repo", "Repo: feat/x", "Other"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
         XCTAssertEqual(made.workspace?.title, "Repo: feat/x")
         XCTAssertEqual(made.workspace?.worktree, ListResult.Worktree(name: "feat/x", parent: repo.path))

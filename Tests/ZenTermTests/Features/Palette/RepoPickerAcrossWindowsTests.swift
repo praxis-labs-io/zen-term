@@ -12,6 +12,8 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
     private var second: WindowController?
     private var tempRoot: URL!
 
+    private var startFolderName: String { PathDisplay.folderName(FileManager.default.temporaryDirectory) ?? "" }
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
@@ -179,8 +181,8 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
 
         pressReturn(in: try openPicker(in: one, on: "Alpha"))
 
-        XCTAssertEqual(one.workspaceNamesForTesting, ["Workspace 1"], "no second copy in the asking window")
-        XCTAssertEqual(two.workspaceNamesForTesting, ["Workspace 1", "Alpha"], "nor a second in the holder")
+        XCTAssertEqual(one.workspaceNamesForTesting, [startFolderName], "no second copy in the asking window")
+        XCTAssertEqual(two.workspaceNamesForTesting, [startFolderName, "Alpha"], "nor a second in the holder")
         XCTAssertEqual(two.activeWorkspaceIDForTesting, alpha, "the window holding it switches to it")
         XCTAssertTrue(
             two.controllerForTesting(tab: alphaTab)?.allSurfaces.first === alphaSurface,
@@ -237,7 +239,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
                 ($0 as? RepoPickerOverlay.RowView)?.running?.window == two.windowID
             })
         else {
-            return XCTFail("no row is held by the other window, and both call their first Workspace 1")
+            return XCTFail("no row is held by the other window, and both name their first after the same folder")
         }
 
         XCTAssertEqual(
@@ -246,8 +248,8 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
 
         picker.activateRow(at: index)
 
-        XCTAssertEqual(one.workspaceNamesForTesting, ["Workspace 1"], "nothing starts in the asking window")
-        XCTAssertEqual(two.workspaceNamesForTesting, ["Workspace 1"], "nor in the one holding it")
+        XCTAssertEqual(one.workspaceNamesForTesting, [startFolderName], "nothing starts in the asking window")
+        XCTAssertEqual(two.workspaceNamesForTesting, [startFolderName], "nor in the one holding it")
         XCTAssertEqual(two.activeWorkspaceIDForTesting, held, "the window holding it is raised on it")
         XCTAssertTrue(pickers(in: one).isEmpty, "the picker closes")
     }
@@ -269,8 +271,8 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
 
         pressReturn(in: try openPicker(in: one, on: "Alpha"))
 
-        XCTAssertEqual(one.workspaceNamesForTesting, ["Workspace 1", "Alpha"])
-        XCTAssertEqual(two.workspaceNamesForTesting, ["Workspace 1"])
+        XCTAssertEqual(one.workspaceNamesForTesting, [startFolderName, "Alpha"])
+        XCTAssertEqual(two.workspaceNamesForTesting, [startFolderName])
     }
 
     func test_aPickerOpenInAnotherWindow_marksTheWorktreeWhenItGoes() throws {

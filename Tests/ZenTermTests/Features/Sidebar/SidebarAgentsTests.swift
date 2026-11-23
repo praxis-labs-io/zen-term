@@ -407,12 +407,13 @@ final class SidebarAgentsTests: WindowTestCase {
         let agent = try focusedAgent(c)
         c.identifyAgentForTesting(agent.id, name: "claude")
         XCTAssertEqual(c.agentRowForTesting(agent.id)?.summary, "claude", "no title falls back to the name")
-        XCTAssertEqual(c.agentRowForTesting(agent.id)?.detail, "Workspace 1", "the second line is the place alone")
+        XCTAssertEqual(
+            c.agentRowForTesting(agent.id)?.detail, PathDisplay.homeName, "the second line is the place alone")
 
         retitle(agent, "✳ Fix the sidebar")
         XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition: the title moved no state")
         XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Fix the sidebar", "a new pane title re-renders the row")
-        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Claude Code, Idle, Workspace 1")
+        XCTAssertEqual(rows(c).first?.accessibilityValue() as? String, "Claude Code, Idle, \(PathDisplay.homeName)")
 
         retitle(agent, "✳ Review the diff")
         XCTAssertEqual(rows(c).first?.summaryTextForTesting, "Review the diff", "and so does the next")
@@ -423,7 +424,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(
             row.accessibilityLabel(), "Review the diff, Wants to run swift test",
             "VoiceOver names the row before its ask, or two asking rows sound alike")
-        XCTAssertEqual(row.accessibilityValue() as? String, "Claude Code, Waiting, Workspace 1")
+        XCTAssertEqual(row.accessibilityValue() as? String, "Claude Code, Waiting, \(PathDisplay.homeName)")
         try hover(row, in: c)
         XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test", "the tooltip keeps the ask")
     }

@@ -7,7 +7,12 @@ import TerminalKit
 final class WorkspaceController {
     let id: WorkspaceID
     let isConfigured: Bool
-    let givenName: String
+    // Nil for a session: an unconfigured workspace nobody named reads as its active tab's folder, as the tab does.
+    private let chosenName: String?
+    var givenName: String {
+        chosenName ?? activeController?.paneFolder.flatMap(PathDisplay.folderName) ?? PathDisplay.folderName(folder)
+            ?? PathDisplay.homeName
+    }
     // Session-only: a rename never reaches the workspaces file, so the config title stays the identity Settings edits.
     var pinnedName: String?
     var name: String { host.map { GeneralConfig.current.displayName(of: $0) } ?? pinnedName ?? givenName }
@@ -26,12 +31,12 @@ final class WorkspaceController {
     private var titleByTab: [TabID: String] = [:]
 
     init(
-        id: WorkspaceID, isConfigured: Bool, name: String, folder: URL, firstTab: TabID,
+        id: WorkspaceID, isConfigured: Bool, name: String?, folder: URL, firstTab: TabID,
         origin: WorktreeOrigin? = nil, seat: Int? = nil, connection: SSHConnection? = nil
     ) {
         self.id = id
         self.isConfigured = isConfigured
-        self.givenName = name
+        self.chosenName = name
         self.folder = folder
         self.origin = origin
         self.connection = connection

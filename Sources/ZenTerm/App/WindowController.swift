@@ -427,7 +427,7 @@ final class WindowController: NSObject {
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
         let firstWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), isConfigured: false, name: Self.unconfiguredName(among: []),
+            id: WorkspaceID(raw: 1), isConfigured: false, name: nil,
             folder: initialCWD ?? ShellLaunch.defaultCWD, firstTab: firstID)
         workspaces = [firstWorkspace]
         selection = .workspace(firstWorkspace)
@@ -774,6 +774,7 @@ final class WindowController: NSObject {
             }
         }
         if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
+        if refreshWorkspaceNames() { changed = true }
         if changed { renderTabBar() }
         if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(programIcon) != shown }) {
             renderAgents()
@@ -783,6 +784,19 @@ final class WindowController: NSObject {
         trackAgentExits()
         checkForRemovedWorktrees()
         sidebar.refreshBranches()
+    }
+
+    private var shownWorkspaceNames: [WorkspaceID: String] = [:]
+
+    // A session's name follows its active tab's folder, so the pickers here and in other windows re-read it.
+    @discardableResult
+    private func refreshWorkspaceNames() -> Bool {
+        let names = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0.name) })
+        guard names != shownWorkspaceNames else { return false }
+        shownWorkspaceNames = names
+        refreshOpenPicker()
+        onOpenWorkspacesChanged?()
+        return true
     }
 
     private var isCheckingForRemovedWorktrees = false
@@ -882,13 +896,6 @@ final class WindowController: NSObject {
     private func mintWorkspaceID() -> WorkspaceID {
         defer { nextWorkspaceID += 1 }
         return WorkspaceID(raw: nextWorkspaceID)
-    }
-
-    private static func unconfiguredName(among names: [String]) -> String {
-        let taken = Set(names)
-        var number = 1
-        while taken.contains("Workspace \(number)") { number += 1 }
-        return "Workspace \(number)"
     }
 
     enum SlideEdge { case fromRight, fromLeft, fromBottom, fromTop }
@@ -2779,12 +2786,11 @@ final class WindowController: NSObject {
     }
 
     private func appendUnconfiguredWorkspace(at folder: URL, named name: String? = nil) -> WorkspaceController {
-        appendWorkspace(
-            named: name ?? Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+        appendWorkspace(named: name, at: folder, config: nil)
     }
 
     private func appendWorkspace(
-        named name: String, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
+        named name: String?, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
     ) -> WorkspaceController {
         Log.info("workspace opened", category: .workspace)
         let tabs = (0..<(config?.tabs.count ?? 1)).map { _ in mintTabID() }
@@ -3344,6 +3350,7 @@ final class WindowController: NSObject {
             guard let self, let workspace = self.workspace(of: id), let c = workspace.controller(id)
             else { return }
             workspace.setTitle(c.title, for: id)
+            self.refreshWorkspaceNames()
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }

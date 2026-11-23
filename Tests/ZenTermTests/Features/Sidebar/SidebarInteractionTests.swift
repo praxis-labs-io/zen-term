@@ -242,7 +242,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1:")
+        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "\(PathDisplay.homeName):")
     }
 
     func test_collapsedLead_truncatesALongWorkspaceNameAtATabTitlesWidth() throws {

@@ -96,7 +96,7 @@ final class NewWorkspaceTests: WindowTestCase {
 
         try pressCmdCtrlT(in: c)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName])
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
         XCTAssertEqual(c.tabOrderForTesting.count, 1)
         XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
@@ -114,18 +114,18 @@ final class NewWorkspaceTests: WindowTestCase {
             "a workspace is a place of its own, so it never inherits the pane's folder")
     }
 
-    func test_cmdCtrlT_takesTheLowestNumberNoOpenWorkspaceHolds() throws {
+    func test_cmdCtrlT_workspacesAtOneFolder_shareItsName() throws {
         let c = makeWindow()
         try pressCmdCtrlT(in: c)
         try pressCmdCtrlT(in: c)
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2", "Workspace 3"])
+
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName, PathDisplay.homeName])
+        XCTAssertEqual(Set(c.workspaceIDsForTesting).count, 3, "a shared name never merges them")
 
         c.requestCloseWorkspace(id: c.workspaceIDsForTesting[1])
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 3"])
-
         try pressCmdCtrlT(in: c)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 3", "Workspace 2"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName, PathDisplay.homeName])
     }
 
     func test_closingTheFirstWorkspace_thenCmdCtrlT_givesAWorkspaceBack() throws {
@@ -138,7 +138,7 @@ final class NewWorkspaceTests: WindowTestCase {
 
         try pressCmdCtrlT(in: c)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Alpha", "Workspace 1"])
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Alpha", PathDisplay.homeName])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
 
@@ -150,7 +150,8 @@ final class NewWorkspaceTests: WindowTestCase {
         try pressCmdCtrlT(in: c)
         spawned.forEach { $0.currentDirectory = root }
         try pressCmdCtrlT(in: c)
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2", "Workspace 3"])
+        let rootName = try XCTUnwrap(PathDisplay.folderName(root))
+        XCTAssertEqual(c.workspaceNamesForTesting, [rootName, rootName, PathDisplay.homeName])
 
         let picker = try openPicker(in: c)
         let alpha = try XCTUnwrap(
@@ -172,7 +173,7 @@ final class NewWorkspaceTests: WindowTestCase {
 
         click(row)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [try XCTUnwrap(PathDisplay.folderName(root)), PathDisplay.homeName])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
         XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
         XCTAssertNil(pickerIn(c), "the picker closes")
@@ -196,7 +197,7 @@ final class NewWorkspaceTests: WindowTestCase {
 
         try pressCmdCtrlT(in: c)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName])
         XCTAssertNil(pickerIn(c), "the picker closes")
     }
 
@@ -231,7 +232,7 @@ final class NewWorkspaceTests: WindowTestCase {
         XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace “api server”")
         try command(#selector(NSResponder.insertNewline(_:)), in: picker)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "api server"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, "api server"])
         XCTAssertEqual(c.window.title, "api server")
         XCTAssertNil(pickerIn(c), "the picker closes")
     }
@@ -245,7 +246,7 @@ final class NewWorkspaceTests: WindowTestCase {
 
         XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace")
         try command(#selector(NSResponder.insertNewline(_:)), in: picker)
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName])
     }
 
     func test_arrowingToNewWorkspacePastAMatch_stillNamesItTheQuery() throws {
@@ -259,7 +260,7 @@ final class NewWorkspaceTests: WindowTestCase {
         XCTAssertEqual(picker.selected, 0)
         try command(#selector(NSResponder.insertNewline(_:)), in: picker)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Al"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, "Al"])
     }
 
     func test_cmdCtrlT_withAQueryInThePicker_namesTheWorkspaceTheQuery() throws {
@@ -269,6 +270,6 @@ final class NewWorkspaceTests: WindowTestCase {
 
         try pressCmdCtrlT(in: c)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "scratch"])
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, "scratch"])
     }
 }

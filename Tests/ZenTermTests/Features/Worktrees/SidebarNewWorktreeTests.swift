@@ -12,6 +12,8 @@ final class SidebarNewWorktreeTests: WindowTestCase {
     private var tempRoot: URL!
     private var repo: URL!
 
+    private var startFolderName: String { PathDisplay.folderName(FileManager.default.temporaryDirectory) ?? "" }
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
@@ -232,7 +234,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         create.performClick(nil)
 
         waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
-        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Workspace 1", "Repo", "feature/nested"])
+        XCTAssertEqual(rows(of: c).map(\.titleForTesting), [startFolderName, "Repo", "feature/nested"])
         XCTAssertEqual(rows(of: c)[2].variant, .nested(.worktree))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
@@ -280,7 +282,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
         drainGitStatus()
 
-        XCTAssertNil(rows(of: c)[0].hoverAccessory, "Workspace 1 has no config entry")
+        XCTAssertNil(rows(of: c)[0].hoverAccessory, "the first workspace has no config entry")
         XCTAssertNotNil(rows(of: c)[1].hoverAccessory)
         XCTAssertNil(rows(of: c)[2].hoverAccessory, "a worktree is made from its workspace")
     }
@@ -312,7 +314,8 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try create("feature/second", from: ghost, in: c)
 
-        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Workspace 1", "Repo", "feature/first", "feature/second"])
+        XCTAssertEqual(
+            rows(of: c).map(\.titleForTesting), [startFolderName, "Repo", "feature/first", "feature/second"])
         XCTAssertEqual(rows(of: c)[1].variant, .faint, "the workspace stays closed")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
@@ -596,7 +599,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         XCTAssertEqual(
             menu.itemViewsForTesting.map(\.title), ["Rename Workspace…", "Close Workspace"],
-            "Workspace 1 has no config entry")
+            "the first workspace has no config entry")
     }
 
     func test_collapsingTheSidebar_closesTheMenu() throws {
