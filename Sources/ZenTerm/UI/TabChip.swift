@@ -40,7 +40,7 @@ class TabChip: ControlView, ThemeReapplying {
 
     var onCloseButton: (() -> Void)?
 
-    var showsClose: Bool { isHovered && isClosable }
+    var showsClose: Bool { showsHover && isClosable }
 
     var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
     var isCloseVisibleForTesting: Bool { !closeButton.isHidden }
@@ -141,7 +141,7 @@ class TabChip: ControlView, ThemeReapplying {
             string: title,
             attributes: [
                 .font: Self.chipFont, .kern: Self.titleKern, .paragraphStyle: paragraph,
-                .foregroundColor: chrome.ink(isCurrent || isHovered ? .normal : .subtle),
+                .foregroundColor: chrome.ink(isCurrent || showsHover ? .normal : .subtle),
             ])
         if label.attributedStringValue != styled {
             label.attributedStringValue = styled
@@ -154,7 +154,7 @@ class TabChip: ControlView, ThemeReapplying {
         } else {
             dot.state = nil
         }
-        easeFill(isHovered && !isCurrent ? chrome.fill(.hover) : .clear)
+        easeFill(showsHover && !isCurrent ? chrome.fill(.hover) : .clear)
         updateAccessories()
     }
 

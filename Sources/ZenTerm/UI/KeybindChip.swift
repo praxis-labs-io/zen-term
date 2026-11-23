@@ -93,7 +93,7 @@ final class KeybindChip: ControlView, ThemeReapplying {
         let fill: NSColor
         if isCapturing {
             fill = chrome.fill(.active)
-        } else if hasKeyboardFocus || isHovered {
+        } else if hasKeyboardFocus || showsHover {
             fill = chrome.fill(.hover)
         } else {
             fill = chrome.fill(.rest)

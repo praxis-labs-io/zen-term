@@ -1508,6 +1508,7 @@ final class WindowController: NSObject {
         presentWindowModal(overlay)
         modal = (overlay, kind)
         sidebar.setHoverCovered(true)
+        window.hoverCover = overlay
         overlay.focusInitialResponder()
         overlay.animateIn()
         renderDock()
@@ -1517,6 +1518,7 @@ final class WindowController: NSObject {
         pendingModal = nil
         guard let overlay = modal?.overlay else { return }
         modal = nil
+        window.hoverCover = nil
         sidebar.setHoverCovered(false)
         modalGutter = nil
         overlay.animateOut { overlay.removeFromSuperview() }
@@ -4384,6 +4386,8 @@ final class WindowController: NSObject {
     func pollTitlesForTesting() { refreshTitlesFromCWD() }
 
     func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
+
+    func closeModalForTesting() { closeModal() }
 
     func openWorkspaceForTesting(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         openWorkspace(ws, origin: origin)

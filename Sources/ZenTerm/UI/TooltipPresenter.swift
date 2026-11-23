@@ -32,7 +32,7 @@ final class TooltipPresenter {
         guard owner === source, tooltip != nil else { return }
         tooltip?.removeFromSuperview()
         tooltip = nil
-        present(for: source, label: label, shortcut: shortcut, style: style)
+        present(for: source, label: label, shortcut: shortcut, style: style, fadesIn: false)
     }
 
     func hide(for source: NSView) {
@@ -40,10 +40,13 @@ final class TooltipPresenter {
         teardown()
     }
 
-    private func present(for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style) {
+    private func present(
+        for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style, fadesIn: Bool = true
+    ) {
         guard let window = source.window, let content = window.contentView else { return }
         let tip = ChromeTooltip(label: label, shortcut: shortcut, style: style)
-        tip.show(in: content, anchor: content.convert(source.bounds, from: source), gap: Self.gap)
+        tip.show(
+            in: content, anchor: content.convert(source.bounds, from: source), gap: Self.gap, fadesIn: fadesIn)
         tooltip = tip
         installDismissTriggers(in: window)
     }
@@ -52,7 +55,7 @@ final class TooltipPresenter {
         owner = nil
         pending?.cancel()
         pending = nil
-        tooltip?.removeFromSuperview()
+        tooltip?.dismiss()
         tooltip = nil
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil

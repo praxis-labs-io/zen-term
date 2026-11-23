@@ -75,7 +75,7 @@ final class IconButton: ControlView, ThemeReapplying {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func hoverDidChange() {
-        if !isHovered { tooltip.hide(from: self) }
+        if !showsHover { tooltip.hide(from: self) }
         update()
     }
 
@@ -83,6 +83,7 @@ final class IconButton: ControlView, ThemeReapplying {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        guard !isHoverSuppressed else { return }
         tooltip.show(from: self)
     }
 
@@ -142,7 +143,7 @@ final class IconButton: ControlView, ThemeReapplying {
         let tint: NSColor
         if isActive {
             bg = chrome.fill(.active); tint = chrome.ink(.normal)
-        } else if isHovered {
+        } else if showsHover {
             bg = chrome.fill(.hover); tint = chrome.ink(.normal)
         } else {
             bg = restsFilled ? chrome.fill(.rest) : .clear

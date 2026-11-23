@@ -223,7 +223,7 @@ private final class Segment: ControlView {
         setAccessibilityValue(isSelected)
         setAccessibilityEnabled(isEnabled)
         let chrome = Theme.current.chrome
-        let hovered = isHovered && isEnabled && !isSelected
+        let hovered = showsHover && isEnabled && !isSelected
         let ink: ChromeTheme.InkLevel = !isEnabled ? .faint : (isSelected || hovered ? .normal : .subtle)
         label.textColor = chrome.ink(ink)
         easeFill(hovered ? chrome.fill(.hover) : .clear)

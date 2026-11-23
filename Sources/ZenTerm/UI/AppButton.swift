@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppButton: NSButton {
+final class AppButton: NSButton, HoverSuppressing {
     enum Variant { case primary, secondary, muted, destructive, link }
 
     private static let height = ChromeMetrics.Height.control
@@ -166,6 +166,11 @@ final class AppButton: NSButton {
         CATransaction.commit()
     }
 
+    var isHoverSuppressed: Bool { controlState.isHoverSuppressed }
+    func setHoverSuppressed(_ suppressed: Bool) { controlState.setHoverSuppressed(suppressed) }
+    func hoverCoverDidChange() { controlState.hoverCoverDidChange() }
+    func refreshHover() { controlState.refreshHover() }
+
     override func mouseEntered(with event: NSEvent) { controlState.pointerEntered() }
     override func mouseExited(with event: NSEvent) { controlState.pointerExited() }
     override func resetCursorRects() {
@@ -196,7 +201,7 @@ final class AppButton: NSButton {
     }
 
     private func enabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
-        let isHovered = controlState.isHovered
+        let isHovered = controlState.showsHover
         switch variant {
         case .primary:
             return (chrome.onAccent.nsColor, isHovered ? Self.primaryHoverFill(chrome) : chrome.accent.nsColor)

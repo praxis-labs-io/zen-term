@@ -12,12 +12,13 @@ final class ModeChrome {
     private let cursor = ScrollCursorView()
 
     private var header: PanelHeader?
-    private var headerConstraints: [NSLayoutConstraint] = []
+    private var isHeaderShown = false
     private var contentTopToHeader: NSLayoutConstraint?
     private let contentTopToContainer: NSLayoutConstraint
 
     private var findBar: FindBarView?
-    private var findBarConstraints: [NSLayoutConstraint] = []
+    private var isFindBarShown = false
+    private var slideRuns: [ObjectIdentifier: Int] = [:]
     private var contentBottomToFindBar: NSLayoutConstraint?
     private let contentBottomToContainer: NSLayoutConstraint
 
@@ -80,15 +81,21 @@ final class ModeChrome {
     func setFindBarShown(_ shown: Bool) -> FindBarView? {
         defer { onStripsChanged() }
         guard shown else {
-            findBar?.isHidden = true
-            NSLayoutConstraint.deactivate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
+            guard isFindBarShown, let findBar, let contentBottomToFindBar else { return nil }
+            isFindBarShown = false
+            findBar.isDismissed = true
+            contentBottomToFindBar.isActive = false
             contentBottomToContainer.isActive = true
+            slide(findBar, appearing: false, fromBottom: true)
             return nil
         }
         let bar = findBar ?? makeFindBar()
-        bar.isHidden = false
+        guard !isFindBarShown else { return bar }
+        isFindBarShown = true
+        bar.isDismissed = false
         contentBottomToContainer.isActive = false
-        NSLayoutConstraint.activate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
+        contentBottomToFindBar?.isActive = true
+        slide(bar, appearing: true, fromBottom: true)
         return bar
     }
 
@@ -97,21 +104,37 @@ final class ModeChrome {
     }
 
     var scrollCursorForTesting: ScrollCursorView { cursor }
-    var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
-    var isHeaderVisibleForTesting: Bool { header.map { !$0.isHidden } ?? false }
+    var findBarForTesting: FindBarView? { isFindBarShown ? findBar : nil }
+    var isHeaderVisibleForTesting: Bool { isHeaderShown }
+    var headerViewForTesting: NSView? { header }
     var headerContentForTesting: (title: String, shortcut: String)? { header?.contentForTesting }
     var builtHeaderKeycapForTesting: String? { header?.builtKeycapShortcutForTesting }
 
     private func setHeaderShown(_ shown: Bool) {
-        guard let header, let contentTopToHeader else { return }
+        guard let header, let contentTopToHeader, shown != isHeaderShown else { return }
         defer { onStripsChanged() }
-        header.isHidden = !shown
+        isHeaderShown = shown
         if shown {
             contentTopToContainer.isActive = false
-            NSLayoutConstraint.activate(headerConstraints + [contentTopToHeader])
+            contentTopToHeader.isActive = true
         } else {
-            NSLayoutConstraint.deactivate(headerConstraints + [contentTopToHeader])
+            contentTopToHeader.isActive = false
             contentTopToContainer.isActive = true
+        }
+        slide(header, appearing: shown, fromBottom: false)
+    }
+
+    // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the strip.
+    private func slide(_ strip: NSView, appearing: Bool, fromBottom: Bool) {
+        let key = ObjectIdentifier(strip)
+        let run = (slideRuns[key] ?? 0) + 1
+        slideRuns[key] = run
+        let depth = strip.fittingSize.height + Self.stripInset
+        strip.isHidden = false
+        Motion.slideFade(strip, appearing: appearing, from: CGVector(dx: 0, dy: fromBottom ? -depth : depth)) {
+            [weak self] in
+            guard !appearing, self?.slideRuns[key] == run else { return }
+            strip.isHidden = true
         }
     }
 
@@ -121,11 +144,11 @@ final class ModeChrome {
         view.translatesAutoresizingMaskIntoConstraints = false
         view.isHidden = true
         container.addSubview(view)
-        headerConstraints = [
+        NSLayoutConstraint.activate([
             view.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: padding),
             view.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -padding),
             view.topAnchor.constraint(equalTo: container.topAnchor, constant: Self.stripInset),
-        ]
+        ])
         contentTopToHeader = content.topAnchor.constraint(
             equalTo: view.bottomAnchor, constant: padding)
         header = view
@@ -135,12 +158,13 @@ final class ModeChrome {
     private func makeFindBar() -> FindBarView {
         let bar = FindBarView()
         bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.isHidden = true
         container.addSubview(bar)
-        findBarConstraints = [
+        NSLayoutConstraint.activate([
             bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: padding),
             bar.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -padding),
             bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Self.stripInset),
-        ]
+        ])
         contentBottomToFindBar = content.bottomAnchor.constraint(
             equalTo: bar.topAnchor, constant: -padding)
         findBar = bar

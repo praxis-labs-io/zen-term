@@ -1,6 +1,6 @@
 import AppKit
 
-class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
+class ListRow: ControlView, ThemeReapplying {
     enum Leading: Equatable {
         case symbol(String)
         case swatch(NSColor)
@@ -85,7 +85,6 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     }
     private(set) var content: Content
     private(set) var isTakingKeyboardFocus = false
-    private(set) var isHoverSuppressed = false
     private var isPressed = false
     private let stack = NSStackView()
     // Kept across rebuilds, so a row that re-renders on hover keeps the label its layout and callers hold.
@@ -330,7 +329,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         }
     }
 
-    var showsHover: Bool { isHovered && !isHoverSuppressed && onPointerEnter == nil }
+    override var showsHover: Bool { super.showsHover && onPointerEnter == nil }
 
     private func refreshFill() {
         let chrome = Theme.current.chrome
@@ -361,14 +360,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         } else if !isHoverSuppressed {
             onPointerEnter?()
         }
+        if isHoverSuppressed { hideTooltip() }
         refreshFill()
-    }
-
-    func setHoverSuppressed(_ suppressed: Bool) {
-        guard suppressed != isHoverSuppressed else { return }
-        isHoverSuppressed = suppressed
-        if suppressed { hideTooltip() } else { refreshHover() }
-        hoverDidChange()
     }
 
     // A truncated subtitle shows in full on hover, unless the owner gave the row a tooltip of its own.
