@@ -81,13 +81,15 @@ final class AgentNestingTests: WindowTestCase {
     }
 
     private func run(
-        _ cmd: String, from parent: Pane?, keep: Bool = false, outlivesParent: Bool = false, in c: WindowController
+        _ cmd: String, from parent: Pane?, keep: Bool = false, outlivesParent: Bool = false,
+        split: PaneDirection? = nil, in c: WindowController
     ) throws -> Pane {
         var reply: ControlReply?
         responder(c).respond(
             to: ControlRequest(
                 id: 1, cmd: .paneRun,
-                args: ControlArgs(cmd: cmd, keep: keep ? true : nil, outliveParent: outlivesParent ? true : nil),
+                args: ControlArgs(
+                    cmd: cmd, split: split, keep: keep ? true : nil, outliveParent: outlivesParent ? true : nil),
                 caller: parent.map { ControlCaller(pane: $0.token) })
         ) { reply = $0 }
         let result = try XCTUnwrap(try XCTUnwrap(reply).get() as? PaneRunResult)
@@ -177,10 +179,13 @@ final class AgentNestingTests: WindowTestCase {
             "an agent with no mark leads with the robot, never a blank column")
     }
 
-    func test_aProcessRowsChip_followsItsProgram() throws {
+    func test_aProcessRowsChip_followsItsProgram_inAPaneNoTabChipShows() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let process = try run("htop", from: root, in: c)
+        let process = try run("htop", from: root, split: .right, in: c)
+        let place = try XCTUnwrap(c.pane(token: root.token))
+        c.focus(root.id, in: place.tab)
+        XCTAssertEqual(try XCTUnwrap(c.pane(token: process.token)).tab, place.tab, "precondition: one tab")
         XCTAssertEqual(try row(of: process, in: c).processBadgeForTesting?.process, .shell, "precondition")
 
         process.surface.foregroundProcessGroupID = try jobs.start(named: "htop")

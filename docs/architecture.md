@@ -379,16 +379,18 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   else, for Claude and Codex until they exit, the task in their pane title (`AgentRules.taskTitle`:
   Claude's without its status glyph, Codex's between its prompt and its folder; any other pane
   title is the shell's), else its name. Never its message, which stays in the tooltip and follows
-  the title in the accessibility label, and never a state word. Its second line is its place. It leads
-  with its agent's mark (`ProcessIcon.forAgent`: the robot for an agent with no mark), or the
-  process symbol for one with no name, so rows align.
+  the title in the accessibility label, and never a state word. Its second line is its place, after
+  the agent's name only when its chip is the robot, which cannot say which agent it is. It leads
+  with its agent's process chip (`ProcessIcon.forAgent`: the robot for an agent with no mark or no
+  name), so rows align.
   Its state reaches VoiceOver through the accessibility value.
 - **The Agents rows nest a pane under the agent that started it.** `AgentFamilies` reads each
   row's `PaneRecord` parent and climbs through listed agents to the topmost, so there is one
   level: a helper's helper lists under the top agent and its tooltip names the helper that
   started it. A child is a one-line row (`ListRow` nesting): a helper agent leads with its
-  agent's mark (`ProcessIcon.forAgent`) and shows its own
-  state, a process shows none. A process row is a parented pane with no agent,
+  agent's chip and shows its own state; a process leads with its program's chip, read the way a
+  tab's is, and shows none. The title poll re-renders the list when a process row's chip changes,
+  since a pane that is not its tab's focused one changes no tab chip. A process row is a parented pane with no agent,
   listed until its pane closes or its program finishes: every `pane.run` program reports an
   OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still
   leaves, and a busy reading falling (`BusyFallWatch`, the roster's rule) is the backstop;

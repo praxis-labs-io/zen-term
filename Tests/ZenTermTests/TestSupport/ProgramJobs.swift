@@ -19,7 +19,8 @@ final class ProgramJobs {
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
         }
         XCTAssertEqual(
-            ProcessArguments.programName(of: pid), name, "precondition: the job runs as \(name)", file: file, line: line)
+            ProcessArguments.programName(of: pid), name, "precondition: the job runs as \(name)", file: file, line: line
+        )
         return pid
     }
 

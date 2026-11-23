@@ -96,7 +96,9 @@ at `Border.width`) and the sheen, a fixed alpha mask lit from the top that every
 A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
 step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
 program runs, so a resting shell and a worktree are never branded. Process marks are never SF
-Symbols; a generic chip's glyph is Lucide, unmodified.
+Symbols; a generic chip's glyph is Lucide, unmodified. In a row, a chip takes the leading slot
+a symbol would (`ListRow.Leading.process`, at `.small`): an Agents row, a worktree row in the
+sidebar and the workspace picker.
 
 ## State
 
@@ -216,7 +218,7 @@ takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
 
-A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its mark, dot or spinner on the title's line, and its workspace line runs under the mark (`ListRow.Content.leadingOnTitleLine`).
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line runs under the chip (`ListRow.Content.leadingOnTitleLine`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 
