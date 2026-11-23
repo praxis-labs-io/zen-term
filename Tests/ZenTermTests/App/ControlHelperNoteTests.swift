@@ -773,4 +773,22 @@ final class ControlHelperNoteTests: WindowTestCase {
             try ask + note("review is blocked on a permission prompt; that decision is the user's", from: helper)
                 + note("review is working again; wait on it with zen wait \(token)", from: helper))
     }
+
+    func test_aBlockedNoteHeldPastTheBlockIsDropped() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.blocked(.permission), from: parent)
+        report(.blocked(.permission), from: helper)
+        report(.working, from: helper)
+
+        report(.working, from: parent)
+        clock.advance(ParentNotes.recheck)
+
+        let token = try token(of: helper)
+        XCTAssertEqual(
+            parent.inputs, try note("review is working again; wait on it with zen wait \(token)", from: helper))
+    }
 }

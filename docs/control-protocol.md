@@ -387,7 +387,8 @@ with `enter` sends it:
 - There is no `stopped` note when the child sent its parent a `pane.send` since its turn began,
   when its `status` last became `working` from anything but `blocked`, since that message carries
   the news, unless the parent has sent or pressed anything into it since. A `stopped`, `blocked` or `resumed`
-  note still held when the child's pane closes, as when the parent closes it, is dropped.
+  note still held when the child's pane closes, as when the parent closes it, is dropped, and so
+  is a `blocked` note still held once the child's `status` has left `blocked`.
 - A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
   until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
   dropped.

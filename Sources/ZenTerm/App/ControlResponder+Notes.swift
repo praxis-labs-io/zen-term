@@ -14,12 +14,19 @@ extension ControlResponder {
             guard let parent = parentPlace(of: note) else { return }
             paneDrafts.hold(parent.pane.surfaceID, hangup: ControlHangup()) { [self] in
                 guard let place = parentPlace(of: note), place.window.runsAgent(place.pane),
-                    place.pane.surface.isStarted, note.outlivesHelper || locate(pane: note.helper) != nil
+                    place.pane.surface.isStarted, note.outlivesHelper || locate(pane: note.helper) != nil,
+                    !isStale(note)
                 else { return }
                 if isBlocked() { return hold(note, by: cap) }
                 paste(note.text, from: note.helper, into: place, enter: true)
             }
         }
+    }
+
+    private func isStale(_ note: HelperNote) -> Bool {
+        guard case .blocked = note.change else { return false }
+        guard let helper = locate(pane: note.helper) else { return true }
+        return helper.window.listing(of: helper.pane, in: helper.tab).agent?.status != .blocked
     }
 
     private func parentPlace(of note: HelperNote) -> PanePlace? {
