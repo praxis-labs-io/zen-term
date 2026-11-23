@@ -4031,34 +4031,38 @@ final class WindowController: NSObject {
             presentClaudeSetupPrompt(
                 title: "Teach Claude Code to use zen?",
                 message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName),
-                confirm: "Set up", decline: "Don't ask again"
-            ) { [weak self] in self?.claudeSetupOffer?.declineForGood() }
+                confirm: "Set up", decline: "Don't ask again",
+                onConfirmed: { [weak self] in self?.showClaudeSetupResult($0) },
+                onDeclined: { [weak self] in self?.claudeSetupOffer?.declineForGood() })
         case .edited(let version):
             presentClaudeSetupPrompt(
                 title: "Update zen for Claude Code?", message: Self.claudeUpdateOfferMessage,
-                confirm: "Update", decline: "Skip this version"
-            ) { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) }
+                confirm: "Update", decline: "Skip this version",
+                onConfirmed: { [weak self] in self?.showClaudeUpdateResult($0) },
+                onDeclined: { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) })
         case .updated:
             showClaudeUpdated()
         case .updateFailed(let error):
-            showClaudeSetupFailure(error)
+            showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
         case .current:
             break
         }
     }
 
     private func presentClaudeSetupPrompt(
-        title: String, message: String, confirm: String, decline: String, onDecline: @escaping () -> Void
+        title: String, message: String, confirm: String, decline: String,
+        onConfirmed: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void,
+        onDeclined: @escaping () -> Void
     ) {
         weak var toast: ToastView?
         let actions = [
             ToastAction(title: confirm, kind: .primary) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                ClaudeCodeSetup.refresh(applying: .install) { self?.showClaudeSetupResult($0) }
+                ClaudeCodeSetup.refresh(applying: .install, completion: onConfirmed)
             },
             ToastAction(title: decline, kind: .cancel) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                onDecline()
+                onDeclined()
             },
         ]
         let shown = toasts.showSticky(
@@ -4083,17 +4087,26 @@ final class WindowController: NSObject {
                     variant: .positive, title: "Claude Code can use zen",
                     message: "New Claude sessions load the zen skill."))
         case .failure(let error):
-            showClaudeSetupFailure(error)
+            showClaudeSetupFailure(error, title: "Couldn't set up Claude Code")
         }
     }
+
+    private func showClaudeUpdateResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        switch result {
+        case .success: showClaudeUpdated()
+        case .failure(let error): showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
+        }
+    }
+
+    static let claudeUpdateFailedTitle = "Couldn't update the zen skill"
 
     private func showClaudeUpdated() {
         toasts.show(
             ToastContent(variant: .info, title: "Updated zen for Claude Code", message: "New Claude sessions load it."))
     }
 
-    private func showClaudeSetupFailure(_ error: ClaudeSetupError) {
-        let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
+    private func showClaudeSetupFailure(_ error: ClaudeSetupError, title: String) {
+        let content = ToastContent(variant: .warning, title: title, message: error.message)
         let shown = toasts.showSticky(content, actions: [], showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
     }

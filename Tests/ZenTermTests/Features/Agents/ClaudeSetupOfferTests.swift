@@ -223,7 +223,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
         try start("claude", in: c)
 
-        waitUntil(toastTexts(in: c).contains("Couldn't set up Claude Code"), "the failure")
+        waitUntil(toastTexts(in: c).contains(WindowController.claudeUpdateFailedTitle), "the failure")
         XCTAssertNil(toast(titled: Self.updatedTitle, in: c))
         XCTAssertEqual(try installedSkill(), Data("older".utf8))
     }
@@ -247,7 +247,8 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
         try press("Update", on: try XCTUnwrap(toast(titled: Self.updateTitle, in: c)))
 
-        waitUntil(toastTexts(in: c).contains("Claude Code can use zen"), "the confirmation")
+        waitUntil(toast(titled: Self.updatedTitle, in: c) != nil, "the update confirmation")
+        XCTAssertFalse(toastTexts(in: c).contains("Claude Code can use zen"))
         XCTAssertEqual(try state(), .current)
     }
 
@@ -303,7 +304,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
             XCTAssertLessThanOrEqual(width, ToastView.messageMaxWidth, "wraps: \(line)")
         }
         let titleRoom = ToastView.messageMaxWidth - ChromeMetrics.Height.xs - ChromeMetrics.Spacing.s6
-        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle] {
+        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.claudeUpdateFailedTitle] {
             let width = (title as NSString).size(withAttributes: [.font: ChromeType.font(.body, weight: .semibold)])
                 .width
             XCTAssertLessThanOrEqual(width, titleRoom, "wraps: \(title)")

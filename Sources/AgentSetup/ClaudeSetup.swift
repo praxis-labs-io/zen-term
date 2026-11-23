@@ -6,7 +6,8 @@ public struct ClaudeSetup: Sendable {
         case notInstalled
         /// Every part is installed, and each file differs from this build's only as an earlier build shipped it.
         case outdated
-        /// A file holds edits no build shipped, or a part is missing, so updating would undo the user's change.
+        /// A file holds edits no build shipped, a part is missing, or the SessionStart entry is not the one setup
+        /// writes, so updating would undo the user's change.
         case edited
         case current
     }
@@ -42,8 +43,8 @@ public struct ClaudeSetup: Sendable {
         let skill = try contents(of: skillURL)
         let hook = try contents(of: hookURL)
         if skill == nil, hook == nil, !settings.hasOwnEntry() { return .notInstalled }
-        guard let skill, let hook, settings.hasOwnEntry() else { return .edited }
-        if skill == files.skill, hook == files.hook, settings.isRegistered(command: hookCommand) { return .current }
+        guard let skill, let hook, settings.isRegistered(command: hookCommand) else { return .edited }
+        if skill == files.skill, hook == files.hook { return .current }
         let isShipped = [(skill, files.skill), (hook, files.hook)].allSatisfy { $0 == $1 || files.isShipped($0) }
         return isShipped ? .outdated : .edited
     }

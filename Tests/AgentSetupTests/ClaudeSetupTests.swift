@@ -137,6 +137,17 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)
     }
 
+    func test_anEditedSessionStartEntryReadsAsEdited() throws {
+        _ = try setup.install()
+        let edited = try String(contentsOf: setup.settingsURL, encoding: .utf8)
+            .replacingOccurrences(of: "\"timeout\" : 5", with: "\"timeout\" : 10")
+        XCTAssertTrue(edited.contains("\"timeout\" : 10"))
+        try writeSettings(edited)
+
+        XCTAssertEqual(try newer(skill: Data("skill v2\n".utf8)).state(), .edited)
+        XCTAssertEqual(try setup.state(), .edited)
+    }
+
     func test_installReplacesAnEditedSkill() throws {
         _ = try setup.install()
         try Data("my own skill\n".utf8).write(to: setup.skillURL)
