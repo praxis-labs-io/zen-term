@@ -3695,6 +3695,7 @@ final class WindowController: NSObject {
             if case .blocked = previous?.state { return nil }
             return .blocked(need.map(agentNeed))
         }
+        if case .blocked = previous?.state, status?.state == .working { return .resumed }
         guard previous?.state == .working, status?.state != .working else { return nil }
         return .stopped(status.map { agentStatus($0.state) })
     }
@@ -3706,7 +3707,9 @@ final class WindowController: NSObject {
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,
-                answeredWaits: reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
+                answeredWaits: change == .resumed
+                    ? paneWaits.callers(watching: surface)
+                    : reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
     }
 
     private static func asks(_ status: TerminalProgramStatus) -> Bool {

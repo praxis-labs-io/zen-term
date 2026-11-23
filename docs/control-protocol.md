@@ -372,6 +372,7 @@ with `enter` sends it:
 | --------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `stopped` | The child's `status` left `working`, but not to `blocked`. | `review stopped (done): read it with zen pane read --pane 34`           |
 | `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
+| `resumed` | The child's `status` went from `blocked` to `working`.     | `review is working again; wait on it with zen wait 34`                  |
 | `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
 
 - A child without a name is `pane 34`. `blocked` names `a permission prompt` or `a login` when
@@ -380,10 +381,11 @@ with `enter` sends it:
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
   child answers the same change, when one it holds on its `children` watches the child, since
   that wait reports the change, or for the report that settles `first_task`, which `pane.run`
-  answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
+  answers with. No wait answers `resumed`, so any wait the parent holds on the child stands in
+  for it. A pane run with `keep` stays open when its program exits, and sends no `exited`.
 - There is no `stopped` note when the child sent its parent a `pane.send` since its `status` last
-  became `working`, since that message carries the news. A `stopped` or `blocked` note still held
-  when the child's pane closes, as when the parent closes it, is dropped.
+  became `working`, since that message carries the news. A `stopped`, `blocked` or `resumed`
+  note still held when the child's pane closes, as when the parent closes it, is dropped.
 - A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
   until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
   dropped.

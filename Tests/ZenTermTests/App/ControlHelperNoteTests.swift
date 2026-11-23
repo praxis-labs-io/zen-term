@@ -624,4 +624,39 @@ final class ControlHelperNoteTests: WindowTestCase {
             report(.working, from: helper)
         }
     }
+
+    func test_aHelperWhoseBlockClearsTellsItsParentToWaitAgain() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.blocked(.permission), from: helper)
+
+        report(.working, from: helper)
+        report(.working, from: helper)
+
+        let token = try token(of: helper)
+        XCTAssertEqual(
+            parent.inputs,
+            try note("review is blocked on a permission prompt; that decision is the user's", from: helper)
+                + note("review is working again; wait on it with zen wait \(token)", from: helper))
+    }
+
+    func test_aWaitTheParentHoldsOnTheHelperTakesThePlaceOfTheWorkingAgainNote() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        let blocked = try wait(parent, on: helper)
+        report(.blocked(.permission), from: helper)
+        XCTAssertEqual((try blocked.reply?.get() as? WaitResult)?.reason, .stopped)
+        let resumed = try wait(parent, on: helper)
+
+        report(.working, from: helper)
+
+        XCTAssertEqual(parent.inputs, [])
+        XCTAssertNil(resumed.reply, "the note answered the parent's wait")
+    }
 }

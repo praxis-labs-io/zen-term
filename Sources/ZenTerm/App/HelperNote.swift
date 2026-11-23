@@ -5,6 +5,7 @@ struct HelperNote: Equatable {
     enum Change: Equatable {
         case stopped(ListResult.AgentStatus?)
         case blocked(ListResult.AgentNeed?)
+        case resumed
         case exited(code: Int?)
     }
 
@@ -31,6 +32,8 @@ struct HelperNote: Equatable {
                 + "or ask the user when it is a product or scope call"
         case .blocked(let need):
             return "\(who) is blocked\(need.map { " on \(Self.waitsOn($0))" } ?? ""); that decision is the user's"
+        case .resumed:
+            return "\(who) is working again; wait on it with zen wait \(helper)"
         case .exited(let code):
             return "\(who) exited\(code.map { " with code \($0)" } ?? "")"
         }
