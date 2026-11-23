@@ -219,7 +219,35 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(
             lines(of: try row(of: root, in: c)).filter { $0 != title }, [workspace],
             "a marked agent's chip already names it, so its detail is the workspace alone")
+        XCTAssertEqual(
+            try row(of: unmarked, in: c).summaryTextForTesting, "aider", "precondition: an untitled agent is its name")
+        XCTAssertEqual(
+            lines(of: try row(of: unmarked, in: c)), ["aider", workspace],
+            "a title that is already the name is not said again under it")
+
+        unmarked.surface.delegate?.surface(
+            unmarked.surface,
+            programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider", title: "Fix login"))
+        drainMainQueue()
         XCTAssertTrue(lines(of: try row(of: unmarked, in: c)).contains("aider · \(workspace)"))
+    }
+
+    func test_aRowSpeaksTheProgramItsChipShows_unlessTheTitleAlreadyIsIt() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let editor = try run("nvim", from: root, in: c)
+        editor.surface.foregroundProcessGroupID = try jobs.start(named: "nvim")
+        c.pollTitlesForTesting()
+        let spoken = try row(of: editor, in: c).accessibilityValue() as? String
+        XCTAssertEqual(spoken?.hasPrefix("Neovim"), true, "VoiceOver hears the program, got \(spoken ?? "nothing")")
+
+        let unmarked = try run("aider", from: nil, in: c)
+        unmarked.surface.delegate?.surface(
+            unmarked.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
+        drainMainQueue()
+        XCTAssertFalse(
+            (try row(of: unmarked, in: c).accessibilityValue() as? String ?? "").contains("Agent"),
+            "the generic chip names no agent, so it says nothing")
     }
 
     func test_everyAgentMarkDrawsInItsRow_neverAnSFSymbolOfTheSameName() {

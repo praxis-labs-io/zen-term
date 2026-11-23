@@ -4016,7 +4016,8 @@ final class WindowController: NSObject {
             let process = name.map(ProcessIcon.forAgent) ?? .unknownAgent
             var item = SidebarAgentItem(
                 id: id, state: state, summary: title,
-                detail: Self.agentDetail(name: name, process: process, place: place.name), message: message)
+                detail: Self.agentDetail(name: name, title: title, process: process, place: place.name),
+                message: message)
             item.process = process
             let pane = panes[id]
             return AgentFamilies.Member(
@@ -4041,9 +4042,9 @@ final class WindowController: NSObject {
 
     private static let unnamedProcess = "process"
 
-    // The generic chip cannot say which agent it is, so its name stays in words.
-    private static func agentDetail(name: String?, process: ProcessIcon, place: String) -> String {
-        guard let name, process == .unknownAgent else { return place }
+    // The generic chip cannot say which agent it is, so its name stays in words unless the title already is it.
+    private static func agentDetail(name: String?, title: String, process: ProcessIcon, place: String) -> String {
+        guard let name, process == .unknownAgent, name != title else { return place }
         return "\(name) · \(place)"
     }
 

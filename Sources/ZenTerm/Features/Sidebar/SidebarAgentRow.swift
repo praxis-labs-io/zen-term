@@ -89,7 +89,9 @@ final class SidebarAgentRow: SidebarJumpRow {
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
         announce(item)
-        let speaks = [item.showsState ? item.state.accessibilityName : nil, item.detail, startedBy]
+        let speaks = [
+            Self.spokenProgram(item), item.showsState ? item.state.accessibilityName : nil, item.detail, startedBy,
+        ]
         setAccessibilityValue(speaks.compactMap { $0 }.joined(separator: ", "))
         dot.state = item.state.dot
         spinner.isHidden = item.state != .working
@@ -109,6 +111,11 @@ final class SidebarAgentRow: SidebarJumpRow {
         case .process(let nested):
             render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: nested))
         }
+    }
+
+    // The chip names the program only to the eye, since the row is the one accessibility element.
+    private static func spokenProgram(_ item: SidebarAgentItem) -> String? {
+        item.process == .unknownAgent || item.process.name == item.summary ? nil : item.process.name
     }
 
     private static func hint(for role: SidebarAgentItem.Role) -> String {
