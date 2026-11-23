@@ -394,17 +394,11 @@ final class DropdownTests: WindowTestCase {
     func test_aClickOnTheButton_goesNoFurther() {
         let dropdown = filterFixture()
         let window = dropdown.window!
-        var reached = false
-        let later = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-            reached = true
-            return event
-        }
-        defer { later.map(NSEvent.removeMonitor) }
+        let click = Self.click(at: NSPoint(x: dropdown.frame.midX, y: dropdown.frame.midY), in: window)
 
-        NSApp.sendEvent(Self.click(at: NSPoint(x: dropdown.frame.midX, y: dropdown.frame.midY), in: window))
-
+        XCTAssertNil(
+            dropdown.listFilterForTesting(click), "the button's own click would reopen the list it just closed")
         XCTAssertFalse(dropdown.isPopoverOpen)
-        XCTAssertFalse(reached, "the button's own click would reopen the list it just closed")
     }
 
     @MainActor

@@ -153,21 +153,13 @@ final class BranchFieldTests: XCTestCase {
 
     func test_aClickInTheField_closesTheListAndReachesTheField() {
         type("zen")
-        var reached = false
-        let later = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-            reached = true
-            return event
-        }
-        defer { later.map(NSEvent.removeMonitor) }
         let point = field.convert(NSPoint(x: field.bounds.midX, y: field.bounds.midY), to: nil)
+        let click = NSEvent.mouseEvent(
+            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
 
-        NSApp.sendEvent(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
-
+        XCTAssertTrue(field.listFilterForTesting(click) === click, "the click goes on to place the caret")
         XCTAssertFalse(field.isListOpen)
-        XCTAssertTrue(reached, "the click goes on to place the caret")
     }
 
     func test_escapeWithNoListIsNotConsumed() {

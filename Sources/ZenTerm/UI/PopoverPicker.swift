@@ -38,6 +38,7 @@ class PopoverPicker: NSView {
     var listCardFrameForTesting: NSRect { popover.cardFrame }
     var queryFieldTextColorForTesting: NSColor? { queryField.textColor }
     func openListForTesting() { openList() }
+    func listFilterForTesting(_ event: NSEvent) -> NSEvent? { popover.filterForTesting(event) }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
 
     func typeForTesting(_ text: String) {

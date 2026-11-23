@@ -61,6 +61,8 @@ final class ListPopover {
 
     var cardForTesting: NSView? { card }
 
+    func filterForTesting(_ event: NSEvent) -> NSEvent? { swallows(Press(event)) ? nil : event }
+
     func open(rows: [Row]) {
         guard let (window, contentView) = openingContext() else { return }
         present(rowsCard(rows), in: window, on: contentView)

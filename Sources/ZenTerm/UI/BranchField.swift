@@ -27,6 +27,7 @@ final class BranchField: NSView, ThemeReapplying {
 
     #if DEBUG
         var matchesForTesting: [String] { matches }
+        func listFilterForTesting(_ event: NSEvent) -> NSEvent? { popover.filterForTesting(event) }
         var highlightedForTesting: String? {
             matches.indices.contains(highlighted) ? matches[highlighted] : nil
         }
