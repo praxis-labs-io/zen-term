@@ -28,6 +28,7 @@ final class GhosttyApp {
     // Building a config is a synchronous file round-trip; `ghostty_surface_update_config` copies, so sharing is safe.
     private var surfaceConfigCache: [String: ghostty_config_t] = [:]
     private var focusObservers: [NSObjectProtocol] = []
+    private var colorScheme = GHOSTTY_COLOR_SCHEME_LIGHT
 
     // Never loads default config files, so a user's ~/.config/ghostty cannot skew zen-term.
     private init(theme: TerminalTheme?, behavior: TerminalBehavior?) {
@@ -64,6 +65,7 @@ final class GhosttyApp {
             fatalError("ghostty_app_new failed")
         }
         self.app = app
+        seedColorScheme(for: theme)
         ghostty_app_set_focus(app, NSApp.isActive)
         observeAppFocus()
     }
@@ -104,6 +106,7 @@ final class GhosttyApp {
         ghostty_config_load_file(cfg, path)
         ghostty_config_finalize(cfg)
         Self.logDiagnostics(of: cfg, context: "updateConfig")
+        adoptColorScheme(for: theme)
         ghostty_app_update_config(app, cfg)
         let old = config
         config = cfg
@@ -111,6 +114,28 @@ final class GhosttyApp {
         lastConfigText = text
         clearSurfaceConfigCache()
         tick()
+    }
+
+    // A new surface's child can ask for the scheme before `ghostty_surface_set_color_scheme` lands.
+    func seedColorScheme(for theme: TerminalTheme?) {
+        guard adoptColorScheme(for: theme) else { return }
+        ghostty_app_update_config(app, config)
+    }
+
+    // libghostty drops a new surface's command when the app's scheme differs from its config's, so a change re-pushes config.
+    @discardableResult
+    private func adoptColorScheme(for theme: TerminalTheme?) -> Bool {
+        guard let background = theme?.background else { return false }
+        let scheme = Self.colorScheme(of: background)
+        guard scheme != colorScheme else { return false }
+        colorScheme = scheme
+        ghostty_app_set_color_scheme(app, scheme)
+        return true
+    }
+
+    // From the background, not `effectiveAppearance`, which reads light for a dark theme on a light system.
+    static func colorScheme(of background: TerminalColor) -> ghostty_color_scheme_e {
+        background.isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT
     }
 
     @discardableResult
