@@ -4024,6 +4024,7 @@ final class WindowController: NSObject {
         guard let agent = agents.agents[surface] else { return false }
         let message = Self.commandResultMessage(result)
         exitsAwaitingResult.remove(surface)
+        taskPickups.release(surface)
         agents.markExited(surface, message: message)
         let crashed = agent.name != nil && Self.isCrash(result)
         if crashed {

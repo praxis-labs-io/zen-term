@@ -231,6 +231,20 @@ final class ControlChildrenWaitTests: WindowTestCase {
         XCTAssertEqual(news(got), [try token(of: child): nil])
     }
 
+    func test_aChildWhoseAgentExitsBeforePickingUpAFollowUpStopsCountingAsWorking() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        try sendFollowUp("now fix y.swift", to: child, from: caller)
+
+        child.delegate?.surface(child, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        settle(0.1)
+
+        let got = try result(waitOnChildren(.all, from: caller))
+        XCTAssertEqual(got.reason, .stopped)
+    }
+
     func test_aCallerWithNoChildrenHearsSoAtOnce() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))
