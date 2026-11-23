@@ -154,24 +154,24 @@ final class NavRowTests: WindowTestCase {
             "the title truncates before the plus, not under it")
     }
 
-    func test_click_takesFocus() {
+    func test_click_takesFocus() throws {
         var activations = 0
         let (row, window) = mountedRow { activations += 1 }
 
-        row.mouseDown(with: click(on: row, in: window))
+        try sendClick(to: row)
 
         XCTAssertTrue(window.firstResponder === row)
         XCTAssertEqual(activations, 1)
     }
 
-    func test_click_onAKeyboardOnlyRow_activatesAndLeavesFocusAlone() {
+    func test_click_onAKeyboardOnlyRow_activatesAndLeavesFocusAlone() throws {
         var activations = 0
         let (row, window) = mountedRow(focusesOnClick: false) { activations += 1 }
         let focusHolder = FocusHolder(frame: NSRect(x: 0, y: 30, width: 10, height: 10))
         window.contentView?.addSubview(focusHolder)
         window.makeFirstResponder(focusHolder)
 
-        row.mouseDown(with: click(on: row, in: window))
+        try sendClick(to: row)
 
         XCTAssertTrue(window.firstResponder === focusHolder, "the click activates the row without taking focus")
         XCTAssertEqual(activations, 1)
@@ -281,13 +281,6 @@ final class NavRowTests: WindowTestCase {
             with: type, location: .zero, modifierFlags: [], timestamp: 0,
             windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
             trackingNumber: 0, userData: nil)!
-    }
-
-    private func click(on row: NSView, in window: NSWindow) -> NSEvent {
-        let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
-        return NSEvent.mouseEvent(
-            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
     }
 
     private func mountedRow(

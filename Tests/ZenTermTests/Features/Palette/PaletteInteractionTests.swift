@@ -154,17 +154,15 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(ran, .splitVertical, "a single click must run the row, no double-click")
     }
 
-    func test_commandPalette_theArrowMovesTheListRowFill_andThePointerDoesNot() throws {
+    func test_commandPalette_thePointerMovesTheCursor_andTheArrowContinuesFromIt() throws {
         Motion.isReduceMotionEnabled = { true }
-        let overlay = makeCommandPalette()
+        var ran: KeyInterceptor.ReservedChord?
+        let overlay = makeCommandPalette(onRun: { ran = $0 })
         let window = mount(overlay)
         window.layoutIfNeeded()
         let hover = Theme.current.chrome.fill(.hover).cgColor
         let shown = rows(in: overlay)
         XCTAssertEqual(shown.map { $0.layer?.backgroundColor == hover }, [true, false, false])
-
-        send(Self.moveDown, to: overlay)
-        XCTAssertEqual(shown.map { $0.layer?.backgroundColor == hover }, [false, true, false])
 
         let enter = try XCTUnwrap(
             NSEvent.enterExitEvent(
@@ -172,8 +170,28 @@ final class PaletteInteractionTests: WindowTestCase {
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
         shown[2].mouseEntered(with: enter)
         XCTAssertEqual(
+            shown.map { $0.layer?.backgroundColor == hover }, [false, false, true],
+            "the pointer's row is not the one lit row")
+
+        send(Self.moveUp, to: overlay)
+        XCTAssertEqual(
             shown.map { $0.layer?.backgroundColor == hover }, [false, true, false],
-            "the pointer fills a row beside the selection")
+            "the arrow does not continue from the pointer's row")
+        send(Self.insertNewline, to: overlay)
+        XCTAssertEqual(ran, .closePane)
+    }
+
+    func test_commandPalette_theArrowStopsAtTheEnds() {
+        var ran: [KeyInterceptor.ReservedChord] = []
+        let overlay = makeCommandPalette(onRun: { ran.append($0) })
+        mount(overlay)
+
+        send(Self.moveUp, to: overlay)
+        send(Self.insertNewline, to: overlay)
+        for _ in 0..<4 { send(Self.moveDown, to: overlay) }
+        send(Self.insertNewline, to: overlay)
+
+        XCTAssertEqual(ran, [.splitVertical, .newTab])
     }
 
     func test_commandPalette_pressThenDragOff_doesNotRun() {

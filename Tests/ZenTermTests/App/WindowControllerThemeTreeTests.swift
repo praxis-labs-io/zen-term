@@ -88,13 +88,7 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         wait(for: [drained], timeout: 5)
     }
 
-    private func click(_ row: NavRow) {
-        let event = NSEvent.mouseEvent(
-            with: .leftMouseDown, location: .zero, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: row.window?.windowNumber ?? 0,
-            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NavRow) { XCTAssertNoThrow(try sendClick(to: row)) }
 
     private func fill(_ button: AppButton) -> CGColor? { button.layer?.backgroundColor }
 

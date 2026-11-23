@@ -52,6 +52,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private weak var subtitleLine: NSTextField?
     private let subtitleTip = TooltipHost(label: "")
     var onChoose: () -> Void
+    // Set by a list with a keyboard cursor: the pointer moves the cursor, whose fill stands in for hover.
+    var onPointerEnter: (() -> Void)? {
+        didSet { refreshFill() }
+    }
     var focusesOnClick = false
     var isHighlighted = false {
         didSet { if isHighlighted != oldValue { refreshFill() } }
@@ -82,6 +86,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private(set) var content: Content
     private(set) var isTakingKeyboardFocus = false
     private(set) var isHoverSuppressed = false
+    private var isPressed = false
     private let stack = NSStackView()
     // Kept across rebuilds, so a row that re-renders on hover keeps the label its layout and callers hold.
     private let titleLabel = NSTextField(labelWithString: "")
@@ -325,7 +330,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         }
     }
 
-    var showsHover: Bool { isHovered && !isHoverSuppressed }
+    var showsHover: Bool { isHovered && !isHoverSuppressed && onPointerEnter == nil }
 
     private func refreshFill() {
         let chrome = Theme.current.chrome
@@ -351,7 +356,11 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     override func focusDidChange() { refreshFill() }
 
     override func hoverDidChange() {
-        if !isHovered { hideTooltip() }
+        if !isHovered {
+            hideTooltip()
+        } else if !isHoverSuppressed {
+            onPointerEnter?()
+        }
         refreshFill()
     }
 
@@ -375,7 +384,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        guard !isHoverSuppressed else { return }
+        guard !isHoverSuppressed, onPointerEnter == nil else { return }
         hoverTooltip?.show(from: self)
     }
 
@@ -386,7 +395,15 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
 
     override func mouseDown(with event: NSEvent) {
         hideTooltip()
+        isPressed = true
         if focusesOnClick { window?.makeFirstResponder(self) }
+    }
+
+    // A control inside the row that acts on its press passes the release up the responder chain to here.
+    override func mouseUp(with event: NSEvent) {
+        guard isPressed else { return }
+        isPressed = false
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         onChoose()
     }
 
