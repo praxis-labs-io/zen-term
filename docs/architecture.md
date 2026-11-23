@@ -597,7 +597,7 @@ that refuses a connect is always stale and a sibling's sweep never removes one m
 request decodes on the connection's thread, applies on main through `ControlResponder`,
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
-replies when the read lands, holding only its own connection. `pane.wait` holds in `PaneWaits`,
+replies when the read lands, holding only its own connection. A command that can hold past `ControlWire.longestReplyWait` (`pane.wait`, `pane.send`, `pane.run`) takes its deadline from its own args through `ControlWire.answerWait`, which the server and `zen` both read, so neither end gives up before the other. `pane.wait` holds in `PaneWaits`,
 app-wide since a caller and the pane it waits on can sit in different windows: `WindowController`
 feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
 `pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
