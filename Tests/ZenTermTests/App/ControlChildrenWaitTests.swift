@@ -185,6 +185,80 @@ final class ControlChildrenWaitTests: WindowTestCase {
         XCTAssertEqual(news(got), [try token(of: child): .stopped])
     }
 
+    func test_anIdleChildSentAFollowUpCountsAsWorkingUntilItsStatusMovesOn() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        let sent = request(
+            .paneSend, ControlArgs(pane: .token(try token(of: child)), text: "now fix y.swift", enter: true),
+            from: caller)
+        waitUntil(sent.reply != nil, "the send to answer")
+        XCTAssertEqual(child.inputs.last, .submit)
+        let answer = waitOnChildren(.all, from: caller)
+        settle(0.6)
+        XCTAssertNil(answer.reply, "an idle child with a follow-up just sent answered as finished")
+
+        report(.idle, from: child)
+        report(.working, from: child)
+        settle(0.6)
+        XCTAssertNil(answer.reply)
+
+        report(.done, from: child)
+
+        let got = try result(answer)
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(news(got), [try token(of: child): .stopped])
+    }
+
+    private func sendFollowUp(_ text: String, to child: RecordingSurface, from caller: Int) throws {
+        let sent = request(
+            .paneSend, ControlArgs(pane: .token(try token(of: child)), text: text, enter: true), from: caller)
+        waitUntil(sent.reply != nil, "the send to answer")
+        XCTAssertEqual(child.inputs.last, .submit)
+    }
+
+    func test_anIdleChildSentASlashCommandStaysFinished_sinceACommandStartsNoTurn() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        try sendFollowUp("/clear", to: child, from: caller)
+
+        let got = try result(waitOnChildren(.all, from: caller))
+
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(news(got), [try token(of: child): nil])
+    }
+
+    func test_aChildWhoseAgentExitsBeforePickingUpAFollowUpStopsCountingAsWorking() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        try sendFollowUp("now fix y.swift", to: child, from: caller)
+
+        child.delegate?.surface(child, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        settle(0.1)
+
+        let got = try result(waitOnChildren(.all, from: caller))
+        XCTAssertEqual(got.reason, .stopped)
+    }
+
+    func test_aChildWhoseStatusResetsBeforePickingUpAFollowUpStopsCountingAsWorking() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("claude", from: caller)
+        report(.idle, from: child)
+        try sendFollowUp("now fix y.swift", to: child, from: caller)
+
+        child.delegate?.surface(child, programStatusDidChange: nil)
+        settle(0.1)
+
+        let got = try result(waitOnChildren(.all, from: caller))
+        XCTAssertEqual(got.reason, .stopped)
+    }
+
     func test_aCallerWithNoChildrenHearsSoAtOnce() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))

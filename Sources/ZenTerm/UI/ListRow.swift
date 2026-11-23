@@ -5,6 +5,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         case symbol(String)
         case swatch(NSColor)
         case spinner
+        case process(ProcessIcon)
     }
 
     enum Trailing: Equatable {
@@ -90,6 +91,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         spinner.isSpinning = true
         return spinner
     }()
+    // Kept too, so a program change crossfades the mark rather than swapping in a new chip.
+    private var processBadge: IconBadge?
     private lazy var stackLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor)
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
@@ -99,6 +102,11 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private var titleLinePins: [NSLayoutConstraint] = []
 
     var title: String { content.title }
+
+    var processBadgeForTesting: IconBadge? {
+        guard case .process = content.leading else { return nil }
+        return processBadge
+    }
 
     var shortcutForTesting: String {
         guard case .keycap(let shortcut) = content.trailing else { return "" }
@@ -209,7 +217,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         line.textColor = chrome.ink(.muted)
         line.lineBreakMode = content.subtitleTruncation
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let lines = NSStackView(views: [glyph.map { Self.titleLine(leading: $0, title: title) } ?? title, line])
+        let lines = NSStackView(views: [
+            glyph.map { Self.titleLine(leading: $0, title: title) } ?? title,
+            glyph.map { Self.indented(line, past: $0) } ?? line,
+        ])
         lines.orientation = .vertical
         lines.alignment = .leading
         lines.spacing = Self.lineGap
@@ -218,11 +229,22 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         return lines
     }
 
+    // The second line starts where the title's text does, not under the glyph.
+    private static func indented(_ line: NSTextField, past glyph: NSView) -> NSView {
+        let inset = NSStackView(views: [line])
+        inset.edgeInsets = NSEdgeInsets(top: 0, left: glyph.fittingSize.width + titleLineGap, bottom: 0, right: 0)
+        inset.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        inset.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return inset
+    }
+
+    private static let titleLineGap = ChromeMetrics.Spacing.s6
+
     private static func titleLine(leading glyph: NSView, title: NSTextField) -> NSView {
         let line = NSStackView(views: [glyph, title])
         line.orientation = .horizontal
         line.alignment = .centerY
-        line.spacing = ChromeMetrics.Spacing.s6
+        line.spacing = titleLineGap
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         line.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return line
@@ -278,6 +300,15 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
             return dot
         case .spinner:
             return spinner
+        case .process(let process):
+            if let processBadge {
+                processBadge.show(process)
+                processBadge.reapplyTheme()
+                return processBadge
+            }
+            let badge = IconBadge(process: process, size: .small)
+            processBadge = badge
+            return badge
         }
     }
 

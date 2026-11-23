@@ -791,4 +791,21 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(
             parent.inputs, try note("review is working again; wait on it with zen wait \(token)", from: helper))
     }
+
+    func test_aNoteToAnIdleParentLeavesItFinishedForItsOwnCaller() throws {
+        makeWindow()
+        let caller = try XCTUnwrap(spawned.first)
+        report(.idle, from: caller)
+        let parent = try runHelper(named: "lead", from: caller)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.done, from: helper)
+        XCTAssertEqual(parent.inputs.last, .submit)
+
+        let all = try waitOnChildren(of: caller, .all)
+
+        let got = try XCTUnwrap(try all.reply?.get() as? WaitResult, "an idle parent handed a note counted as working")
+        XCTAssertEqual(got.reason, .stopped)
+    }
 }

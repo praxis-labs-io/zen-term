@@ -108,6 +108,23 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
 
+    func test_aWorktreeRow_leadsWithTheWorktreeChip_andAWorkspaceRowWithNone() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+        overlay.layoutSubtreeIfNeeded()
+
+        let parent = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let child = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
+        let chip = try XCTUnwrap(child.processBadgeForTesting, "a worktree row draws no chip")
+        XCTAssertEqual(chip.process, .worktree)
+        XCTAssertTrue(chip.isDescendant(of: child), "the chip is not in the row")
+        XCTAssertGreaterThan(chip.frame.width, 0)
+        XCTAssertNil(parent.processBadgeForTesting, "a workspace row is not a worktree")
+    }
+
     func test_branchSitsInTheSameColumnOnAWorkspaceAndAWorktree() throws {
         let repo = path("alpha")
         GitRepoStatus.resetForTesting()

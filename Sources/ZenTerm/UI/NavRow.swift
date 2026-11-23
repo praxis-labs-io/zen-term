@@ -3,7 +3,7 @@ import AppKit
 final class NavRow: ListRow {
     enum Variant: Equatable {
         case standard
-        case nested(symbol: String)
+        case nested(ProcessIcon)
         case faint
     }
 
@@ -67,8 +67,8 @@ final class NavRow: ListRow {
         var shown: [NSView] = []
         if showsHoverAccessory, let hoverAccessory { shown.append(hoverAccessory) }
         var next = Content(title: content.title, note: showsHoverAccessory ? nil : detail, ink: titleInkLevel)
-        if case .nested(let symbol) = variant {
-            next.leading = .symbol(symbol)
+        if case .nested(let process) = variant {
+            next.leading = .process(process)
             next.nests = true
         }
         render(next, accessories: shown)

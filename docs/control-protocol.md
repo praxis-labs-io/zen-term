@@ -338,7 +338,8 @@ parent's own `pane.close` on its child is not refused over the child's work (`pa
 that quits while its pane stays open closes nothing.
 
 The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
-the way `tab.new` and `pane.split` run a `cmd`.
+the way `tab.new` and `pane.split` run a `cmd`, unless the command ends in its shell's own `exit`
+or, under zsh, an interrupt ends it.
 
 `name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
 digits. The name then addresses the pane anywhere a token does, until it closes.
@@ -466,8 +467,10 @@ Holds until something happens to the pane, then answers once with why:
 - The program is the pane's foreground job, an agent included. A pane at a shell prompt waits
   for the next command to finish. An agent that sends no `status` waits as a plain program does.
 - `exitCode` is the shell's report through its integration, and is absent when the shell
-  integration is off. `text` is the last 40 lines. Both are absent for a pane that closed,
-  unless `pane.run` opened it.
+  integration is off. A `pane.run` command that ends in its shell's own `exit` reports none
+  under a shell other than sh, bash, zsh and ksh, or under bash, sh and ksh once it set an `EXIT`
+  trap of its own. `text` is the last 40 lines. Both are absent for a pane that closed, unless
+  `pane.run` opened it.
 - `output` is matched within one line of the screen's rows, without escapes, so a newline in it
   is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
@@ -485,11 +488,12 @@ begins, and takes no `pane`. Each child is watched as a wait on its pane would b
 | `all`      | `stopped` once none is working, at once when none is. |
 
 A child is working while its agent's `status` is `working`, or, with no `status`, while the app
-reads its agent as working. A child that runs no agent is working while its program runs. A child whose
-first task was sent counts as working until its `status` moves past `idle` or `done`, so `all`
-does not answer before it starts on the task. With `all`, each child's `reason` is its latest
-news while the wait held, so a child that stopped and then exited answers `exited` with its
-`exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+reads its agent as working. A child that runs no agent is working while its program runs. A child
+handed a task while its `status` was `idle` or `done`, as its first task or as `pane.send` text
+with `enter` other than a slash command, counts as working until its `status` moves past `idle`
+or `done`, clears, or its agent exits, so `all` does not answer before it starts on the task.
+With `all`, each child's `reason` is its latest news while the wait held, so a child that
+stopped and then exited answers `exited` with its `exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
 `bad_request` with `all`.
 
 ```json

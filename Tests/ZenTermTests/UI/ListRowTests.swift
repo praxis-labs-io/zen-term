@@ -99,6 +99,19 @@ final class ListRowTests: WindowTestCase {
         XCTAssertTrue(before.isSpinning)
     }
 
+    func test_aProcessChip_isKeptAcrossARenderAndAThemeChange_andShowsTheNewProgram() throws {
+        let row = mount(ListRow(ListRow.Content(title: "server", leading: .process(.shell))) {})
+        let before = try XCTUnwrap(row.processBadgeForTesting, "a process leading draws no chip")
+        XCTAssertTrue(before.isDescendant(of: row))
+
+        row.render(ListRow.Content(title: "server", leading: .process(ProcessIcon.forProgram("nvim"))))
+        row.reapplyTheme()
+
+        XCTAssertTrue(row.processBadgeForTesting === before, "a new program swaps the chip, so it cannot crossfade")
+        XCTAssertTrue(before.isDescendant(of: row), "the kept chip left the row")
+        XCTAssertEqual(before.process?.name, "Neovim")
+    }
+
     func test_branchField_highlightsWithTheArrow_andAClickedRowCommitsItsBranch() throws {
         let field = BranchField()
         window.contentView?.addSubview(field)

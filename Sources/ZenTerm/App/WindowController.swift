@@ -22,6 +22,7 @@ final class WindowController: NSObject {
     private let agents = AgentRoster()
     private let agentStates = AgentStateTracker()
     private let firstTasks: FirstTaskDelivery
+    private let taskPickups = TaskPickups()
     private(set) var launchedPaneExits = LaunchedPaneExits()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
@@ -58,7 +59,7 @@ final class WindowController: NSObject {
     private var exitsAwaitingResult: Set<SurfaceID> = []
     private var processBusy = BusyFallWatch()
     private var exitedProcesses: Set<SurfaceID> = []
-    private var listedProcesses: Set<SurfaceID> = []
+    private var listedProcesses: [SurfaceID: ProcessIcon] = [:]
     private var helpersReported: Set<SurfaceID> = []
     private var blocksParentsAnswered: Set<SurfaceID> = []
 
@@ -776,6 +777,9 @@ final class WindowController: NSObject {
         }
         if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
         if changed { renderTabBar() }
+        if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(programIcon) != shown }) {
+            renderAgents()
+        }
 
         if busyDots() != lastBusyDots { renderDock() }
         trackAgentExits()
@@ -2433,9 +2437,15 @@ final class WindowController: NSObject {
         if case .blocked = agentStates.status(of: surface)?.state { blocksParentsAnswered.insert(surface) }
     }
 
-    // A task pasted into an idle agent shows no change until the agent reports again.
+    // Only an agent that reports its status shows when it picks a task up.
+    func noteTaskSubmitted(to pane: PaneHandle) {
+        guard runsAgent(pane), let status = agentStates.status(of: pane.surfaceID), TaskPickups.isReady(status)
+        else { return }
+        taskPickups.submitted(to: pane.surfaceID)
+    }
+
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
-        if firstTasks.awaitsPickup(pane.surfaceID) { return true }
+        if taskPickups.awaitsPickup(pane.surfaceID) { return true }
         let listed = listing(of: pane, in: tab)
         guard let agent = listed.agent else { return listed.busy }
         return agent.status.map { $0 == .working } ?? (agent.state == .working)
@@ -2464,11 +2474,13 @@ final class WindowController: NSObject {
     func deliverFirstTask(_ task: String, toPane token: Int, settle: @escaping (FirstTask) -> Void) {
         guard let (_, handle) = pane(token: token) else { return settle(.held(.notReady)) }
         let surface = handle.surface
+        let surfaceID = handle.surfaceID
         firstTasks.await(
-            handle.surfaceID,
-            send: { [weak surface] in
+            surfaceID,
+            send: { [weak self, weak surface] in
                 surface?.paste(task)
                 surface?.submit()
+                self?.taskPickups.submitted(to: surfaceID)
             },
             settle: { [weak self] outcome in
                 self?.updateRecord(pane: token) { $0.firstTask = outcome }
@@ -3387,6 +3399,7 @@ final class WindowController: NSObject {
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
                 self?.firstTasks.release($0)
+                self?.taskPickups.release($0)
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
@@ -3590,7 +3603,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
-            if let surface, self.listedProcesses.contains(surface) { self.processFinished(surface) }
+            if let surface, self.isProcessPane(surface) { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -3633,7 +3646,7 @@ final class WindowController: NSObject {
                 joined = true
             }
             guard self.agents.contains(surface) else {
-                if self.listedProcesses.contains(surface) { self.renderAgents() }
+                if self.listedProcesses[surface] != nil { self.renderAgents() }
                 return
             }
             let previous = self.agentStates.title(of: surface)
@@ -3670,7 +3683,12 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let settlesFirstTask = self.firstTasks.isAwaiting(surface)
-            if let status { self.firstTasks.report(status, from: surface) }
+            if let status {
+                self.taskPickups.report(status, from: surface)
+                self.firstTasks.report(status, from: surface)
+            } else {
+                self.taskPickups.release(surface)
+            }
             guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }
@@ -4045,6 +4063,7 @@ final class WindowController: NSObject {
         guard let agent = agents.agents[surface] else { return false }
         let message = Self.commandResultMessage(result)
         exitsAwaitingResult.remove(surface)
+        taskPickups.release(surface)
         agents.markExited(surface, message: message)
         let crashed = agent.name != nil && Self.isCrash(result)
         if crashed {
@@ -4095,6 +4114,11 @@ final class WindowController: NSObject {
         if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
     }
 
+    // Unlisted too: a pane with no agent above it can gain one later, and must not return as live.
+    private func isProcessPane(_ surface: SurfaceID) -> Bool {
+        agents.agents[surface] == nil && panesBySurface()[surface]?.record.parent != nil
+    }
+
     private func processFinished(_ surface: SurfaceID) {
         exitedProcesses.insert(surface)
         renderAgents()
@@ -4131,7 +4155,7 @@ final class WindowController: NSObject {
             exitedProcesses.insert(id)
         }
         let items = agentItems()
-        listedProcesses = Set(items.filter { !$0.showsState }.map(\.id))
+        listedProcesses = Dictionary(uniqueKeysWithValues: items.filter { !$0.showsState }.map { ($0.id, $0.process) })
         sidebar.renderAgents(items)
         renderTabChips(agents: items)
     }
@@ -4146,9 +4170,13 @@ final class WindowController: NSObject {
             let paneTitle =
                 agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
+            let name = agent.name.flatMap { $0.isEmpty ? nil : $0 }
+            let process = name.map(ProcessIcon.forAgent) ?? .unknownAgent
             var item = SidebarAgentItem(
-                id: id, state: state, summary: title, detail: place.name, message: message)
-            item.mark = agent.name.flatMap { $0.isEmpty ? nil : ProcessIcon.forAgent($0).mark }
+                id: id, state: state, summary: title,
+                detail: Self.agentDetail(name: name, title: title, process: process, place: place.name),
+                message: message)
+            item.process = process
             let pane = panes[id]
             return AgentFamilies.Member(
                 item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
@@ -4160,16 +4188,26 @@ final class WindowController: NSObject {
                 let place = agentPlace(pane.surfaceID)
             else { return nil }
             let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
-            let item = SidebarAgentItem(
+            var item = SidebarAgentItem(
                 id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
+            item.process = programIcon(of: pane.surface)
             return AgentFamilies.Member(
                 item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
                 isAgent: false)
         }
-        return AgentFamilies.arrange(agentRows + processRows)
+        let parents = Dictionary(
+            panes.values.compactMap { pane in pane.record.parent.map { (pane.token, $0) } },
+            uniquingKeysWith: { first, _ in first })
+        return AgentFamilies.arrange(agentRows + processRows, parents: parents)
     }
 
     private static let unnamedProcess = "process"
+
+    // The generic chip cannot say which agent it is, so its name stays in words unless the title already is it.
+    private static func agentDetail(name: String?, title: String, process: ProcessIcon, place: String) -> String {
+        guard let name, process == .unknownAgent, name != title else { return place }
+        return "\(name) · \(place)"
+    }
 
     private func panesBySurface() -> [SurfaceID: PaneHandle] {
         var panes: [SurfaceID: PaneHandle] = [:]
@@ -4546,6 +4584,11 @@ final class WindowController: NSObject {
         if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
             return ProcessIcon.forAgent(name)
         }
+        return programIcon(of: surface)
+    }
+
+    // Unreadable arguments are a program that runs, never the resting shell.
+    private func programIcon(of surface: TerminalSurface) -> ProcessIcon {
         guard let group = surface.foregroundProcessGroupID else { return .shell }
         return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
     }

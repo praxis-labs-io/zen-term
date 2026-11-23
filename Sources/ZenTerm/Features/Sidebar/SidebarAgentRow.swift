@@ -4,7 +4,7 @@ struct SidebarAgentItem: Equatable {
     enum Role: Equatable {
         case agent
         case helper
-        case process(nested: Bool)
+        case process
     }
 
     let id: SurfaceID
@@ -14,7 +14,7 @@ struct SidebarAgentItem: Equatable {
     let message: String?
     var role = Role.agent
     var startedBy: String?
-    var mark: String?
+    var process = ProcessIcon.unknownAgent
 }
 
 // The Agents list's own ordering, and the state a row speaks since its title never names it.
@@ -55,7 +55,6 @@ final class SidebarAgentRow: SidebarJumpRow {
     static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
     private static let processJumpHint = "Jump to process"
-    private static let processSymbol = "terminal"
     private static let glyphSize = NSSize(width: 14, height: 16)
 
     init(onActivate: @escaping () -> Void) {
@@ -90,7 +89,9 @@ final class SidebarAgentRow: SidebarJumpRow {
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
         announce(item)
-        let speaks = [item.showsState ? item.state.accessibilityName : nil, item.detail, startedBy]
+        let speaks = [
+            Self.spokenProgram(item), item.showsState ? item.state.accessibilityName : nil, item.detail, startedBy,
+        ]
         setAccessibilityValue(speaks.compactMap { $0 }.joined(separator: ", "))
         dot.state = item.state.dot
         spinner.isHidden = item.state != .working
@@ -103,15 +104,18 @@ final class SidebarAgentRow: SidebarJumpRow {
         case .agent:
             render(
                 Content(
-                    title: item.summary, subtitle: item.detail, leading: .symbol(item.mark ?? Self.processSymbol),
+                    title: item.summary, subtitle: item.detail, leading: .process(item.process),
                     leadingOnTitleLine: true))
         case .helper:
-            render(
-                Content(
-                    title: item.summary, leading: .symbol(item.mark ?? Self.processSymbol), ink: .subtle, nests: true))
-        case .process(let nested):
-            render(Content(title: item.summary, leading: .symbol(Self.processSymbol), ink: .subtle, nests: nested))
+            render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: true))
+        case .process:
+            render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: true))
         }
+    }
+
+    // The chip names the program only to the eye, since the row is the one accessibility element.
+    private static func spokenProgram(_ item: SidebarAgentItem) -> String? {
+        item.process == .unknownAgent || item.process.name == item.summary ? nil : item.process.name
     }
 
     private static func hint(for role: SidebarAgentItem.Role) -> String {
@@ -131,9 +135,9 @@ final class SidebarAgentRow: SidebarJumpRow {
 
     var isNestedForTesting: Bool { content.nests }
 
-    var leadingSymbolForTesting: String? {
-        guard case .symbol(let name) = content.leading else { return nil }
-        return name
+    var leadingProcessForTesting: ProcessIcon? {
+        guard case .process(let process) = content.leading else { return nil }
+        return process
     }
 
     var showsStateForTesting: Bool { !glyphSlot.isHidden }

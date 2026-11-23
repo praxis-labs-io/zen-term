@@ -1,6 +1,6 @@
 import Foundation
 
-// The Agents list's order: each row under the agent that started it, most urgent family first.
+// The Agents list's order: each agent, then every pane under it, most urgent family first.
 enum AgentFamilies {
     struct Member {
         var item: SidebarAgentItem
@@ -11,14 +11,16 @@ enum AgentFamilies {
         let isAgent: Bool
     }
 
-    static func arrange(_ members: [Member]) -> [SidebarAgentItem] {
+    // `parents` holds every live pane's parent, rows or not, so ownership passes through any pane.
+    static func arrange(_ members: [Member], parents: [Int: Int]) -> [SidebarAgentItem] {
         let agentsByToken = Dictionary(
             members.filter(\.isAgent).compactMap { member in member.token.map { ($0, member) } },
             uniquingKeysWith: { first, _ in first })
         var starters: [SurfaceID: Member] = [:]
         var heads: [SurfaceID: SurfaceID] = [:]
         for member in members {
-            guard let lineage = startingAgents(of: member, in: agentsByToken), let head = lineage.last else {
+            guard let lineage = startingAgents(of: member, in: agentsByToken, parents: parents), let head = lineage.last
+            else {
                 continue
             }
             starters[member.item.id] = lineage[0]
@@ -28,14 +30,14 @@ enum AgentFamilies {
         let byHead = Dictionary(grouping: members.compactMap { member in heads[member.item.id].map { ($0, member) } }) {
             $0.0
         }.mapValues { $0.map(\.1) }
-        let families = members.filter { heads[$0.item.id] == nil }.map { head in
+        let families = members.filter { $0.isAgent && heads[$0.item.id] == nil }.map { head in
             [head] + (byHead[head.item.id] ?? []).sorted { $0.position.lexicographicallyPrecedes($1.position) }
         }
         return families.sorted(by: precedes).flatMap { family in
             family.map { member in
                 var item = member.item
                 let nested = heads[item.id] != nil
-                item.role = member.isAgent ? (nested ? .helper : .agent) : .process(nested: nested)
+                item.role = member.isAgent ? (nested ? .helper : .agent) : .process
                 if let starter = starters[item.id], nested, starter.item.id != heads[item.id] {
                     item.startedBy = starter.item.summary
                 }
@@ -44,15 +46,15 @@ enum AgentFamilies {
         }
     }
 
-    private static func startingAgents(of member: Member, in agents: [Int: Member]) -> [Member]? {
+    private static func startingAgents(of member: Member, in agents: [Int: Member], parents: [Int: Int]) -> [Member]? {
         var lineage: [Member] = []
-        var seen: Set<SurfaceID> = [member.item.id]
-        var next = member.parent.flatMap { agents[$0] }
-        while let ancestor = next, seen.insert(ancestor.item.id).inserted {
-            lineage.append(ancestor)
-            next = ancestor.parent.flatMap { agents[$0] }
+        var seen = Set(member.token.map { [$0] } ?? [])
+        var next = member.parent
+        while let token = next, seen.insert(token).inserted {
+            if let agent = agents[token] { lineage.append(agent) }
+            next = parents[token]
         }
-        if next?.item.id == member.item.id { return nil }
+        if next != nil, next == member.token { return nil }
         return lineage.isEmpty ? nil : lineage
     }
 
