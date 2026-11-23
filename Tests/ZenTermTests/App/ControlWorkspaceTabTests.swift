@@ -170,6 +170,26 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, "/tmp/given")
     }
 
+    func test_tabNewFromARemovedWorktree_startsInItsParentsFolder_unlessGivenOne() throws {
+        let c = makeWindow()
+        let tree = FileManager.default.temporaryDirectory.appendingPathComponent("zt-control-alpha-one")
+        c.openWorkspaceForTesting(
+            Workspace(title: "alpha: one", path: tree, tabs: [], env: [:]),
+            origin: WorktreeOrigin(
+                parent: alpha(), worktree: Worktree(path: tree, branch: "one", head: "0000000", isLocked: false)))
+        let caller = try token(of: XCTUnwrap(spawned.last))
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        _ = try result(
+            send(.tabNew, from: caller, in: tree.appendingPathComponent("Sources").path), as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, folder.path)
+
+        _ = try result(send(.tabNew, ControlArgs(cwd: tree.path), from: caller, in: tree.path), as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, tree.path)
+    }
+
     func test_tabNewWhileSettingsIsUpLeavesSettingsUp() throws {
         let c = makeWindow()
         c.handle(.openSettings)

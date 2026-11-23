@@ -157,6 +157,26 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(try startFolder(of: opened.pane), worktree)
     }
 
+    func test_runFromARemovedWorktree_startsInItsParentsFolder() throws {
+        let c = makeWindow()
+        let parent = URL(fileURLWithPath: try folder("parent"))
+        let tree = URL(fileURLWithPath: try folder("worktree"))
+        c.openWorkspaceForTesting(
+            Workspace(title: "parent: one", path: tree, tabs: [], env: [:]),
+            origin: WorktreeOrigin(
+                parent: Workspace(title: "parent", path: parent, tabs: [], env: [:]),
+                worktree: Worktree(path: tree, branch: "one", head: "0000000", isLocked: false)))
+        let caller = try token(of: XCTUnwrap(spawned.last))
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        let opened = try XCTUnwrap(
+            try run(ControlArgs(cmd: "htop"), from: caller, in: tree.path).get() as? PaneRunResult)
+
+        XCTAssertEqual(try startFolder(of: opened.pane), parent.path)
+    }
+
     func test_cwdOverridesTheCallersFolder() throws {
         makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
