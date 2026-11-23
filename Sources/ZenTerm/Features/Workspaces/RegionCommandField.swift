@@ -104,7 +104,7 @@ final class RegionCommandField: ControlView, NSTextFieldDelegate, ThemeReapplyin
         FieldChrome.apply(to: self, isFocused: isEditing)
         marker.isHidden = !opensFocused
         opensFocusedLabel.isHidden = !opensFocused
-        cornerButton.isHidden = !(isHovered || isEditing)
+        cornerButton.isHidden = !(showsHover || isEditing)
         cornerButton.isActive = opensFocused
         needsLayout = true
     }

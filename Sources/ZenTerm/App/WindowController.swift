@@ -234,8 +234,6 @@ final class WindowController: NSObject {
         }
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
-    // Only what the modal suppressed comes back, so a list holding hover down for its keyboard cursor keeps it down.
-    private var hoverCoveredByModal: [any HoverSuppressing] = []
 
     // The only trace of a card still loading: stops a second press presenting twice, or a late load presenting after Esc.
     private var pendingModal: ModalKind?
@@ -1501,7 +1499,7 @@ final class WindowController: NSObject {
         presentWindowModal(overlay)
         modal = (overlay, kind)
         sidebar.setHoverCovered(true)
-        coverHover(under: overlay)
+        window.hoverCover = overlay
         overlay.focusInitialResponder()
         overlay.animateIn()
         renderDock()
@@ -1511,24 +1509,12 @@ final class WindowController: NSObject {
         pendingModal = nil
         guard let overlay = modal?.overlay else { return }
         modal = nil
-        uncoverHover()
+        window.hoverCover = nil
         sidebar.setHoverCovered(false)
         modalGutter = nil
         overlay.animateOut { overlay.removeFromSuperview() }
         returnFocusAfterOverlay()
         renderDock()
-    }
-
-    private func coverHover(under overlay: NSView) {
-        uncoverHover()
-        let covered = window.contentView?.hoverSuppressingDescendants(skipping: overlay) ?? []
-        hoverCoveredByModal = covered.filter { !$0.isHoverSuppressed }
-        hoverCoveredByModal.forEach { $0.setHoverSuppressed(true) }
-    }
-
-    private func uncoverHover() {
-        hoverCoveredByModal.forEach { $0.setHoverSuppressed(false) }
-        hoverCoveredByModal = []
     }
 
     // Built after the off-main read rather than presented empty, which would flash as it resized.

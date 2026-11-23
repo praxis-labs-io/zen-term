@@ -65,7 +65,7 @@ the settled value once rather than re-applying a gate flag the resync has not up
 **A tracking area is geometric: z-order and hit-testing do not gate it.** A view under an opaque
 sibling still gets `mouseEntered`, so a hover feature suppressed by "something covers it" has to test
 that state explicitly, or a covered `IconButton` still pops its tooltip. Hide the view
-(`SidebarEdgeReveal`) or suppress it (`HoverSuppressing`, which every `ControlView` adopts).
+(`SidebarEdgeReveal`) or suppress it (`HoverSuppressing`, which every `ControlView` and `AppButton` adopts).
 
 **`SidebarView.setHoverCovered` clamps at zero going down, not going up.** A stray decrement is
 harmless, a stray increment suppresses sidebar hover for the rest of the session with nothing to clear

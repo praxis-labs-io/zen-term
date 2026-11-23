@@ -124,4 +124,41 @@ final class ModalHoverCoverTests: WindowTestCase {
 
         XCTAssertFalse(chip.isCloseVisibleForTesting, "the modal lifts only the hover it took")
     }
+
+    func test_aTabChipBuiltWhileAModalIsOpen_showsNoHover() throws {
+        let c = makeWindow()
+        c.presentModalForTesting(ButtonOverlay())
+        c.newTabForTesting()
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let content = try XCTUnwrap(c.window.contentView)
+        let chip = try XCTUnwrap(descendants(of: content).compactMap { $0 as? TerminalTabChip }.last)
+
+        chip.mouseEntered(with: try crossing(.mouseEntered, over: chip))
+
+        XCTAssertFalse(chip.isCloseVisibleForTesting, "a chip that arrives under the modal is covered too")
+    }
+
+    func test_anAppButtonBehindAModal_showsNoHover() throws {
+        let c = makeWindow()
+        let button = AppButton(title: "Retry", variant: .secondary)
+        button.frame = NSRect(x: 40, y: 40, width: 80, height: ChromeMetrics.Height.control)
+        c.window.contentView?.addSubview(button)
+        c.presentModalForTesting(ButtonOverlay())
+
+        button.mouseEntered(with: try crossing(.mouseEntered, over: button))
+
+        XCTAssertNotEqual(button.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+    }
+
+    func test_anOwnerLiftingItsSuppressionUnderAModal_staysCovered() throws {
+        let c = makeWindow()
+        let chip = try tabChip(in: c)
+        chip.setHoverSuppressed(true)
+        c.presentModalForTesting(ButtonOverlay())
+
+        chip.setHoverSuppressed(false)
+        chip.mouseEntered(with: try crossing(.mouseEntered, over: chip))
+
+        XCTAssertFalse(chip.isCloseVisibleForTesting, "the owner's flag and the modal's cover are separate")
+    }
 }

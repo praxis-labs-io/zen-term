@@ -9,8 +9,8 @@ class ControlView: NSView, HoverSuppressing {
 
     var isHovered: Bool { state.isHovered }
     var hasKeyboardFocus: Bool { state.hasKeyboardFocus }
-    private(set) var isHoverSuppressed = false
-    var showsHover: Bool { isHovered && !isHoverSuppressed }
+    var isHoverSuppressed: Bool { state.isHoverSuppressed }
+    var showsHover: Bool { state.showsHover }
 
     func hoverDidChange() {}
     func focusDidChange() {}
@@ -19,12 +19,8 @@ class ControlView: NSView, HoverSuppressing {
     func setKeyboardFocus(_ on: Bool) { state.setKeyboardFocus(on) }
     func refreshHover() { state.refreshHover() }
 
-    func setHoverSuppressed(_ suppressed: Bool) {
-        guard suppressed != isHoverSuppressed else { return }
-        isHoverSuppressed = suppressed
-        if !suppressed { refreshHover() }
-        hoverDidChange()
-    }
+    func setHoverSuppressed(_ suppressed: Bool) { state.setHoverSuppressed(suppressed) }
+    func hoverCoverDidChange() { state.hoverCoverDidChange() }
     func easeFill(_ color: NSColor) { state.easeFill(color) }
     func showFocusRing(_ shown: Bool) { state.showFocusRing(shown) }
 

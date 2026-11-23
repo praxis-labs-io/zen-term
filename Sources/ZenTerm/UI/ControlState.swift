@@ -11,6 +11,15 @@ final class ControlState {
     private var hoverFollowsPointer = false
     private(set) var isHovered = false
     private(set) var hasKeyboardFocus = false
+    private var isOwnerSuppressed = false
+
+    var isHoverSuppressed: Bool { isOwnerSuppressed || isUnderHoverCover }
+    var showsHover: Bool { isHovered && !isHoverSuppressed }
+
+    private var isUnderHoverCover: Bool {
+        guard let cover = (host.window as? HostWindow)?.hoverCover else { return false }
+        return !host.isDescendant(of: cover)
+    }
 
     init(host: NSView, hoverChanged: @escaping () -> Void, focusChanged: @escaping () -> Void) {
         self.host = host
@@ -47,6 +56,18 @@ final class ControlState {
         if !on { hoverFollowsPointer = false }
         guard on != isHovered else { return }
         isHovered = on
+        hoverChanged()
+    }
+
+    func setHoverSuppressed(_ suppressed: Bool) {
+        guard suppressed != isOwnerSuppressed else { return }
+        isOwnerSuppressed = suppressed
+        if !suppressed { refreshHover() }
+        hoverChanged()
+    }
+
+    func hoverCoverDidChange() {
+        if !isHoverSuppressed { refreshHover() }
         hoverChanged()
     }
 

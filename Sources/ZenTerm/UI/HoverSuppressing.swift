@@ -5,15 +5,15 @@ import AppKit
 protocol HoverSuppressing: NSView {
     var isHoverSuppressed: Bool { get }
     func setHoverSuppressed(_ suppressed: Bool)
+    func hoverCoverDidChange()
     // A row that moves under a still cursor never gets `mouseExited`, so hover sticks on every row that passed under it.
     func refreshHover()
 }
 
 extension NSView {
-    func hoverSuppressingDescendants(skipping skipped: NSView) -> [any HoverSuppressing] {
-        guard self !== skipped else { return [] }
+    func hoverSuppressingDescendants() -> [any HoverSuppressing] {
         let own = (self as? any HoverSuppressing).map { [$0] } ?? []
-        return own + subviews.flatMap { $0.hoverSuppressingDescendants(skipping: skipped) }
+        return own + subviews.flatMap { $0.hoverSuppressingDescendants() }
     }
 
     var pointerIsInside: Bool {

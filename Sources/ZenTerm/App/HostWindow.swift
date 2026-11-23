@@ -7,6 +7,13 @@ final class HostWindow: NSWindow {
 
     private lazy var chromeFieldEditor = ChromeTextView.makeFieldEditor()
 
+    var hoverCover: NSView? {
+        didSet {
+            guard hoverCover !== oldValue else { return }
+            contentView?.hoverSuppressingDescendants().forEach { $0.hoverCoverDidChange() }
+        }
+    }
+
     /// Sets `contentMinSize` because a mounted overlay otherwise collapses the size AppKit derives from constraints.
     init(contentRect: NSRect) {
         super.init(
