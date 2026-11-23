@@ -4098,7 +4098,7 @@ final class WindowController: NSObject {
         }
     }
 
-    static let claudeUpdateFailedTitle = "Couldn't update the zen skill"
+    static let claudeUpdateFailedTitle = "Couldn't update zen"
 
     private func showClaudeUpdated() {
         toasts.show(
