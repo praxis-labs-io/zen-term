@@ -4026,7 +4026,10 @@ final class WindowController: NSObject {
                 item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
                 isAgent: false)
         }
-        return AgentFamilies.arrange(agentRows + processRows)
+        let parents = Dictionary(
+            panes.values.compactMap { pane in pane.record.parent.map { (pane.token, $0) } },
+            uniquingKeysWith: { first, _ in first })
+        return AgentFamilies.arrange(agentRows + processRows, parents: parents)
     }
 
     private static let unnamedProcess = "process"

@@ -71,9 +71,13 @@ final class AgentNestingTests: WindowTestCase {
         return Pane(token: token, id: id, surface: surface)
     }
 
-    private func rootAgent(_ c: WindowController) throws -> Pane {
+    private func rootPane(_ c: WindowController) throws -> Pane {
         let token = try XCTUnwrap(spawned.first?.lastConfig?.environment["ZEN_PANE"].flatMap(Int.init))
-        let root = try pane(token, in: c)
+        return try pane(token, in: c)
+    }
+
+    private func rootAgent(_ c: WindowController) throws -> Pane {
+        let root = try rootPane(c)
         report(.working, from: root)
         return root
     }
@@ -209,7 +213,29 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(c.focusedSurfaceIDForTesting, helper.id)
     }
 
-    func test_whenTheParentAgentLeaves_itsChildrenBecomeTopLevelRows() throws {
+    func test_aProcessRunFromAPlainShell_isNotListed() throws {
+        let c = makeWindow()
+        let shell = try rootPane(c)
+
+        let process = try run("htop", from: shell, in: c)
+
+        XCTAssertNotNil(c.pane(token: process.token), "precondition: the process pane is open")
+        XCTAssertEqual(items(c).map(\.id), [], "no agent owns it, so the agent queue does not list it")
+    }
+
+    func test_aProcessAnAgentStartedThroughAShellPane_nestsUnderTheAgent() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let shell = try run("zsh", from: root, in: c)
+
+        let process = try run("htop", from: shell, in: c)
+
+        XCTAssertEqual(items(c).map(\.id), [root.id, shell.id, process.id])
+        XCTAssertEqual(items(c).map(\.role), [.agent, .process(nested: true), .process(nested: true)])
+        XCTAssertNil(try row(of: process, in: c).itemForTesting?.startedBy, "the shell is no agent to name")
+    }
+
+    func test_whenTheParentAgentLeaves_itsHelperListsTopLevel_andItsProcessIsNotListed() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
         let helper = try run("claude", from: root, in: c)
@@ -220,11 +246,10 @@ final class AgentNestingTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNil(rows(c).first { $0.itemForTesting?.id == root.id }, "precondition: the parent left")
-        XCTAssertEqual(Set(items(c).map(\.id)), [helper.id, process.id])
+        XCTAssertNotNil(c.pane(token: process.token), "precondition: the process pane is still open")
+        XCTAssertEqual(items(c).map(\.id), [helper.id], "a process whose agent is gone is not listed")
         XCTAssertEqual(try row(of: helper, in: c).itemForTesting?.role, .agent)
         XCTAssertEqual(try row(of: helper, in: c).frame.height, SidebarAgentRow.height)
-        XCTAssertEqual(try row(of: process, in: c).itemForTesting?.role, .process(nested: false))
-        XCTAssertFalse(try row(of: process, in: c).isNestedForTesting)
     }
 
     func test_whenTheParentPaneCloses_childrenThatOutliveItBecomeTopLevelRows() throws {

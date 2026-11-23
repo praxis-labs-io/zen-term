@@ -374,8 +374,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the title in the accessibility label, and never a state word. Its second line is its place. It leads
   with its agent's brand mark (`AgentRules.brandMark`), else the process symbol, so rows align.
   Its state reaches VoiceOver through the accessibility value.
-- **The Agents rows nest a pane under the agent that started it.** `AgentFamilies` reads each
-  row's `PaneRecord` parent and climbs through listed agents to the topmost, so there is one
+- **The Agents list is an agent queue: only agents are top-level, and it lists only what an
+  agent owns.** `AgentFamilies` reads each row's `PaneRecord` parent and climbs through every
+  live pane, rows or not (an agent, a shell or a program), to the topmost agent, so there is one
   level: a helper's helper lists under the top agent and its tooltip names the helper that
   started it. A child is a one-line row (`ListRow` nesting): a helper agent leads with its
   agent's brand mark (`AgentRules.brandMark`, else the process symbol) and shows its own
@@ -383,9 +384,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   listed until its pane closes or its program finishes: every `pane.run` program reports an
   OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still
   leaves, and a busy reading falling (`BusyFallWatch`, the roster's rule) is the backstop;
-  a parented pane whose agent left is never one. A family sorts by its most urgent member.
-  When the parent's agent leaves, or its pane closes under children that outlive it, the chain
-  breaks there and those children list top-level.
+  a parented pane whose agent left is never one. A pane with no agent above it is not listed, so
+  a process run from a plain shell, or one whose agent left or whose agent's pane closed, has no
+  row. A helper whose agent is gone lists top-level as an agent. A family sorts by its most
+  urgent member.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
