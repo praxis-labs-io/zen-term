@@ -292,8 +292,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   change it, as it does not change the title. The title poll re-renders the tab bar when a
   tab's chip changes.
 - **A tab is named for its focused pane's job, else its folder** (`PaneCanvasController.title`):
-  the job's program by the same reading as its chip, back at the prompt the folder, and the OSC
-  title only when there is no folder, since the shell's title is its prompt path or the command
+  a `zen pane run --name` first, then the job's program by the same reading as its chip, and back
+  at the prompt, or in a shell started from it (`zsh`, `nix develop`), the folder. The OSC
+  title is used only when there is no folder, since the shell's title is its prompt path or the command
   line it runs. `PathDisplay.folderName` is the one name for a folder, so the home folder reads
   as its own name, never a lone `~`. A host's tab skips the job (`readsForeground`), since its
   foreground job is the local `ssh`. Rename Tab's `pinnedTitle` outranks all of it.

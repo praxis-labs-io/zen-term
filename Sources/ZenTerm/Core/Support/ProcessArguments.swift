@@ -34,18 +34,55 @@ enum ProcessArguments {
 
     // A script runs as its interpreter, so its own name is the first argument that is not a flag.
     nonisolated static func scriptName(in arguments: [String]) -> String? {
-        guard let program = arguments.first.flatMap(programName(from:)),
-            interpreters.contains(withoutVersion(program.lowercased()))
-        else { return nil }
-        for argument in arguments.dropFirst() {
-            if inlineCodeFlags.contains(argument) { return nil }
-            if !argument.hasPrefix("-") { return programName(from: argument) }
-        }
-        return nil
+        guard case .script(let name) = invocation(of: arguments) else { return nil }
+        return name
     }
 
     nonisolated static func commandName(from arguments: [String]) -> String? {
         scriptName(in: arguments) ?? arguments.first.flatMap(programName(from:))
+    }
+
+    // A shell started at a prompt (`zsh`, `nix develop`, `sudo -s`) is a prompt too, not a job.
+    nonisolated static func isInteractiveShell(_ arguments: [String]) -> Bool {
+        guard let program = arguments.first.flatMap(programName(from:)),
+            shells.contains(withoutVersion(program.lowercased()))
+        else { return false }
+        return invocation(of: arguments) == .interactive
+    }
+
+    private enum Invocation: Equatable {
+        case notAnInterpreter, script(String), inlineCode, interactive, unknown
+    }
+
+    private nonisolated static func invocation(of arguments: [String]) -> Invocation {
+        guard let program = arguments.first.flatMap(programName(from:)) else { return .notAnInterpreter }
+        let interpreter = withoutVersion(program.lowercased())
+        guard shells.contains(interpreter) || interpreters.contains(interpreter) else { return .notAnInterpreter }
+        let codeLetters = inlineCodeLetters[interpreter] ?? []
+        var skipsValue = false
+        var namesModule = false
+        for argument in arguments.dropFirst() {
+            if namesModule { return programName(from: argument).map(Invocation.script) ?? .unknown }
+            if skipsValue { skipsValue = false; continue }
+            if argument == "-m", interpreter == "python" { namesModule = true; continue }
+            if argument == "--" { continue }
+            if argument.hasPrefix("--") {
+                let flag = String(argument.prefix { $0 != "=" })
+                if longInlineCodeFlags.contains(flag) { return .inlineCode }
+                skipsValue = valueFlags.contains(argument)
+                continue
+            }
+            if argument.hasPrefix("-"), argument.count > 1 {
+                if argument.dropFirst().contains(where: codeLetters.contains) { return .inlineCode }
+                skipsValue = valueFlags.contains(argument)
+                continue
+            }
+            guard argument.contains("/") || argument.contains("."), let name = programName(from: argument) else {
+                return .unknown
+            }
+            return .script(name)
+        }
+        return .interactive
     }
 
     // `python3.12` runs as itself, not as `python`.
@@ -53,10 +90,20 @@ enum ProcessArguments {
         String(program.reversed().drop { $0.isNumber || $0 == "." }.reversed())
     }
 
-    private nonisolated static let interpreters: Set<String> = [
-        "python", "bash", "sh", "zsh", "dash", "node", "ruby", "perl",
+    private nonisolated static let shells: Set<String> = ["bash", "sh", "zsh", "dash", "fish", "ksh", "tcsh", "csh"]
+
+    private nonisolated static let interpreters: Set<String> = ["python", "node", "ruby", "perl"]
+
+    // `bash -lc` and `node -p` run the code that follows, so no argument names a script.
+    private nonisolated static let inlineCodeLetters: [String: Set<Character>] = [
+        "bash": ["c"], "sh": ["c"], "zsh": ["c"], "dash": ["c"], "fish": ["c"], "ksh": ["c"], "tcsh": ["c"],
+        "csh": ["c"], "python": ["c"], "perl": ["e", "E"], "ruby": ["e"], "node": ["e", "p"],
     ]
 
-    // `bash -c` and `perl -e` run the code that follows, so no argument names a script.
-    private nonisolated static let inlineCodeFlags: Set<String> = ["-c", "-e"]
+    private nonisolated static let longInlineCodeFlags: Set<String> = ["--eval", "--print", "--command"]
+
+    // The argument after these is their value (`python -W ignore`, `bash --rcfile`), never the script.
+    private nonisolated static let valueFlags: Set<String> = [
+        "-o", "-O", "-W", "-X", "-I", "-r", "--rcfile", "--init-file", "--require",
+    ]
 }
