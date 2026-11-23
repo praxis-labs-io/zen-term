@@ -233,7 +233,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
         XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Workspace 1", "Repo", "feature/nested"])
-        XCTAssertEqual(rows(of: c)[2].variant, .nested(symbol: "arrow.triangle.branch"))
+        XCTAssertEqual(rows(of: c)[2].variant, .nested(.worktree))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
 

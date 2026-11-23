@@ -118,7 +118,7 @@ final class SidebarAgentRowTests: WindowTestCase {
             "the title sits above the row's middle, or this test proves nothing")
     }
 
-    func test_anAgentsMarkSitsOnTheTitleLine_withTheWorkspaceLineStillUnderIt() throws {
+    func test_anAgentsChipSitsOnTheTitleLine_withTheWorkspaceLineStillUnderIt() throws {
         let row = SidebarAgentRow {}
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 80), styleMask: [.borderless],
@@ -133,18 +133,22 @@ final class SidebarAgentRowTests: WindowTestCase {
         row.render(
             SidebarAgentItem(
                 id: SurfaceID(raw: 1), state: .idle, summary: "Review x.swift", detail: "zen-term", message: nil,
-                mark: "terminal"))
+                process: ProcessIcon.forAgent("claude")))
         content.layoutSubtreeIfNeeded()
         func frame(_ view: NSView) -> NSRect { view.convert(view.bounds, to: nil) }
 
-        let mark = try XCTUnwrap(descendants(row).compactMap { $0 as? NSImageView }.first { $0.image != nil })
+        let mark = try XCTUnwrap(row.processBadgeForTesting, "the row draws no chip")
+        XCTAssertTrue(descendants(row).contains { $0 === mark }, "the chip is not in the row")
+        XCTAssertEqual(mark.process?.name, "Claude Code")
         let title = try summaryLabel(of: row, saying: "Review x.swift")
         let workspace = try summaryLabel(of: row, saying: "zen-term")
         XCTAssertFalse(mark.isHiddenOrHasHiddenAncestor)
         XCTAssertFalse(workspace.isHiddenOrHasHiddenAncestor)
         XCTAssertGreaterThan(frame(mark).width, 0)
         XCTAssertGreaterThan(frame(workspace).width, 0)
-        XCTAssertEqual(frame(mark).midY, frame(title).midY, accuracy: 0.5, "the mark centers on the title's line")
+        XCTAssertEqual(frame(mark).midY, frame(title).midY, accuracy: 0.5, "the chip centers on the title's line")
         XCTAssertLessThan(frame(workspace).maxY, frame(title).minY, "the workspace line sits under the title")
+        XCTAssertEqual(
+            frame(workspace).minX, frame(title).minX, accuracy: 0.5, "the workspace line starts with the title's text")
     }
 }

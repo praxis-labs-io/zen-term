@@ -665,7 +665,10 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.style = style
             self.label = label
             self.statusPath = statusPath
-            super.init(Content(title: label, ink: style.ink, nests: style == .child))
+            super.init(
+                Content(
+                    title: label, leading: style == .child ? .process(.worktree) : nil, ink: style.ink,
+                    nests: style == .child))
 
             branchLabel.font = ChromeType.font(.caption)
             branchLabel.textColor = Theme.current.chrome.ink(.muted)

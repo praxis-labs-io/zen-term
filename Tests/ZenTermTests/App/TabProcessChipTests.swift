@@ -9,7 +9,7 @@ final class TabProcessChipTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
-    private var jobs: [Process] = []
+    private let jobs = ProgramJobs()
     private let originalPresence = WindowController.isPresent
 
     override func setUpWithError() throws {
@@ -27,8 +27,7 @@ final class TabProcessChipTests: WindowTestCase {
     }
 
     override func tearDownWithError() throws {
-        jobs.forEach { $0.terminate() }
-        jobs = []
+        jobs.stopAll()
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller.map { AttentionCenter.shared.forget(windowID: $0.windowID) }
         controller = nil
@@ -58,22 +57,6 @@ final class TabProcessChipTests: WindowTestCase {
         return try XCTUnwrap(tabBar.chipsForTesting.first).processBadgeForTesting?.process
     }
 
-    // A real process whose argv[0] is `name`, which is how a pane's program is read.
-    private func job(named name: String) throws -> pid_t {
-        let job = Process()
-        job.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        job.arguments = ["-e", "exec {'/bin/sleep'} '\(name)', '30'"]
-        try job.run()
-        jobs.append(job)
-        let pid = job.processIdentifier
-        let deadline = Date().addingTimeInterval(5)
-        while ProcessArguments.programName(of: pid) != name, Date() < deadline {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
-        }
-        XCTAssertEqual(ProcessArguments.programName(of: pid), name, "precondition: the job runs as \(name)")
-        return pid
-    }
-
     func test_aTabInTheHomeFolder_isNamedForTheUser_neverATilde() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
@@ -97,7 +80,7 @@ final class TabProcessChipTests: WindowTestCase {
         let job = Process()
         job.executableURL = script
         try job.run()
-        jobs.append(job)
+        jobs.track(job)
         let deadline = Date().addingTimeInterval(5)
         while ProcessArguments.arguments(of: job.processIdentifier)?.last != script.path, Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
@@ -126,11 +109,11 @@ final class TabProcessChipTests: WindowTestCase {
         let pane = try XCTUnwrap(spawned.first)
         XCTAssertEqual(try chipProcess(in: c), .shell, "a pane at its prompt shows the shell chip")
 
-        pane.foregroundProcessGroupID = try job(named: "nvim")
+        pane.foregroundProcessGroupID = try jobs.start(named: "nvim")
         c.pollTitlesForTesting()
         XCTAssertEqual(try chipProcess(in: c)?.name, "Neovim")
 
-        pane.foregroundProcessGroupID = try job(named: "fooctl")
+        pane.foregroundProcessGroupID = try jobs.start(named: "fooctl")
         c.pollTitlesForTesting()
         XCTAssertEqual(try chipProcess(in: c), .unknown, "an unknown program gets the generic chip")
 
