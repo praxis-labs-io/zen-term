@@ -2892,6 +2892,7 @@ final class WindowController: NSObject {
                 return
             }
         }
+        if chord == .clearScreen, sidebar.openMenuOnFocusedRow() { return }
         if case .host(let host) = selection {
             if chord == .newTab { return connect(host) }
             if case .toggleToolFloat(let id) = chord {

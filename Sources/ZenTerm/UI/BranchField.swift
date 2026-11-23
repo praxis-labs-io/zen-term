@@ -62,12 +62,6 @@ final class BranchField: NSView, ThemeReapplying {
             self?.closeList()
             self?.onSubmit?()
         }
-        box.onEndEditing = { [weak self] in self?.closeList() }
-        box.onEscape = { [weak self] in
-            guard let self, self.isListOpen else { return false }
-            self.closeList()
-            return true
-        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -162,8 +156,8 @@ final class BranchField: NSView, ThemeReapplying {
     }
 
     private func rerenderList() {
-        closeList()
-        openList()
+        popover.replace(rows: buildRows())
+        renderRows()
     }
 
     private func buildRows() -> [ListPopover.Row] {

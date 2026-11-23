@@ -12,8 +12,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onBacktab: (() -> Void)?
     var onEndEditing: (() -> Void)?
     var onSubmit: (() -> Void)?
-    // Handled here because `performKeyEquivalent` does not run for a bare Esc while a popover host holds focus.
-    var onEscape: (() -> Bool)?
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
@@ -107,8 +105,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
             } else {
                 (onEnter ?? onArrowDown)?()
             }
-        case #selector(NSResponder.cancelOperation(_:)):
-            guard let onEscape, onEscape() else { return false }
         case #selector(NSResponder.insertTab(_:)):
             guard let onTab else { return false }
             onTab()

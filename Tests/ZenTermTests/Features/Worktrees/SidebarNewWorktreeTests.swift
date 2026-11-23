@@ -552,43 +552,112 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertFalse(menu.isOpen)
     }
 
+    private func key(
+        _ characters: String, code: UInt16, flags: NSEvent.ModifierFlags = [], in c: WindowController
+    ) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
+    }
+
+    private func pressCommandK(in c: WindowController) throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        XCTAssertNil(keys.route(try key("k", code: 40, flags: .command, in: c)), "⌘K is claimed, not passed on")
+    }
+
+    private func focusRow(_ row: NavRow, in c: WindowController) {
+        c.handle(.focusSidebar)
+        row.takeKeyboardFocus()
+        XCTAssertTrue(c.window.firstResponder === row, "precondition: the row holds keyboard focus")
+    }
+
     func test_escape_closesTheMenu_andGoesNoFurther() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
         let items = menu.itemViewsForTesting
-        let escape = try XCTUnwrap(
-            NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: c.window.windowNumber, context: nil, characters: "\u{1b}",
-                charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
 
-        XCTAssertNil(menu.filter(escape))
+        NSApp.sendEvent(try key("\u{1b}", code: 53, in: c))
 
         XCTAssertFalse(menu.isOpen)
         XCTAssertFalse(items.isEmpty)
-        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows left the window")
     }
 
-    func test_aClickElsewhere_closesTheMenu_andStillLands() throws {
+    func test_aClickElsewhere_closesTheMenu() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
-        let click = try mouse(.leftMouseDown, at: NSPoint(x: 600, y: 300), in: c)
 
-        XCTAssertTrue(menu.filter(click) === click)
+        NSApp.sendEvent(try mouse(.leftMouseDown, at: NSPoint(x: 600, y: 300), in: c))
 
         XCTAssertFalse(menu.isOpen)
     }
 
-    func test_aClickOnTheMenu_leavesItForTheItem() throws {
+    func test_aStrayKey_leavesTheMenuOpen() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
-        let item = try XCTUnwrap(menu.itemViewsForTesting.first)
-        let click = try mouse(
-            .leftMouseDown, at: item.convert(NSPoint(x: item.bounds.midX, y: item.bounds.midY), to: nil), in: c)
 
-        XCTAssertTrue(menu.filter(click) === click)
+        NSApp.sendEvent(try key("a", code: 0, in: c))
+
+        XCTAssertTrue(menu.isOpen, "only Esc, a click outside or the window going away closes the menu")
+    }
+
+    func test_commandK_onAFocusedRow_opensItsMenu_highlightingTheFirstItem() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        focusRow(row, in: c)
+
+        try pressCommandK(in: c)
 
         XCTAssertTrue(menu.isOpen)
+        XCTAssertTrue(menu.anchor === row)
+        XCTAssertEqual(menu.highlightedTitleForTesting, "New Worktree…")
+        XCTAssertEqual(
+            menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "", ""], "the keycaps stay on the items")
+    }
+
+    func test_commandK_withAPaneFocused_stillClearsTheScreen() throws {
+        let c = makeWindow()
+        let surface = try XCTUnwrap(c.anyTerminalSurface as? RecordingSurface)
+
+        try pressCommandK(in: c)
+
+        XCTAssertFalse(menu.isOpen)
+        XCTAssertEqual(surface.clearScreenCount, 1)
+    }
+
+    func test_theKeyboard_walksTheMenu_andReturnChoosesTheHighlightedItem() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        focusRow(row, in: c)
+        try pressCommandK(in: c)
+
+        c.window.sendEvent(try key("\u{F701}", code: 125, flags: [.function, .numericPad], in: c))
+        XCTAssertEqual(menu.highlightedTitleForTesting, "Rename Workspace…")
+        c.window.sendEvent(try key("\u{F700}", code: 126, flags: [.function, .numericPad], in: c))
+        XCTAssertEqual(menu.highlightedTitleForTesting, "New Worktree…")
+        XCTAssertTrue(c.window.firstResponder === row, "the arrows walk the menu, not the sidebar")
+
+        c.window.sendEvent(try key("\r", code: 36, in: c))
+
+        _ = try newWorktreeCard(in: c)
+        XCTAssertFalse(menu.isOpen)
+    }
+
+    func test_escape_closesAKeyboardMenu_andLeavesFocusOnTheRow() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        focusRow(row, in: c)
+        try pressCommandK(in: c)
+        XCTAssertTrue(menu.isOpen, "precondition: ⌘K opened the menu")
+
+        NSApp.sendEvent(try key("\u{1b}", code: 53, in: c))
+
+        XCTAssertFalse(menu.isOpen)
+        XCTAssertTrue(c.window.firstResponder === row)
     }
 
     func test_aRowWithNoConfigEntry_offersOnlyClose() throws {

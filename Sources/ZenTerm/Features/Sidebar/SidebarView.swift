@@ -301,8 +301,8 @@ final class SidebarView: NSView, ThemeReapplying {
     }
 
     private func wire(_ row: SidebarJumpRow) {
-        row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
-        row.onArrowDown = { [weak self] in self?.moveFocus(1) }
+        row.onArrowUp = { [weak self] in self?.arrow(-1) }
+        row.onArrowDown = { [weak self] in self?.arrow(1) }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
     }
@@ -357,10 +357,13 @@ final class SidebarView: NSView, ThemeReapplying {
                 Self.selectShortcut(self?.numbers[id])
             }
         }
-        row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
-        row.onArrowDown = { [weak self] in self?.moveFocus(1) }
+        row.onArrowUp = { [weak self] in self?.arrow(-1) }
+        row.onArrowDown = { [weak self] in self?.arrow(1) }
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
-        row.onReturn = { [weak self] in self?.onActivate(id) }
+        row.onReturn = { [weak self] in
+            guard let self else { return }
+            if self.rowMenu.isOpen { self.rowMenu.chooseHighlighted() } else { self.onActivate(id) }
+        }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onSecondaryClick = { [weak self, weak row] in
             guard let self, let row else { return }
@@ -426,6 +429,17 @@ final class SidebarView: NSView, ThemeReapplying {
     override func viewDidHide() {
         super.viewDidHide()
         rowMenu.close()
+    }
+
+    // The menu leaves focus on its row, so the row's arrows walk the menu while it is up.
+    private func arrow(_ delta: Int) {
+        if rowMenu.isOpen { rowMenu.moveHighlight(delta) } else { moveFocus(delta) }
+    }
+
+    func openMenuOnFocusedRow() -> Bool {
+        guard let id = focusedRow, let row = rows[id] else { return false }
+        rowMenu.open(menuItems(for: id), from: row, highlightingFirst: true)
+        return rowMenu.isOpen
     }
 
     var hasFocus: Bool { focusStops.contains { KeyboardFocus.isFocused($0, in: window) } }

@@ -644,7 +644,8 @@
 #
 # `clear_screen` (⌘K) wipes the screen and the scrollback with it, the way `clear`
 # does. It leaves a full-screen program alone: vim and its kind draw on a second screen
-# that has no scrollback to clear. Over an open tool float it clears the card.
+# that has no scrollback to clear. Over an open tool float it clears the card. With a
+# sidebar row focused it opens that row's menu instead.
 #
 # `write_screen_file` (⌘⇧J) writes what is on screen to a file and types the path at
 # your prompt, so the next command has something to point at. Reach for it when a wall
