@@ -78,6 +78,10 @@ final class LayoutRow: NSView, ThemeReapplying {
         messageLabel.show(text, tone: kind == .diagnostic ? .warning : .destructive)
     }
 
+    func setDescription(_ text: String) {
+        descriptionLabel?.stringValue = text
+    }
+
     var renderedMessageForTesting: String? {
         messageLabel.isHidden ? nil : messageLabel.stringValue
     }
