@@ -114,8 +114,12 @@ extension ControlResponder {
     }
 
     func sendToPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
-        guard request.args.text != nil else {
+        guard let text = request.args.text else {
             return reply(.failure(ControlError(.badRequest, "pane.send needs text.")))
+        }
+        if ZenEnvelope.carriesTag(text) {
+            let tagged = "pane.send text cannot contain a <zen or </zen tag, which marks who sent a message."
+            return reply(.failure(ControlError(.badRequest, tagged)))
         }
         if request.args.wait == true, case .failure(let error) = Self.waitTimeout(request) {
             return reply(.failure(error))
@@ -174,8 +178,7 @@ extension ControlResponder {
     private func envelope(_ text: String, from sender: Int?, into place: PanePlace) -> String {
         guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane), !Self.isSlashCommand(text)
         else { return text }
-        let from = locate(pane: sender)?.pane.record.name.map { "\(sender) \($0)" } ?? "\(sender)"
-        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender) --enter\">\(text)</zen>"
+        return ZenEnvelope.wrap(text, from: sender, named: locate(pane: sender)?.pane.record.name)
     }
 
     // A wrapped slash command reaches the agent as a message and never runs.
@@ -281,12 +284,8 @@ extension ControlResponder {
         }
         switch pane(address, for: request) {
         case .failure(let error):
-            if error.code == .notFound, case .token(let token) = address, let exit = launchedExit(of: token) {
-                return reply(
-                    .success(
-                        WaitResult(
-                            reason: .exited, exitCode: exit.exitCode, text: exit.lastLines,
-                            pane: exit.pane ?? Self.closedPane(exit))))
+            if error.code == .notFound, let exit = launchedExit(of: address) {
+                return reply(.success(Self.exited(exit)))
             }
             reply(.failure(error))
         case .success(let place):
@@ -361,8 +360,20 @@ extension ControlResponder {
             exit: { [self] in launchedExit(of: token) })
     }
 
-    private func launchedExit(of token: Int) -> LaunchedPaneExit? {
+    func launchedExit(of token: Int) -> LaunchedPaneExit? {
         windows().lazy.compactMap { $0.launchedPaneExits.exit(of: token) }.first
+    }
+
+    private func launchedExit(of address: ControlAddress.Pane) -> LaunchedPaneExit? {
+        switch address {
+        case .token(let token): return launchedExit(of: token)
+        case .name(let name):
+            return windows().compactMap { $0.launchedPaneExits.latestExit(named: name) }.max { $0.token < $1.token }
+        }
+    }
+
+    static func exited(_ exit: LaunchedPaneExit) -> WaitResult {
+        WaitResult(reason: .exited, exitCode: exit.exitCode, text: exit.lastLines, pane: exit.pane ?? closedPane(exit))
     }
 
     private static func closedPane(_ exit: LaunchedPaneExit) -> ListResult.Pane {

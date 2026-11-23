@@ -60,7 +60,8 @@ final class SettingsGeneralSection: SettingsFormSection {
         claudeSetupControl = control
         addCustomRow(
             key: Self.claudeSetupKey, caption: "Teach Claude Code to use zen",
-            description: "The zen skill and a session hook, in ~/.claude", control: control, focusStop: control,
+            description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)", control: control,
+            focusStop: control,
             controlNote: nil, width: nil, refresh: {})
         ClaudeCodeSetup.refresh { [weak self] in self?.showClaudeSetup($0) }
     }

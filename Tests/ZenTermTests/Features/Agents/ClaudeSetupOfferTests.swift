@@ -189,8 +189,19 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         XCTAssertEqual(try ClaudeSetup(configRoot: try claudeRoot(), files: files).state(), .current)
     }
 
+    func test_theOfferNamesTheFolderItInstallsTo() throws {
+        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+
+        try start("claude", in: c)
+
+        waitUntil(offerToast(in: c) != nil, "the setup offer")
+        let folder = PathDisplay.abbreviatingHome(try claudeRoot().path)
+        XCTAssertTrue(
+            toastTexts(in: c).contains(WindowController.claudeSetupOfferMessage(in: folder)), "\(toastTexts(in: c))")
+    }
+
     func test_offerCopyFitsTheToast() {
-        for line in WindowController.claudeSetupOfferMessage.split(separator: "\n") {
+        for line in WindowController.claudeSetupOfferMessage(in: "~/.claude").split(separator: "\n") {
             let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.messageMaxWidth, "wraps: \(line)")
         }

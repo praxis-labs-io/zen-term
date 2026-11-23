@@ -267,11 +267,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   with no code yet holds the close until the mark or `exitMarkGrace` (async). The window
   keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
   run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
-  Every pane and drawer token a tab releases reaches the window (`onPaneTokensReleased`),
-  which closes that token's children on the next main-queue turn, since the release lands
+  Every pane and drawer token a tab releases reaches its window (`onPaneTokensReleased`),
+  which hands it to every window (`appWindows`), since a child sits wherever its `pane` put it.
+  Each closes that token's children on the next main-queue turn, since the release lands
   mid-rebuild of a canvas that may hold a child. A child's own release cascades the same way.
-  Close stakes and confirmations count the children first (`childStakes`), including whether
-  closing them empties the window. `list` drops a `parent` that `NavRegistry` no longer holds.
+  Close stakes and confirmations count the children in every window first (`familyStakes`),
+  including whether closing them empties the window or another one, whose window floats then
+  count too. A worktree removal closes every window's
+  tabs in it together, so each window counts only the children it holds. `list` drops a `parent` that `NavRegistry` no longer holds.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -596,14 +599,15 @@ that refuses a connect is always stale and a sibling's sweep never removes one m
 request decodes on the connection's thread, applies on main through `ControlResponder`,
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
-replies when the read lands, holding only its own connection. `pane.wait` holds in `PaneWaits`,
+replies when the read lands, holding only its own connection. A command that can hold past `ControlWire.longestReplyWait` (`pane.wait`, `pane.send`, `pane.run`) takes its deadline from its own args through `ControlWire.answerWait`, which the server and `zen` both read, so neither end gives up before the other. `pane.wait` holds in `PaneWaits`,
 app-wide since a caller and the pane it waits on can sit in different windows: `WindowController`
 feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
 `pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
 without OSC 133 are checked on a timer while a wait holds: the screen's own rows, lined up with the
 last read (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). The
-connection's thread checks for a hangup while it waits and drops the hold. A wait on the caller's children
-(`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
+connection's thread checks for a hangup while it waits and drops the hold. A hangup is the write
+side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `shutdown(SHUT_WR)`.
+A wait on the caller's children (`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
 as a single pane's does. A pane `pane.run` opened leaves its exit in its window's
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent holds in `PaneDrafts`, also app-wide, which `WindowController.keyReachedFocus` feeds the

@@ -133,10 +133,17 @@ final class ControlServer {
         return reply
     }
 
-    // A peek that reads end-of-file means the peer closed; pending bytes are its next request.
+    // Read EOF and POLLHUP both fire on a peer's shutdown(SHUT_WR); only a write-side EOF means it closed.
     private static func hasHungUp(_ fd: Int32) -> Bool {
-        var byte: UInt8 = 0
-        return recv(fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT) == 0
+        let queue = kqueue()
+        guard queue >= 0 else { return false }
+        defer { close(queue) }
+        var change = kevent(
+            ident: UInt(fd), filter: Int16(EVFILT_WRITE), flags: UInt16(EV_ADD), fflags: 0, data: 0, udata: nil)
+        var event = kevent()
+        var now = timespec(tv_sec: 0, tv_nsec: 0)
+        guard kevent(queue, &change, 1, &event, 1, &now) == 1 else { return false }
+        return event.flags & UInt16(EV_EOF) != 0
     }
 
     private static func encoded(_ reply: ControlReply, id: Int?) -> Data {
