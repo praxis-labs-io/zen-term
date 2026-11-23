@@ -9,6 +9,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         var submitFailure: String?
         var cancelled = 0
         var deleted = 0
+        var deleteFailure: String?
     }
 
     private var window: NSWindow?
@@ -30,7 +31,11 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
             },
             onCancel: { sink.cancelled += 1 },
             onDismiss: {},
-            onDelete: withDelete ? { sink.deleted += 1 } : nil)
+            onDelete: withDelete
+                ? {
+                    sink.deleted += 1
+                    return sink.deleteFailure
+                } : nil)
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 900),
@@ -129,6 +134,19 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
 
         overlay.titleFieldForTesting.onChange?()
         XCTAssertFalse(visibleText(in: overlay).contains(try XCTUnwrap(sink.submitFailure)))
+    }
+
+    func test_aFailedDelete_showsInline_andFocusesDelete() throws {
+        let existing = Workspace(title: "api", path: try makeRealDir(), tabs: [], env: [:], carry: [])
+        let (overlay, sink) = mount(editing: existing, withDelete: true)
+        sink.deleteFailure = "Couldn't write the workspaces file: the volume is read-only."
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+
+        delete.onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+        XCTAssertTrue(visibleText(in: overlay).contains(try XCTUnwrap(sink.deleteFailure)))
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window))
     }
 
     func test_theAddCard_opensWithOneShellTab_focusedOnItsMainPane() throws {

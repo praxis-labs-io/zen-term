@@ -536,10 +536,10 @@ New modal surfaces compose the existing primitives.
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
   `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
-  (a config write, git, the browser) shows in a `FormErrorLabel` above the action bar,
-  never a toast.
+  or delete (a config write, git, the browser) shows in a `FormErrorLabel` above the action
+  bar, never a toast.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
-  submits, Esc cancels. A single-field card (rename) submits on Return. Every card is fully
+  submits, Esc cancels. A card with a single field (rename) submits on Return. Every card is fully
   operable without a mouse.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.

@@ -337,6 +337,21 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertNotIdentical(second, first, "a new warning opens even while the old one is leaving")
     }
 
+    func test_aSubmit_clearsAnEarlierFailure() throws {
+        removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        XCTAssertEqual(visibleMessage(in: overlay), removalFailure)
+        nameField(in: overlay).setText("The \"box\"")
+
+        submitByChord()
+
+        let shown = descendants(of: overlay).compactMap { $0 as? NSTextField }.filter { !$0.isHidden }.map(
+            \.stringValue)
+        XCTAssertFalse(shown.contains(try XCTUnwrap(removalFailure)), "\(shown)")
+        XCTAssertTrue(shown.contains("Can't contain \"."), "\(shown)")
+    }
+
     func test_aFailedRemove_showsInTheForm_andFocusReturnsToRemove() throws {
         removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
         let overlay = mount(devbox, removable: true)

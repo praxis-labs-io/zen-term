@@ -178,6 +178,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     private func submit() {
         guard !isDismissing else { return }
+        errorLabel.clear()
         let validation = validate()
         guard validation.isValid else { return validation.revealFirstInvalid() }
         let name = enteredName

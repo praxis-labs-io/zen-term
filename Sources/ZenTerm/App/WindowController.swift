@@ -2165,27 +2165,24 @@ final class WindowController: NSObject {
         do {
             try WorkspacesWriter.update(ws, originalTitle: originalTitle)
         } catch {
-            return Self.workspaceSaveFailure(error)
+            return Self.workspaceWriteFailure(error)
         }
         done()
         return nil
     }
 
-    private static func workspaceSaveFailure(_ error: Error) -> String {
+    private static func workspaceWriteFailure(_ error: Error) -> String {
         "Couldn't write the workspaces file: \(error.localizedDescription)"
     }
 
-    private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
+    private func deleteWorkspace(_ ws: Workspace, then done: @escaping () -> Void) -> String? {
         do {
             try WorkspacesWriter.remove(title: ws.title)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Delete Workspace",
-                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
-            return
+            return Self.workspaceWriteFailure(error)
         }
-        (done ?? reopenSettingsOnWorkspaces)()
+        done()
+        return nil
     }
 
     // Leaves Settings open: rebuilding it would lose the user's place in the list mid-⌥↓.
@@ -2215,7 +2212,7 @@ final class WindowController: NSObject {
         do {
             try WorkspacesWriter.append(ws)
         } catch {
-            return Self.workspaceSaveFailure(error)
+            return Self.workspaceWriteFailure(error)
         }
         closeModal()
         openWorkspace(ws)

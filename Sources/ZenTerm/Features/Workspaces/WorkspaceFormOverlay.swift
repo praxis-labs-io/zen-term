@@ -17,7 +17,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let editingWorkspace: Workspace?
     private let existingTitles: Set<String>
     private let onSubmit: (Workspace) -> String?
-    private let onDelete: (() -> Void)?
+    private let onDelete: (() -> String?)?
     private var form: WorkspaceForm
 
     private lazy var header = ModalHeader(title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace")
@@ -40,13 +40,13 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let undoButton = AppButton(title: "Undo", variant: .secondary)
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private lazy var addButton = ModalShell.submitButton(title: editingWorkspace == nil ? "Add Workspace" : "Save")
-    private let failureLabel = FormErrorLabel(maximumLines: 3)
+    private let errorLabel = FormErrorLabel(maximumLines: 3)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
 
     init(
         editing: Workspace? = nil, existingTitles: Set<String>,
         onSubmit: @escaping (Workspace) -> String?, onCancel: @escaping () -> Void,
-        onDismiss: @escaping () -> Void, onDelete: (() -> Void)? = nil
+        onDismiss: @escaping () -> Void, onDelete: (() -> String?)? = nil
     ) {
         self.editingWorkspace = editing
         self.existingTitles = existingTitles
@@ -218,10 +218,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         addButton.onTap = { [weak self] in self?.submit() }
         var leading: [NSView] = [notice, undoButton]
         if onDelete != nil {
-            deleteButton.onTap = { [weak self] in
-                guard let self, !self.isDismissing else { return }
-                self.onDelete?()
-            }
+            deleteButton.onTap = { [weak self] in self?.delete() }
             leading.insert(deleteButton, at: 0)
         }
         for button in [addVarButton, undoButton, cancelButton, addButton, deleteButton] {
@@ -233,7 +230,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         }
         wireFooterArrows()
         return FormCard.footer(
-            ModalActionBar(leading: leading, trailing: [cancelButton, addButton]), failure: failureLabel)
+            ModalActionBar(leading: leading, trailing: [cancelButton, addButton]), failure: errorLabel)
     }
 
     private func wireFooterArrows() {
@@ -467,13 +464,22 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     private func submit() {
         guard !isDismissing else { return }
-        failureLabel.clear()
+        errorLabel.clear()
         let validation = validate(submitting: true)
         guard validation.isValid else { return validation.revealFirstInvalid() }
         guard let workspace = buildWorkspace() else { return }
         if let failure = onSubmit(workspace) {
-            failureLabel.show(failure)
+            errorLabel.show(failure)
             focus(addButton)
+        }
+    }
+
+    private func delete() {
+        guard !isDismissing else { return }
+        errorLabel.clear()
+        if let failure = onDelete?() {
+            errorLabel.show(failure)
+            focus(deleteButton)
         }
     }
 
@@ -571,7 +577,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func refreshValidity() {
-        failureLabel.clear()
+        errorLabel.clear()
         validate(submitting: false)
     }
 

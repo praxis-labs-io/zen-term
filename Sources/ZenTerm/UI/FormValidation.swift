@@ -1,6 +1,5 @@
 import AppKit
 
-// Collects a form's problems in field order, so submit can focus the first one.
 struct FormValidation {
     private var revealFirst: (() -> Void)?
 
