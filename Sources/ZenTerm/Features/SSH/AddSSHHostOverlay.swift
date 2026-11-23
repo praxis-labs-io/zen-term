@@ -65,6 +65,12 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     override var isShowingOverlaidCard: Bool { confirm.isShowing }
 
+    // Save's plain-Return equivalent would otherwise answer a Return meant for the card's focused button.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard confirm.isShowing else { return super.performKeyEquivalent(with: event) }
+        return confirm.card?.performKeyEquivalent(with: event) ?? false
+    }
+
     func focusInitialResponder() {
         if let card = confirm.card { return card.focusInitialResponder() }
         let field = editing == nil ? hostField.field : nameField.field
@@ -156,11 +162,13 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         guard !isDismissing else { return }
         guard let removal, let editing, confirm.card == nil else { return }
         errorLabel.clear()
-        guard let consequence = removal.consequence() else { return performRemoval() }
         let name = editing.entry.displayName
+        let message =
+            removal.consequence().map { "Removing \(name) will \($0)." }
+            ?? "Removing \(name) takes it off your remote hosts. Your SSH config stays."
         confirm.present(
             ConfirmCard(
-                title: "Remove \(name)", message: "Removing \(name) will \(consequence).",
+                title: "Remove \(name)", message: message,
                 confirmLabel: "Remove",
                 onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.removeButton) } },
                 onConfirm: { [weak self] in self?.confirm.dismiss { self?.performRemoval() } }))
@@ -191,7 +199,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isDismissing else { return }
+        guard !isDismissing, !confirm.isShowing else { return }
         guard let host = submittedHost() else { return }
         let name = nameField.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let problem = Self.problem(withName: name) {

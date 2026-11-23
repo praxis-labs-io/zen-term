@@ -8,7 +8,6 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (Request) -> Void
     private let onEditWorkspace: (() -> Void)?
 
-    private lazy var confirm = ConfirmSlot(over: self)
     private let header = ModalHeader(title: "New Worktree")
 
     private let branchField = BranchField()
@@ -54,13 +53,9 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     // `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
     override var isBusy: Bool { isWorking }
 
-    override var isShowingOverlaidCard: Bool { confirm.isShowing }
-
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
-    func focusInitialResponder() {
-        if let card = confirm.card { card.focusInitialResponder() } else { focus(branchField.field) }
-    }
+    func focusInitialResponder() { focus(branchField.field) }
 
     override func reapplyTheme() {
         super.reapplyTheme()
@@ -109,7 +104,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         branchCaption.font = ChromeType.font(.caption)
         branchCaption.textColor = Theme.current.chrome.ink(.muted)
         branchCaption.lineBreakMode = .byWordWrapping
-        branchCaption.maximumNumberOfLines = 2
+        branchCaption.maximumNumberOfLines = 0
         branchCaption.isHidden = true
         let branchStack = Self.vStack([branchGroup, branchCaption], spacing: ChromeMetrics.Spacing.s6)
 
@@ -238,30 +233,13 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isWorking, !confirm.isShowing else { return }
+        guard !isWorking else { return }
         branchField.closeList()
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
             return
         }
-        guard case .mainCheckout = options.holders[branchName] else {
-            onSubmit(request)
-            return
-        }
-        confirm.present(
-            ConfirmCard(
-                title: "Move Your Main Checkout",
-                message: Self.moveMainCheckoutMessage(
-                    branchName, to: options.defaultBase ?? "the default branch"),
-                confirmLabel: "Create Worktree",
-                onCancel: { [weak self] in
-                    self?.confirm.dismiss { self?.focus(self?.branchField.field) }
-                },
-                onConfirm: { [weak self] in
-                    guard let self else { return }
-                    self.confirm.dismiss {}
-                    self.onSubmit(self.request)
-                }))
+        onSubmit(request)
     }
 
     static func moveMainCheckoutMessage(_ branch: String, to base: String) -> String {
@@ -343,8 +321,8 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         }
         branchCaption.isHidden = false
         if case .mainCheckout = options.holders[branchName] {
-            branchCaption.stringValue =
-                "\(branchName) is checked out in your main checkout, which moves to the default branch."
+            branchCaption.stringValue = Self.moveMainCheckoutMessage(
+                branchName, to: options.defaultBase ?? "the default branch")
         } else {
             branchCaption.stringValue = "Uses the existing branch \(branchName)."
         }

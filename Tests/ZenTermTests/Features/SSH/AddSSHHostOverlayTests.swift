@@ -248,13 +248,21 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertLessThan(remove.frame.minX, cancel.frame.minX)
     }
 
-    func test_remove_withNothingToWarnAbout_removesAtOnce() throws {
+    func test_remove_ofAnIdleHost_stillAsks_withFocusOnCancel() throws {
         let overlay = mount(devbox, removable: true)
 
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
 
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        let texts = descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(
+            texts.contains("Removing Build box takes it off your remote hosts. Your SSH config stays."), "\(texts)")
+        XCTAssertTrue(isFocused(button("Cancel", in: card)))
+        XCTAssertEqual(removed, 0)
+
+        try XCTUnwrap(button("Remove", in: card)).onTap()
+
         XCTAssertEqual(removed, 1)
-        XCTAssertFalse(descendants(of: overlay).contains { $0 is ConfirmCard })
     }
 
     func test_returnWhileDismissing_doesNotSubmit() {
@@ -294,6 +302,35 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(removed, 1)
     }
 
+    func test_returnWithTheWarningUp_answersTheWarning_notTheForm() throws {
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+
+        deliver(returnKey())
+
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(removed, 0)
+        XCTAssertEqual(cancelled, 0)
+        XCTAssertTrue(isFocused(button("Remove", in: overlay)), "Return on Cancel closed the warning")
+    }
+
+    func test_returnOnTheWarningsRemove_removes() throws {
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        window?.makeFirstResponder(button("Remove", in: card))
+
+        deliver(returnKey())
+
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(removed, 1)
+    }
+
+    private func deliver(_ event: NSEvent) {
+        guard let window, !window.performKeyEquivalent(with: event) else { return }
+        window.firstResponder?.keyDown(with: event)
+    }
+
     func test_cancellingTheWarning_removesNothing_andFocusReturnsToRemove() throws {
         removalConsequence = "stop connecting to it and close its tabs"
         let overlay = mount(devbox, removable: true)
@@ -326,8 +363,10 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     func test_aFailedRemove_showsInTheForm_andFocusReturnsToRemove() throws {
         removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
         let overlay = mount(devbox, removable: true)
-
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+
+        try XCTUnwrap(button("Remove", in: card)).onTap()
 
         XCTAssertEqual(removed, 1)
         XCTAssertEqual(visibleMessage(in: overlay), removalFailure)
