@@ -347,7 +347,6 @@ class ListRow: ControlView, ThemeReapplying {
 
     override func focusDidChange() { refreshFill() }
 
-    // A list with a keyboard cursor suppresses hover too, or the hovered row and the cursor's row would both look chosen.
     override func hoverDidChange() {
         if !showsHover { hideTooltip() }
         refreshFill()
