@@ -8,12 +8,15 @@ import XCTest
 final class LaunchedProgramShellTests: XCTestCase {
     private final class Recorder: NSObject, TerminalSurfaceDelegate {
         var events: [String] = []
+        var titles: [String] = []
 
         func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
             events.append("finished \(result.exitCode.map(String.init) ?? "nil")")
         }
 
         func surfaceDidExit(_ s: TerminalSurface, code: Int32?) { events.append("exited") }
+
+        func surface(_ s: TerminalSurface, titleDidChange title: String) { titles.append(title) }
     }
 
     private var originalConfig: GeneralConfig!
@@ -220,6 +223,14 @@ final class LaunchedProgramShellTests: XCTestCase {
                     foregroundProgram(of: surface, becoming: "claude"), "claude", "\(shell), closes \(closes)")
             }
         }
+    }
+
+    func test_aLaunchedCommandOf256BytesOrMoreTitlesItsPane() throws {
+        let accents = String(repeating: "\u{e9}", count: 200)
+        let expected = "true " + String(repeating: "\u{e9}", count: 123) + "\u{2026}"
+        let recorder = try launch("true \(accents)", in: "/bin/zsh").recorder
+        run { recorder.titles.contains(expected) || recorder.events.contains("exited") }
+        XCTAssertTrue(recorder.titles.contains(expected), "\(recorder.titles)")
     }
 
     func test_interruptingTheForegroundGroupEndsTheLaunchedCommandWithItsCode() throws {

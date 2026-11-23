@@ -172,6 +172,31 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertTrue(script.hasPrefix(#"printf '\033]2;%s\007' 'make make test'; "#), script)
     }
 
+    private func title(launching command: String) -> String {
+        withConfig(shell: "/bin/zsh")
+        let script = ShellLaunch.program(command, cwd: nil).args.last ?? ""
+        let prefix = #"printf '\033]2;%s\007' '"#
+        guard script.hasPrefix(prefix), let end = script.range(of: "'; ") else { return script }
+        return String(script[script.index(script.startIndex, offsetBy: prefix.count)..<end.lowerBound])
+    }
+
+    func test_program_titlesACommandUnder256BytesWhole() {
+        let command = String(repeating: "x", count: 255)
+        XCTAssertEqual(title(launching: command), command)
+    }
+
+    func test_program_cutsATitleOf256BytesOrMoreTo255BytesEndingInAnEllipsis() {
+        let title = title(launching: String(repeating: "x", count: 256))
+        XCTAssertEqual(title, String(repeating: "x", count: 252) + "\u{2026}")
+        XCTAssertEqual(title.utf8.count, 255)
+    }
+
+    func test_program_cutsALongTitleOnACharacterBoundary() {
+        let title = title(launching: "echo " + String(repeating: "\u{e9}", count: 200))
+        XCTAssertEqual(title, "echo " + String(repeating: "\u{e9}", count: 123) + "\u{2026}")
+        XCTAssertEqual(title.utf8.count, 254)
+    }
+
     func test_program_titlesThePaneWithFishQuoting_underFish() {
         withConfig(shell: "/usr/local/bin/fish")
         let script = ShellLaunch.program(#"echo 'a\b'"#, cwd: nil).args.last ?? ""
