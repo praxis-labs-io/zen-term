@@ -471,9 +471,9 @@ A child is working while its agent's `status` is `working`, or, with no `status`
 reads its agent as working. A child that runs no agent is working while its program runs. A child
 handed a task while its `status` was `idle` or `done`, as its first task or as `pane.send` text
 with `enter` other than a slash command, counts as working until its `status` moves past `idle`
-or `done` or its agent exits, so `all` does not answer before it starts on the task. With `all`,
-each child's `reason` is its latest news while the wait held, so a child that stopped and then exited answers `exited` with its
-`exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+or `done`, clears, or its agent exits, so `all` does not answer before it starts on the task.
+With `all`, each child's `reason` is its latest news while the wait held, so a child that
+stopped and then exited answers `exited` with its `exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
 `bad_request` with `all`.
 
 ```json

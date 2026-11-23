@@ -3672,6 +3672,8 @@ final class WindowController: NSObject {
             if let status {
                 self.taskPickups.report(status, from: surface)
                 self.firstTasks.report(status, from: surface)
+            } else {
+                self.taskPickups.release(surface)
             }
             guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
