@@ -154,7 +154,7 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertFalse(processRow.showsStateForTesting, "a process row shows a state")
     }
 
-    func test_aHelperLeadsWithItsAgentsMark_elseTheProcessSymbol() throws {
+    func test_aHelperLeadsWithItsAgentsMark_elseTheRobot() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
 
@@ -166,23 +166,24 @@ final class AgentNestingTests: WindowTestCase {
 
         XCTAssertEqual(try row(of: codex, in: c).leadingSymbolForTesting, "openai")
         XCTAssertEqual(try row(of: unmarked, in: c).itemForTesting?.role, .helper, "precondition: aider is an agent")
-        XCTAssertEqual(try row(of: unmarked, in: c).leadingSymbolForTesting, "terminal")
+        XCTAssertEqual(try row(of: unmarked, in: c).leadingSymbolForTesting, "bot")
         let promoted = try run("aider", from: nil, in: c)
         promoted.surface.delegate?.surface(
             promoted.surface, programStatusDidChange: TerminalProgramStatus(state: .working, app: "aider"))
         drainMainQueue()
         XCTAssertEqual(try row(of: promoted, in: c).itemForTesting?.role, .agent, "precondition")
         XCTAssertEqual(
-            try row(of: promoted, in: c).leadingSymbolForTesting, "terminal",
-            "an unmarked agent row keeps the leading column so rows align")
+            try row(of: promoted, in: c).leadingSymbolForTesting, "bot",
+            "an agent with no mark leads with the robot, never a blank column")
     }
 
-    func test_everyAgentMarkIsABrandMarkTheCatalogDraws() {
-        for agent in ["claude", "codex", "gemini", "copilot", "opencode", "ollama"] {
-            let mark = AgentRules.brandMark(for: agent)
-            XCTAssertNotNil(mark, agent)
-            XCTAssertTrue(IconCatalog.brands.contains(mark ?? ""), "\(agent) has no mark in the catalog")
-            XCTAssertNotNil(IconCatalog.image(mark ?? ""), "\(agent)'s mark does not draw")
+    func test_everyAgentMarkDrawsInItsRow_neverAnSFSymbolOfTheSameName() {
+        for agent in ["claude", "codex", "gemini", "copilot", "opencode", "pi", "ollama", "aider"] {
+            let mark = ProcessIcon.forAgent(agent).mark
+            XCTAssertNil(
+                NSImage(systemSymbolName: mark, accessibilityDescription: nil),
+                "\(mark) names an SF Symbol, which the row would draw in its place")
+            XCTAssertNotNil(IconCatalog.image(mark), "\(agent)'s mark does not draw")
         }
     }
 

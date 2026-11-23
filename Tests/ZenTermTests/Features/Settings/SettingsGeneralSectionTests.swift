@@ -151,6 +151,17 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertNil(claudeSetupMessage())
     }
 
+    func test_claudeSetup_namesTheFolderItInstallsTo() throws {
+        _ = claudeSetupControl()
+        let detail = try XCTUnwrap(hostWindow?.contentView)
+
+        let texts = descendants(of: detail).compactMap { ($0 as? NSTextField)?.stringValue }
+
+        XCTAssertTrue(
+            texts.contains("The zen skill and a session hook, in \(PathDisplay.abbreviatingHome(claudeRoot.path))"),
+            "\(texts)")
+    }
+
     func test_claudeSetup_choosingOnInstalls_andOffRemoves() {
         let control = claudeSetupControl()
 

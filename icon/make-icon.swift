@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Renders the app icon into a .iconset, one PNG per size; `--dev` tints the mark rose and adds a Dev chip.
+// Renders the app icon into a .iconset, one PNG per size; `--dev` tints the mark red and adds a Dev chip.
 import AppKit
 
 func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
@@ -8,12 +8,12 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
 let isDev = CommandLine.arguments.dropFirst().contains("--dev")
-let iris = rgb(0xC4A7E7)
-let rose = rgb(0xEA9A97)
-let markColor = isDev ? rose : iris
-let bgTop = rgb(0x221E33)
-let bgBottom = rgb(0x141120)
-let badgeSurface = rgb(0x393552)
+let mint = rgb(0x6EE6B8)
+let red = rgb(0xF2707A)
+let markColor = isDev ? red : mint
+let bgTop = rgb(0x161B26)
+let bgBottom = rgb(0x07090E)
+let badgeSurface = rgb(0x1C2536)
 
 func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
     let n: CGFloat = 5, steps = 720
@@ -155,7 +155,7 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
         end: CGPoint(x: L(512), y: L(square ? 0 : 100)), options: [])
 
     let glow = CGGradient(
-        colorsSpace: space, colors: [rgb(0xC4A7E7, 0.16), rgb(0xC4A7E7, 0)] as CFArray,
+        colorsSpace: space, colors: [markColor.copy(alpha: 0.16)!, markColor.copy(alpha: 0)!] as CFArray,
         locations: [0, 1])!
     ctx.drawRadialGradient(
         glow, startCenter: CGPoint(x: L(512), y: L(512)), startRadius: 0,
@@ -192,7 +192,7 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
         let font = NSFont.systemFont(ofSize: h * 0.6, weight: .semibold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: NSColor(cgColor: rose)!,
+            .foregroundColor: NSColor(cgColor: red)!,
         ]
         let label = NSAttributedString(string: "Dev", attributes: attrs)
         let tb = label.size()

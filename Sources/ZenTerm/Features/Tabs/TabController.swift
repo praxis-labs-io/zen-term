@@ -167,6 +167,9 @@ final class TabController: NSObject {
 
     var isDrawerFocused: Bool { focusedPanel != .pane }
 
+    // The pane the tab is named for, which a focused drawer does not change.
+    var focusedPaneSurfaceID: SurfaceID? { paneCanvas.focusedSurfaceID }
+
     var focusedSurfaceID: SurfaceID? {
         switch focusedPanel {
         case .pane: return paneCanvas.focusedSurfaceID

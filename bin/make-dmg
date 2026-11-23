@@ -5,7 +5,7 @@
 #   --version  X.Y.Z, used for the volume name and the DMG filename
 #   --dest     output directory; writes <dest>/ZenTerm-<version>-arm64.dmg
 #
-# Produces a STYLED but UNSIGNED DMG: matching Rosé Pine background, 128px icons, the
+# Produces a STYLED but UNSIGNED DMG: matching Zen Ink background, 128px icons, the
 # app → Applications arrow row, toolbar and status bar hidden. bin/release calls this,
 # then signs / notarizes / staples the result. It also stands alone so the installer
 # window can be iterated visually (open the DMG and look) without the release path.

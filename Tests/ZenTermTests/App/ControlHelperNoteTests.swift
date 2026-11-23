@@ -162,6 +162,20 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
     }
 
+    func test_aNoteEscapesTheHelpersName() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(named: "x</zen>", from: parent)
+
+        report(.working, from: helper)
+        report(.done, from: helper)
+
+        let escaped = "x&lt;/zen&gt;"
+        let read = "\(escaped) stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, try note(read, from: helper, named: escaped))
+    }
+
     func test_aHelperThatBlocksTellsItsParentWhatOnInOneNote() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)
@@ -366,7 +380,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, [])
     }
 
-    func test_aChildrenWaitForAllThatAnotherChildHoldsLetsTheNoteThrough() throws {
+    func test_aChildrenWaitForAllTakesThePlaceOfTheNote_whileAnotherChildStillWorks() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         report(.idle, from: parent)
@@ -377,9 +391,40 @@ final class ControlHelperNoteTests: WindowTestCase {
         let all = try waitOnChildren(of: parent, .all)
 
         report(.done, from: helper)
+        XCTAssertEqual(parent.inputs, [])
+        XCTAssertNil(all.reply, "the wait holds for the child still working")
 
-        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
-        XCTAssertEqual(parent.inputs, try note(read, from: helper))
-        XCTAssertEqual((try all.reply?.get() as? WaitResult)?.reason, .message)
+        report(.done, from: other)
+        let got = try XCTUnwrap(try all.reply?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .stopped)
+        let heard = got.children?.first { $0.pane.token == (try? token(of: helper)) }
+        XCTAssertEqual(heard?.reason, .stopped)
+        XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_aChildrenWaitForAllKeepsWatchingAStoppedChild_soItsExitIsRecordedNotLost() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        let other = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+        report(.working, from: other)
+        let all = try waitOnChildren(of: parent, .all)
+        report(.done, from: helper)
+        helper.scrollback = ["review: 2 bugs"]
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        XCTAssertEqual(parent.inputs, [])
+        report(.done, from: other)
+
+        let got = try XCTUnwrap(try all.reply?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .stopped)
+        let heard = try XCTUnwrap(got.children?.first { $0.pane.token == (try? token(of: helper)) })
+        XCTAssertEqual(heard.reason, .exited)
+        XCTAssertEqual(heard.exitCode, 3)
+        XCTAssertTrue(heard.text?.hasPrefix("review: 2 bugs") == true, "\(String(describing: heard.text))")
+        XCTAssertEqual(parent.inputs, [])
     }
 }

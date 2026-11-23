@@ -2,7 +2,7 @@ import ControlProtocol
 import Foundation
 import TerminalKit
 
-// One held `pane.wait` on one pane, answered once. Main-thread only.
+// One held `pane.wait` on one pane, answered once, or until it exits when it keeps watching. Main-thread only.
 final class PaneWait {
     // libghostty reports no output, and without OSC 133 the foreground group is the only sign a job exited.
     static let checkInterval: TimeInterval = 0.25
@@ -25,6 +25,7 @@ final class PaneWait {
 
     let watched: Watched
     let caller: SurfaceID?
+    private let keepsWatching: Bool
     private var reply: ((Answer) -> Void)?
     private var lastPane: ListResult.Pane
     private var output: OutputWatch?
@@ -34,11 +35,13 @@ final class PaneWait {
     var onAnswered: (() -> Void)?
 
     init?(
-        _ watched: Watched, caller: SurfaceID?, output needle: String?, reply: @escaping (Answer) -> Void
+        _ watched: Watched, caller: SurfaceID?, output needle: String?, keepsWatching: Bool = false,
+        reply: @escaping (Answer) -> Void
     ) {
         guard let pane = watched.pane() else { return nil }
         self.watched = watched
         self.caller = caller
+        self.keepsWatching = keepsWatching
         self.reply = reply
         lastPane = pane
         if let needle {
@@ -48,6 +51,8 @@ final class PaneWait {
     }
 
     var pane: ListResult.Pane { watched.pane() ?? lastPane }
+
+    var isWatching: Bool { reply != nil }
 
     // A wait without a timeout answers only on the pane's news, for a wait that holds the deadline itself.
     func start(timeout: TimeInterval?) {
@@ -102,7 +107,7 @@ final class PaneWait {
     private func answer(_ reason: WaitReason, exitCode: Int? = nil, text: String? = nil) {
         guard let reply else { return }
         let pane = pane
-        finish()
+        if !keepsWatching || reason == .exited { finish() }
         reply(Answer(reason: reason, exitCode: exitCode, text: text, pane: pane))
     }
 

@@ -67,9 +67,24 @@ extension ControlResponder {
             return reply(.success(ran))
         }
         guard let found = locate(pane: ran.pane) else {
-            return reply(.failure(ControlError(.notFound, "Pane \(ran.pane) closed before the wait began.")))
+            guard let exit = launchedExit(of: ran.pane) else {
+                return reply(.failure(ControlError(.notFound, "Pane \(ran.pane) closed before the wait began.")))
+            }
+            return reply(.success(Self.exited(exit, firstTask: ran.firstTask)))
         }
         let place = PanePlace(window: found.window, tab: found.tab, pane: found.pane)
         hold(waitOn: place, output: request.args.output, timeout: timeout, for: request, hangup: hangup, reply: reply)
+    }
+
+    // The exit was kept before the first task settled, so its pane does not carry that answer yet.
+    private static func exited(_ exit: LaunchedPaneExit, firstTask: FirstTask?) -> WaitResult {
+        let answer = exited(exit)
+        guard let pane = answer.pane else { return answer }
+        return WaitResult(
+            reason: .exited, exitCode: answer.exitCode, text: answer.text,
+            pane: ListResult.Pane(
+                token: pane.token, drawer: pane.drawer, title: pane.title, cwd: pane.cwd, busy: pane.busy,
+                process: pane.process, agent: pane.agent, name: pane.name, parent: pane.parent,
+                firstTask: firstTask ?? pane.firstTask))
     }
 }

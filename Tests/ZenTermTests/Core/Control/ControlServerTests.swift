@@ -155,6 +155,30 @@ final class ControlServerTests: XCTestCase {
         wait(for: [hungUp], timeout: 3)
     }
 
+    func test_aClientThatShutsItsWriteSideStillGetsAHeldAnswer() throws {
+        let fd = try UnixSocket.connect(to: path)
+        defer { close(fd) }
+        let done = expectation(description: "the held reply arrives")
+        var reply = Data()
+        DispatchQueue.global().async {
+            defer { done.fulfill() }
+            _ = UnixSocket.writeAll(
+                Data((#"{"v":1,"id":1,"cmd":"pane.wait","args":{"pane":3,"timeout":1}}"# + "\n").utf8), to: fd)
+            shutdown(fd, SHUT_WR)
+            var timeout = timeval(tv_sec: 4, tv_usec: 0)
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+            var chunk = [UInt8](repeating: 0, count: 1024)
+            while !reply.contains(0x0A) {
+                let n = read(fd, &chunk, chunk.count)
+                if n <= 0 { break }
+                reply.append(contentsOf: chunk[0..<n])
+            }
+        }
+        wait(for: [done], timeout: 6)
+        let line = try XCTUnwrap(String(decoding: reply, as: UTF8.self).split(separator: "\n").first)
+        XCTAssertEqual(try decode(String(line), as: HelloResult.self).result, HelloResult(app: "held-1"))
+    }
+
     func test_malformedLineIsABadRequestAndTheConnectionStaysUsable() throws {
         let replies = try exchange(["garbage not json", #"{"v":1,"id":2,"cmd":"hello"}"#], expecting: 2)
         guard replies.count == 2 else { return XCTFail("expected two replies, got \(replies)") }

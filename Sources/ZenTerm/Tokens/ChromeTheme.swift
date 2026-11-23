@@ -22,6 +22,7 @@ struct ChromeTheme: Equatable {
     let overlayRaised: TerminalColor
     let floatRaised: TerminalColor
     let modalRaised: TerminalColor
+    let chipRaised: TerminalColor
     /// Check `1 / inkBoost` before raising it: above that a level clamps to opaque.
     static let inkBoost: CGFloat = 1.15
 

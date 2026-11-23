@@ -86,8 +86,9 @@ A `refused` error says what `force` would end:
 
 `panes` are the running panes and drawers, in the shape `list` uses, the running children
 that `pane.run` started from them included. `floats` are the
-titles of running tool floats. `closesWindow` is true when the close would take the
-window with it.
+titles of running tool floats. `closesWindow` is true when the close would take a window with
+it: its own, or another window whose last tab is a child that closes with it, whose running
+floats are then counted too. The message says which.
 A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
 `lostCommits`, the commits on it that no branch or other worktree holds.
 
@@ -95,9 +96,8 @@ Requests are decoded off the main thread, applied on it, and written back off it
 answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds,
 `pane.send`, within 65 seconds, and with `wait` its `timeout` more, and `pane.run` with `wait`,
 within its `timeout` plus 65 seconds.
-A client that closes its connection before the answer ends a `pane.wait`. A client keeps its
-write side open until it has the answer: closing it is read as hanging up, which drops a held
-`pane.wait`.
+A client that closes its connection before the answer ends a `pane.wait`. Shutting down only its
+write side is not closing it: the answer still comes.
 
 ## Addressing
 
@@ -292,7 +292,8 @@ and closed with `force`, as `tab.close` on its tab is. A drawer is not closed.
 
 `args`: `pane`, `text` (required), `enter`, `force`, `wait`, `timeout`.
 
-Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
+Pastes `text`, so several lines arrive as one block. Text containing `<zen` or `</zen`, in any
+case, is a `bad_request`, since it could pass for the envelope below. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
 characters become spaces, and `pane.keys` presses keys. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
@@ -305,9 +306,10 @@ Into a pane that runs an agent:
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
   `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
-  token, and its name after it when it has one. A send into a shell, into the caller's own
+  token, and its name after it when it has one, with `&`, `"`, `<` and `>` escaped as `&amp;`,
+  `&quot;`, `&lt;` and `&gt;`. A send into a shell, into the caller's own
   pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
-  note to its parent (`pane.run`) arrives the same way.
+  note to its parent (`pane.run`) arrives the same way, its name escaped the same way.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
 
@@ -322,7 +324,7 @@ starting in that pane's folder. With `split` it splits `pane` the way `pane.spli
 refused or fails the same way. `focus` shows the new pane.
 
 A pane closes the children it started when it closes, and they close theirs, wherever they are
-in its window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
+in any window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
 exiting, or the window closing. A close that would end a running child is refused without
 `force`, and its `details` list that child; the app's close confirmation names it too. A
 parent's own `pane.close` on its child is not refused over the child's work (`pane.close`).
@@ -373,7 +375,8 @@ with `enter` sends it:
 - A child without a name is `pane 34`. `blocked` names `a permission prompt`, `a question` or
   `a login` when the program says which.
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
-  child, or on its `children`, answers the same change, or for the report that settles `first_task`, which `pane.run`
+  child answers the same change, when one it holds on its `children` watches the child, since
+  that wait reports the change, or for the report that settles `first_task`, which `pane.run`
   answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
 - A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
   until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
@@ -452,9 +455,9 @@ Holds until something happens to the pane, then answers once with why:
   is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
 - A pane `pane.run` opened closes when its program exits, and a wait on it still answers
-  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after
-  and addresses it by token. The app keeps the 64 most recent such exits; an older one is
-  `not_found`.
+  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
+  A name then reaches the most recent such pane with that name. The app keeps the 64 most
+  recent such exits; an older one is `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
 begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
@@ -467,8 +470,10 @@ begins, and takes no `pane`. Each child is watched as a wait on its pane would b
 A child is working while its agent's `status` is `working`, or, with no `status`, while the app
 reads its agent as working. A child that runs no agent is working while its program runs. A child whose
 first task was sent counts as working until its `status` moves past `idle` or `done`, so `all`
-does not answer before it starts on the task. `message` and `timeout` answer as they do for a
-pane, and `output` is a `bad_request` with `all`.
+does not answer before it starts on the task. With `all`, each child's `reason` is its latest
+news while the wait held, so a child that stopped and then exited answers `exited` with its
+`exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+`bad_request` with `all`.
 
 ```json
 {"reason":"exited","children":[

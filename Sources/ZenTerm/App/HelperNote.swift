@@ -15,7 +15,7 @@ struct HelperNote: Equatable {
     let answeredWaits: Set<SurfaceID>
 
     var text: String {
-        let who = name ?? "pane \(helper)"
+        let who = name.map(ZenEnvelope.escaped) ?? "pane \(helper)"
         switch change {
         case .stopped(let status):
             let word = status.map { " (\($0.rawValue))" } ?? ""
