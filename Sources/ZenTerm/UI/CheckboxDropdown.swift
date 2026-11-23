@@ -84,7 +84,7 @@ final class CheckboxDropdown: PopoverPicker {
         rowViews = visible.map { index in
             let content = items.indices.contains(index) ? Self.content(items[index]) : ListRow.Content(title: "")
             let row = ListRow(content) { [weak self] in self?.pick(index) }
-            row.setHoverSuppressed(true)
+            row.onPointerEnter = { [weak self] in self?.highlightPointed(index) }
             return row
         }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }

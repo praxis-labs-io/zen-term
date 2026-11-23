@@ -201,6 +201,65 @@ final class DropdownTests: WindowTestCase {
             charactersIgnoringModifiers: "\u{F701}", isARepeat: false, keyCode: 125)!
     }
 
+    func test_thePointerMovesTheHighlight_andTheArrowContinuesFromIt() throws {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+        let rows = dropdown.rowViewsForTesting
+        let hover = Theme.current.chrome.fill(.hover).cgColor
+        let enter = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: dropdown.window?.windowNumber ?? 0, context: nil, eventNumber: 0, trackingNumber: 0,
+                userData: nil))
+
+        rows[2].mouseEntered(with: enter)
+        XCTAssertEqual(dropdown.highlightedIndexForTesting, 2)
+        XCTAssertEqual(rows.map { $0.layer?.backgroundColor == hover }, [false, false, true, false, false])
+
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        XCTAssertEqual(
+            rows.map { $0.layer?.backgroundColor == hover }, [false, false, false, true, false], "two rows are lit")
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(picked, 3, "Down did not continue from the pointer's row")
+    }
+
+    func test_aRowPicksOnRelease_andNotWhenTheReleaseLandsOffIt() throws {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+        let row = dropdown.rowViewsForTesting[3]
+        let inside = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
+        func event(_ type: NSEvent.EventType, at point: NSPoint) throws -> NSEvent {
+            try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: 1))
+        }
+
+        row.mouseDown(with: try event(.leftMouseDown, at: inside))
+        XCTAssertNil(picked, "the press picked the row")
+        row.mouseUp(with: try event(.leftMouseUp, at: NSPoint(x: inside.x + 400, y: inside.y)))
+        XCTAssertNil(picked, "a release off the row picked it")
+        XCTAssertTrue(dropdown.isPopoverOpen)
+
+        try sendClick(to: row)
+        XCTAssertEqual(picked, 3)
+        XCTAssertFalse(dropdown.isPopoverOpen)
+    }
+
+    func test_theArrowStopsAtTheEnds() {
+        var picked: Int?
+        let first = filterFixture { picked = $0 }
+        _ = first.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
+        _ = first.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(picked, 0, "Up wrapped from the first row")
+
+        let last = filterFixture(selectedIndex: 4) { picked = $0 }
+        _ = last.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = last.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(picked, 4, "Down wrapped from the last row")
+    }
+
     func test_committingAFilteredRow_selectsThatItem_notItsPosition() {
         var picked: Int?
         let dropdown = filterFixture { picked = $0 }

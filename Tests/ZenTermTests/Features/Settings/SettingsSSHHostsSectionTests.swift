@@ -365,14 +365,10 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         let point = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
         let target = try XCTUnwrap(content.hitTest(point))
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         if let button = target as? NSButton {
             button.performClick(nil)
         } else {
-            target.mouseDown(with: event)
+            try sendClick(to: target, at: point)
         }
         return target
     }

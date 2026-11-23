@@ -196,14 +196,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.focusedStop, .host("staging"))
     }
 
-    private func click(_ row: NSView) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NSView) throws { try sendClick(to: row) }
 
     private final class KeyRecorder: NSResponder {
         var keyCodes: [UInt16] = []

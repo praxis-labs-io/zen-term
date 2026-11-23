@@ -17,16 +17,9 @@ class SelectableRowView: ListRow, PaletteRowView {
 
     init(_ content: Content) {
         super.init(content) {}
-        setHoverSuppressed(true)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    // Accepts the press so the release lands here; `mouseUp` runs the row only if it lands inside.
-    override func mouseDown(with event: NSEvent) {}
-    override func mouseUp(with event: NSEvent) {
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { onChoose() }
-    }
 }
 
 class PaletteOverlay: ModalShell, ModalOverlay {
@@ -227,6 +220,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
                 row = LaidOutRow(id: id, view: view, height: heightConstraint)
             }
             row.view.onActivate = { [weak self] in self?.activateRow(at: index) }
+            (row.view as? ListRow)?.onPointerEnter = { [weak self] in self?.pointRow(at: index) }
             next.append(row)
             total += height
         }
@@ -289,17 +283,20 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     func defaultSelectionIndex() -> Int { firstSelectableIndex() }
 
     private func moveSelection(_ delta: Int) {
-        let step = delta < 0 ? -1 : 1
-        var i = selected + step
-        while laidOutRows.indices.contains(i) {
-            if isSelectable(at: i) {
-                selected = i
-                updateHighlight()
-                scrollSelectedToVisible(travelling: step < 0 ? .up : .down)
-                return
-            }
-            i += step
-        }
+        let selectable = laidOutRows.indices.filter { isSelectable(at: $0) }
+        guard
+            let next = KeyboardFocus.step(
+                from: selectable.firstIndex(of: selected), delta: delta, count: selectable.count)
+        else { return }
+        selected = selectable[next]
+        updateHighlight()
+        scrollSelectedToVisible(travelling: delta < 0 ? .up : .down)
+    }
+
+    private func pointRow(at index: Int) {
+        guard index != selected, laidOutRows.indices.contains(index), isSelectable(at: index) else { return }
+        selected = index
+        updateHighlight()
     }
 
     private func firstSelectableIndex() -> Int {

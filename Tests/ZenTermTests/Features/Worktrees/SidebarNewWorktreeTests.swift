@@ -95,11 +95,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         let point = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
         let target = try XCTUnwrap(content.hitTest(point))
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-        target.mouseDown(with: event)
+        try sendClick(to: target, at: point)
     }
 
     private func newWorktreeCard(in c: WindowController) throws -> NewWorktreeOverlay {

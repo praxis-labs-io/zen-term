@@ -318,14 +318,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     private func titles(of c: WindowController) -> [String] { rows(of: c).map(\.titleForTesting) }
 
-    private func click(_ view: NSView) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        view.mouseDown(with: event)
-    }
+    private func click(_ view: NSView) throws { try sendClick(to: view) }
 
     private func press(_ key: String, typing characters: String, keyCode: UInt16, in c: WindowController) throws {
         let keys = KeyInterceptor()
@@ -496,11 +489,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let beta = c.activeWorkspaceIDForTesting
 
         try rightClick(rows(of: c)[1])
-        try XCTUnwrap(menu.itemViewsForTesting.last).mouseDown(
-            with: try XCTUnwrap(
-                NSEvent.mouseEvent(
-                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        try sendClick(to: try XCTUnwrap(menu.itemViewsForTesting.last))
 
         XCTAssertEqual(titles(of: c), [startFolderName, "Beta"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, beta, "closing a background workspace leaves the screen alone")
@@ -553,11 +542,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try rightClick(rows(of: c)[1])
         let item = try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" })
         XCTAssertEqual(item.shortcutForTesting, "", "the chord renames the active workspace, not this one")
-        item.mouseDown(
-            with: try XCTUnwrap(
-                NSEvent.mouseEvent(
-                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        try sendClick(to: item)
         let card = try renameCard(in: c)
         XCTAssertEqual(card.nameFieldForTesting.text, "Alpha", "the clicked row's name, not the active one's")
         card.nameFieldForTesting.setText("api")
@@ -577,11 +562,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(try renameCard(in: c).nameFieldForTesting.text, "Beta")
 
         try rightClick(rows(of: c)[1])
-        try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" }).mouseDown(
-            with: try XCTUnwrap(
-                NSEvent.mouseEvent(
-                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        try sendClick(to: try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" }))
 
         XCTAssertEqual(try renameCard(in: c).nameFieldForTesting.text, "Alpha", "Alpha's card, not none")
     }
@@ -696,11 +677,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
 
         try rightClick(rows(of: c)[2])
-        try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" }).mouseDown(
-            with: try XCTUnwrap(
-                NSEvent.mouseEvent(
-                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        try sendClick(to: try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" }))
         let card = try renameCard(in: c)
         card.nameFieldForTesting.setText("spike")
         try sendReturn(through: card.nameFieldForTesting, in: c)

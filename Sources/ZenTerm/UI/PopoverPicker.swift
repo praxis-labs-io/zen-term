@@ -253,6 +253,12 @@ class PopoverPicker: NSView {
         revealHighlight()
     }
 
+    func highlightPointed(_ index: Int) {
+        guard popover.isOpen, index != highlighted, visible.contains(index) else { return }
+        highlighted = index
+        renderRows()
+    }
+
     private func revealHighlight() {
         guard let row = highlightedRow() else { return }
         popover.reveal(row)

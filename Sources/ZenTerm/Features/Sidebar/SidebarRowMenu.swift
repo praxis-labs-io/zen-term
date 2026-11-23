@@ -54,6 +54,10 @@ final class SidebarRowMenu {
                     item.run()
                 }
             }
+            for (offset, view) in views.enumerated() {
+                let index = itemViews.count + offset
+                view.onPointerEnter = { [weak self] in self?.highlight(index) }
+            }
             itemViews += views
             rows += views.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
         }
@@ -79,11 +83,13 @@ final class SidebarRowMenu {
     func moveHighlight(_ delta: Int) {
         guard isOpen, let next = KeyboardFocus.step(from: highlighted, delta: delta, count: itemViews.count)
         else { return }
-        highlighted = next
-        for (index, row) in itemViews.enumerated() {
-            row.setHoverSuppressed(true)
-            row.isHighlighted = index == next
-        }
+        highlight(next)
+    }
+
+    private func highlight(_ index: Int) {
+        guard isOpen, itemViews.indices.contains(index) else { return }
+        highlighted = index
+        for (position, row) in itemViews.enumerated() { row.isHighlighted = position == index }
     }
 
     func chooseHighlighted() -> Bool {

@@ -286,16 +286,12 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(backtabs, 1)
     }
 
-    func test_clickTogglesTheClickedRow_andKeepsTheListOpen() {
+    func test_clickTogglesTheClickedRow_andKeepsTheListOpen() throws {
         var toggled: [Int] = []
         let dropdown = makeDropdown(onToggle: { toggled.append($0) })
         dropdown.openListForTesting()
         let row = dropdown.rowViewsForTesting[2]
-        let event = NSEvent.mouseEvent(
-            with: .leftMouseDown, location: row.convert(CGPoint(x: 4, y: 4), to: nil),
-            modifierFlags: [], timestamp: 0, windowNumber: row.window?.windowNumber ?? 0,
-            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-        row.mouseDown(with: event)
+        try sendClick(to: row)
         XCTAssertEqual(toggled, [2])
         XCTAssertTrue(dropdown.isPopoverOpen)
     }

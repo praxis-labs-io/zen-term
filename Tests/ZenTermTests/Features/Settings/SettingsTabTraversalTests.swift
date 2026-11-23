@@ -71,6 +71,30 @@ final class SettingsTabTraversalTests: WindowTestCase {
         XCTAssertIdentical(tab(from: rows[0]), rows[1], "Tab advances to the next row")
     }
 
+    private func arrow(from stop: NSView, down: Bool) -> NSResponder? {
+        window!.makeFirstResponder(stop)
+        let glyph = down ? "\u{F701}" : "\u{F700}"
+        stop.keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
+                windowNumber: 0, context: nil, characters: glyph, charactersIgnoringModifiers: glyph,
+                isARepeat: false, keyCode: down ? 125 : 126)!)
+        return window!.firstResponder
+    }
+
+    func test_theArrow_stopsAtTheSectionsEnds() throws {
+        try seed(twoFloats)
+        let section = SettingsToolsSection()
+        mount(section.makeDetailView())
+        let stops = section.detailStops()
+        let first = try XCTUnwrap(stops.first)
+        let last = try XCTUnwrap(stops.last)
+        XCTAssertGreaterThan(stops.count, 1)
+
+        XCTAssertIdentical(arrow(from: first, down: false), first, "Up wrapped from the first stop")
+        XCTAssertIdentical(arrow(from: last, down: true), last, "Down wrapped from the last stop")
+    }
+
     func test_shiftTab_fromToolFloatRow_retreatsOneStop_notToTheNav() throws {
         try seed(twoFloats)
         let section = SettingsToolsSection()

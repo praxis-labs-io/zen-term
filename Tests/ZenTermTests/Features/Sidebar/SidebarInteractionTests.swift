@@ -85,14 +85,7 @@ final class SidebarInteractionTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
-    private func click(_ row: NavRow) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NavRow) throws { try sendClick(to: row) }
 
     private func rowFillEdge(in controller: WindowController) throws -> CGFloat {
         let row = try XCTUnwrap(modals(NavRow.self, in: controller).first, "a workspace row")
@@ -403,13 +396,7 @@ final class SidebarInteractionTests: WindowTestCase {
         try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
         let row = controller.sidebarForTesting.view.rowsForTesting[1]
 
-        let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
-        row.mouseDown(
-            with: try XCTUnwrap(
-                NSEvent.mouseEvent(
-                    with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                    windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
-                    clickCount: 1, pressure: 1)))
+        try sendClick(to: row)
 
         XCTAssertTrue(
             controller.window.firstResponder === apiPane.view, "the click switches, and the pane has the keys")
@@ -1423,6 +1410,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let otherSurface = try XCTUnwrap(surfaces.last)
         controller.activateWorkspaceForTesting(home)
         let focusesBefore = otherSurface.focusCount
+        controller.window.layoutIfNeeded()
 
         try click(controller.sidebarForTesting.view.rowsForTesting[1])
 

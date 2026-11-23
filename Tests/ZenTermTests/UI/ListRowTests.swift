@@ -26,13 +26,8 @@ final class ListRowTests: WindowTestCase {
 
     private func click(_ view: NSView) throws {
         let point = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
-                pressure: 1))
         let target = try XCTUnwrap(view.window?.contentView?.hitTest(point), "nothing takes the click")
-        target.mouseDown(with: event)
+        try sendClick(to: target, at: point)
     }
 
     private func crossing(_ type: NSEvent.EventType) throws -> NSEvent {
@@ -126,11 +121,50 @@ final class ListRowTests: WindowTestCase {
         XCTAssertEqual(shown.map(\.isHighlighted), [false, true], "the arrow did not move the highlight")
         XCTAssertEqual(shown[1].layer?.backgroundColor, hover)
         shown[0].mouseEntered(with: try crossing(.mouseEntered))
-        XCTAssertEqual(shown[0].layer?.backgroundColor?.alpha, 0, "the hovered row fills beside the cursor's row")
+        XCTAssertEqual(shown.map(\.isHighlighted), [true, false], "the pointer did not move the highlight")
+        XCTAssertEqual(shown[1].layer?.backgroundColor?.alpha, 0, "two rows are lit")
 
         try click(shown[0])
         XCTAssertEqual(field.text, "feature/zen-454")
         XCTAssertFalse(field.isListOpen)
+    }
+
+    func test_branchField_theArrowStopsAtTheEnds() {
+        let field = BranchField()
+        window.contentView?.addSubview(field)
+        field.frame = NSRect(x: 20, y: 300, width: 420, height: ChromeMetrics.Height.control)
+        field.setBranches(["feature/zen-454", "feature/zen-481"], notes: [:])
+        field.box.setText("zen")
+        field.box.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field.field))
+        func arrow(_ selector: Selector) {
+            field.box.control(field.field, textView: NSTextView(), doCommandBy: selector)
+        }
+
+        arrow(#selector(NSResponder.moveUp(_:)))
+        XCTAssertEqual(field.highlightedForTesting, "feature/zen-454", "Up wrapped from the first branch")
+        arrow(#selector(NSResponder.moveDown(_:)))
+        arrow(#selector(NSResponder.moveDown(_:)))
+        XCTAssertEqual(field.highlightedForTesting, "feature/zen-481", "Down wrapped from the last branch")
+        XCTAssertTrue(field.isListOpen)
+    }
+
+    func test_rowMenu_thePointerMovesTheCursor_andTheArrowContinuesFromIt() throws {
+        let anchor = NSView(frame: NSRect(x: 20, y: 300, width: 200, height: ChromeMetrics.Height.control))
+        window.contentView?.addSubview(anchor)
+        let menu = SidebarRowMenu()
+        let item = { (title: String) in SidebarRowMenu.Item(title: title, action: nil) {} }
+        menu.open([[item("Rename"), item("Duplicate")], [item("Close")]], from: anchor)
+        let items = menu.itemViewsForTesting
+
+        items[1].mouseEntered(with: try crossing(.mouseEntered))
+        XCTAssertEqual(menu.highlightedTitleForTesting, "Duplicate")
+        XCTAssertEqual(items.map { $0.layer?.backgroundColor == hover }, [false, true, false])
+
+        menu.moveHighlight(1)
+        XCTAssertEqual(menu.highlightedTitleForTesting, "Close")
+        XCTAssertEqual(items.map { $0.layer?.backgroundColor == hover }, [false, false, true], "two rows are lit")
+        menu.moveHighlight(1)
+        XCTAssertEqual(menu.highlightedTitleForTesting, "Close", "Down wrapped from the last item")
     }
 
     func test_rowMenu_aClickedItemRunsItsCommand_andClosesTheMenu() throws {

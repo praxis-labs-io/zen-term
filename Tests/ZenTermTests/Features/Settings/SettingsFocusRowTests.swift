@@ -33,14 +33,6 @@ final class SettingsFocusRowTests: WindowTestCase {
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
     }
 
-    private func click(_ row: NSView) throws -> NSEvent {
-        let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
-        return try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-    }
-
     private var rows: [(String, SettingsFocusRow)] {
         [
             (
@@ -65,7 +57,7 @@ final class SettingsFocusRowTests: WindowTestCase {
             row.mouseExited(with: try crossing(.mouseExited))
             XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0, "\(name) keeps its hover")
 
-            row.mouseDown(with: try click(row))
+            try sendClick(to: row)
             XCTAssertEqual(chosen, 1, "\(name) does not open on a click")
             XCTAssertTrue(window.firstResponder === row, "\(name) does not take focus on a click")
             XCTAssertEqual(row.layer?.borderColor, chrome.focusRing.cgColor, "\(name) shows no focus ring")

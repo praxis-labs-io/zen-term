@@ -131,14 +131,7 @@ final class SidebarAgentsTests: WindowTestCase {
         while c.focusedSurfaceIDForTesting != agent.id { c.handle(.nextPane) }
     }
 
-    private func click(_ row: NSView) throws {
-        let event = try XCTUnwrap(
-            NSEvent.mouseEvent(
-                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
-                clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
-    }
+    private func click(_ row: NSView) throws { try sendClick(to: row) }
 
     private func hover(_ row: SidebarAgentRow, in c: WindowController) throws {
         TooltipPresenter.shared.dismiss()
