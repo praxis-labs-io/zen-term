@@ -31,13 +31,14 @@ extension ControlResponder {
         let opened = pane(request.args.pane, for: request).flatMap {
             place -> Result<(WindowController, Int), ControlError> in
             if let direction = request.args.split {
-                return split(place, direction, running: program, focus: focus).map { (place.window, $0) }
+                let cwd = callerFolder(as: place.pane.token, for: request)
+                return split(place, direction, running: program, cwd: cwd, focus: focus).map { (place.window, $0) }
             }
             guard let workspace = place.window.workspaceID(of: place.tab) else {
                 return .failure(ControlError(.notFound, "That workspace is gone."))
             }
             return openTab(
-                in: WorkspacePlace(window: place.window, id: workspace), cwd: Self.startFolder(of: place, for: request),
+                in: WorkspacePlace(window: place.window, id: workspace), cwd: startFolder(of: place, for: request),
                 explicitCWD: request.args.cwd != nil, running: program, focus: focus
             ).map { (place.window, $0.pane) }
         }
@@ -65,13 +66,9 @@ extension ControlResponder {
         return cwd.hasPrefix("/") ? nil : ControlError(.badRequest, "\(cwd) is not an absolute path.")
     }
 
-    // A pane launched as `cd <dir> && <program>` never reports `<dir>`, so the caller's own folder is the truer one.
-    private static func startFolder(of place: PanePlace, for request: ControlRequest) -> URL? {
+    private func startFolder(of place: PanePlace, for request: ControlRequest) -> URL? {
         if let cwd = request.args.cwd { return URL(fileURLWithPath: cwd, isDirectory: true) }
-        if let caller = request.caller, caller.pane == place.pane.token, let cwd = caller.cwd, cwd.hasPrefix("/") {
-            return URL(fileURLWithPath: cwd, isDirectory: true)
-        }
-        return place.pane.cwd
+        return callerFolder(as: place.pane.token, for: request) ?? place.pane.cwd
     }
 
     // The wait's answer carries the pane as `pane.get` reports it, its `first_task` included.

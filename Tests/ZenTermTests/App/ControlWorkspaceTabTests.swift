@@ -68,12 +68,12 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         return responder
     }
 
-    private func send(_ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), from pane: Int? = nil) throws
-        -> ControlReply
-    {
+    private func send(
+        _ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), from pane: Int? = nil, in folder: String? = nil
+    ) throws -> ControlReply {
         var reply: ControlReply?
         responder.respond(
-            to: ControlRequest(id: 1, cmd: cmd, args: args, caller: pane.map(ControlCaller.init(pane:)))
+            to: ControlRequest(id: 1, cmd: cmd, args: args, caller: pane.map { ControlCaller(pane: $0, cwd: folder) })
         ) { reply = $0 }
         return try XCTUnwrap(reply, "\(cmd.rawValue) never answered")
     }
@@ -154,6 +154,20 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         XCTAssertEqual(try error(send(.tabNew, ControlArgs(cwd: "relative"))).code, .badRequest)
         XCTAssertEqual(c.tabOrderForTesting.count, 3)
+    }
+
+    func test_tabNewStartsInTheCallersOwnFolder_notTheOneItsPaneLastReported() throws {
+        _ = makeWindow()
+        let first = try XCTUnwrap(spawned.first)
+        first.currentDirectory = URL(fileURLWithPath: "/tmp/reported")
+
+        _ = try result(send(.tabNew, from: try token(of: first), in: "/tmp/worktree"), as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, "/tmp/worktree")
+
+        _ = try result(
+            send(.tabNew, ControlArgs(cwd: "/tmp/given"), from: try token(of: first), in: "/tmp/worktree"),
+            as: TabResult.self)
+        XCTAssertEqual(spawned.last?.lastConfig?.workingDirectory?.path, "/tmp/given")
     }
 
     func test_tabNewWhileSettingsIsUpLeavesSettingsUp() throws {

@@ -207,6 +207,17 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(try listed(opened.pane, in: c).parent, caller)
     }
 
+    func test_aSplitRunStartsInTheCallersOwnFolder() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let worktree = try folder("worktree")
+
+        let opened = try XCTUnwrap(
+            try run(ControlArgs(cmd: "htop", split: .right), from: caller, in: worktree).get() as? PaneRunResult)
+
+        XCTAssertEqual(try startFolder(of: opened.pane), worktree)
+    }
+
     func test_focusShowsTheHelpersTab() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))

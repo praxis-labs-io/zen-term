@@ -43,14 +43,17 @@ extension ControlResponder {
         }
         return pane(request.args.pane, for: request).flatMap { place in
             let command = request.args.cmd.flatMap { $0.isEmpty ? nil : PaneProgram(command: $0) }
-            return split(place, direction, running: command, focus: request.args.focus == true)
-                .map { PaneResult(pane: $0) as any ControlPayload }
+            return split(
+                place, direction, running: command, cwd: callerFolder(as: place.pane.token, for: request),
+                focus: request.args.focus == true
+            )
+            .map { PaneResult(pane: $0) as any ControlPayload }
         }
     }
 
-    func split(_ place: PanePlace, _ direction: PaneDirection, running command: PaneProgram?, focus: Bool)
-        -> Result<Int, ControlError>
-    {
+    func split(
+        _ place: PanePlace, _ direction: PaneDirection, running command: PaneProgram?, cwd: URL?, focus: Bool
+    ) -> Result<Int, ControlError> {
         let token = place.pane.token
         if place.pane.drawer != nil {
             return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
@@ -62,7 +65,7 @@ extension ControlResponder {
                     "Pane \(token) is on \(ControlAddress.hostPrefix + host.alias), and a split there takes no cmd. "
                         + "It starts the host's login shell."))
         }
-        switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command) {
+        switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command, cwd: cwd) {
         case nil:
             return .failure(ControlError(.notFound, "There is no pane \(token)."))
         case .focusMode:

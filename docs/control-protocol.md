@@ -238,10 +238,11 @@ screen when it was showing the workspace.
 
 `args`: `workspace`, `cwd` (absolute), `cmd`, `focus`.
 
-Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`,
-else in the caller's folder when the caller is in that workspace, else where a new tab
-in the app would. A host's tab starts the host's login shell over its connection, so
-`cmd` or `cwd` for a host is `refused`.
+Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`.
+Else, when the caller is in that workspace, it starts in `caller.cwd`, else in the folder
+the caller's pane last reported. Otherwise it starts where a new tab in the app would. A
+host's tab starts the host's login shell over its connection, so `cmd` or `cwd` for a host
+is `refused`.
 
 ```json
 {"tab":"w1.t14","pane":31}
@@ -268,7 +269,8 @@ on it would.
 
 `args`: `pane`, `dir` (required, `right` or `down`), `cmd`, `focus`.
 
-Splits the pane, starting the new one in its folder, running `cmd` in a shell or a shell.
+Splits the pane, running `cmd` in a shell or a shell. The new pane starts in `caller.cwd`
+when the pane is the caller's, else in the folder the pane last reported.
 Focus stays on the pane that had it. A drawer does not split. `refused` when the pane's tab
 is in Focus Mode or `cmd` is given for a host's pane, and `failed` when the pane is too small
 to split.
