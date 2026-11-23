@@ -9,4 +9,8 @@ struct LaunchedPaneExits {
     }
 
     func exit(of token: Int) -> LaunchedPaneExit? { byToken[token] }
+
+    func latestExit(named name: String) -> LaunchedPaneExit? {
+        byToken.values.filter { $0.record.name == name }.max { $0.token < $1.token }
+    }
 }

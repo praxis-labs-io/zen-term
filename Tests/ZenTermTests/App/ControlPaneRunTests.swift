@@ -45,6 +45,7 @@ final class ControlPaneRunTests: WindowTestCase {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             initialCWD: FileManager.default.temporaryDirectory, firstTaskWindow: firstTaskWindow)
+        c.appWindows = { [weak self] in self?.controllers ?? [] }
         c.mountAndStart()
         c.window.contentView?.layoutSubtreeIfNeeded()
         controllers.append(c)
@@ -262,6 +263,24 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(result.firstTask, .held(.notReady))
     }
 
+    func test_runWaitWithATaskWhoseProgramExitsBeforeReportingAnswersExited() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let reply = send(.paneRun, ControlArgs(cmd: "./tool", task: "go", split: .right, wait: true), from: caller)
+        let helper = try XCTUnwrap(spawned.last)
+        helper.scrollback = ["boom"]
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(reply() != nil, "the run's answer")
+
+        let got = try XCTUnwrap(try XCTUnwrap(reply()).get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 1)
+        XCTAssertTrue(got.text?.hasPrefix("boom") == true, "\(String(describing: got.text))")
+        XCTAssertEqual(got.pane?.firstTask, .held(.notReady))
+    }
+
     func test_aLaunchedPaneClosesWhenItsProgramExits_keepingItsExitForLater() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
@@ -473,6 +492,139 @@ final class ControlPaneRunTests: WindowTestCase {
         _ = try answer(.workspaceClose, ControlArgs(workspace: "other"))
         waitUntil(!isOpen(placedHere, in: c), "a child in another workspace closing with its parent's")
         XCTAssertTrue(isOpen(lead, in: c))
+    }
+
+    private func childInAnotherWindow() throws -> (a: WindowController, b: WindowController, parent: Int, child: Int) {
+        let a = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let b = makeWindow()
+        let elsewhere = try token(of: XCTUnwrap(spawned.last))
+        let parent = try run(ControlArgs(cmd: "claude", split: .right), from: lead).pane
+        let child = try run(ControlArgs(cmd: "claude", pane: .token(elsewhere), name: "review"), from: parent).pane
+        XCTAssertTrue(isOpen(child, in: b), "the child opened beside the pane it was given")
+        return (a, b, parent, child)
+    }
+
+    func test_closingAParentClosesItsChildInAnotherWindow() throws {
+        let family = try childInAnotherWindow()
+
+        XCTAssertTrue(try answer(.paneClose, ControlArgs(pane: .token(family.parent))).isSuccess)
+
+        waitUntil(!isOpen(family.child, in: family.b), "the child in the other window closing")
+    }
+
+    func test_closingAParentIsRefusedOverARunningChildInAnotherWindow() throws {
+        let family = try childInAnotherWindow()
+        try surface(family.child).isBusy = true
+
+        let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(family.parent)))))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.panes.map(\.token), [family.child])
+        XCTAssertEqual(refusal.details?.panes.map(\.name), ["review"])
+    }
+
+    func test_closingAWindowAsksFirstOverARunningChildInAnotherWindow() throws {
+        let family = try childInAnotherWindow()
+        XCTAssertTrue(family.a.windowShouldClose(family.a.window))
+        try surface(family.child).isBusy = true
+
+        XCTAssertFalse(family.a.windowShouldClose(family.a.window))
+    }
+
+    func test_closingAWindowClosesTheChildrenItsPanesStartedInAnotherWindow() throws {
+        let family = try childInAnotherWindow()
+
+        family.a.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+
+        waitUntil(!isOpen(family.child, in: family.b), "the child in the other window closing")
+    }
+
+    private func childThatIsAnotherWindowsLastTab() throws -> (a: WindowController, b: WindowController, parent: Int) {
+        var config = GeneralConfig.builtIn
+        config.floats = [
+            ToolFloat(
+                id: "btop", order: 0, title: "btop", icon: ToolFloatParser.defaultIcon, command: "btop", dir: nil,
+                widthFraction: 0.8, heightFraction: 0.8, requiresGitRepo: false, persist: .window,
+                toggle: Chord(command: true, shift: true, key: "b"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        let family = try childInAnotherWindow()
+        let elsewhere = try XCTUnwrap(everyPane(family.b).first { $0.token != family.child }?.token)
+        let tab = try XCTUnwrap(family.b.pane(token: elsewhere)?.tab)
+        XCTAssertTrue(
+            try answer(.tabClose, ControlArgs(tab: ControlAddress.tab(window: family.b.windowID, tab: tab.raw)))
+                .isSuccess)
+        XCTAssertEqual(everyPane(family.b).map(\.token), [family.child])
+        return (family.a, family.b, family.parent)
+    }
+
+    func test_aChildThatIsAnotherWindowsLastTabCountsThatWindowClosing_andItsRunningFloats() throws {
+        let family = try childThatIsAnotherWindowsLastTab()
+        let before = spawned.count
+        family.b.handle(.toggleToolFloat("btop"))
+        try XCTUnwrap(spawned.dropFirst(before).first, "opening btop spawns its program").isBusy = true
+
+        let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(family.parent)))))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.closesWindow, true)
+        XCTAssertEqual(refusal.details?.floats, ["btop"])
+        XCTAssertTrue(refusal.message.contains("close another window"), refusal.message)
+    }
+
+    func test_closingAWindowAsksFirstWhenAChildIsAnotherWindowsLastTab() throws {
+        let family = try childThatIsAnotherWindowsLastTab()
+
+        XCTAssertFalse(family.a.windowShouldClose(family.a.window))
+        let content = try XCTUnwrap(family.a.window.contentView)
+        let texts = Self.descendants(of: content).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(
+            texts.contains { $0.hasSuffix("It also closes another window.") }, "the confirmation says so: \(texts)")
+    }
+
+    func test_removingAWorktreeCountsARunningChildInAnotherWindowOnce() throws {
+        let a = makeWindow()
+        _ = makeWindow()
+        let elsewhere = try token(of: XCTUnwrap(spawned.last))
+        let worktree = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-run-\(UUID().uuidString)", isDirectory: true)
+        let opened = try XCTUnwrap(try answer(.tabNew, ControlArgs(cwd: worktree.path)).get() as? TabResult)
+        XCTAssertNotNil(a.pane(token: opened.pane), "the worktree tab opened in the first window")
+        let child = try run(ControlArgs(cmd: "claude", pane: .token(elsewhere), name: "tests"), from: opened.pane).pane
+        try surface(child).isBusy = true
+
+        let stakes = controllers.map { $0.closeStakes(atPath: worktree) }
+        let closes = controllers.reduce(ClosedByRemoval()) {
+            $0.adding($1.closedByRemoval(atPath: worktree), isThisWindow: $1 === a)
+        }
+
+        XCTAssertEqual(stakes.flatMap(\.panes).map(\.token), [child])
+        XCTAssertEqual(closes.stopping, ["tests"])
+    }
+
+    func test_removingAWorktreeOpenInTwoWindowsCountsAChildInBothOnlyOnce() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let elsewhere = try token(of: XCTUnwrap(spawned.last))
+        let worktree = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-run-\(UUID().uuidString)", isDirectory: true)
+        let here = try XCTUnwrap(try answer(.tabNew, ControlArgs(cwd: worktree.path)).get() as? TabResult)
+        let there = try XCTUnwrap(
+            try answer(.tabNew, ControlArgs(cwd: worktree.path), from: elsewhere).get() as? TabResult)
+        XCTAssertNotNil(b.pane(token: there.pane), "the second worktree tab opened in the second window")
+        let child = try run(
+            ControlArgs(cmd: "claude", pane: .token(there.pane), name: "tests", split: .right), from: here.pane
+        ).pane
+        try surface(child).isBusy = true
+
+        let stakes = controllers.map { $0.closeStakes(atPath: worktree) }
+        let closes = controllers.reduce(ClosedByRemoval()) {
+            $0.adding($1.closedByRemoval(atPath: worktree), isThisWindow: $1 === a)
+        }
+
+        XCTAssertEqual(stakes.flatMap(\.panes).map(\.token), [child])
+        XCTAssertEqual(closes.stopping, [])
     }
 
     func test_aLaunchedPaneExitingClosesItsChildren() throws {

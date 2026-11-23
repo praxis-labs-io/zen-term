@@ -262,6 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             other.activateWorkspace(id)
             return true
         }
+        wc.appWindows = { [weak self] in self?.windows ?? [] }
         wc.isWorkspaceOpenInAnotherWindow = { [weak self, weak wc] path in
             self?.otherWindow(holding: path, asking: wc) != nil
         }

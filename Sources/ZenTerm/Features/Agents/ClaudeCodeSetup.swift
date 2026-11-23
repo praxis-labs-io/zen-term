@@ -1,7 +1,7 @@
 import AgentSetup
 import Foundation
 
-// The installer `zen setup claude` runs, kept off main because every call reads or writes files in ~/.claude.
+// The installer `zen setup claude` runs, kept off main because every call reads or writes files in Claude's folder.
 enum ClaudeCodeSetup {
     enum Change { case install, remove }
 
@@ -12,13 +12,22 @@ enum ClaudeCodeSetup {
 
     private static let queue = DispatchQueue(label: "com.zenterm.claude-setup", qos: .userInitiated)
 
+    // The app's own environment, which a Finder or Dock launch does not take from the shell profile.
+    static var configRoot: URL {
+        #if DEBUG
+            if let configRootOverrideForTesting { return configRootOverrideForTesting }
+        #endif
+        return ClaudeSetup.configRoot()
+    }
+
+    static var folderName: String { PathDisplay.abbreviatingHome(configRoot.path) }
+
     static func refresh(
         applying change: Change? = nil, completion: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void
     ) {
-        var configRoot = ClaudeSetup.configRoot()
+        let configRoot = configRoot
         var files: ClaudeSetupFiles?
         #if DEBUG
-            configRoot = configRootOverrideForTesting ?? configRoot
             files = filesOverrideForTesting
         #endif
         queue.async {
