@@ -175,6 +175,11 @@ final class ControlPaneRunTests: WindowTestCase {
             try run(ControlArgs(cmd: "htop"), from: caller, in: tree.path).get() as? PaneRunResult)
 
         XCTAssertEqual(try startFolder(of: opened.pane), parent.path)
+
+        let given = try XCTUnwrap(
+            try run(ControlArgs(cwd: tree.path, cmd: "htop"), from: caller, in: tree.path).get() as? PaneRunResult)
+
+        XCTAssertEqual(try startFolder(of: given.pane), tree.path)
     }
 
     func test_cwdOverridesTheCallersFolder() throws {

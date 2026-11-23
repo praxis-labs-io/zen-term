@@ -915,7 +915,8 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   an agent in its panes may still be running. A session that would inherit a folder inside it
   (a split, drawer or float, a tab or window under `tab-inherit-cwd`, and a tab `zen` opens in
   its caller's folder) starts at the parent workspace's folder instead
-  (`WorktreeOrigin.relocating`). A `cwd` passed to `zen` is used as given.
+  (`WorktreeOrigin.relocating`). A `cwd` passed to `zen tab new` or `zen pane run` is used as
+  given.
 
 ### Subprocess and GitCommand
 
