@@ -183,6 +183,8 @@ is listed from its first opening until it closes, shown or hidden.
   name, run from a pane, or given a task. `parent` is the token of the pane that ran it, and is
   absent once that pane has closed. `first_task` is the run's answer about its task, once it
   has one.
+- `tab_named`: `true` when the pane's tab has a name someone gave it, with Rename Tab,
+  `tab.rename` or `tab = <name>` in the workspaces file. Absent while the tab's title follows its panes.
 
 ### `workspace.open`
 

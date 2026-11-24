@@ -165,4 +165,11 @@ final class ControlResponseTests: XCTestCase {
                 + "\"title\":\"\",\"token\":34}\n")
         XCTAssertEqual(try JSONDecoder().decode(ListResult.Pane.self, from: ControlWire.line(pane)), pane)
     }
+
+    func test_aPaneInANamedTabSaysSoInSnakeCase() throws {
+        let pane = ListResult.Pane(token: 31, drawer: nil, title: "", cwd: nil, busy: false, agent: nil, tabNamed: true)
+        XCTAssertEqual(
+            text(try ControlWire.line(pane)), "{\"busy\":false,\"tab_named\":true,\"title\":\"\",\"token\":31}\n")
+        XCTAssertEqual(try JSONDecoder().decode(ListResult.Pane.self, from: ControlWire.line(pane)), pane)
+    }
 }
