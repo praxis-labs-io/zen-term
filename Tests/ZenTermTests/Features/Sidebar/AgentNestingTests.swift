@@ -361,8 +361,8 @@ final class AgentNestingTests: WindowTestCase {
     func test_whenTheParentAgentLeaves_itsHelperListsTopLevel_andItsProcessIsNotListed() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let helper = try run("claude", from: root, in: c)
-        let process = try run("htop", from: root, in: c)
+        let helper = try run("claude", from: root, float: false, in: c)
+        let process = try run("htop", from: root, float: false, in: c)
 
         root.surface.delegate?.surface(
             root.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
