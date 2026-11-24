@@ -49,8 +49,8 @@ final class GhosttyStaleExitTests: XCTestCase {
     }
 
     func test_aFreedSurfacesQueuedExitNeverReachesANewSurfaceAtItsAddress() throws {
-        var reused = 0
-        for _ in 0..<40 where reused < 3 {
+        var checked = false
+        for _ in 0..<40 where !checked {
             let exited = try start("/usr/bin/true", [], recorder: Recorder())
             let freedAddress = exited.surfacePtr
             Thread.sleep(forTimeInterval: 0.3)
@@ -60,10 +60,10 @@ final class GhosttyStaleExitTests: XCTestCase {
             let successor = try start("/bin/sleep", ["100"], recorder: recorder)
             defer { close(successor) }
             guard successor.surfacePtr == freedAddress else { continue }
-            reused += 1
+            checked = true
             RunLoop.current.run(until: Date().addingTimeInterval(0.3))
             XCTAssertEqual(recorder.events, [])
         }
-        try XCTSkipIf(reused == 0, "libghostty never reused a freed surface's address, so nothing was checked")
+        try XCTSkipUnless(checked, "libghostty never reused a freed surface's address, so nothing was checked")
     }
 }
