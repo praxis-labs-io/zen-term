@@ -2459,7 +2459,7 @@ final class WindowController: NSObject {
     }
 
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
-        if taskPickups.awaitsPickup(pane.surfaceID) { return true }
+        if taskPickups.awaitsPickup(pane.surfaceID) || paneDrafts.hasQueuedTask(for: pane.surfaceID) { return true }
         let listed = listing(of: pane, in: tab)
         guard let agent = listed.agent else { return listed.busy }
         return agent.status.map { $0 == .working } ?? (agent.state == .working)
@@ -3355,6 +3355,9 @@ final class WindowController: NSObject {
     }
     @objc func paste(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
+        if let surface = presentFocusedSurface {
+            paneDrafts.typed(answersPrompt(surface) ? .none : .addUnknown, into: surface)
+        }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
     }
     @objc func selectAll(_ sender: Any?) {
@@ -3765,7 +3768,9 @@ final class WindowController: NSObject {
     // Read before the change reaches `paneWaits`, which drops the waits it answers.
     private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
         guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
-        if case .stopped = change, helpersReported.contains(surface) { return }
+        if case .stopped = change, helpersReported.contains(surface) || paneDrafts.hasQueuedTask(for: surface) {
+            return
+        }
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,
@@ -3989,10 +3994,21 @@ final class WindowController: NSObject {
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
-    func keyReachedFocus() {
+    func keyReachedFocus(_ event: NSEvent) {
         guard !search.isEditing, let surface = presentFocusedSurface else { return }
-        paneDrafts.typed(into: surface)
+        let edit = answersPrompt(surface) ? .none : DraftEdit(event, composing: isComposing(surface))
+        paneDrafts.typed(edit, into: surface)
         answerTypedAgent()
+    }
+
+    private func isComposing(_ surface: SurfaceID) -> Bool {
+        (terminalSurface(surface)?.view as? NSTextInputClient)?.hasMarkedText() == true
+    }
+
+    // A key or paste into a blocked agent answers its prompt, so it neither starts the draft nor sends it.
+    private func answersPrompt(_ surface: SurfaceID) -> Bool {
+        if case .blocked = agentStates.status(of: surface)?.state { return true }
+        return false
     }
 
     func answerTypedAgent() {

@@ -33,7 +33,7 @@ final class KeyInterceptorRouteTests: XCTestCase {
     func test_aKeyThatReachesThePane_countsAsTypingToTheAgent() throws {
         let keys = interceptor()
         var typed = 0
-        keys.onKeyToFocus = { typed += 1 }
+        keys.onKeyToFocus = { _ in typed += 1 }
 
         XCTAssertNotNil(keys.route(try keyDown("1")))
 
@@ -43,7 +43,7 @@ final class KeyInterceptorRouteTests: XCTestCase {
     func test_aChordTheChromeClaims_isNotTypingToTheAgent() throws {
         let keys = interceptor()
         var typed = 0
-        keys.onKeyToFocus = { typed += 1 }
+        keys.onKeyToFocus = { _ in typed += 1 }
         keys.onReservedChord = { _ in }
 
         XCTAssertNil(keys.route(try keyDown("t", flags: .command)))

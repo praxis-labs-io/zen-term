@@ -1,37 +1,137 @@
-import ControlProtocol
 import Foundation
 
-// The person's last key into each pane, so a send waits out a draft they are typing. App-wide, main-thread only.
+// What the person has unsent at each pane's prompt, and the messages queued for it in order. App-wide, main-thread only.
 final class PaneDrafts {
+    struct Message {
+        let isTask: Bool
+        let isBlocked: () -> Bool
+        let deliver: () -> Void
+        let drop: (_ reason: String) -> Void
+    }
+
+    // A nil length is text ZenTerm could not count, or a cursor it lost, which only Return or a clearing key ends.
+    private struct Draft {
+        var length: Int?
+        var endsInBackslash = false
+    }
+
+    // So a message does not land in the prompt just as the person starts typing into it.
     static let quiet: TimeInterval = 2
-    static let longestHold = TimeInterval(ControlWire.longestDraftHold)
+    static let blockedRecheck: TimeInterval = 1
+    static let longestBlockedHold: TimeInterval = 600
 
     var now: () -> Date = Date.init
     var after: (TimeInterval, @escaping () -> Void) -> Void = { delay, work in
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
     private var lastKeys: [SurfaceID: Date] = [:]
+    private var drafts: [SurfaceID: Draft] = [:]
+    private var queues: [SurfaceID: [Message]] = [:]
+    private var blockedSince: [SurfaceID: Date] = [:]
+    private var scheduled: Set<SurfaceID> = []
 
-    func typed(into surface: SurfaceID) { lastKeys[surface] = now() }
-
-    func lastKey(into surface: SurfaceID) -> Date? { lastKeys[surface] }
-
-    func panesClosed(_ surfaces: [SurfaceID]) { surfaces.forEach { lastKeys[$0] = nil } }
-
-    func hold(_ surface: SurfaceID, hangup: ControlHangup, then deliver: @escaping () -> Void) {
-        release(surface, by: now().addingTimeInterval(Self.longestHold), hangup: hangup, deliver)
+    func typed(_ edit: DraftEdit, into surface: SurfaceID) {
+        guard edit != .submit else { return submit(surface) }
+        lastKeys[surface] = now()
+        switch edit {
+        case .add(let text):
+            drafts[surface] = Draft(
+                length: (drafts[surface] ?? Draft(length: 0)).length.map { $0 + text.count },
+                endsInBackslash: text.hasSuffix("\\"))
+        case .addUnknown:
+            drafts[surface] = Draft(length: nil)
+        case .move:
+            drafts[surface]?.length = nil
+        case .removeOne:
+            drafts[surface]?.endsInBackslash = false
+            guard let length = drafts[surface]?.length else { return }
+            if length > 1 { drafts[surface]?.length = length - 1 } else { endDraft(surface) }
+        case .removeUnknown:
+            drafts[surface]?.length = nil
+            drafts[surface]?.endsInBackslash = false
+        case .clear:
+            endDraft(surface)
+        case .submit, .none:
+            break
+        }
     }
 
-    private func release(
-        _ surface: SurfaceID, by cap: Date, hangup: ControlHangup, _ deliver: @escaping () -> Void
-    ) {
-        guard !hangup.hasHungUp else { return }
-        let now = now()
-        guard let lastKey = lastKeys[surface], now < cap else { return deliver() }
-        let quietAt = lastKey.addingTimeInterval(Self.quiet)
-        guard now < quietAt else { return deliver() }
-        after(min(quietAt, cap).timeIntervalSince(now)) { [weak self] in
-            self?.release(surface, by: cap, hangup: hangup, deliver)
+    func isHolding(_ surface: SurfaceID) -> Bool {
+        queues[surface] != nil || drafts[surface] != nil || now() < quietAt(surface)
+    }
+
+    func hasQueuedTask(for surface: SurfaceID) -> Bool {
+        queues[surface]?.contains(where: \.isTask) == true
+    }
+
+    func queue(_ surface: SurfaceID, _ message: Message) {
+        queues[surface, default: []].append(message)
+        drain(surface)
+    }
+
+    func panesClosed(_ surfaces: [SurfaceID]) {
+        for surface in surfaces {
+            lastKeys[surface] = nil
+            drafts[surface] = nil
+            blockedSince[surface] = nil
+            queues.removeValue(forKey: surface)?.forEach { $0.drop("its pane closed") }
+        }
+    }
+
+    // Claude Code reads a backslash before Return as a newline, so that Return sends nothing.
+    private func submit(_ surface: SurfaceID) {
+        guard drafts[surface]?.endsInBackslash != true else {
+            lastKeys[surface] = now()
+            drafts[surface]?.endsInBackslash = false
+            return
+        }
+        lastKeys[surface] = nil
+        drafts[surface] = nil
+        after(0) { [weak self] in self?.drain(surface) }
+    }
+
+    private func endDraft(_ surface: SurfaceID) {
+        drafts[surface] = nil
+        drain(surface)
+    }
+
+    private func quietAt(_ surface: SurfaceID) -> Date {
+        lastKeys[surface].map { $0.addingTimeInterval(Self.quiet) } ?? .distantPast
+    }
+
+    // The blocked cap counts only time the queue could have delivered in, so a draft never spends it.
+    private func drain(_ surface: SurfaceID) {
+        guard queues[surface] != nil else { return }
+        let quietFor = quietAt(surface).timeIntervalSince(now())
+        guard drafts[surface] == nil, quietFor <= 0 else {
+            blockedSince[surface] = nil
+            if drafts[surface] == nil { schedule(surface, in: quietFor) }
+            return
+        }
+        while let head = queues[surface]?.first {
+            guard head.isBlocked() else {
+                blockedSince[surface] = nil
+                queues[surface]?.removeFirst()
+                head.deliver()
+                continue
+            }
+            let since = blockedSince[surface] ?? now()
+            blockedSince[surface] = since
+            guard now() >= since.addingTimeInterval(Self.longestBlockedHold) else {
+                return schedule(surface, in: Self.blockedRecheck)
+            }
+            queues[surface]?.removeFirst()
+            head.drop("its agent stayed blocked")
+        }
+        queues[surface] = nil
+        blockedSince[surface] = nil
+    }
+
+    private func schedule(_ surface: SurfaceID, in delay: TimeInterval) {
+        guard scheduled.insert(surface).inserted else { return }
+        after(delay) { [weak self] in
+            self?.scheduled.remove(surface)
+            self?.drain(surface)
         }
     }
 }

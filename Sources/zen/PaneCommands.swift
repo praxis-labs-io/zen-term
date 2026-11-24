@@ -170,8 +170,8 @@ struct PaneCommands: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Paste text into a pane. Control characters arrive as spaces.",
             discussion:
-                "Into an agent, it waits until the person has not typed into the pane for 2 seconds, "
-                + "at most \(ControlWire.longestDraftHold), and refuses while the agent waits on the user.")
+                "Into an agent whose person has unsent text at its prompt, it is queued until they send it, "
+                + "and prints {\"queued\":true}. It refuses while the agent waits on the user.")
 
         @OptionGroup var connection: ConnectionOptions
 
@@ -203,11 +203,11 @@ struct PaneCommands: ParsableCommand {
             let args = ControlArgs(
                 force: force, pane: pane, text: text, enter: enter, timeout: wait ? timeout : nil, wait: wait)
             var client = try connection.client()
-            client.replyTimeout = ControlClient.replyTimeout(for: .paneSend, args)
             if wait {
+                client.replyTimeout = ControlClient.replyTimeout(for: .paneSend, args)
                 print(try JSONOutput.text(client.send(.paneSend, args, expecting: WaitResult.self)))
-            } else {
-                _ = try client.send(.paneSend, args, expecting: NoPayload.self)
+            } else if try client.send(.paneSend, args, expecting: PaneSendResult.self).queued == true {
+                print(try JSONOutput.text(PaneSendResult(queued: true)))
             }
         }
     }
