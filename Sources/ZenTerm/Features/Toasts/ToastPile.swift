@@ -11,6 +11,7 @@ final class ToastPile: NSView {
     private let showLess = AppButton(title: "Show Less", variant: .secondary)
     private var arrangement: [NSLayoutConstraint] = []
     private var clickMonitor: Any?
+    private let foldsOnClickOutside: Bool
 
     // Board 16's recession, three deep: each card behind is fainter, with no token to name the step.
     private static let plateOpacity: [Float] = [0.75, 0.45]
@@ -18,7 +19,9 @@ final class ToastPile: NSView {
     private static let plateInset = ChromeMetrics.Spacing.s10
     private static let listGap = ChromeMetrics.Spacing.s8
 
-    init() {
+    // The Component Gallery shows an unfolded stack that a click elsewhere in the gallery leaves open.
+    init(foldsOnClickOutside: Bool = true) {
+        self.foldsOnClickOutside = foldsOnClickOutside
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         let snug = widthAnchor.constraint(equalToConstant: 0)
@@ -104,7 +107,7 @@ final class ToastPile: NSView {
     private func setUnfolded(_ unfolded: Bool) {
         guard unfolded != isUnfolded else { return }
         isUnfolded = unfolded
-        unfolded ? watchForClicksOutside() : stopWatchingClicks()
+        unfolded && foldsOnClickOutside ? watchForClicksOutside() : stopWatchingClicks()
         onUnfoldChange?(unfolded)
     }
 
