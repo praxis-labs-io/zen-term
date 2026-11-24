@@ -3,6 +3,7 @@
 # Usage: bin/ghosttykit-stamp write | verify
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 XCFRAMEWORK="$ROOT/Frameworks/GhosttyKit.xcframework"
 RESOURCES="$ROOT/Sources/TerminalKit/Resources/ghostty-resources"
 # Inside the xcframework so a worktree's symlink and CI's artifact cache carry it along.
@@ -11,12 +12,12 @@ STAMP="$XCFRAMEWORK/zenterm-build-inputs"
 # The same inputs as CI's GhosttyKit cache key.
 fingerprint() {
     local pin
-    pin="$(git -C "$ROOT" rev-parse HEAD:vendor/ghostty)"
+    pin="$(git rev-parse HEAD:vendor/ghostty)"
     shopt -s nullglob
     local inputs=("bin/build-ghosttykit" patches/ghostty-*.patch)
     shopt -u nullglob
     local digest
-    digest="$(cd "$ROOT" && for f in "${inputs[@]}"; do printf '%s\n' "$f"; cat "$f"; done | shasum -a 256 | cut -d' ' -f1)"
+    digest="$(for f in "${inputs[@]}"; do printf '%s\n' "$f"; cat "$f"; done | shasum -a 256 | cut -d' ' -f1)"
     printf 'ghostty %s\ninputs %s\n' "$pin" "$digest"
 }
 
