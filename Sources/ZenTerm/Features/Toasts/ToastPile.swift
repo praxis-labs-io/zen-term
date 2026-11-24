@@ -83,6 +83,14 @@ final class ToastPile: NSView {
         relayout(animated: true)
     }
 
+    func bringForward(_ card: NSView) {
+        guard let index = cards.firstIndex(where: { $0 === card }), !leaving.contains(ObjectIdentifier(card))
+        else { return }
+        cards.append(cards.remove(at: index))
+        front.map(raise)
+        relayout(animated: true)
+    }
+
     func remove(_ card: NSView) {
         let id = ObjectIdentifier(card)
         cards.removeAll { $0 === card }
@@ -118,7 +126,8 @@ final class ToastPile: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard !isUnfolded, settled.count > 1, let front else { return super.hitTest(point) }
-        guard frame.contains(point) else { return nil }
+        let local = convert(point, from: superview)
+        guard local.x >= front.frame.minX, local.x <= front.frame.maxX, bounds.contains(local) else { return nil }
         if let hit = super.hitTest(point), Self.isControl(hit, within: front) { return hit }
         return self
     }
@@ -130,7 +139,7 @@ final class ToastPile: NSView {
     private static func isControl(_ view: NSView, within card: NSView) -> Bool {
         var current: NSView? = view
         while let candidate = current, candidate !== card {
-            if candidate is NSControl || candidate is ControlView { return true }
+            if candidate is NSButton || candidate is ControlView { return true }
             current = candidate.superview
         }
         return false
@@ -157,6 +166,7 @@ final class ToastPile: NSView {
     }
 
     private func relayout(animated: Bool, arriving: NSView? = nil) {
+        superview?.layoutSubtreeIfNeeded()
         NSLayoutConstraint.deactivate(arrangement)
         arrangement = isUnfolded ? listArrangement() : foldedArrangement()
         NSLayoutConstraint.activate(arrangement)

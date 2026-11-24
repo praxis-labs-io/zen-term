@@ -132,6 +132,11 @@ final class ToastPresenter {
         if pile.isShowing(card) { Motion.springScaleFade(card, appearing: true) }
     }
 
+    func bringForward(card: ShadowCardView) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        pile.bringForward(card)
+    }
+
     func remove(card: ShadowCardView) {
         dispatchPrecondition(condition: .onQueue(.main))
         pile.release(card)

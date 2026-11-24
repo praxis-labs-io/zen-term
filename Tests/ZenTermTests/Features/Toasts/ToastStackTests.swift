@@ -102,6 +102,49 @@ final class ToastStackTests: WindowTestCase {
             "well past the duration, nothing expires while the stack is open")
     }
 
+    func test_clickingTheFrontToastsTitle_unfoldsRatherThanDismissing() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let front = try XCTUnwrap(toast(titled: "Third"))
+        let title = try XCTUnwrap(descendants(of: front).first { ($0 as? NSTextField)?.stringValue == "Third" })
+
+        click(title)
+
+        XCTAssertTrue(presenter.pileForTesting.isUnfolded)
+        XCTAssertNotNil(toast(titled: "Third"), "the click on the text did not dismiss the toast")
+    }
+
+    func test_aClickBesideANarrowFrontCard_reachesWhatIsBehindTheStack() throws {
+        let behind = ClickCatcher(frame: window.contentView!.bounds)
+        window.contentView!.addSubview(behind)
+        let presenter = presenter()
+        presenter.show(notice("A notice wide enough to set the stack's width"))
+        let readout = FontSizeCard(text: "13 pt")
+        presenter.present(card: readout)
+        window.contentView!.layoutSubtreeIfNeeded()
+        let pile = presenter.pileForTesting
+        XCTAssertLessThan(readout.frame.width, pile.frame.width, "precondition: the hidden toast widens the stack")
+
+        click(at: pile.convert(NSPoint(x: pile.bounds.minX + 4, y: readout.frame.midY), to: nil))
+
+        XCTAssertTrue(behind.clicked, "the click beside the front card reaches the view behind")
+        XCTAssertFalse(pile.isUnfolded)
+    }
+
+    func test_anUpdatedCard_comesBackInFrontOfNewerToasts() {
+        let presenter = presenter()
+        let readout = FontSizeCard(text: "13 pt")
+        presenter.present(card: readout)
+        presenter.show(notice("Config reloaded"))
+        let pile = presenter.pileForTesting
+        XCTAssertFalse(pile.isShowing(readout), "precondition: folded behind the newer toast")
+
+        presenter.bringForward(card: readout)
+
+        XCTAssertTrue(pile.front === readout)
+        XCTAssertEqual(pile.opacityForTesting(readout), 1)
+    }
+
     func test_hoveringTheFoldedStack_leavesItFolded() throws {
         let presenter = presenter()
         showThree(on: presenter)
@@ -214,4 +257,10 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(visible("Third", in: pile), "newer toasts fold behind it")
         XCTAssertEqual(pile.plateOpacityForTesting, [0.75, 0.45])
     }
+}
+
+private final class ClickCatcher: NSView {
+    private(set) var clicked = false
+
+    override func mouseDown(with event: NSEvent) { clicked = true }
 }
