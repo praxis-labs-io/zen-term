@@ -119,7 +119,10 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         let isOneLine = messageLabel == nil
         let usesLinks = !gatesFocus
         if !actions.isEmpty {
-            actionButtons = actions.map { usesLinks ? Self.link(for: $0) : Self.button(for: $0) }
+            actionButtons =
+                usesLinks
+                ? Self.primaryLast(actions).map { Self.link(for: $0, alone: actions.count == 1) }
+                : actions.map(Self.button(for:))
         }
         if isOneLine, usesLinks {
             actionButtons.forEach(header.addArrangedSubview)
@@ -196,8 +199,14 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         return row
     }
 
-    private static func link(for action: ToastAction) -> AppButton {
-        AppButton(title: action.title, variant: action.kind == .cancel ? .quietLink : .link, onTap: action.run)
+    // The answer a toast asks for sits last in ink; every other action recedes before it.
+    private static func primaryLast(_ actions: [ToastAction]) -> [ToastAction] {
+        actions.filter { $0.kind != .primary } + actions.filter { $0.kind == .primary }
+    }
+
+    private static func link(for action: ToastAction, alone: Bool) -> AppButton {
+        let variant: AppButton.Variant = alone || action.kind == .primary ? .link : .quietLink
+        return AppButton(title: action.title, variant: variant, onTap: action.run)
     }
 
     // Click-only: a `keyEquivalent` answers only when the traversal reaches the button, so the card owns Return and Esc.

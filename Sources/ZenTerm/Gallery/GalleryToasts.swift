@@ -91,7 +91,7 @@
 
         private static func stickyCards() -> GallerySection {
             let conflict = KeybindConflict(
-                loser: .toggleZoom, chord: Chord(command: true, key: "\r"), winner: .toggleSidebar)
+                loser: .toggleZoom, chord: Chord(command: true, key: "⏎"), winner: .toggleSidebar)
             let diagnostics = [
                 ConfigDiagnostic(
                     scope: .setting(key: "toast-duration"), problem: .invalidValue(got: "soon", expected: "seconds")),
