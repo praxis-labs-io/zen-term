@@ -2340,7 +2340,9 @@ final class WindowController: NSObject {
             return ListResult.Tab(
                 id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
                 active: id == workspace.activeID,
-                panes: tab.paneHandles.map { listing(of: $0, onHost: workspace.host != nil) })
+                panes: tab.paneHandles.map {
+                    listing(of: $0, onHost: workspace.host != nil, tabNamed: tab.pinnedTitle != nil)
+                })
         }
         let host = Self.hostListing(of: workspace)
         return ListResult.Workspace(
@@ -2353,11 +2355,13 @@ final class WindowController: NSObject {
     func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
 
     func listing(of pane: PaneHandle, in tab: TabID) -> ListResult.Pane {
-        listing(of: pane, onHost: workspace(of: tab)?.host != nil)
+        let workspace = workspace(of: tab)
+        return listing(
+            of: pane, onHost: workspace?.host != nil, tabNamed: workspace?.controller(tab)?.pinnedTitle != nil)
     }
 
     // A host pane's foreground program is the local ssh, not what runs on the host.
-    private func listing(of pane: PaneHandle, onHost: Bool) -> ListResult.Pane {
+    private func listing(of pane: PaneHandle, onHost: Bool, tabNamed: Bool) -> ListResult.Pane {
         let agent = agents.agents[pane.surfaceID].map { agent in
             let tone = AttentionTone(
                 wait: attention.agentWait(of: pane.surfaceID), working: attention.isWorking(pane.surfaceID))
@@ -2369,7 +2373,7 @@ final class WindowController: NSObject {
             cwd: pane.cwd?.path, busy: pane.surface.isBusy,
             process: onHost ? nil : Self.processListing(of: pane.surface), agent: agent, name: pane.record.name,
             parent: pane.record.parent.flatMap { NavRegistry.shared.isLive(token: $0) ? $0 : nil },
-            firstTask: pane.record.firstTask)
+            firstTask: pane.record.firstTask, tabNamed: tabNamed ? true : nil)
     }
 
     private static func processListing(of surface: TerminalSurface) -> ListResult.Process? {
@@ -2555,7 +2559,7 @@ final class WindowController: NSObject {
         return CloseStakes(
             closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
             isRunning: running || children.isRunning,
-            panes: busy.map { listing(of: $0, onHost: workspace.host != nil) }
+            panes: busy.map { listing(of: $0, onHost: workspace.host != nil, tabNamed: tab.pinnedTitle != nil) }
                 + children.listings,
             floats: floats.runningTitles(scope: id) + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
@@ -2570,7 +2574,11 @@ final class WindowController: NSObject {
         return CloseStakes(
             closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
             isRunning: isRunning(workspace: workspace) || children.isRunning,
-            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map { listing(of: $0, onHost: false) }
+            panes: tabs.flatMap { tab in
+                tab.paneHandles.filter(\.surface.isBusy).map {
+                    listing(of: $0, onHost: false, tabNamed: tab.pinnedTitle != nil)
+                }
+            }
                 + children.listings,
             floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))

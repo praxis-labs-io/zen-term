@@ -24,6 +24,10 @@ If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
   its tab and its workspace.
 - `zen pane get` prints your pane as JSON. `name` and `parent` are there when
   another pane started you with `zen pane run`: you are its helper.
+- A session without a parent names its tab once, as its first action after the
+  user's first prompt: `zen tab rename "<words>"`, 2 or 3 words naming the task.
+  Never later in the session, and not when `zen pane get` shows `tab_named`. A
+  helper leaves its tab alone.
 - `zen list --pretty` prints every window, workspace, tab, pane and drawer as a
   tree. `zen list` prints the same as JSON.
 - Addresses: a pane is its token (`31`) or its name (`tests`), a tab is
