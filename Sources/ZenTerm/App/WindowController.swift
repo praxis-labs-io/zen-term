@@ -3355,7 +3355,7 @@ final class WindowController: NSObject {
     }
     @objc func paste(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
-        if let surface = presentFocusedSurface { paneDrafts.typed(.write, into: surface) }
+        if let surface = presentFocusedSurface { paneDrafts.typed(.addUnknown, into: surface) }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
     }
     @objc func selectAll(_ sender: Any?) {

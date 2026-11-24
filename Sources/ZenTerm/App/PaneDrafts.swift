@@ -9,6 +9,11 @@ final class PaneDrafts {
         let drop: (_ reason: String) -> Void
     }
 
+    // A nil length is text ZenTerm could not count, which only Return or a clearing key ends.
+    private struct Draft {
+        var length: Int?
+    }
+
     // So a message does not land in the prompt just as the person starts typing into it.
     static let quiet: TimeInterval = 2
     static let blockedRecheck: TimeInterval = 1
@@ -19,31 +24,37 @@ final class PaneDrafts {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
     private var lastKeys: [SurfaceID: Date] = [:]
-    private var drafts: Set<SurfaceID> = []
+    private var drafts: [SurfaceID: Draft] = [:]
     private var queues: [SurfaceID: [Message]] = [:]
     private var blockedSince: [SurfaceID: Date] = [:]
     private var scheduled: Set<SurfaceID> = []
 
     func typed(_ edit: DraftEdit, into surface: SurfaceID) {
-        switch edit {
-        case .write:
-            lastKeys[surface] = now()
-            drafts.insert(surface)
-        case .clear:
-            lastKeys[surface] = now()
-            drafts.remove(surface)
-            drain(surface)
-        case .submit:
+        guard edit != .submit else {
             lastKeys[surface] = nil
-            drafts.remove(surface)
-            after(0) { [weak self] in self?.drain(surface) }
-        case .none:
-            lastKeys[surface] = now()
+            drafts[surface] = nil
+            return after(0) { [weak self] in self?.drain(surface) }
+        }
+        lastKeys[surface] = now()
+        switch edit {
+        case .add(let text):
+            drafts[surface] = Draft(length: (drafts[surface] ?? Draft(length: 0)).length.map { $0 + text.count })
+        case .addUnknown:
+            drafts[surface] = Draft(length: nil)
+        case .removeOne:
+            guard let length = drafts[surface]?.length else { return }
+            if length > 1 { drafts[surface]?.length = length - 1 } else { endDraft(surface) }
+        case .removeUnknown:
+            if drafts[surface] != nil { drafts[surface]?.length = nil }
+        case .clear:
+            endDraft(surface)
+        case .submit, .none:
+            break
         }
     }
 
     func isHolding(_ surface: SurfaceID) -> Bool {
-        queues[surface] != nil || drafts.contains(surface) || now() < quietAt(surface)
+        queues[surface] != nil || drafts[surface] != nil || now() < quietAt(surface)
     }
 
     func hasQueuedTask(for surface: SurfaceID) -> Bool {
@@ -58,10 +69,15 @@ final class PaneDrafts {
     func panesClosed(_ surfaces: [SurfaceID]) {
         for surface in surfaces {
             lastKeys[surface] = nil
-            drafts.remove(surface)
+            drafts[surface] = nil
             blockedSince[surface] = nil
             queues.removeValue(forKey: surface)?.forEach { $0.drop("its pane closed") }
         }
+    }
+
+    private func endDraft(_ surface: SurfaceID) {
+        drafts[surface] = nil
+        drain(surface)
     }
 
     private func quietAt(_ surface: SurfaceID) -> Date {
@@ -72,9 +88,9 @@ final class PaneDrafts {
     private func drain(_ surface: SurfaceID) {
         guard queues[surface] != nil else { return }
         let quietFor = quietAt(surface).timeIntervalSince(now())
-        guard !drafts.contains(surface), quietFor <= 0 else {
+        guard drafts[surface] == nil, quietFor <= 0 else {
             blockedSince[surface] = nil
-            if !drafts.contains(surface) { schedule(surface, in: quietFor) }
+            if drafts[surface] == nil { schedule(surface, in: quietFor) }
             return
         }
         while let head = queues[surface]?.first {

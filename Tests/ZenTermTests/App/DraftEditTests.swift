@@ -18,14 +18,24 @@ final class DraftEditTests: XCTestCase {
     func test_returnSends_andKeypadEnterToo_butAModifiedReturnWritesANewline() throws {
         XCTAssertEqual(try key("\r", keyCode: 36), .submit)
         XCTAssertEqual(try key("\u{3}", flags: [.numericPad, .function], keyCode: 76), .submit)
-        XCTAssertEqual(try key("\r", flags: .shift, keyCode: 36), .write)
-        XCTAssertEqual(try key("\r", flags: .option, keyCode: 36), .write)
+        XCTAssertEqual(try key("\r", flags: .shift, keyCode: 36), .add("\n"))
+        XCTAssertEqual(try key("\r", flags: .option, keyCode: 36), .add("\n"))
     }
 
-    func test_textWrites_withShiftOrOption() throws {
-        XCTAssertEqual(try key("q"), .write)
-        XCTAssertEqual(try key("Q", flags: .shift), .write)
-        XCTAssertEqual(try key("å", bare: "a", flags: .option), .write)
+    func test_textAddsWhatItTypes_withShiftOrOption() throws {
+        XCTAssertEqual(try key("q"), .add("q"))
+        XCTAssertEqual(try key("Q", flags: .shift), .add("Q"))
+        XCTAssertEqual(try key("å", bare: "a", flags: .option), .add("å"))
+    }
+
+    func test_backspaceRemovesOne_andAWordOrLineDeleteRemovesAnUnknownAmount() throws {
+        XCTAssertEqual(try key("\u{7f}", keyCode: 51), .removeOne)
+        XCTAssertEqual(try key("\u{7f}", flags: .option, keyCode: 51), .removeUnknown)
+        XCTAssertEqual(try key("\u{7f}", flags: .command, keyCode: 51), .removeUnknown)
+        XCTAssertEqual(try key("\u{F728}", flags: [.function], keyCode: 117), .removeUnknown)
+        XCTAssertEqual(try key("\u{17}", bare: "w", flags: .control, keyCode: 13), .removeUnknown)
+        XCTAssertEqual(try key("\u{b}", bare: "k", flags: .control, keyCode: 40), .removeUnknown)
+        XCTAssertEqual(try key("\u{8}", bare: "h", flags: .control, keyCode: 4), .removeUnknown)
     }
 
     func test_controlCAndControlUClear_butEscapeDoesNot() throws {
@@ -34,16 +44,15 @@ final class DraftEditTests: XCTestCase {
         XCTAssertEqual(try key("\u{1b}", keyCode: 53), .none)
     }
 
-    func test_upDownAndTabWrite_sinceTheyRecallOrCompleteText() throws {
-        XCTAssertEqual(try key("\u{F700}", flags: [.function, .numericPad], keyCode: 126), .write)
-        XCTAssertEqual(try key("\u{F701}", flags: [.function, .numericPad], keyCode: 125), .write)
-        XCTAssertEqual(try key("\t", keyCode: 48), .write)
+    func test_upDownAndTabAddUnknownText_sinceTheyRecallOrCompleteIt() throws {
+        XCTAssertEqual(try key("\u{F700}", flags: [.function, .numericPad], keyCode: 126), .addUnknown)
+        XCTAssertEqual(try key("\u{F701}", flags: [.function, .numericPad], keyCode: 125), .addUnknown)
+        XCTAssertEqual(try key("\t", keyCode: 48), .addUnknown)
     }
 
-    func test_sideArrowsDeleteShiftTabAndCommandKeysLeaveTheDraft() throws {
+    func test_sideArrowsShiftTabAndCommandKeysLeaveTheDraft() throws {
         XCTAssertEqual(try key("\u{F702}", flags: [.function, .numericPad], keyCode: 123), .none)
         XCTAssertEqual(try key("\u{F703}", flags: [.function, .numericPad], keyCode: 124), .none)
-        XCTAssertEqual(try key("\u{7f}", keyCode: 51), .none)
         XCTAssertEqual(try key("\u{19}", bare: "\t", flags: .shift, keyCode: 48), .none)
         XCTAssertEqual(try key("v", flags: .command, keyCode: 9), .none)
         XCTAssertEqual(try key("\u{1}", bare: "a", flags: .control, keyCode: 0), .none)

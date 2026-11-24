@@ -2,34 +2,46 @@ import AppKit
 
 // What a key the person typed into a pane does to the text sitting unsent at its prompt.
 enum DraftEdit: Equatable {
-    case write, submit, clear, none
+    case add(String), addUnknown, removeOne, removeUnknown, submit, clear, none
 
     private static let returnKeys: Set<UInt16> = [36, 76]
+    private static let backspaceKey: UInt16 = 51
+    private static let forwardDeleteKey: UInt16 = 117
     // Up, Down and Tab recall or complete text at an agent's prompt.
     private static let recallingKeys: Set<UInt16> = [126, 125, 48]
     private static let clearingControlKeys: Set<String> = ["c", "u"]
+    private static let deletingControlKeys: Set<String> = ["h", "k", "w"]
     private static let functionKeys: ClosedRange<UInt32> = 0xF700...0xF8FF
 
     init(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
         if Self.returnKeys.contains(event.keyCode) {
-            self = modifiers.isEmpty ? .submit : .write
+            self = modifiers.isEmpty ? .submit : .add("\n")
         } else if Self.recallingKeys.contains(event.keyCode) {
-            self = modifiers.isEmpty ? .write : .none
+            self = modifiers.isEmpty ? .addUnknown : .none
+        } else if event.keyCode == Self.backspaceKey {
+            self = modifiers.isEmpty ? .removeOne : .removeUnknown
+        } else if event.keyCode == Self.forwardDeleteKey {
+            self = .removeUnknown
         } else if modifiers == .control {
-            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            self = Self.clearingControlKeys.contains(key) ? .clear : .none
-        } else if modifiers.isDisjoint(with: [.command, .control]), Self.types(event.characters) {
-            self = .write
+            self = Self.controlEdit(event.charactersIgnoringModifiers?.lowercased() ?? "")
+        } else if modifiers.isDisjoint(with: [.command, .control]), let typed = Self.typed(event.characters) {
+            self = .add(typed)
         } else {
             self = .none
         }
     }
 
-    private static func types(_ characters: String?) -> Bool {
-        guard let characters, !characters.isEmpty else { return false }
-        return characters.unicodeScalars.allSatisfy {
+    private static func controlEdit(_ key: String) -> DraftEdit {
+        if clearingControlKeys.contains(key) { return .clear }
+        return deletingControlKeys.contains(key) ? .removeUnknown : .none
+    }
+
+    private static func typed(_ characters: String?) -> String? {
+        guard let characters, !characters.isEmpty else { return nil }
+        let printable = characters.unicodeScalars.allSatisfy {
             !CharacterSet.controlCharacters.contains($0) && !functionKeys.contains($0.value)
         }
+        return printable ? characters : nil
     }
 }

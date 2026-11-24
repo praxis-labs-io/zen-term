@@ -216,6 +216,43 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [.paste("go")])
     }
 
+    func test_backspacingADraftAwayReleasesTheSendAfterTheQuietPause() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "hi", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+
+        try sendKeys([.backspace], to: c)
+        clock.advance(3600)
+        XCTAssertEqual(agent.inputs, [], "one character is still unsent")
+        try sendKeys([.backspace], to: c)
+        clock.advance(PaneDrafts.quiet)
+
+        XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
+    func test_backspaceNeverEndsADraftOfUnknownLength() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+
+        var delivered: [RecordingSurface.Input] = []
+        for start: [TypedKey] in [[.arrowUp], [.character("h"), .character("i"), .optionBackspace]] {
+            try sendKeys(start, to: c)
+            XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+            try sendKeys(Array(repeating: .backspace, count: 20), to: c)
+            clock.advance(3600)
+            XCTAssertEqual(agent.inputs, delivered, "\(start) left text ZenTerm could not count")
+            try sendKeys([.controlU], to: c)
+            clock.advance(PaneDrafts.quiet)
+            delivered.append(.paste("go"))
+            XCTAssertEqual(agent.inputs, delivered)
+        }
+    }
+
     func test_aKeyThatMovesWithoutWritingStartsNoDraft() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)
