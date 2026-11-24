@@ -350,23 +350,42 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [.paste("go")])
     }
 
-    func test_aPasteIntoThePaneIsADraft() throws {
-        let c = makeWindow()
-        let agent = try XCTUnwrap(spawned.first)
-        report(.idle, from: agent)
-        try focus(agent, in: c)
+    private func paste(_ text: String, in c: WindowController) {
         let saved = NSPasteboard.general.string(forType: .string)
         defer {
             NSPasteboard.general.clearContents()
             if let saved { NSPasteboard.general.setString(saved, forType: .string) }
         }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("pasted draft", forType: .string)
+        NSPasteboard.general.setString(text, forType: .string)
         c.paste(nil)
+    }
+
+    func test_aPasteIntoThePaneIsADraft() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        paste("pasted draft", in: c)
 
         XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
         clock.advance(3600)
         XCTAssertEqual(agent.inputs, [.paste("pasted draft")])
+    }
+
+    func test_aPasteThatAnswersABlockedAgentStartsNoDraft() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.blocked(.question), from: agent)
+        try focus(agent, in: c)
+        paste("the answer", in: c)
+        report(.working, from: agent)
+        let answer = send("go", to: try token(of: agent))
+
+        clock.advance(PaneDrafts.quiet)
+
+        XCTAssertTrue(isQueued(answer))
+        XCTAssertEqual(agent.inputs, [.paste("the answer"), .paste("go")])
     }
 
     func test_aShellIsNeverHeld() throws {

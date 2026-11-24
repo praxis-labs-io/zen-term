@@ -3355,7 +3355,9 @@ final class WindowController: NSObject {
     }
     @objc func paste(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
-        if let surface = presentFocusedSurface { paneDrafts.typed(.addUnknown, into: surface) }
+        if let surface = presentFocusedSurface {
+            paneDrafts.typed(answersPrompt(surface) ? .none : .addUnknown, into: surface)
+        }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
     }
     @objc func selectAll(_ sender: Any?) {
@@ -4003,7 +4005,7 @@ final class WindowController: NSObject {
         (terminalSurface(surface)?.view as? NSTextInputClient)?.hasMarkedText() == true
     }
 
-    // A key into a blocked agent answers its prompt, so it neither starts the draft nor sends it.
+    // A key or paste into a blocked agent answers its prompt, so it neither starts the draft nor sends it.
     private func answersPrompt(_ surface: SurfaceID) -> Bool {
         if case .blocked = agentStates.status(of: surface)?.state { return true }
         return false

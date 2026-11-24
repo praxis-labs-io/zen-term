@@ -318,7 +318,7 @@ Into a pane that runs an agent:
   confirms an input method's text, or that follows a typed `\`, does not send it. Queued sends
   arrive in order, each on its own, right after the person's Return, or 2 seconds after the key
   that cleared it. A send within 2 seconds of any other key into the pane is queued the same way.
-  Keys into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued
+  Keys or a paste into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued
   send whose agent is `blocked` when its turn comes waits until it is not, and is dropped once the
   agent stays blocked 10 minutes from when the person sent or cleared their text. A queued send that
   is dropped, there or because its pane closed or refused it, answers a `wait` with a `failed` error
