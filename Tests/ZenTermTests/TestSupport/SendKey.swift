@@ -48,7 +48,6 @@ func sendKeys(typing text: String, to controller: WindowController) throws {
     try sendKeys(text.map { .character(String($0)) }, to: controller)
 }
 
-// A reserved chord, through `KeyInterceptor` wired as the app wires it, over the keymap the config holds now.
 @MainActor
 func pressChord(
     _ characters: String, _ flags: NSEvent.ModifierFlags, keyCode: UInt16, in controller: WindowController
