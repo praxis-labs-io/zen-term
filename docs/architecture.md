@@ -502,7 +502,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`NavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
-  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row).
+  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row). An
+  Agents row whose surface is a pane, not a drawer or tool float, gets the same menu with
+  Close, which takes `confirmClosing`, the close-stakes confirm ⌘W uses.
   Space opens it on the focused row. Focus stays on the row, whose ↑/↓ walk the menu and
   ↵ chooses; Esc closes it back to the row.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**
@@ -542,7 +544,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   to size its grid by. `WindowController.focus(_:in:)` shows it, so `pane.focus`, a card's Switch and a jump to
   a waiting agent reveal its tab and show it, and while shown it is the window's focused surface.
   Its Agents row toggles it instead (`toggleAgentRow`). `close_pane` over any shown float hides
-  it, so ending one takes its program exiting or `zen pane close`.
+  it, so ending one takes its program exiting, `zen pane close` or the row menu's Close.
   A tab's close confirmation names a running one that is hidden.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**

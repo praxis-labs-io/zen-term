@@ -704,6 +704,110 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertTrue(c.floatsForTesting.shownSurface === (try surface(family.helper)))
     }
 
+    private var rowMenu: SidebarRowMenu { controllers[0].sidebarForTesting.view.rowMenu }
+
+    private func mouse(_ type: NSEvent.EventType, flags: NSEvent.ModifierFlags = [], in c: WindowController) throws
+        -> NSEvent
+    {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: type, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+
+    private func rightClick(_ row: SidebarAgentRow, in c: WindowController) throws {
+        row.rightMouseDown(with: try mouse(.rightMouseDown, in: c))
+    }
+
+    private func chooseClose(in c: WindowController) throws {
+        let close = try XCTUnwrap(rowMenu.itemViewsForTesting.first { $0.title == "Close" })
+        close.onChoose()
+    }
+
+    func test_rightClickControlClickAndSpace_openAnAgentRowsMenu_withClose() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        let family = try helperFloat(in: c)
+        let row = try agentRow(of: family.helper, in: c)
+
+        try rightClick(row, in: c)
+        XCTAssertEqual(rowMenu.itemViewsForTesting.map(\.title), ["Close"])
+        rowMenu.close()
+
+        row.mouseDown(with: try mouse(.leftMouseDown, flags: .control, in: c))
+        XCTAssertTrue(rowMenu.isOpen, "Control-click opens the menu")
+        XCTAssertNil(c.floatsForTesting.shownSurface, "Control-click does not jump")
+        rowMenu.close()
+
+        c.window.makeFirstResponder(row)
+        try sendKeys([.space], to: c)
+        XCTAssertTrue(rowMenu.isOpen, "Space opens the menu")
+        XCTAssertEqual(rowMenu.highlightedTitleForTesting, "Close")
+
+        try sendKeys([.returnKey], to: c)
+        XCTAssertFalse(isOpen(family.helper, in: c), "Return chose Close on an idle float pane")
+    }
+
+    func test_closeOnAnIdleFloatPane_closesItWithoutAsking() throws {
+        let c = makeWindow()
+        let family = try helperFloat(in: c)
+
+        try rightClick(try agentRow(of: family.helper, in: c), in: c)
+        try chooseClose(in: c)
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertFalse(isOpen(family.helper, in: c))
+        XCTAssertTrue(isOpen(family.lead, in: c))
+    }
+
+    func test_closeOnARunningFloatPane_asksFirst() throws {
+        let c = makeWindow()
+        let family = try helperFloat(in: c)
+        try surface(family.helper).isBusy = true
+
+        try rightClick(try agentRow(of: family.helper, in: c), in: c)
+        try chooseClose(in: c)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(
+            toastTexts(in: c).contains("Closing this pane will stop the process running in it."),
+            "\(toastTexts(in: c))")
+        XCTAssertTrue(isOpen(family.helper, in: c))
+
+        try pressConfirmClose(in: c)
+        XCTAssertFalse(isOpen(family.helper, in: c))
+        XCTAssertTrue(isOpen(family.lead, in: c))
+    }
+
+    func test_closeOnAParentWithARunningChild_namesTheChild() throws {
+        let c = makeWindow()
+        c.handle(.splitVertical)
+        let parent = try XCTUnwrap(everyPane(c).last?.token)
+        try becomeAgent(parent)
+        let child = try run(ControlArgs(cmd: "claude", name: "review"), from: parent)
+        try surface(child).isBusy = true
+
+        try rightClick(try agentRow(of: parent, in: c), in: c)
+        try chooseClose(in: c)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(
+            toastTexts(in: c).contains("Closing this pane will stop the process running in it, including review."),
+            "\(toastTexts(in: c))")
+        XCTAssertTrue(isOpen(parent, in: c))
+
+        try pressConfirmClose(in: c)
+        XCTAssertFalse(isOpen(parent, in: c))
+        waitUntil(!isOpen(child, in: c), "the child closing with its parent")
+    }
+
+    private func pressConfirmClose(in c: WindowController) throws {
+        let content = try XCTUnwrap(c.window.contentView)
+        let button = try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "Close" })
+        button.performClick(nil)
+    }
+
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap { descendants(of: $0) }
     }

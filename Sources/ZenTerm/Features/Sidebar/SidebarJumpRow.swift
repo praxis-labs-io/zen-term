@@ -4,6 +4,7 @@ class SidebarJumpRow: ListRow {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEscape: (() -> Void)?
+    var onReturn: (() -> Void)?
     var onFocusChanged: (() -> Void)?
 
     init(_ content: Content = Content(title: ""), tooltip: String, onActivate: @escaping () -> Void) {
@@ -26,7 +27,7 @@ class SidebarJumpRow: ListRow {
         switch KeyboardFocus.key(for: event) {
         case .up: onArrowUp?()
         case .down: onArrowDown?()
-        case .activate where KeyboardFocus.isReturn(event): onChoose()
+        case .activate where KeyboardFocus.isReturn(event): (onReturn ?? onChoose)()
         case .escape where onEscape != nil && KeyboardFocus.isUnmodified(event): onEscape?()
         default: super.keyDown(with: event)
         }

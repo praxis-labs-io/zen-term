@@ -525,6 +525,7 @@ final class WindowController: NSObject {
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         onRenameWorkspace = { [weak self] in self?.openRenameWorkspace($0) }
         sidebar.onJump = { [weak self] in self?.toggleAgentRow($0) }
+        sidebar.onCloseAgent = { [weak self] in self?.requestClose(agent: $0) }
         sidebar.onActivateHost = { [weak self] host in
             self?.sidebar.hideReveal()
             self?.activate(host)
@@ -3218,43 +3219,56 @@ final class WindowController: NSObject {
             return
         }
 
-        let lastPane = active.isSinglePane
-        if lastPane, let workspace = activeWorkspace, let tab = workspace.activeID, holdsAwaitingLogin(tab: tab) {
-            return confirmAbandoningLogin(of: workspace, closing: .tab)
+        guard let tab = activeWorkspace?.activeID else { return }
+        confirmClosing(focusedPane(of: tab), in: tab, lastPane: active.isSinglePane) { [weak self] in
+            guard let self, let active = self.activeController else { return }
+            if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
         }
-        let tab = activeWorkspace?.activeID
+    }
+
+    private func requestClose(agent surface: SurfaceID) {
+        guard let found = pane(where: { $0.surfaceID == surface }), found.pane.drawer == nil,
+            let c = controller(found.tab), let workspace = workspace(of: found.tab)
+        else { return }
+        if workspace.connection?.isAwaitingLogin(on: surface) == true {
+            return confirmAbandoningLogin(of: workspace, closing: .pane)
+        }
+        let lastPane = c.isSinglePane && found.pane.location == .tree
+        confirmClosing(found.pane, in: found.tab, lastPane: lastPane) { [weak self] in
+            self?.removePane(found.pane.token, in: found.tab)
+        }
+    }
+
+    private func confirmClosing(
+        _ pane: PaneHandle?, in tab: TabID, lastPane: Bool, close: @escaping () -> Void
+    ) {
+        guard let workspace = workspace(of: tab) else { return }
+        if lastPane, holdsAwaitingLogin(tab: tab) { return confirmAbandoningLogin(of: workspace, closing: .tab) }
         let children =
             lastPane
-            ? childStakes(closing: Set([tab].compactMap { $0 }))
-            : childStakes(closing: [], panes: Set([tab.flatMap(focusedPane(of:))?.token].compactMap { $0 }))
+            ? childStakes(closing: [tab])
+            : childStakes(closing: [], panes: Set([pane?.token].compactMap { $0 }))
         let closesWindow =
-            lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace) || children.closesWindow
+            lastPane && workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
         let needsConfirm =
             closesWindow
             || !children.otherWindows.isEmpty
-            || active.focusedPaneIsBusy
+            || pane?.surface.isBusy == true
             || children.isRunning
-            || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
-        guard needsConfirm else {
-            if active.closeFocused() == false { activeWorkspace?.activeID.map { closeTab($0) } }
-            return
-        }
+            || (lastPane && isRunning(tab: tab))
+        guard needsConfirm else { return close() }
 
         let subject: CloseWarning.Subject =
             closesWindow ? .lastPane(running: windowIsRunning) : (lastPane ? .tab : .pane)
         let names =
             closesWindow
             ? runningNamesInWindow() + children.names(outside: self)
-            : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : []) + children.names
+            : (lastPane ? hiddenRunningNames(inTab: tab) : []) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(
                 closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close"
-        ) { [weak self] in
-            guard let self, let active = self.activeController else { return }
-            if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
-        }
+            confirmLabel: "Close", onConfirm: close)
     }
 
     private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
@@ -4364,6 +4378,7 @@ final class WindowController: NSObject {
                 message: message)
             item.process = process
             let pane = panes[id]
+            item.canClose = pane.map { $0.drawer == nil } ?? false
             return AgentFamilies.Member(
                 item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
                 parent: pane?.record.parent, isAgent: true)
@@ -4377,6 +4392,7 @@ final class WindowController: NSObject {
             var item = SidebarAgentItem(
                 id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
             item.process = programIcon(of: pane.surface)
+            item.canClose = pane.drawer == nil
             return AgentFamilies.Member(
                 item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
                 isAgent: false)
