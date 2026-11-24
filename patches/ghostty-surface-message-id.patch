@@ -1,0 +1,60 @@
+diff --git i/src/App.zig w/src/App.zig
+index 840dac6ec..d34707e55 100644
+--- i/src/App.zig
++++ w/src/App.zig
+@@ -290,7 +290,7 @@ fn drainMailbox(self: *App, rt_app: *apprt.App) !void {
+             ),
+             .new_window => |msg| try self.newWindow(rt_app, msg),
+             .close => |surface| self.closeSurface(surface),
+-            .surface_message => |msg| try self.surfaceMessage(msg.surface, msg.message),
++            .surface_message => |msg| try self.surfaceMessage(msg.surface, msg.id, msg.message),
+ 
+             // If we're quitting, then we set the quit flag and stop
+             // draining the mailbox immediately. This lets us defer
+@@ -519,11 +519,11 @@ pub fn performAllAction(
+ }
+ 
+ /// Handle a window message
+-fn surfaceMessage(self: *App, surface: *Surface, msg: apprt.surface.Message) !void {
++fn surfaceMessage(self: *App, surface: *Surface, id: u64, msg: apprt.surface.Message) !void {
+     // We want to ensure our window is still active. Window messages
+     // are quite rare and we normally don't have many windows so we do
+     // a simple linear search here.
+-    if (self.hasSurface(surface)) {
++    if (self.hasSurface(surface) and surface.id == id) {
+         try surface.handleMessage(msg);
+     }
+ 
+@@ -567,6 +567,8 @@ pub const Message = union(enum) {
+     /// A message for a specific surface.
+     surface_message: struct {
+         surface: *Surface,
++        /// A freed surface's address can be reused, so the id tells a new surface there from the sender.
++        id: u64,
+         message: apprt.surface.Message,
+     },
+ 
+diff --git i/src/apprt/gtk/class/application.zig w/src/apprt/gtk/class/application.zig
+index a6db7ad93..1a548d5fa 100644
+--- i/src/apprt/gtk/class/application.zig
++++ w/src/apprt/gtk/class/application.zig
+@@ -1997,6 +1997,7 @@ pub const Application = extern struct {
+             .{
+                 .surface_message = .{
+                     .surface = surface,
++                    .id = surface.id,
+                     .message = .present_surface,
+                 },
+             },
+diff --git i/src/apprt/surface.zig w/src/apprt/surface.zig
+index 602e28c73..7ef8816fc 100644
+--- i/src/apprt/surface.zig
++++ w/src/apprt/surface.zig
+@@ -210,6 +210,7 @@ pub const Mailbox = struct {
+         return self.app.push(.{
+             .surface_message = .{
+                 .surface = self.surface,
++                .id = self.surface.id,
+                 .message = msg,
+             },
+         }, timeout);

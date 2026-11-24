@@ -99,4 +99,7 @@ mkdir -p "$RES"
 cp -R "$GHOSTTY/zig-out/share/ghostty" "$RES/ghostty"
 cp -R "$GHOSTTY/zig-out/share/terminfo" "$RES/terminfo"
 
+# 7. Stamp the build with its inputs so bin/run, bin/check and bin/release refuse a stale one.
+"$ROOT/bin/ghosttykit-stamp" write
+
 echo "✓ done — build with: swift build; run with: swift run ZenTerm"

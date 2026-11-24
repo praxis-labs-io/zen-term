@@ -187,8 +187,7 @@ SIGN_PROBE="$(mktemp)"
     || { echo "✗ sign_update can't reach the Sparkle EdDSA key: import it, do not generate a new one (see docs/releasing.md)" >&2; rm -f "$SIGN_PROBE"; exit 1; }
 rm -f "$SIGN_PROBE"
 
-[[ -d Frameworks/GhosttyKit.xcframework ]] \
-    || { echo "✗ GhosttyKit.xcframework missing: run bin/build-ghosttykit" >&2; exit 1; }
+bin/ghosttykit-stamp verify
 
 # The DMG window is styled by bin/make-dmg, which needs the committed background art and a
 # terminal authorized to control Finder. Both are checked here, up front, so a missing asset
