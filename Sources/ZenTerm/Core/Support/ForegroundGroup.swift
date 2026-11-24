@@ -9,7 +9,7 @@ enum ForegroundGroup {
     }
 
     nonisolated static let system = Processes(
-        session: { getsid($0) }, parent: { info(of: $0)?.kp_eproc.e_ppid }, command: command(of:))
+        session: { getsid($0) }, parent: { info(of: $0)?.kp_eproc.e_ppid }, command: { command(of: $0) })
 
     // A pane's shell leads its session, or is the child of the `login` that does; a job it runs is neither.
     nonisolated static func isShell(_ group: pid_t, in processes: Processes = system) -> Bool {
