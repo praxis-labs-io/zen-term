@@ -784,19 +784,20 @@ final class TabController: NSObject {
 
     private func toastZoomBlocked(_ verb: String) {
         guard zoomBlockToasts.allows(verb) else { return }
-        onRequestToast?(
-            ToastContent(
-                variant: .info, title: "Focus Mode",
-                message: "Exit Focus Mode (\(Self.focusModeChord)) to \(verb)."))
+        onRequestToast?(Self.zoomBlockedToast(verb))
+    }
+
+    static func zoomBlockedToast(_ verb: String) -> ToastContent {
+        ToastContent(variant: .info, title: "Focus Mode", message: "Exit Focus Mode (\(focusModeChord)) to \(verb).")
     }
 
     private func toastFocusModeUnavailable() {
         guard focusUnavailableToasts.allows() else { return }
-        onRequestToast?(
-            ToastContent(
-                variant: .info, title: "Focus Mode",
-                message: "Focus Mode needs a second pane or an open drawer."))
+        onRequestToast?(Self.focusModeUnavailableToast)
     }
+
+    static let focusModeUnavailableToast = ToastContent(
+        variant: .info, title: "Focus Mode", message: "Focus Mode needs a second pane or an open drawer.")
 
     func toastNoNeighbor(_ direction: Direction) {
         guard noNeighborToasts.allows(direction) else { return }
@@ -1316,9 +1317,12 @@ extension TabController: TerminalSurfaceDelegate {
     }
 
     private func warnSurfaceFailed(descriptor: String) {
-        onRequestToast?(
-            ToastContent(
-                variant: .warning, title: "Terminal didn't start",
-                message: "\(descriptor) failed to launch. Open it again to retry."))
+        onRequestToast?(Self.surfaceFailedToast(descriptor: descriptor))
+    }
+
+    static func surfaceFailedToast(descriptor: String) -> ToastContent {
+        ToastContent(
+            variant: .warning, title: "Terminal didn't start",
+            message: "\(descriptor) failed to launch. Open it again to retry.")
     }
 }

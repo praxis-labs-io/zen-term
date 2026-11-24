@@ -120,7 +120,7 @@ final class BackgroundTabTests: WindowTestCase {
 
     func test_openingABackgroundTabLeavesAConfirmUp() throws {
         let c = makeWindow()
-        c.presentConfirm(variant: .warning, title: "Close Tab", message: "", confirmLabel: "Close") {}
+        c.presentConfirm(ToastContent(variant: .warning, title: "Close Tab", message: ""), confirmLabel: "Close") {}
 
         _ = try openBackgroundTab(in: c)
 
@@ -158,7 +158,7 @@ final class BackgroundTabTests: WindowTestCase {
     func test_removingABackgroundTabLeavesAConfirmUp() throws {
         let c = makeWindow()
         let id = try openBackgroundTab(in: c)
-        c.presentConfirm(variant: .warning, title: "Close Tab", message: "", confirmLabel: "Close") {}
+        c.presentConfirm(ToastContent(variant: .warning, title: "Close Tab", message: ""), confirmLabel: "Close") {}
 
         c.removeTab(id)
 

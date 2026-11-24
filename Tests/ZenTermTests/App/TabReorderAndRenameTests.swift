@@ -197,7 +197,7 @@ final class TabReorderAndRenameTests: WindowTestCase {
         let controller = makeWindow(tabs: 2)
         var confirmed = 0
         controller.presentConfirm(
-            variant: .warning, title: "Close 2 panes", message: "This closes both.",
+            ToastContent(variant: .warning, title: "Close 2 panes", message: "This closes both."),
             confirmLabel: "Close", onConfirm: { confirmed += 1 })
         XCTAssertTrue(controller.isConfirmOpen)
 

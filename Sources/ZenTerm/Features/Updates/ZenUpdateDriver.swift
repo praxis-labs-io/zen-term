@@ -4,6 +4,13 @@ import Sparkle
 
 // No `SPUStandardUserDriver` fallback: `SUEnableAutomaticChecks` in the plist suppresses Sparkle's permission prompt.
 final class ZenUpdateDriver: NSObject, SPUUserDriver {
+    static var upToDateNotice: ToastContent {
+        ToastContent(variant: .positive, title: "You're on the latest", message: "ZenTerm \(AppVersion.current)")
+    }
+
+    static let checkFailedNotice = ToastContent(
+        variant: .warning, title: "Couldn't check for updates", message: "Something went wrong. Try again later.")
+
     // Weak and set late: `UpdateController` builds the `SPUUpdater` from this driver.
     weak var controller: UpdateController?
 
@@ -63,10 +70,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         controller?.dismiss()
         if userInitiated {
             userInitiated = false
-            controller?.announce(
-                ToastContent(
-                    variant: .positive, title: "You're on the latest",
-                    message: "ZenTerm \(AppVersion.current)"))
+            controller?.announce(Self.upToDateNotice)
         }
         acknowledgement()
     }
@@ -76,10 +80,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         controller?.dismiss()
         if userInitiated {
             userInitiated = false
-            controller?.announce(
-                ToastContent(
-                    variant: .warning, title: "Couldn't check for updates",
-                    message: "Something went wrong. Try again later."))
+            controller?.announce(Self.checkFailedNotice)
         }
         acknowledgement()
     }

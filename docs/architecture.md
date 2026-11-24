@@ -550,6 +550,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A toast that offers an action stays until it is answered.** Only an attention or completion
   card under `auto` counts down with its actions. A non-modal card's actions are text links and
   it never takes focus; a confirm keeps its buttons, because it owns Return and Esc.
+- **A toast's copy and actions come from a static factory on its owner** (`WindowController+Toasts`
+  for the window's), never a literal at the call site. `GalleryToasts` builds the Component
+  Gallery's toast sections from the same factories, so a new toast adds itself there too.
 
 ### The interaction language
 

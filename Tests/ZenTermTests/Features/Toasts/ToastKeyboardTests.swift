@@ -83,7 +83,7 @@ final class ToastKeyboardTests: WindowTestCase {
         onCancel: @escaping () -> Void = {}
     ) -> WindowController {
         c.presentConfirm(
-            variant: .warning, title: "Close Tab", message: "This stops everything running in it.",
+            ToastContent(variant: .warning, title: "Close Tab", message: "This stops everything running in it."),
             confirmLabel: "Close", onConfirm: onConfirm, onCancel: onCancel)
         return c
     }
