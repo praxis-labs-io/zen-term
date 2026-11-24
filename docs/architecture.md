@@ -325,7 +325,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
   row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
-  stack, modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
+  stack, modal card. Toasts sit above floats (a chord a float blocks toasts about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab. An open modal is the window's
   `hoverCover`: every control ordered behind it shows no hover, apart from the owner's own
@@ -539,8 +539,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `prune` skips it, and its tab ends it. Its presentation events reach the slot through
   `PaneFloats.presenter`, whose own guard drops a hidden one's. It runs hidden, started at the
   card's size (`ToolFloatController.paneContentSize`), since a view never in a window has no frame
-  to size its grid by. `WindowController.focus(_:in:)` shows it, so an Agents row and a jump to
+  to size its grid by. `WindowController.focus(_:in:)` shows it, so `pane.focus`, a card's Switch and a jump to
   a waiting agent reveal its tab and show it, and while shown it is the window's focused surface.
+  Its Agents row toggles it instead (`toggleAgentRow`). `close_pane` over any shown float hides
+  it, so ending one takes its program exiting or `zen pane close`.
   A tab's close confirmation names a running one that is hidden.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**

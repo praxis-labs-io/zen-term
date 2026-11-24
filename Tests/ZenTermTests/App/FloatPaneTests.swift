@@ -600,13 +600,108 @@ final class FloatPaneTests: WindowTestCase {
         try tab(of: lead, in: c).updateRecord(pane: float) { $0.name = "review" }
         try show(float, in: c)
 
-        c.handle(.closePane)
         c.handle(.navLeft)
 
         let texts = toastTexts(in: c)
-        XCTAssertTrue(texts.contains("Close review first, then ⌘W."), "\(texts)")
         XCTAssertTrue(texts.contains("review is open. Close it to get back to your panes."), "\(texts)")
         XCTAssertTrue(texts.contains("Float Pane"), "\(texts)")
+    }
+
+    private func pressCommandW(in c: WindowController) throws {
+        try pressChord("w", .command, keyCode: 13, in: c)
+    }
+
+    func test_cmdW_overAShownFloatPane_hidesIt_andItKeepsRunning() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let float = try openFloat(in: c, beside: lead)
+        try show(float, in: c)
+
+        try pressCommandW(in: c)
+
+        XCTAssertNil(c.floatsForTesting.shownSurface)
+        XCTAssertTrue(isOpen(float, in: c))
+        XCTAssertFalse(try surface(float).terminated)
+        XCTAssertTrue(isOpen(lead, in: c), "⌘W reached the pane under the float")
+        XCTAssertFalse(c.isConfirmOpen)
+    }
+
+    func test_cmdW_overAToolFloat_hidesIt_andItKeepsRunning() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let scratch = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+
+        try pressCommandW(in: c)
+
+        XCTAssertFalse(c.floatsForTesting.isOpen)
+        XCTAssertFalse(scratch.terminated)
+        XCTAssertTrue(isOpen(lead, in: c), "⌘W reached the pane under the float")
+        XCTAssertTrue(toastTexts(in: c).isEmpty, "\(toastTexts(in: c))")
+    }
+
+    func test_cmdW_withNoFloatShown_stillClosesThePane() throws {
+        let c = makeWindow()
+        c.handle(.splitVertical)
+        let panes = everyPane(c).count
+
+        try pressCommandW(in: c)
+
+        XCTAssertEqual(everyPane(c).count, panes - 1)
+    }
+
+    func test_aRemappedClosePane_hidesAShownFloatToo() throws {
+        var config = GeneralConfig.current
+        config.rebind(.closePane, to: Chord(command: true, control: true, key: "k"))
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let float = try openFloat(in: c, beside: lead)
+        try show(float, in: c)
+
+        try pressChord("k", [.command, .control], keyCode: 40, in: c)
+
+        XCTAssertNil(c.floatsForTesting.shownSurface)
+        XCTAssertTrue(isOpen(float, in: c))
+        XCTAssertTrue(isOpen(lead, in: c))
+    }
+
+    private func agentRow(of token: Int, in c: WindowController) throws -> SidebarAgentRow {
+        let id = try XCTUnwrap(c.pane(token: token)?.pane.surfaceID)
+        drainMainQueue()
+        return try XCTUnwrap(c.sidebarForTesting.view.agentRowsForTesting.first { $0.itemForTesting?.id == id })
+    }
+
+    private func helperFloat(in c: WindowController) throws -> (lead: Int, helper: Int) {
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+        return (lead, try run(ControlArgs(cmd: "claude", name: "review"), from: lead))
+    }
+
+    func test_clickingAFloatPanesRow_togglesIt() throws {
+        let c = makeWindow()
+        let family = try helperFloat(in: c)
+        let row = try agentRow(of: family.helper, in: c)
+
+        try sendClick(to: row)
+        XCTAssertTrue(c.floatsForTesting.shownSurface === (try surface(family.helper)), "the first click shows it")
+
+        try sendClick(to: row)
+        XCTAssertNil(c.floatsForTesting.shownSurface, "the second click hides it")
+        XCTAssertFalse(try surface(family.helper).terminated)
+
+        try sendClick(to: row)
+        XCTAssertTrue(c.floatsForTesting.shownSurface === (try surface(family.helper)))
+    }
+
+    func test_paneFocusOnAShownFloatPane_onlyShowsIt() throws {
+        let c = makeWindow()
+        let family = try helperFloat(in: c)
+
+        _ = try answer(.paneFocus, ControlArgs(pane: .token(family.helper)))
+        _ = try answer(.paneFocus, ControlArgs(pane: .token(family.helper)))
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === (try surface(family.helper)))
     }
 
     private func descendants(of view: NSView) -> [NSView] {

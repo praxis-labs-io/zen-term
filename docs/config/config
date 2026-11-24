@@ -395,7 +395,8 @@
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
 # keybind = split_horizontal=cmd+shift+d         # a new pane below
-# keybind = close_pane=cmd+w                     # the focused pane or drawer; the last pane takes the tab
+# keybind = close_pane=cmd+w                     # the focused pane or drawer; the last pane takes the tab.
+#                                                # Over a float it hides the float and leaves it running.
 # keybind = nav_left=cmd+opt+left                # past the leftmost pane, into the docked sidebar
 # keybind = nav_down=cmd+opt+down
 # keybind = nav_up=cmd+opt+up

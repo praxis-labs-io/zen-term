@@ -409,15 +409,6 @@ final class WindowController: NSObject {
         toasts.show(content)
     }
 
-    private var floatCloseBlockContent: ToastContent {
-        floats.shownPaneSurface == nil
-            ? ToastContent(
-                variant: .info, title: "Tool Float", message: "Close \(activeFloatName ?? "the tool") first, then ⌘W.")
-            : ToastContent(
-                variant: .info, title: "Float Pane",
-                message: "Close \(shownFloatPaneName ?? "the float pane") first, then ⌘W.")
-    }
-
     private var noNewWorktreeToasts = ToastThrottle<SidebarController.NewWorktreeRefusal>()
 
     private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
@@ -533,7 +524,7 @@ final class WindowController: NSObject {
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         onRenameWorkspace = { [weak self] in self?.openRenameWorkspace($0) }
-        sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
+        sidebar.onJump = { [weak self] in self?.toggleAgentRow($0) }
         sidebar.onActivateHost = { [weak self] host in
             self?.sidebar.hideReveal()
             self?.activate(host)
@@ -2963,7 +2954,7 @@ final class WindowController: NSObject {
         if floats.isOpen {
             switch chord {
             case .closePane:
-                toasts.show(floatCloseBlockContent)
+                floats.close()
                 return
             case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane, .focusSidebar,
                 .splitVertical, .splitHorizontal,
@@ -4455,6 +4446,11 @@ final class WindowController: NSObject {
                 message: elsewhere
                     ? "An agent is waiting in another window."
                     : "No agent in this window is asking for you.\nThe sidebar lists the ones that are."))
+    }
+
+    private func toggleAgentRow(_ surface: SurfaceID) {
+        if floats.shownPaneSurface == surface { return floats.hidePane(surface) }
+        jumpToAgent(surface)
     }
 
     private func jumpToAgent(_ surface: SurfaceID) {
