@@ -119,6 +119,18 @@ final class ClaudeSetupFilesTests: XCTestCase {
             #"You are helper `review`, started by pane 31. When done or stuck, report with "#
                 + #"`zen pane send --pane 31 --enter "<result>"`, then stop. Put a question about your task to "#
                 + #"pane 31 the same way and `zen wait 31` for the answer, not AskUserQuestion."#)
+        XCTAssertFalse(output.contains("zen tab rename"))
+    }
+
+    func test_shippedHookAsksATopLevelSessionToNameItsTab() throws {
+        let pane = #"{"agent":{"name":"claude"},"token":31}"#
+        let (status, output) = try runShippedHook(environment: try zenPaneEnvironment(pane: 31, answering: pane))
+
+        XCTAssertEqual(status, 0)
+        XCTAssertTrue(
+            output.contains(
+                #"- Your first action after the user's first prompt: name your tab for the task in 2 or 3 words "#
+                    + #"with `zen tab rename "<words>"`."#))
     }
 
     func test_shippedHookHasNoHelperLineWithoutAParent() throws {
