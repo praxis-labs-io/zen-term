@@ -82,7 +82,6 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return shownPane
     }
 
-    // A float pane takes Scratch's card.
     private static var paneCard: ToolFloat { .scratch }
 
     static func paneContentSize(in area: NSSize) -> NSSize {
