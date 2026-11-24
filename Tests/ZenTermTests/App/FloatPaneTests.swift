@@ -400,6 +400,36 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertFalse(isFloat(defaulted, in: c))
     }
 
+    func test_anAgentsRunIntoAnotherWindowOpensATab_andItsSameWindowRunStillFloats() throws {
+        let home = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+        let other = makeWindow()
+        let target = try XCTUnwrap(everyPane(other).first?.token)
+        let sibling = try run(ControlArgs(cmd: "zsh", float: false), from: lead)
+
+        let across = try run(ControlArgs(cmd: "htop", pane: .token(target)), from: lead)
+        let beside = try run(ControlArgs(cmd: "htop", pane: .token(sibling)), from: lead)
+
+        XCTAssertFalse(isFloat(across, in: other))
+        XCTAssertEqual(tabCount(other), 2)
+        XCTAssertTrue(isFloat(beside, in: home))
+    }
+
+    func test_aFloatIntoAnotherWindowIsRefused() throws {
+        _ = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+        let other = makeWindow()
+        let target = try XCTUnwrap(everyPane(other).first?.token)
+
+        let refused = try XCTUnwrap(
+            error(try answer(.paneRun, ControlArgs(cmd: "htop", pane: .token(target), float: true), from: lead)))
+
+        XCTAssertEqual(refused.code, .refused)
+        XCTAssertEqual(everyPane(other).count, 1)
+    }
+
     func test_floatWithNoAgentAboveIsRefused() throws {
         let c = makeWindow()
         let lead = try token(of: XCTUnwrap(spawned.first))

@@ -83,9 +83,11 @@ extension ControlResponder {
         return nil
     }
 
-    // A float is opened from its agent's row in the Agents list, and closes when that agent exits.
+    // A float is opened from its agent's row in the Agents list, which lists only its own window's panes,
+    // and closes when that agent exits.
     private func opensFloat(_ request: ControlRequest, in place: PanePlace) -> Result<Bool, ControlError> {
         let caller = request.caller?.pane.flatMap(locate(pane:))
+        let acrossWindows = caller.map { $0.window !== place.window } ?? false
         switch request.args.float {
         case false?: return .success(false)
         case true?:
@@ -96,11 +98,18 @@ extension ControlResponder {
                         "A float opens only from an agent's pane, or a pane an agent started, so the Agents list "
                             + "can show it."))
             }
+            if acrossWindows {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "Pane \(place.pane.token) is in another window, and a float opens only in its agent's "
+                            + "window. Leave out --float to open a tab there."))
+            }
             return .success(true)
         case nil:
             let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
             let fromAgent = caller.map { $0.window.runsAgent($0.pane.surfaceID) } ?? false
-            return .success(fromAgent && request.args.outliveParent != true && !onHost)
+            return .success(fromAgent && request.args.outliveParent != true && !onHost && !acrossWindows)
         }
     }
 

@@ -335,9 +335,10 @@ Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Wit
 it opens a hidden float pane in the tab of `pane` (the caller's by default), or a tab behind
 the active one in that pane's workspace. `float` picks: `true` a float, `false` a tab. Absent,
 it is a float when an agent runs in `caller.pane`, without `outlive_parent`, outside a remote
-host's workspace; a tab otherwise. A float stays hidden until its row in the Agents list,
-`pane.focus` or `focus` shows it. `float: true` is refused unless an agent runs in
-`caller.pane` or a pane above it (its parent, and on up), and in a remote host's workspace.
+host's workspace, with `pane` in the caller's window; a tab otherwise. A float stays hidden
+until its row in the Agents list, `pane.focus` or `focus` shows it. `float: true` is refused
+unless an agent runs in `caller.pane` or a pane above it (its parent, and on up), when `pane`
+is in another window than `caller.pane`, and in a remote host's workspace.
 `float` with `split`, or `float: true` with `outlive_parent`, is a `bad_request`. It
 starts in `cwd`, else in `caller.cwd` when `pane` is the caller's, else in the folder that pane
 last reported. An inherited folder inside a removed worktree starts at the parent workspace's
