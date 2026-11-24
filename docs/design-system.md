@@ -62,7 +62,7 @@ Three ways in, never a raw alpha:
 
 Accent is rare. It goes in these places only:
 
-- The focus border of a tool float, of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
+- The focus border of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
 - The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
@@ -117,8 +117,8 @@ One ladder for every control and row:
 In a transient list, hover moves the keyboard cursor, so one row is lit at a time and ↑/↓
 continue from the row the pointer chose. A persistent list shows keyboard focus as the ring,
 and hover does not move it. In every row list a row activates on mouse up, and ↑/↓ stop at
-the ends. Focus changes a border's color, never its width; a focused pane or tool float steps
-up to `Border.paneFocus`.
+the ends. Focus changes a border's color, never its width; a focused pane steps up to
+`Border.paneFocus`. A float wears no focus border.
 
 ## Type
 
@@ -154,7 +154,7 @@ needs fixing, not a new step.
 | `Radius.capsule(_:)` | A fully rounded end, from the view's height |
 | `Radius.icon(_:)` | A process chip's app-icon corner, from its side |
 | `Border.width` | Every border, edge and focus ring |
-| `Border.paneFocus` | A focused pane or tool float |
+| `Border.paneFocus` | A focused pane |
 | `Icon.xs`, `.sm`, `.md`, `.xl` | SF Symbol point sizes |
 
 `panelGap`, `windowGutter`, `topInset` and `footerGap` are window layout, set from config,

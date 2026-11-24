@@ -100,18 +100,15 @@ final class WindowKeyFocusTests: WindowTestCase {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
         c.window.contentView?.layoutSubtreeIfNeeded()
         let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
-        let overlay = try XCTUnwrap(c.floatsForTesting.shownOverlayForTesting)
-        XCTAssertTrue(overlay.isFocusBorderVisible, "precondition: the float shows its accent edge")
+        XCTAssertEqual(float.focusRenders.last, true, "precondition: the float starts focused")
 
         resignKey(c)
 
         XCTAssertEqual(float.focusRenders.last, false)
-        XCTAssertFalse(overlay.isFocusBorderVisible)
 
         becomeKey(c)
 
         XCTAssertEqual(float.focusRenders.last, true)
-        XCTAssertTrue(overlay.isFocusBorderVisible)
     }
 
     func test_aModeInAnOpenFloat_rendersItUnfocused_likeAPane() throws {
@@ -131,9 +128,6 @@ final class WindowKeyFocusTests: WindowTestCase {
         c.handle(.toggleScrollMode)
 
         XCTAssertEqual(float.focusRenders.last, true)
-        XCTAssertEqual(
-            c.floatsForTesting.shownOverlayForTesting?.isFocusBorderVisible, true,
-            "a mode dims the cursor, not the edge")
     }
 
     func test_aFloatSearchingWhenItsWindowLosesKey_endsUnfocused() throws {
@@ -160,7 +154,6 @@ final class WindowKeyFocusTests: WindowTestCase {
 
         let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
         XCTAssertEqual(float.focusRenders.last, false)
-        XCTAssertEqual(c.floatsForTesting.shownOverlayForTesting?.isFocusBorderVisible, false)
     }
 
     func test_aTabLeftBehind_readsUnfocused_andComesBackWhenItIsActiveAgain() throws {
@@ -228,6 +221,29 @@ final class WindowKeyFocusTests: WindowTestCase {
         let afterClose = Array(pane.focusRenders.dropFirst(paneRenders))
         XCTAssertEqual(afterClose.first, true, "precondition: the pane takes first responder back")
         XCTAssertFalse(afterClose.contains(false), "a false between two trues leaves libghostty's blink cancelled")
+    }
+
+    func test_aShownFloatWearsNoFocusBorder_whileAFocusedTreePaneKeepsIts() throws {
+        let c = makeWindow()
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let pane = try XCTUnwrap(c.focusedPanelForTesting)
+        XCTAssertEqual(pane.borderForTesting.width, ChromeMetrics.Border.paneFocus)
+        XCTAssertEqual(pane.borderForTesting.color, Theme.current.chrome.accent.nsColor.cgColor)
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let overlay = try XCTUnwrap(c.floatsForTesting.shownOverlayForTesting)
+
+        XCTAssertTrue(c.window.firstResponder === float.view, "precondition: the float holds the keyboard")
+        XCTAssertEqual(overlay.edgeForTesting.width, ChromeMetrics.Border.width)
+        XCTAssertEqual(overlay.edgeForTesting.color, FloatShadow.edge.cgColor)
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(try XCTUnwrap(c.focusedPanelForTesting).borderForTesting.width, ChromeMetrics.Border.paneFocus)
     }
 
     func test_aLonePane_wearsNoFocusBorder_untilAnotherPanelSharesTheScreen() throws {
