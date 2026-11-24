@@ -325,8 +325,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
   row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
-  stack, modal card. Toasts sit above floats (a chord a float blocks toasts about the float); a card
-  sits above toasts because it owns the keyboard. `closeModal()` in
+  stack, modal card. Toasts sit above floats so a toast about a float, such as a chord it blocks, stays
+  visible; a card sits above toasts because it owns the keyboard. `closeModal()` in
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab. An open modal is the window's
   `hoverCover`: every control ordered behind it shows no hover, apart from the owner's own
   suppression. A popover the card opens mounts on the content view, in front of the card, and keeps
