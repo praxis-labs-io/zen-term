@@ -46,7 +46,8 @@ final class IconButton: ControlView, ThemeReapplying {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
-        icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight)
+        let image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight)
+        icon.image = image
         icon.imageScaling = .scaleNone
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)
@@ -64,8 +65,8 @@ final class IconButton: ControlView, ThemeReapplying {
             heightAnchor.constraint(equalToConstant: size.height),
             icon.centerXAnchor.constraint(equalTo: centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: size.width),
-            icon.heightAnchor.constraint(equalToConstant: size.height),
+            icon.widthAnchor.constraint(equalToConstant: image?.size.width ?? 0),
+            icon.heightAnchor.constraint(equalToConstant: image?.size.height ?? 0),
             activityDot.centerXAnchor.constraint(equalTo: trailingAnchor, constant: -Self.dotInset),
             activityDot.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.dotInset),
         ])

@@ -13,6 +13,13 @@ class ListRow: ControlView, ThemeReapplying {
         case keycap(String)
     }
 
+    enum Nesting: Equatable {
+        case none
+        case indented
+        // The glyph starts where the parent's title does, under a parent that leads with the same glyph.
+        case underTitle
+    }
+
     struct Content: Equatable {
         var title: String
         var subtitle: String?
@@ -21,13 +28,16 @@ class ListRow: ControlView, ThemeReapplying {
         var leading: Leading?
         var trailing: Trailing?
         var ink: ChromeTheme.InkLevel
-        var nests: Bool
+        var nesting: Nesting
         var leadingOnTitleLine: Bool
+        // The subtitle's descent hangs into the bottom padding, so the row's ink sits as far from its bottom as its top.
+        var trimsSubtitleDescent: Bool
 
         init(
             title: String, subtitle: String? = nil, subtitleTruncation: NSLineBreakMode = .byTruncatingTail,
             note: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
-            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false, leadingOnTitleLine: Bool = false
+            ink: ChromeTheme.InkLevel = .normal, nesting: Nesting = .none, leadingOnTitleLine: Bool = false,
+            trimsSubtitleDescent: Bool = false
         ) {
             self.title = title
             self.subtitle = subtitle
@@ -36,15 +46,18 @@ class ListRow: ControlView, ThemeReapplying {
             self.leading = leading
             self.trailing = trailing
             self.ink = ink
-            self.nests = nests
+            self.nesting = nesting
             self.leadingOnTitleLine = leadingOnTitleLine
+            self.trimsSubtitleDescent = trimsSubtitleDescent
         }
+
+        var nests: Bool { nesting != .none }
     }
 
     static let swatchSize: CGFloat = 10
     private static let symbolColumn: CGFloat = ChromeMetrics.Icon.md
     private static let noteMaxWidth: CGFloat = 96
-    private static let nestIndent: CGFloat = ChromeMetrics.Spacing.s16
+    private static let nestStep: CGFloat = ChromeMetrics.Spacing.s16
     private static let lineGap: CGFloat = ChromeMetrics.Spacing.s2
     private static let tallPadding: CGFloat = ChromeMetrics.Spacing.s6
 
@@ -104,8 +117,14 @@ class ListRow: ControlView, ThemeReapplying {
     // Pinned again on every rebuild: moving the title into a new lines stack drops constraints on it.
     private var titleLineViews: [NSView] = []
     private var titleLinePins: [NSLayoutConstraint] = []
+    private var nestIndent: CGFloat = 0
 
     var title: String { content.title }
+
+    var trimmedSubtitleDescent: CGFloat {
+        guard content.trimsSubtitleDescent, content.subtitle != nil, let subtitleLine else { return 0 }
+        return subtitleLine.lastBaselineOffsetFromBottom
+    }
 
     var processBadgeForTesting: IconBadge? {
         guard case .process = content.leading else { return nil }
@@ -178,6 +197,7 @@ class ListRow: ControlView, ThemeReapplying {
         let chrome = Theme.current.chrome
 
         let glyph = content.leading.map { leadingView($0, chrome) }
+        nestIndent = Self.nestIndent(content.nesting, glyph: glyph)
         var lead: [NSView] = []
         if content.leadingOnTitleLine, content.subtitle != nil, let glyph {
             lead.append(titleView(chrome, leading: glyph))
@@ -244,6 +264,14 @@ class ListRow: ControlView, ThemeReapplying {
 
     private static let titleLineGap = ChromeMetrics.Spacing.s6
 
+    private static func nestIndent(_ nesting: Nesting, glyph: NSView?) -> CGFloat {
+        switch nesting {
+        case .none: return 0
+        case .indented: return nestStep
+        case .underTitle: return (glyph?.fittingSize.width ?? 0) + titleLineGap
+        }
+    }
+
     private static func titleLine(leading glyph: NSView, title: NSTextField) -> NSView {
         let line = NSStackView(views: [glyph, title])
         line.orientation = .horizontal
@@ -257,9 +285,9 @@ class ListRow: ControlView, ThemeReapplying {
     // A one-line row centers in the height its owner gives it; a taller row pads itself.
     private func refreshInsets() {
         let pad = content.subtitle != nil || footnote != nil ? Self.tallPadding : 0
-        stackLeading.constant = ChromeMetrics.Spacing.controlInset + (content.nests ? Self.nestIndent : 0)
+        stackLeading.constant = ChromeMetrics.Spacing.controlInset + nestIndent
         stackTop.constant = pad
-        stackBottom.constant = -pad
+        stackBottom.constant = trimmedSubtitleDescent - pad
         footnoteBottom?.constant = -pad
     }
 

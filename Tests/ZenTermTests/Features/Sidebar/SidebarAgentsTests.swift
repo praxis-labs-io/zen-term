@@ -1032,7 +1032,8 @@ final class SidebarAgentsTests: WindowTestCase {
         let row = try XCTUnwrap(rows(c).first)
 
         XCTAssertEqual(row.summaryTextForTesting, "pi", "the message never replaces the title")
-        XCTAssertEqual(row.frame.height, SidebarAgentRow.height, "the message does not grow the row")
+        XCTAssertEqual(
+            row.frame.height, SidebarAgentRow.height - row.trimmedSubtitleDescent, "the message does not grow the row")
 
         try hover(row, in: c)
 

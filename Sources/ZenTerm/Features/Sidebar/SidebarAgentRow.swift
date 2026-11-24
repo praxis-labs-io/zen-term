@@ -81,7 +81,6 @@ final class SidebarAgentRow: SidebarJumpRow {
         guard item != self.item else { return }
         self.item = item
         rendersForTesting += 1
-        heightPin.constant = item.role == .agent ? Self.height : ChromeMetrics.Height.control
         renderContent(item)
         let startedBy = item.startedBy.map { "Started by \($0)" }
         let notes = [startedBy, item.message].compactMap { $0 }
@@ -105,11 +104,12 @@ final class SidebarAgentRow: SidebarJumpRow {
             render(
                 Content(
                     title: item.summary, subtitle: item.detail, leading: .process(item.process),
-                    leadingOnTitleLine: true))
-        case .helper:
-            render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: true))
-        case .process:
-            render(Content(title: item.summary, leading: .process(item.process), ink: .subtle, nests: true))
+                    leadingOnTitleLine: true, trimsSubtitleDescent: true))
+            heightPin.constant = Self.height - trimmedSubtitleDescent
+        case .helper, .process:
+            render(
+                Content(title: item.summary, leading: .process(item.process), ink: .subtle, nesting: .underTitle))
+            heightPin.constant = ChromeMetrics.Height.control
         }
     }
 
