@@ -52,12 +52,20 @@ final class DraftEditTests: XCTestCase {
         XCTAssertEqual(try key("\t", keyCode: 48), .addUnknown)
     }
 
-    func test_sideArrowsShiftTabAndCommandKeysLeaveTheDraft() throws {
-        XCTAssertEqual(try key("\u{F702}", flags: [.function, .numericPad], keyCode: 123), .none)
-        XCTAssertEqual(try key("\u{F703}", flags: [.function, .numericPad], keyCode: 124), .none)
+    func test_sideArrowsHomeEndAndControlAOrEMove_withOrWithoutAModifier() throws {
+        XCTAssertEqual(try key("\u{F702}", flags: [.function, .numericPad], keyCode: 123), .move)
+        XCTAssertEqual(try key("\u{F703}", flags: [.function, .numericPad], keyCode: 124), .move)
+        XCTAssertEqual(try key("\u{F702}", flags: [.function, .numericPad, .option], keyCode: 123), .move)
+        XCTAssertEqual(try key("\u{F703}", flags: [.function, .numericPad, .command], keyCode: 124), .move)
+        XCTAssertEqual(try key("\u{F729}", flags: [.function], keyCode: 115), .move)
+        XCTAssertEqual(try key("\u{F72B}", flags: [.function], keyCode: 119), .move)
+        XCTAssertEqual(try key("\u{1}", bare: "a", flags: .control, keyCode: 0), .move)
+        XCTAssertEqual(try key("\u{5}", bare: "e", flags: .control, keyCode: 14), .move)
+    }
+
+    func test_shiftTabAndCommandKeysLeaveTheDraft() throws {
         XCTAssertEqual(try key("\u{19}", bare: "\t", flags: .shift, keyCode: 48), .none)
         XCTAssertEqual(try key("v", flags: .command, keyCode: 9), .none)
-        XCTAssertEqual(try key("\u{1}", bare: "a", flags: .control, keyCode: 0), .none)
     }
 
     func test_whileAnInputMethodComposesAKeyAddsUnknownText_butEscapeAndClearingKeysKeepTheirMeaning() throws {

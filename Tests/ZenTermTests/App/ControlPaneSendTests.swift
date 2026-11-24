@@ -289,6 +289,40 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [.paste("go")])
     }
 
+    func test_aMovedCursorLeavesTheDraftUncounted_soBackspaceAtThePromptStartNeverEndsIt() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+
+        try sendKeys([.arrowLeft, .backspace], to: c)
+        clock.advance(3600)
+        XCTAssertEqual(agent.inputs, [], "the Backspace deleted nothing, so x is still unsent")
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(0)
+        XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
+    func test_aReturnAfterABackslashStaysANewline_throughKeysThatOnlyMoveTheCursor() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x\\", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+
+        try sendKeys([.arrowLeft, .arrowRight, .returnKey], to: c)
+        clock.advance(3600)
+        XCTAssertEqual(agent.inputs, [], "Claude Code took the backslash and Return as a newline")
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(0)
+        XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
     func test_aKeyThatMovesWithoutWritingStartsNoDraft() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)

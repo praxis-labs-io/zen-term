@@ -6,7 +6,7 @@ import XCTest
 // A key a person types, through `KeyInterceptor` and then the window, the path it takes before the responder chain.
 enum TypedKey {
     case character(String)
-    case returnKey, escape, tab, arrowUp, arrowDown, arrowLeft, controlU, backspace, optionBackspace
+    case returnKey, escape, tab, arrowUp, arrowDown, arrowLeft, arrowRight, controlU, backspace, optionBackspace
 
     func event(in window: NSWindow) throws -> NSEvent {
         let (characters, bare, flags, keyCode): (String, String, NSEvent.ModifierFlags, UInt16) =
@@ -18,6 +18,7 @@ enum TypedKey {
             case .arrowUp: ("\u{F700}", "\u{F700}", [.function, .numericPad], 126)
             case .arrowDown: ("\u{F701}", "\u{F701}", [.function, .numericPad], 125)
             case .arrowLeft: ("\u{F702}", "\u{F702}", [.function, .numericPad], 123)
+            case .arrowRight: ("\u{F703}", "\u{F703}", [.function, .numericPad], 124)
             case .controlU: ("\u{15}", "u", .control, 32)
             case .backspace: ("\u{7f}", "\u{7f}", [], 51)
             case .optionBackspace: ("\u{7f}", "\u{7f}", .option, 51)

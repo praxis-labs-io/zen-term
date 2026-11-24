@@ -9,7 +9,7 @@ final class PaneDrafts {
         let drop: (_ reason: String) -> Void
     }
 
-    // A nil length is text ZenTerm could not count, which only Return or a clearing key ends.
+    // A nil length is text ZenTerm could not count, or a cursor it lost, which only Return or a clearing key ends.
     private struct Draft {
         var length: Int?
         var endsInBackslash = false
@@ -33,7 +33,6 @@ final class PaneDrafts {
     func typed(_ edit: DraftEdit, into surface: SurfaceID) {
         guard edit != .submit else { return submit(surface) }
         lastKeys[surface] = now()
-        drafts[surface]?.endsInBackslash = false
         switch edit {
         case .add(let text):
             drafts[surface] = Draft(
@@ -41,11 +40,15 @@ final class PaneDrafts {
                 endsInBackslash: text.hasSuffix("\\"))
         case .addUnknown:
             drafts[surface] = Draft(length: nil)
+        case .move:
+            drafts[surface]?.length = nil
         case .removeOne:
+            drafts[surface]?.endsInBackslash = false
             guard let length = drafts[surface]?.length else { return }
             if length > 1 { drafts[surface]?.length = length - 1 } else { endDraft(surface) }
         case .removeUnknown:
-            if drafts[surface] != nil { drafts[surface]?.length = nil }
+            drafts[surface]?.length = nil
+            drafts[surface]?.endsInBackslash = false
         case .clear:
             endDraft(surface)
         case .submit, .none:
