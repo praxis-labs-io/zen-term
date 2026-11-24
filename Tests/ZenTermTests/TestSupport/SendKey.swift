@@ -6,13 +6,14 @@ import XCTest
 // A key a person types, through `KeyInterceptor` and then the window, the path it takes before the responder chain.
 enum TypedKey {
     case character(String)
-    case returnKey, escape, tab, arrowUp, arrowDown, arrowLeft, arrowRight, controlU, backspace, optionBackspace
+    case returnKey, space, escape, tab, arrowUp, arrowDown, arrowLeft, arrowRight, controlU, backspace, optionBackspace
 
     func event(in window: NSWindow) throws -> NSEvent {
         let (characters, bare, flags, keyCode): (String, String, NSEvent.ModifierFlags, UInt16) =
             switch self {
             case .character(let typed): (typed, typed, [], 12)
             case .returnKey: ("\r", "\r", [], 36)
+            case .space: (" ", " ", [], 49)
             case .escape: ("\u{1b}", "\u{1b}", [], 53)
             case .tab: ("\t", "\t", [], 48)
             case .arrowUp: ("\u{F700}", "\u{F700}", [.function, .numericPad], 126)
@@ -45,4 +46,23 @@ func sendKeys(_ keys: [TypedKey], to controller: WindowController) throws {
 @MainActor
 func sendKeys(typing text: String, to controller: WindowController) throws {
     try sendKeys(text.map { .character(String($0)) }, to: controller)
+}
+
+@MainActor
+func pressChord(
+    _ characters: String, _ flags: NSEvent.ModifierFlags, keyCode: UInt16, in controller: WindowController
+) throws {
+    let interceptor = KeyInterceptor()
+    interceptor.setKeymap(GeneralConfig.current.keymap)
+    interceptor.passThroughGuard = { [unowned controller] chord, action in
+        controller.passesThrough(chord, as: action, firstResponder: controller.window.firstResponder)
+    }
+    interceptor.onReservedChord = { [unowned controller] in controller.handle($0) }
+    interceptor.onKeyToFocus = { [unowned controller] in controller.keyReachedFocus($0) }
+    let event = try XCTUnwrap(
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: controller.window.windowNumber, context: nil, characters: characters,
+            charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode))
+    if let routed = interceptor.route(event) { controller.window.sendEvent(routed) }
 }
