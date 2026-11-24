@@ -15,7 +15,8 @@ toolchain, and builds `GhosttyKit.xcframework` plus libghostty's runtime
 resources. It applies the ghostty patches ZenTerm carries in `patches/` for the
 build and takes them back off after, and stops if one no longer applies to the
 pin. It takes a few minutes and reruns only when the ghostty pin, a patch, or the
-script changes. Its outputs are gitignored and per-machine, so a fresh git
+script changes. `bin/run` and `bin/check` stop and tell you when one of those
+changed since your last build. Its outputs are gitignored and per-machine, so a fresh git
 worktree needs `Frameworks/GhosttyKit.xcframework` and
 `Sources/TerminalKit/Resources/ghostty-resources` symlinked in from the main
 checkout or the build fails.

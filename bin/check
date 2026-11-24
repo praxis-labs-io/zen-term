@@ -40,6 +40,8 @@ fi
 # at ~500MB each, and paired with any other build it swaps the machine out. Cap it.
 JOBS="${SWIFT_BUILD_JOBS:-4}"
 
+bin/ghosttykit-stamp verify
+
 echo "▸ swift build"
 swift build --jobs "$JOBS" 2>&1 | filter_noise
 
