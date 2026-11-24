@@ -408,6 +408,33 @@ final class CloseCommandTests: WindowTestCase {
             c.window.firstResponder === confirm, "a tab the user is not looking at must not take the keyboard")
     }
 
+    func test_aBackgroundTabLosingItsLastPane_dismissesTheConfirmAskingToCloseIt() throws {
+        let c = onScreen()
+        let background = try firstPane()
+        background.isBusy = true
+        spareTab(c)
+        try middleClick(tab: 0, in: c)
+        XCTAssertTrue(c.isConfirmOpen, "precondition: closing the running background tab asks first")
+
+        background.delegate?.surfaceDidExit(background, code: 0)
+
+        XCTAssertEqual(c.tabOrderForTesting.count, 1, "precondition: the background tab closed")
+        XCTAssertFalse(c.isConfirmOpen, "the tab it asks about is gone, so its Close would do nothing")
+    }
+
+    func test_aBackgroundTabLosingItsLastPane_dismissesTheRenameNamingIt() throws {
+        let c = onScreen()
+        let background = try firstPane()
+        spareTab(c)
+        c.renameTabForTesting(index: 0)
+        XCTAssertTrue(c.isModalOverlayOpen, "precondition: the rename is up for the background tab")
+
+        background.delegate?.surfaceDidExit(background, code: 0)
+
+        XCTAssertEqual(c.tabOrderForTesting.count, 1, "precondition: the background tab closed")
+        XCTAssertFalse(c.isModalOverlayOpen, "the tab it names is gone, so its rename would do nothing")
+    }
+
     func test_theWindowCloseButton_withSomethingRunning_asksFirst() throws {
         let c = onScreen()
         try firstPane().isBusy = true
