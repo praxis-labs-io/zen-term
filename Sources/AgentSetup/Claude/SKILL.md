@@ -154,6 +154,9 @@ zen worktree remove my-branch
   presses Return once after it. Pass it for every message to an agent, or the
   agent never reads it. Into an agent that waits on the user it
   refuses; that wait is the user's to answer.
+- While the user has unsent text in an agent's prompt, `zen pane send` prints
+  `{"queued":true}`: the message arrives on its own after the user sends
+  theirs. Don't send it again.
 - Exit codes: 0 ok, 1 ZenTerm answered with an error, 2 usage, 3 no ZenTerm
   reachable.
 

@@ -134,19 +134,42 @@ extension ControlResponder {
                 return reply(.failure(refusal))
             }
             let token = place.pane.token
-            guard place.window.runsAgent(place.pane) else {
-                return deliver(to: token, for: request, hangup: hangup, reply: reply)
+            guard place.window.runsAgent(place.pane), paneDrafts.isHolding(place.pane.surfaceID) else {
+                return answer(deliver(to: token, for: request), for: request, hangup: hangup, reply: reply)
             }
-            paneDrafts.hold(place.pane.surfaceID, hangup: hangup) { [self] in
-                deliver(to: token, for: request, hangup: hangup, reply: reply)
+            let isBlocked = { [self] in
+                guard case .success(let place) = pane(.token(token), for: request) else { return false }
+                return Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) != nil
             }
+            let cap = blockedHolds.now().addingTimeInterval(BlockedHolds.longestHold)
+            hold(into: token, by: cap, whileBlocked: isBlocked) { [self] in _ = deliver(to: token, for: request) }
+            if request.args.enter == true, Self.startsTurn(request.args.text ?? "") {
+                place.window.noteTaskSubmitted(to: place.pane)
+            }
+            guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
+                return reply(.success(PaneSendResult(queued: true)))
+            }
+            hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
         }
     }
 
-    // The pane is found again because a draft hold can outlast it, and its agent can block meanwhile.
-    private func deliver(
-        to token: Int, for request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void
+    // Waits out a blocked agent, then the person's draft, as often as either comes back, so neither takes the paste.
+    func hold(
+        into token: Int, by cap: Date, whileBlocked isBlocked: @escaping () -> Bool,
+        then deliver: @escaping () -> Void
     ) {
+        blockedHolds.hold(by: cap, whileBlocked: isBlocked) { [self] in
+            guard let surface = locate(pane: token)?.pane.surfaceID else { return }
+            let deliverUnlessBlocked = { [self] in
+                isBlocked() ? hold(into: token, by: cap, whileBlocked: isBlocked, then: deliver) : deliver()
+            }
+            guard paneDrafts.isHolding(surface) else { return deliverUnlessBlocked() }
+            paneDrafts.queue(surface, deliverUnlessBlocked)
+        }
+    }
+
+    // The pane is found again because a queued message can outlast it, and its agent can block meanwhile.
+    private func deliver(to token: Int, for request: ControlRequest) -> Result<PanePlace, ControlError> {
         let found = pane(.token(token), for: request).flatMap { place -> Result<PanePlace, ControlError> in
             guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
             if let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) {
@@ -154,12 +177,20 @@ extension ControlResponder {
             }
             return .success(place)
         }
-        guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
+        guard case .success(let place) = found else { return found }
         let text = request.args.text ?? ""
         let enter = request.args.enter == true
         paste(text, from: request.caller?.pane, into: place, enter: enter)
         noteDelivery(from: request.caller?.pane, to: place, submitted: enter && !text.isEmpty)
         if enter, Self.startsTurn(text) { place.window.noteTaskSubmitted(to: place.pane) }
+        return found
+    }
+
+    private func answer(
+        _ delivered: Result<PanePlace, ControlError>, for request: ControlRequest, hangup: ControlHangup,
+        reply: @escaping (ControlReply) -> Void
+    ) {
+        guard case .success(let place) = delivered else { return reply(delivered.map { _ in NoPayload() }) }
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }

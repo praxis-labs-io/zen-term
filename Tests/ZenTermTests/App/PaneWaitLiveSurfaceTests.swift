@@ -142,26 +142,25 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         XCTAssertFalse(ForegroundGroup.isShell(job))
     }
 
-    func test_aKeyTypedIntoThePaneRecordsTheDraftTime() throws {
+    func test_aKeyTypedIntoThePaneStartsADraft() throws {
         let (surface, token) = try shellPane()
         let c = try XCTUnwrap(controller)
         let place = try XCTUnwrap(c.pane(token: token))
         c.window.makeKeyAndOrderFront(nil)
         c.focus(place.pane.surfaceID, in: place.tab)
         let keys = KeyInterceptor()
-        keys.onKeyToFocus = { c.keyReachedFocus() }
+        keys.onKeyToFocus = { c.keyReachedFocus($0) }
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
                 windowNumber: c.window.windowNumber, context: nil, characters: "q", charactersIgnoringModifiers: "q",
                 isARepeat: false, keyCode: 12))
-        XCTAssertNil(drafts.lastKey(into: place.pane.surfaceID))
-        let before = Date()
+        XCTAssertFalse(drafts.isHolding(place.pane.surfaceID))
 
         c.window.sendEvent(try XCTUnwrap(keys.route(event)))
 
-        let typed = try XCTUnwrap(drafts.lastKey(into: place.pane.surfaceID))
-        XCTAssertGreaterThanOrEqual(typed, before)
+        drafts.now = { Date().addingTimeInterval(3600) }
+        XCTAssertTrue(drafts.isHolding(place.pane.surfaceID), "a draft holds past the quiet pause")
         waitUntil((surface.activeScreenText ?? "").contains("q"), "the key to reach the shell", timeout: 10)
     }
 }

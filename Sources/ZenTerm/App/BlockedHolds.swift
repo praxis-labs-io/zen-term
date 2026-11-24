@@ -1,7 +1,7 @@
 import Foundation
 
-// Holds a helper's note while its parent agent is blocked, since a paste would answer the user's prompt. Main-thread only.
-final class ParentNotes {
+// Holds a message for an agent while it is blocked, since a paste would answer the user's prompt. Main-thread only.
+final class BlockedHolds {
     static let recheck: TimeInterval = 1
     static let longestHold: TimeInterval = 600
 

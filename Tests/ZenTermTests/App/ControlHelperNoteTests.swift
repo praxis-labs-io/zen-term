@@ -13,7 +13,7 @@ final class ControlHelperNoteTests: WindowTestCase {
     private var spawned: [RecordingSurface] = []
     private let waits = PaneWaits()
     private let drafts = PaneDrafts()
-    private let notes = ParentNotes()
+    private let notes = BlockedHolds()
     private let clock = Clock()
     private let originalPresence = WindowController.isPresent
 
@@ -87,7 +87,7 @@ final class ControlHelperNoteTests: WindowTestCase {
     private var responder: ControlResponder {
         ControlResponder(
             windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first },
-            paneWaits: waits, paneDrafts: drafts, parentNotes: notes)
+            paneWaits: waits, paneDrafts: drafts, blockedHolds: notes)
     }
 
     private func token(of surface: RecordingSurface) throws -> Int {
@@ -195,7 +195,14 @@ final class ControlHelperNoteTests: WindowTestCase {
     private func type(into surface: RecordingSurface, in c: WindowController) throws {
         let place = try XCTUnwrap(c.pane(token: try token(of: surface)))
         c.focus(place.pane.surfaceID, in: place.tab)
-        c.keyReachedFocus()
+        try sendKeys(typing: "draft", to: c)
+    }
+
+    private func sendDraft(in c: WindowController) throws {
+        try sendKeys([.returnKey], to: c)
+        let drained = expectation(description: "main queue")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
     }
 
     func test_aHelperThatStopsTellsItsParent() throws {
@@ -263,8 +270,9 @@ final class ControlHelperNoteTests: WindowTestCase {
         try type(into: parent, in: c)
 
         report(.done, from: helper)
-        XCTAssertEqual(parent.inputs, [], "the person is typing to the parent")
-        clock.advance(PaneDrafts.quiet)
+        clock.advance(3600)
+        XCTAssertEqual(parent.inputs, [], "the person has an unsent draft in the parent")
+        try sendDraft(in: c)
 
         let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
@@ -346,11 +354,11 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.blocked(.permission), from: parent)
 
         report(.done, from: helper)
-        clock.advance(ParentNotes.recheck * 5)
+        clock.advance(BlockedHolds.recheck * 5)
         XCTAssertEqual(parent.inputs, [], "the note answered the parent's permission prompt")
 
         report(.working, from: parent)
-        clock.advance(ParentNotes.recheck)
+        clock.advance(BlockedHolds.recheck)
 
         let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
@@ -365,9 +373,9 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.blocked(.permission), from: parent)
         report(.done, from: helper)
 
-        for _ in 0..<Int(ParentNotes.longestHold) { clock.advance(ParentNotes.recheck) }
+        for _ in 0..<Int(BlockedHolds.longestHold) { clock.advance(BlockedHolds.recheck) }
         report(.idle, from: parent)
-        clock.advance(ParentNotes.recheck)
+        clock.advance(BlockedHolds.recheck)
 
         XCTAssertEqual(parent.inputs, [])
     }
@@ -381,12 +389,13 @@ final class ControlHelperNoteTests: WindowTestCase {
         try type(into: parent, in: c)
         report(.done, from: helper)
 
+        try sendKeys([.controlU], to: c)
         report(.blocked(.question), from: parent)
         clock.advance(PaneDrafts.quiet)
         XCTAssertEqual(parent.inputs, [])
 
         report(.idle, from: parent)
-        clock.advance(ParentNotes.recheck)
+        clock.advance(BlockedHolds.recheck)
 
         let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
@@ -565,7 +574,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.done, from: helper)
 
         try close(helper, by: parent)
-        clock.advance(PaneDrafts.quiet)
+        try sendDraft(in: c)
 
         XCTAssertEqual(parent.inputs, [])
     }
@@ -581,7 +590,7 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         try close(helper, by: parent)
         report(.working, from: parent)
-        clock.advance(ParentNotes.recheck)
+        clock.advance(BlockedHolds.recheck)
 
         XCTAssertEqual(parent.inputs, [])
     }
@@ -596,7 +605,8 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
-        clock.advance(PaneDrafts.quiet)
+        XCTAssertEqual(parent.inputs, [])
+        try sendDraft(in: c)
 
         XCTAssertEqual(parent.inputs, try note("\(name) exited with code 1", from: helper, named: nil))
     }
@@ -803,7 +813,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.working, from: helper)
 
         report(.working, from: parent)
-        clock.advance(ParentNotes.recheck)
+        clock.advance(BlockedHolds.recheck)
 
         let token = try token(of: helper)
         XCTAssertEqual(

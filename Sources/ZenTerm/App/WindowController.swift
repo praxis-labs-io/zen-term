@@ -3355,6 +3355,7 @@ final class WindowController: NSObject {
     }
     @objc func paste(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
+        if let surface = presentFocusedSurface { paneDrafts.typed(.write, into: surface) }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
     }
     @objc func selectAll(_ sender: Any?) {
@@ -3989,10 +3990,16 @@ final class WindowController: NSObject {
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
-    func keyReachedFocus() {
+    func keyReachedFocus(_ event: NSEvent) {
         guard !search.isEditing, let surface = presentFocusedSurface else { return }
-        paneDrafts.typed(into: surface)
+        paneDrafts.typed(answersPrompt(surface) ? .none : DraftEdit(event), into: surface)
         answerTypedAgent()
+    }
+
+    // A key into a blocked agent answers its prompt, so it neither starts the draft nor sends it.
+    private func answersPrompt(_ surface: SurfaceID) -> Bool {
+        if case .blocked = agentStates.status(of: surface)?.state { return true }
+        return false
     }
 
     func answerTypedAgent() {
