@@ -1359,11 +1359,11 @@ final class WindowController: NSObject {
         return true
     }
 
+    // Only the showing tab takes the modal, float and confirm with it, since they answer whatever tab is showing.
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         guard let workspace = workspace(of: id) else { return }
-        // A background workspace's tab closes without touching what is on screen, or it answers the wrong tab.
         let isOnScreen = workspace === activeWorkspace
-        if isOnScreen {
+        if id == activeWorkspace?.activeID {
             if dismissingModal { closeModal() }
             closeFloatForTabChange()
             cancelConfirm()

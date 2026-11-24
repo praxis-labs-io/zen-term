@@ -158,6 +158,32 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         }
     }
 
+    func test_aBackgroundTabLosingItsLastPane_leavesTheFloatUp() throws {
+        let c = makeWindow()
+        let background = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.newTab)
+        c.handle(.toggleToolFloat("btop"))
+        XCTAssertEqual(cards(c).count, 1, "precondition: the float is up")
+
+        background.delegate?.surfaceDidExit(background, code: 0)
+
+        XCTAssertEqual(c.tabOrderForTesting.count, 1, "precondition: the background tab closed")
+        XCTAssertEqual(cards(c).count, 1, "a tab the user is not looking at must not take the float down")
+    }
+
+    func test_theShowingTabLosingItsLastPane_dismissesTheFloat() throws {
+        let c = makeWindow()
+        c.handle(.newTab)
+        let showing = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleToolFloat("btop"))
+        XCTAssertEqual(cards(c).count, 1, "precondition: the float is up")
+
+        showing.delegate?.surfaceDidExit(showing, code: 0)
+
+        XCTAssertEqual(c.tabOrderForTesting.count, 1, "precondition: the showing tab closed")
+        XCTAssertTrue(cards(c).isEmpty, "the float acts on the showing tab, so it goes with it")
+    }
+
     func test_floatNotification_isRelayed_evenWhileHidden() {
         let c = makeWindow()
         c.handle(.toggleToolFloat("btop"))
