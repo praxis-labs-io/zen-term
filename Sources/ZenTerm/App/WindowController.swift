@@ -1362,13 +1362,13 @@ final class WindowController: NSObject {
     // Only the showing tab takes the modal, float and confirm with it, since they answer whatever tab is showing.
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         guard let workspace = workspace(of: id) else { return }
-        let isOnScreen = workspace === activeWorkspace
-        if id == activeWorkspace?.activeID {
+        let isShowing = id == activeWorkspace?.activeID
+        if isShowing {
             if dismissingModal { closeModal() }
             closeFloatForTabChange()
             cancelConfirm()
         }
-        removeTab(id, from: workspace, remounting: isOnScreen)
+        removeTab(id, from: workspace, remounting: isShowing)
     }
 
     // Only the tab showing takes the float and the confirm with it, since both act on whatever tab is showing.
