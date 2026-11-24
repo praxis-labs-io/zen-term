@@ -88,7 +88,10 @@ kind, app, decoded msg and title), dropping reports about a sub-record (`id=`). 
 matters as much as the action: Claude Code sends 7501 only to a terminal that answers its query.
 `ghostty-surface-birth-overrides.patch` keeps a new surface's command, environment, initial
 input and `wait-after-command` when its config is rebuilt at birth for a color scheme that
-differs from the one the app config was built with.
+differs from the one the app config was built with. `ghostty-surface-message-id.patch` tags
+each surface message with the surface's id and drops one whose id no longer matches: a freed
+surface's address is reused by the next one, so a pointer alone would hand a closed pane's queued
+exit to a new pane.
 
 **Never call `Bundle.module` in shippable code.** In a real `.app` it checks the
 bundle root and a build-machine path, then `fatalError`s, so it works on the build
