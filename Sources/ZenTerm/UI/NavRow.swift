@@ -70,7 +70,7 @@ final class NavRow: ListRow {
         var next = Content(title: content.title, note: showsHoverAccessory ? nil : detail, ink: titleInkLevel)
         if case .nested(let process) = variant {
             next.leading = .process(process)
-            next.nests = true
+            next.nesting = .indented
         }
         render(next, accessories: shown)
         setAccessibilityValue(detail?.isEmpty == false ? detail : nil)

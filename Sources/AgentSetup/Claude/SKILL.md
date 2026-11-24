@@ -24,6 +24,10 @@ If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
   its tab and its workspace.
 - `zen pane get` prints your pane as JSON. `name` and `parent` are there when
   another pane started you with `zen pane run`: you are its helper.
+- A session without a parent names its tab once, as its first action after the
+  user's first prompt: `zen tab rename "<words>"`, 2 or 3 words naming the task.
+  Never later in the session, and not when `zen pane get` shows `tab_named`. A
+  helper leaves its tab alone.
 - `zen list --pretty` prints every window, workspace, tab, pane and drawer as a
   tree. `zen list` prints the same as JSON.
 - Addresses: a pane is its token (`31`) or its name (`tests`), a tab is
@@ -158,6 +162,9 @@ zen worktree remove my-branch
   presses Return once after it. Pass it for every message to an agent, or the
   agent never reads it. Into an agent that waits on the user it
   refuses; that wait is the user's to answer.
+- While the user has unsent text in an agent's prompt, `zen pane send` prints
+  `{"queued":true}`: the message arrives on its own after the user sends
+  theirs. Don't send it again.
 - Exit codes: 0 ok, 1 ZenTerm answered with an error, 2 usage, 3 no ZenTerm
   reachable.
 

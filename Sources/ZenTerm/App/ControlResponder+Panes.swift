@@ -1,3 +1,4 @@
+import AppLog
 import ControlProtocol
 import Foundation
 import PaneKit
@@ -138,19 +139,38 @@ extension ControlResponder {
                 return reply(.failure(refusal))
             }
             let token = place.pane.token
-            guard place.window.runsAgent(place.pane) else {
-                return deliver(to: token, for: request, hangup: hangup, reply: reply)
+            guard place.window.runsAgent(place.pane), paneDrafts.isHolding(place.pane.surfaceID) else {
+                return answer(deliver(to: token, for: request), for: request, hangup: hangup, reply: reply)
             }
-            paneDrafts.hold(place.pane.surfaceID, hangup: hangup) { [self] in
-                deliver(to: token, for: request, hangup: hangup, reply: reply)
+            let isBlocked = { [self] in
+                guard case .success(let place) = pane(.token(token), for: request) else { return false }
+                return Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) != nil
             }
+            var wait: PaneWait?
+            if request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) {
+                wait = hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
+            } else {
+                reply(.success(PaneSendResult(queued: true)))
+            }
+            let drop = { (reason: String) in
+                Log.warning("Dropped a pane.send queued for pane \(token): \(reason).", category: .control)
+                wait?.cancel()
+                reply(.failure(ControlError(.failed, "The send queued for pane \(token) was dropped: \(reason).")))
+            }
+            paneDrafts.queue(
+                place.pane.surfaceID,
+                PaneDrafts.Message(
+                    isTask: request.args.enter == true && Self.startsTurn(request.args.text ?? ""),
+                    isBlocked: isBlocked,
+                    deliver: { [self] in
+                        if case .failure(let error) = deliver(to: token, for: request) { drop(error.message) }
+                    },
+                    drop: drop))
         }
     }
 
-    // The pane is found again because a draft hold can outlast it, and its agent can block meanwhile.
-    private func deliver(
-        to token: Int, for request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void
-    ) {
+    // The pane is found again because a queued message can outlast it, and its agent can block meanwhile.
+    private func deliver(to token: Int, for request: ControlRequest) -> Result<PanePlace, ControlError> {
         let found = pane(.token(token), for: request).flatMap { place -> Result<PanePlace, ControlError> in
             guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
             if let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) {
@@ -158,12 +178,20 @@ extension ControlResponder {
             }
             return .success(place)
         }
-        guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
+        guard case .success(let place) = found else { return found }
         let text = request.args.text ?? ""
         let enter = request.args.enter == true
         paste(text, from: request.caller?.pane, into: place, enter: enter)
         noteDelivery(from: request.caller?.pane, to: place, submitted: enter && !text.isEmpty)
         if enter, Self.startsTurn(text) { place.window.noteTaskSubmitted(to: place.pane) }
+        return found
+    }
+
+    private func answer(
+        _ delivered: Result<PanePlace, ControlError>, for request: ControlRequest, hangup: ControlHangup,
+        reply: @escaping (ControlReply) -> Void
+    ) {
+        guard case .success(let place) = delivered else { return reply(delivered.map { _ in NoPayload() }) }
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }
@@ -355,18 +383,21 @@ extension ControlResponder {
         return .success(timeout)
     }
 
+    @discardableResult
     func hold(
         waitOn place: PanePlace, output: String?, timeout: Int, for request: ControlRequest, hangup: ControlHangup,
         reply: @escaping (ControlReply) -> Void
-    ) {
+    ) -> PaneWait? {
         let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
         let answered: (PaneWait.Answer) -> Void = {
             reply(.success(WaitResult(reason: $0.reason, exitCode: $0.exitCode, text: $0.text, pane: $0.pane)))
         }
         guard let wait = PaneWait(watched(place), caller: caller, output: output, reply: answered) else {
-            return reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
+            reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
+            return nil
         }
         paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+        return wait
     }
 
     private func waitOnChildren(
@@ -401,7 +432,10 @@ extension ControlResponder {
         return PaneWait.Watched(
             surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
             pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } },
-            exit: { [self] in launchedExit(of: token) })
+            exit: { [self] in launchedExit(of: token) },
+            awaitsQueuedTask: { [paneDrafts, surfaceID = place.pane.surfaceID] in
+                paneDrafts.hasQueuedTask(for: surfaceID)
+            })
     }
 
     func launchedExit(of token: Int) -> LaunchedPaneExit? {

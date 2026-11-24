@@ -2373,7 +2373,9 @@ final class WindowController: NSObject {
             return ListResult.Tab(
                 id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
                 active: id == workspace.activeID,
-                panes: tab.paneHandles.map { listing(of: $0, onHost: workspace.host != nil) })
+                panes: tab.paneHandles.map {
+                    listing(of: $0, onHost: workspace.host != nil, tabNamed: tab.pinnedTitle != nil)
+                })
         }
         let host = Self.hostListing(of: workspace)
         return ListResult.Workspace(
@@ -2386,11 +2388,13 @@ final class WindowController: NSObject {
     func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
 
     func listing(of pane: PaneHandle, in tab: TabID) -> ListResult.Pane {
-        listing(of: pane, onHost: workspace(of: tab)?.host != nil)
+        let workspace = workspace(of: tab)
+        return listing(
+            of: pane, onHost: workspace?.host != nil, tabNamed: workspace?.controller(tab)?.pinnedTitle != nil)
     }
 
     // A host pane's foreground program is the local ssh, not what runs on the host.
-    private func listing(of pane: PaneHandle, onHost: Bool) -> ListResult.Pane {
+    private func listing(of pane: PaneHandle, onHost: Bool, tabNamed: Bool) -> ListResult.Pane {
         let agent = agents.agents[pane.surfaceID].map { agent in
             let tone = AttentionTone(
                 wait: attention.agentWait(of: pane.surfaceID), working: attention.isWorking(pane.surfaceID))
@@ -2403,7 +2407,7 @@ final class WindowController: NSObject {
             cwd: pane.cwd?.path, busy: pane.surface.isBusy,
             process: onHost ? nil : Self.processListing(of: pane.surface), agent: agent, name: pane.record.name,
             parent: pane.record.parent.flatMap { NavRegistry.shared.isLive(token: $0) ? $0 : nil },
-            firstTask: pane.record.firstTask)
+            firstTask: pane.record.firstTask, tabNamed: tabNamed ? true : nil)
     }
 
     private static func processListing(of surface: TerminalSurface) -> ListResult.Process? {
@@ -2493,7 +2497,7 @@ final class WindowController: NSObject {
     }
 
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
-        if taskPickups.awaitsPickup(pane.surfaceID) { return true }
+        if taskPickups.awaitsPickup(pane.surfaceID) || paneDrafts.hasQueuedTask(for: pane.surfaceID) { return true }
         let listed = listing(of: pane, in: tab)
         guard let agent = listed.agent else { return listed.busy }
         return agent.status.map { $0 == .working } ?? (agent.state == .working)
@@ -2614,7 +2618,7 @@ final class WindowController: NSObject {
         return CloseStakes(
             closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
             isRunning: running || children.isRunning,
-            panes: busy.map { listing(of: $0, onHost: workspace.host != nil) }
+            panes: busy.map { listing(of: $0, onHost: workspace.host != nil, tabNamed: tab.pinnedTitle != nil) }
                 + children.listings,
             floats: floats.runningTitles(scope: id) + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
@@ -2629,7 +2633,11 @@ final class WindowController: NSObject {
         return CloseStakes(
             closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
             isRunning: isRunning(workspace: workspace) || children.isRunning,
-            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map { listing(of: $0, onHost: false) }
+            panes: tabs.flatMap { tab in
+                tab.paneHandles.filter(\.surface.isBusy).map {
+                    listing(of: $0, onHost: false, tabNamed: tab.pinnedTitle != nil)
+                }
+            }
                 + children.listings,
             floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
@@ -3439,6 +3447,9 @@ final class WindowController: NSObject {
     }
     @objc func paste(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
+        if let surface = presentFocusedSurface {
+            paneDrafts.typed(answersPrompt(surface) ? .none : .addUnknown, into: surface)
+        }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
     }
     @objc func selectAll(_ sender: Any?) {
@@ -3859,7 +3870,9 @@ final class WindowController: NSObject {
     // Read before the change reaches `paneWaits`, which drops the waits it answers.
     private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
         guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
-        if case .stopped = change, helpersReported.contains(surface) { return }
+        if case .stopped = change, helpersReported.contains(surface) || paneDrafts.hasQueuedTask(for: surface) {
+            return
+        }
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,
@@ -4085,10 +4098,21 @@ final class WindowController: NSObject {
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
-    func keyReachedFocus() {
+    func keyReachedFocus(_ event: NSEvent) {
         guard !search.isEditing, let surface = presentFocusedSurface else { return }
-        paneDrafts.typed(into: surface)
+        let edit = answersPrompt(surface) ? .none : DraftEdit(event, composing: isComposing(surface))
+        paneDrafts.typed(edit, into: surface)
         answerTypedAgent()
+    }
+
+    private func isComposing(_ surface: SurfaceID) -> Bool {
+        (terminalSurface(surface)?.view as? NSTextInputClient)?.hasMarkedText() == true
+    }
+
+    // A key or paste into a blocked agent answers its prompt, so it neither starts the draft nor sends it.
+    private func answersPrompt(_ surface: SurfaceID) -> Bool {
+        if case .blocked = agentStates.status(of: surface)?.state { return true }
+        return false
     }
 
     func answerTypedAgent() {

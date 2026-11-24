@@ -672,16 +672,27 @@ side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `s
 A wait on the caller's children (`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
 as a single pane's does. A task submitted to a ready agent, a run's first task or a `pane.send`
 with `enter`, sits in its window's `TaskPickups` until the agent's next report past `idle` or
-`done`, a cleared status, or its exit, and the child counts as working meanwhile. A pane `pane.run` opened leaves its exit in its window's
+`done`, a cleared status, or its exit, and the child counts as working meanwhile. A task queued
+in `PaneDrafts` is noted at delivery; until then `PaneDrafts.hasQueuedTask` counts the child as
+working, holds back its `stopped` note, and keeps `PaneWait` from answering its agent's stop. A pane `pane.run` opened leaves its exit in its window's
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
-agent holds in `PaneDrafts`, also app-wide, which `WindowController.keyReachedFocus` feeds the
-person's last key into each surface from `KeyInterceptor`'s keys the chrome did not claim, the
-path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)
+agent queues in `PaneDrafts`, also app-wide, while the person has unsent text at its prompt.
+`WindowController.keyReachedFocus` feeds it each key the chrome did not claim from
+`KeyInterceptor`, the path that also answers an agent by typing, classed by `DraftEdit`, and
+`WindowController.paste` feeds it a paste. `PaneDrafts` counts the draft's length from typed text
+and Backspace, so deleting it ends the draft; text it cannot count, or a key that moves the cursor,
+leaves the length unknown, which only Return or a clearing key ends. A key while the surface's view has marked text (an input
+method composing) leaves the length unknown and is never a submit, and a Return after a typed `\`,
+past keys that only move the cursor, is Claude Code's newline, not a submit. Each surface has one ordered queue that the draft's
+release and the blocked recheck both drain, so a newer message never passes a held one. The
+person's Return drains it through `PaneDrafts.after`, after the key reached the surface. A message
+the queue drops (its pane closed, or its agent blocked 10 minutes from when the queue could deliver)
+goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
 `onHelperNote`. A child's submitted `pane.send` to its parent marks it in its window until its next turn or its parent's
-next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
-parent is blocked and `PaneDrafts` while it has a draft. `pane.send`, `pane.keys` and a held note
+next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after the parent's `PaneDrafts` queue waits out a
+blocked agent and a draft, as a queued `pane.send` does. `pane.send`, `pane.keys` and a held note
 all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker

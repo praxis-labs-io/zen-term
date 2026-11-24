@@ -567,7 +567,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         init(worktree: Worktree) {
             name = worktree.name
-            super.init(Content(title: "Removing \(name)…", leading: .spinner, ink: .faint, nests: true))
+            super.init(Content(title: "Removing \(name)…", leading: .spinner, ink: .faint, nesting: .indented))
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -664,7 +664,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             super.init(
                 Content(
                     title: label, leading: style == .child ? .process(.worktree) : nil, ink: style.ink,
-                    nests: style == .child))
+                    nesting: style == .child ? .indented : .none))
 
             branchLabel.font = ChromeType.font(.caption)
             branchLabel.textColor = Theme.current.chrome.ink(.muted)

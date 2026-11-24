@@ -541,12 +541,12 @@ final class FloatPaneTests: WindowTestCase {
 
         try show(float, in: c)
         drainMainQueue()
-        c.keyReachedFocus()
+        try sendKeys(typing: "q", to: c)
 
         let got = try XCTUnwrap(try answer(.paneGet).get() as? ListResult.Pane)
         XCTAssertEqual(got.token, float, "a request naming no pane reaches the pane on screen")
-        XCTAssertNotNil(drafts.lastKey(into: id))
-        XCTAssertNil(drafts.lastKey(into: leadID))
+        XCTAssertTrue(drafts.isHolding(id))
+        XCTAssertFalse(drafts.isHolding(leadID))
         XCTAssertEqual(c.surfaceAttentionForTesting(id), .idle)
     }
 

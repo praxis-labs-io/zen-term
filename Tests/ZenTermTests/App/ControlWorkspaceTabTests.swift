@@ -259,6 +259,20 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertEqual(try error(send(.tabRename, ControlArgs(tab: opened.tab))).code, .badRequest)
     }
 
+    func test_aPaneReportsItsTabNamedOnlyOnceSomeoneNamesIt() throws {
+        _ = makeWindow()
+        let opened = try result(send(.tabNew), as: TabResult.self)
+        let pane = ControlArgs(pane: .token(opened.pane))
+        XCTAssertNil(try result(send(.paneGet, pane), as: ListResult.Pane.self).tabNamed)
+
+        _ = try result(send(.tabRename, ControlArgs(tab: opened.tab, title: "server")), as: NoPayload.self)
+
+        XCTAssertEqual(try result(send(.paneGet, pane), as: ListResult.Pane.self).tabNamed, true)
+        let listed = try result(send(.list), as: ListResult.self).windows.flatMap(\.workspaces).flatMap(\.tabs)
+        XCTAssertEqual(listed.first { $0.id == opened.tab }?.panes.first?.tabNamed, true)
+        XCTAssertEqual(listed.filter { $0.id != opened.tab }.flatMap(\.panes).compactMap(\.tabNamed), [])
+    }
+
     func test_workspaceOpenReturnsOneOpenInAnotherWindowWithoutASecondCopy() throws {
         let here = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))

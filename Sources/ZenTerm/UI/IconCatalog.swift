@@ -141,7 +141,7 @@ enum IconCatalog {
     }
 
     // Marks carry no internal padding, so they need a slightly larger box to match the symbols.
-    static let brandNudge: CGFloat = 1.5
+    static let brandNudge: CGFloat = 2
 
     static func gitBadge(pointSize: CGFloat = ChromeMetrics.Icon.sm) -> NSImage? {
         guard let image = BrandMark.image("git") else { return nil }

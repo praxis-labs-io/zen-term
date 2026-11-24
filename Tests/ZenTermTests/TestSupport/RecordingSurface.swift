@@ -4,6 +4,7 @@ import TerminalKit
 final class RecordingSurface: NSObject, TerminalSurface {
     final class ResizingView: NSView {
         var onResize: (() -> Void)?
+        var markedText = ""
         override var acceptsFirstResponder: Bool { true }
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
@@ -189,4 +190,23 @@ final class RecordingSurface: NSObject, TerminalSurface {
         }
         return sliced.joined(separator: "\n")
     }
+}
+
+extension RecordingSurface.ResizingView: NSTextInputClient {
+    func insertText(_ string: Any, replacementRange: NSRange) {}
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        markedText = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+    }
+    func unmarkText() { markedText = "" }
+    func selectedRange() -> NSRange { NSRange(location: NSNotFound, length: 0) }
+    func markedRange() -> NSRange {
+        markedText.isEmpty ? NSRange(location: NSNotFound, length: 0) : NSRange(location: 0, length: markedText.count)
+    }
+    func hasMarkedText() -> Bool { !markedText.isEmpty }
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
+        nil
+    }
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] { [] }
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect { .zero }
+    func characterIndex(for point: NSPoint) -> Int { NSNotFound }
 }

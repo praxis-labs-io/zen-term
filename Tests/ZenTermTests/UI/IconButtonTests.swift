@@ -166,28 +166,59 @@ final class IconButtonTests: WindowTestCase {
 }
 
 final class IconGlyphSizeTests: XCTestCase {
-    private func glyphCentreOffset(_ symbol: String) throws -> CGFloat {
+    private struct Placement {
+        let offset: CGFloat
+        let halfPixel: CGFloat
+    }
+
+    private func inkCentreFromTop(_ rep: NSBitmapImageRep) -> CGFloat {
+        var weighted: CGFloat = 0
+        var total: CGFloat = 0
+        for y in 0..<rep.pixelsHigh {
+            for x in 0..<rep.pixelsWide {
+                let alpha = rep.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                weighted += (CGFloat(y) + 0.5) * alpha
+                total += alpha
+            }
+        }
+        return weighted / total * rep.size.height / CGFloat(rep.pixelsHigh)
+    }
+
+    private func glyphPlacement(_ symbol: String) throws -> Placement {
         let button = IconButton(symbol: symbol, pointSize: ChromeMetrics.Icon.sm, accessibilityLabel: symbol) {}
         button.translatesAutoresizingMaskIntoConstraints = true
         button.frame = NSRect(x: 0, y: 0, width: 24, height: 24)
         button.layoutSubtreeIfNeeded()
+        let scale = button.convertToBacking(NSRect(x: 0, y: 0, width: 1, height: 1)).height
         let image = try XCTUnwrap(
-            button.subviews.compactMap { $0 as? NSImageView }.first, "no glyph view in \(symbol)")
-        return image.frame.midY - button.bounds.midY
+            button.subviews.compactMap { $0 as? NSImageView }.first?.image, "no glyph in \(symbol)")
+
+        let rendered = try XCTUnwrap(button.bitmapImageRepForCachingDisplay(in: button.bounds))
+        button.cacheDisplay(in: button.bounds, to: rendered)
+
+        let alone = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: Int(image.size.width * scale),
+                pixelsHigh: Int(image.size.height * scale), bitsPerSample: 8, samplesPerPixel: 4,
+                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        alone.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: alone)
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        let inkInButton = inkCentreFromTop(rendered) - button.bounds.height / 2
+        let inkInGlyph = inkCentreFromTop(alone) - image.size.height / 2
+        return Placement(offset: inkInButton - inkInGlyph, halfPixel: 0.5 / scale)
     }
 
-    func test_symbolsAndBrandMarks_shareAVerticalCentre() throws {
-        let symbols = try ["terminal.fill", "folder.fill", "doc.text.fill", "square.stack.fill"]
-            .map(glyphCentreOffset)
-        let brands = try ["git", "github", "claude"].map(glyphCentreOffset)
-        let symbolMean = symbols.reduce(0, +) / CGFloat(symbols.count)
-        let brandMean = brands.reduce(0, +) / CGFloat(brands.count)
-
-        XCTAssertEqual(
-            symbolMean, brandMean, accuracy: 0.05,
-            "symbols centre at \(symbolMean), marks at \(brandMean) — the row sits unevenly")
-        let spread = (symbols.max() ?? 0) - (symbols.min() ?? 0)
-        XCTAssertLessThan(spread, 0.05, "the roster disagrees with itself by \(spread)pt")
+    func test_symbolsAndBrandMarks_centreWithinHalfABackingPixel() throws {
+        let glyphs = ["terminal.fill", "folder.fill", "doc.text.fill", "square.stack.fill", "git", "github", "claude"]
+        for glyph in glyphs {
+            let placement = try glyphPlacement(glyph)
+            XCTAssertLessThanOrEqual(
+                abs(placement.offset), placement.halfPixel + 0.01,
+                "\(glyph) sits \(placement.offset)pt off the button's centre")
+        }
     }
-
 }

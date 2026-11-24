@@ -119,6 +119,43 @@ final class ClaudeSetupFilesTests: XCTestCase {
             #"You are helper `review`, started by pane 31. When done or stuck, report with "#
                 + #"`zen pane send --pane 31 --enter "<result>"`, then stop. Put a question about your task to "#
                 + #"pane 31 the same way and `zen wait 31` for the answer, not AskUserQuestion."#)
+        XCTAssertFalse(output.contains("zen tab rename"))
+    }
+
+    private static let renameLine =
+        #"- Your first action after the user's first prompt: name your tab for the task in 2 or 3 words "#
+        + #"with `zen tab rename "<words>"`."#
+
+    func test_shippedHookAsksATopLevelSessionToNameItsTabAtStartupAndAfterClear() throws {
+        let pane = #"{"agent":{"name":"claude"},"token":31}"#
+        for start in ["startup", "clear"] {
+            let (status, output) = try runShippedHook(
+                environment: try zenPaneEnvironment(pane: 31, answering: pane), start: start)
+
+            XCTAssertEqual(status, 0)
+            XCTAssertTrue(output.contains(Self.renameLine), start)
+        }
+    }
+
+    func test_shippedHookLeavesTheTabAloneWhenASessionResumesOrCompacts() throws {
+        let pane = #"{"agent":{"name":"claude"},"token":31}"#
+        for start in ["resume", "compact"] {
+            let (status, output) = try runShippedHook(
+                environment: try zenPaneEnvironment(pane: 31, answering: pane), start: start)
+
+            XCTAssertEqual(status, 0)
+            XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"), start)
+            XCTAssertFalse(output.contains("zen tab rename"), start)
+        }
+    }
+
+    func test_shippedHookLeavesATabSomeoneNamedAlone() throws {
+        let pane = #"{"agent":{"name":"claude"},"tab_named":true,"token":31}"#
+        let (status, output) = try runShippedHook(environment: try zenPaneEnvironment(pane: 31, answering: pane))
+
+        XCTAssertEqual(status, 0)
+        XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
+        XCTAssertFalse(output.contains("zen tab rename"))
     }
 
     func test_shippedHookHasNoHelperLineWithoutAParent() throws {
@@ -139,6 +176,7 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertEqual(status, 0)
         XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
         XCTAssertFalse(output.contains("You are helper"))
+        XCTAssertFalse(output.contains("zen tab rename"))
     }
 
     // A stub `zen` that answers `hello`, and `pane get` with `pane`, or fails it when nil.
@@ -162,7 +200,8 @@ final class ClaudeSetupFilesTests: XCTestCase {
         return ["PATH": "\(bin.path):/usr/bin:/bin", "ZEN_CONTROL_SOCK": "/tmp/zen-test.sock", "ZEN_PANE": "\(token)"]
     }
 
-    private func runShippedHook(environment: [String: String]) throws -> (Int32, String) {
+    // `start` is the SessionStart `source` Claude Code sends on stdin.
+    private func runShippedHook(environment: [String: String], start: String = "startup") throws -> (Int32, String) {
         let files = try XCTUnwrap(shipped)
         let script = root.appendingPathComponent(ClaudeSetup.hookFileName)
         try files.hook.write(to: script)
@@ -172,8 +211,12 @@ final class ClaudeSetupFilesTests: XCTestCase {
         process.environment = environment
         let output = Pipe()
         process.standardOutput = output
+        let input = Pipe()
+        process.standardInput = input
 
         try process.run()
+        input.fileHandleForWriting.write(Data(#"{"session_id":"s1","source":"\#(start)"}"#.utf8))
+        try input.fileHandleForWriting.close()
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return (process.terminationStatus, String(decoding: data, as: UTF8.self))

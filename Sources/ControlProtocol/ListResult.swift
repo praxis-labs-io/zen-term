@@ -80,9 +80,9 @@ public struct ListResult: ControlPayload, Equatable {
         }
     }
 
-    /// One pane or drawer, as `list` and `pane.get` report it. `drawer` is set for a drawer and `float` is true for a
-    /// float pane; `process` is absent on a host's pane and when the program cannot be read. `name`, `parent` and
-    /// `firstTask` are set for a pane `pane.run` opened: `parent` is the live pane that ran it.
+    /// One pane or drawer, as `list` and `pane.get` report it. `drawer` is set for a drawer, `float` for a float pane,
+    /// and `tabNamed` when its tab carries a name someone gave it. `process` is absent on a host's pane or when the
+    /// program cannot be read. `name`, `parent` (the live pane that ran it) and `firstTask` are set by `pane.run`.
     public struct Pane: ControlPayload, Equatable {
         public let token: Int
         public let drawer: Drawer?
@@ -95,11 +95,12 @@ public struct ListResult: ControlPayload, Equatable {
         public let name: String?
         public let parent: Int?
         public let firstTask: FirstTask?
+        public let tabNamed: Bool?
 
         public init(
             token: Int, drawer: Drawer?, float: Bool? = nil, title: String, cwd: String?, busy: Bool,
-            process: Process? = nil,
-            agent: Agent?, name: String? = nil, parent: Int? = nil, firstTask: FirstTask? = nil
+            process: Process? = nil, agent: Agent?, name: String? = nil, parent: Int? = nil,
+            firstTask: FirstTask? = nil, tabNamed: Bool? = nil
         ) {
             self.token = token
             self.drawer = drawer
@@ -112,11 +113,13 @@ public struct ListResult: ControlPayload, Equatable {
             self.name = name
             self.parent = parent
             self.firstTask = firstTask
+            self.tabNamed = tabNamed
         }
 
         private enum CodingKeys: String, CodingKey {
             case token, drawer, float, title, cwd, busy, process, agent, name, parent
             case firstTask = "first_task"
+            case tabNamed = "tab_named"
         }
     }
 

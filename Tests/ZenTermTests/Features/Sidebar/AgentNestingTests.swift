@@ -141,7 +141,7 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertFalse(parentRow.isNestedForTesting)
         XCTAssertEqual(parentRow.leadingProcessForTesting?.name, "Claude Code", "a top-level agent leads with its chip")
         XCTAssertNotNil(parentRow.processBadgeForTesting, "the row draws no chip for its agent")
-        XCTAssertEqual(parentRow.frame.height, SidebarAgentRow.height)
+        try assertInkCentered(parentRow)
         let helperRow = try row(of: helper, in: c)
         XCTAssertTrue(helperRow.isNestedForTesting)
         XCTAssertEqual(helperRow.leadingProcessForTesting?.name, "Claude Code", "a helper leads with its agent's chip")
@@ -372,7 +372,8 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertNotNil(c.pane(token: process.token), "precondition: the process pane is still open")
         XCTAssertEqual(items(c).map(\.id), [helper.id], "a process whose agent is gone is not listed")
         XCTAssertEqual(try row(of: helper, in: c).itemForTesting?.role, .agent)
-        XCTAssertEqual(try row(of: helper, in: c).frame.height, SidebarAgentRow.height)
+        let promoted = try row(of: helper, in: c)
+        try assertInkCentered(promoted)
     }
 
     func test_whenTheParentPaneCloses_childrenThatOutliveItBecomeTopLevelRows() throws {
