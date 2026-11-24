@@ -265,7 +265,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A pane `pane.run` opened carries a `PaneRecord`** (name, parent token, first-task result)
   per leaf in `PaneCanvasController`, beside its surface and not in `AgentRoster`, so it
   outlives the agent leaving the roster. It opens through the same `openTab` and `split` as
-  `tab.new` and `pane.split`, with a `PaneProgram` whose `exitClosesPane` drops the shell that
+  `tab.new` and `pane.split`, or as a float pane (`TabController.openFloatPane`) when an agent
+  runs in the caller (`ControlResponder.opensFloat`), with a `PaneProgram` whose `exitClosesPane` drops the shell that
   `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
   Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
   program's `D` mark and its last 40 lines. The mark follows the command inline. Under sh, bash,
@@ -284,7 +285,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   Close stakes and confirmations count the children in every window first (`familyStakes`),
   including whether closing them empties the window or another one, whose window floats then
   count too. A worktree removal closes every window's
-  tabs in it together, so each window counts only the children it holds. `list` drops a `parent` that `NavRegistry` no longer holds.
+  tabs in it together, so each window counts only the children it holds. A float pane is
+  reached only through its agent's row, so after an agent exits every window closes each float
+  pane with no live agent at or above its parent (`hasAgent(atOrAbove:)`), on the next
+  main-queue turn, without asking. `list` drops a `parent` that `NavRegistry` no longer holds.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -421,7 +425,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   listed until its pane closes or its program finishes: every `pane.run` program reports an
   OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still
   leaves, and a busy reading falling (`BusyFallWatch`, the roster's rule) is the backstop;
-  a parented pane whose agent left is never one. A pane with no agent above it is not listed, so
+  a parented pane whose agent left is never one. A float pane is the exception to both: its row
+  is the only way to open it, so it lists while it is open. A pane with no agent above it is not listed, so
   a process run from a plain shell, or one with no agent left anywhere above it, has no row.
   Ownership passes through any open pane, so a process under a helper whose agent left still
   lists under the agent above that helper. A helper whose agent is gone lists top-level as an agent. A family sorts by its most
@@ -528,7 +533,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `prune` skips it, and its tab ends it. Its presentation events reach the slot through
   `PaneFloats.presenter`, whose own guard drops a hidden one's. It runs hidden, started at the
   card's size (`ToolFloatController.paneContentSize`), since a view never in a window has no frame
-  to size its grid by. `WindowController.focus(_:in:)` shows it.
+  to size its grid by. `WindowController.focus(_:in:)` shows it, so an Agents row and a jump to
+  a waiting agent reveal its tab and show it, and while shown it is the window's focused surface.
+  A tab's close confirmation names a running one that is hidden.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
