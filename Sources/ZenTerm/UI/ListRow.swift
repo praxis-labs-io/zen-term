@@ -123,7 +123,8 @@ class ListRow: ControlView, ThemeReapplying {
 
     var trimmedSubtitleDescent: CGFloat {
         guard content.trimsSubtitleDescent, content.subtitle != nil, let subtitleLine else { return 0 }
-        return subtitleLine.lastBaselineOffsetFromBottom
+        let scale = window?.backingScaleFactor ?? 2
+        return (subtitleLine.lastBaselineOffsetFromBottom * scale).rounded() / scale
     }
 
     var titleLabelForTesting: NSTextField { titleLabel }
@@ -415,6 +416,11 @@ class ListRow: ControlView, ThemeReapplying {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { hideTooltip() }
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        refreshInsets()
     }
 
     override func mouseDown(with event: NSEvent) {

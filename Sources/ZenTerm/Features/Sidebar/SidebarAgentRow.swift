@@ -105,12 +105,20 @@ final class SidebarAgentRow: SidebarJumpRow {
                 Content(
                     title: item.summary, subtitle: item.detail, leading: .process(item.process),
                     leadingOnTitleLine: true, trimsSubtitleDescent: true))
-            heightPin.constant = Self.height - trimmedSubtitleDescent
         case .helper, .process:
             render(
                 Content(title: item.summary, leading: .process(item.process), ink: .subtle, nesting: .underTitle))
-            heightPin.constant = ChromeMetrics.Height.control
         }
+        pinHeight()
+    }
+
+    private func pinHeight() {
+        heightPin.constant = item?.role == .agent ? Self.height - trimmedSubtitleDescent : ChromeMetrics.Height.control
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        pinHeight()
     }
 
     // The chip names the program only to the eye, since the row is the one accessibility element.
