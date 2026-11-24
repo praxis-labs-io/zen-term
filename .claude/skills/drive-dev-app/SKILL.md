@@ -67,6 +67,9 @@ security boundary, and `validate_text` is the guard that matters most:
   writes there is doing something it should do from the tool shell instead.
 - **`chord` is single-key only**, with an allowlisted modifier set, so text cannot
   arrive through the path that skips validation.
+- **Pointer input lands only inside the dev window.** `click` and `hover` take
+  window-relative points and refuse any outside the window's frame, read fresh from
+  the target by pid, so a stray coordinate cannot reach another app.
 - **Refuses to run as root**, caps a session at 200 synthesized actions so a
   runaway loop cannot keep typing, and puts a 10s timeout on every `osascript` call
   so a hung UI cannot wedge the run.
@@ -151,8 +154,13 @@ Then drive it:
 $S run 'python3 /tmp/fixture.py 8931'   # paste a command into the focused pane
 $S chord '\' command,shift              # split a pane
 $S chord w command                      # close the focused pane
+$S key escape                           # a named key: return escape tab space and the arrows
+$S click 630 91                         # window-relative points, read off a wshot at half its pixels
+$S hover 575 199                        # move the pointer without clicking
+$S hold down 12                         # an arrow held for 12 autorepeats
 $S quit                                 # ⌘Q
 $S shot /tmp/state.png                  # then Read the png to inspect
+$S wshot /tmp/window.png                # the dev window only, at 2x
 $S port 8931                            # LISTENING | free
 $S waitgone 34668 30                    # poll until a pid exits
 $S sweep                                # ALWAYS, at the end
@@ -171,6 +179,11 @@ grep -n 'keybind' ~/.config/zen-term/config                # overrides
 Never guess a chord and send it. An unknown chord in a terminal is arbitrary input.
 
 ## Rules that came from getting this wrong
+
+- **The dev build reads and writes Drew's real config.** Workspaces, remote hosts and
+  tool floats are his. Never finish a save, delete or remove: drive a confirm only to
+  Cancel, Esc or Space, and leave a form by Discard or Cancel. Copy
+  `~/.config/zen-term/` aside first and `cmp` it at the end.
 
 - **Paste, never type.** `zt-drive.sh run` uses the clipboard and ⌘V. Per-character
   `keystroke` silently drops characters on long strings: it once turned `python3`

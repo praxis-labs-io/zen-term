@@ -302,6 +302,107 @@ cmd_chord() {
     note "chord: $mods+$key"
 }
 
+# A named non-printable key, by key code. Allowlisted so no key reaches the app
+# that a runbook step does not need.
+cmd_key() {
+    local name="${1:?usage: key <return|escape|tab|space|up|down|left|right> [mods]}" mods="${2:-}" code t applemods=""
+    case "$name" in
+        return) code=36 ;; escape) code=53 ;; tab) code=48 ;; space) code=49 ;;
+        up) code=126 ;; down) code=125 ;; left) code=123 ;; right) code=124 ;;
+        *) die "key takes return, escape, tab, space or an arrow, got: $name" ;;
+    esac
+    case "$mods" in
+        *[!a-z,]*) die "modifiers must be comma-separated words (command,shift,option,control)" ;;
+    esac
+    count_action
+    t=$(require_target)
+    if [ -n "$mods" ]; then
+        IFS=',' read -ra parts <<< "$mods"
+        for m in "${parts[@]}"; do
+            case "$m" in
+                command|shift|option|control) applemods+="${applemods:+, }$m down" ;;
+                *) die "unknown modifier: $m" ;;
+            esac
+        done
+    fi
+    guard "$t"
+    if [ -n "$applemods" ]; then
+        osa -e "tell application \"System Events\" to key code $code using {$applemods}" >/dev/null
+    else
+        osa -e "tell application \"System Events\" to key code $code" >/dev/null
+    fi
+    note "key: ${mods:+$mods+}$name"
+}
+
+# Pointer events need CGEvent, which osascript cannot post. The helper is compiled from
+# source beside this script on first use, so no binary is checked in.
+pointer_bin() {
+    local src bin
+    src="$(cd "$(dirname "$0")" && pwd)/pointer.swift"
+    bin="${TMPDIR:-/tmp}/zt-drive-pointer"
+    if [ ! -x "$bin" ] || [ "$src" -nt "$bin" ]; then
+        swiftc -O "$src" -o "$bin" >/dev/null 2>&1 || die "could not compile $src"
+    fi
+    echo "$bin"
+}
+
+# The target's front window as "x y w h" in global points, top-left origin.
+_window_frame() {
+    local t="$1" raw
+    raw=$(osa -e "tell application \"System Events\" to tell (first process whose unix id is $t) to get {position, size} of window 1")
+    echo "$raw" | tr -d ' ' | tr ',' ' '
+}
+
+cmd_window() {
+    local t; t=$(require_target)
+    _focus "$t"
+    note "window: $(_window_frame "$t")"
+}
+
+# Pointer input goes only to a point inside the target's own window, given
+# window-relative, so a stray coordinate can never land in another app.
+_pointer() {
+    local verb="$1" wx="${2:?usage: $1 <x> <y> (window-relative points)}" wy="${3:?usage: $1 <x> <y>}" t fx fy fw fh
+    case "$wx$wy" in *[!0-9.]*) die "coordinates must be non-negative numbers" ;; esac
+    count_action
+    t=$(require_target)
+    guard "$t"
+    read -r fx fy fw fh <<< "$(_window_frame "$t")"
+    awk -v x="$wx" -v y="$wy" -v w="$fw" -v h="$fh" 'BEGIN { exit !(x >= 1 && y >= 1 && x < w - 1 && y < h - 1) }' \
+        || die "refusing: ($wx,$wy) is outside the target window (${fw}x${fh})"
+    local gx gy
+    gx=$(awk -v a="$fx" -v b="$wx" 'BEGIN { print a + b }')
+    gy=$(awk -v a="$fy" -v b="$wy" 'BEGIN { print a + b }')
+    got=$(_frontmost_pid)
+    [ "$got" = "$t" ] || die "refusing to send input: frontmost is pid $got, expected $t"
+    "$(pointer_bin)" "$verb" "$gx" "$gy" || die "pointer $verb failed"
+    note "$verb: ($wx,$wy) in window"
+}
+cmd_click() { _pointer click "$@"; }
+cmd_hover() { _pointer move "$@"; }
+
+# Hold an arrow key: a real keyDown, then autorepeat keyDowns, then keyUp.
+cmd_hold() {
+    local name="${1:?usage: hold <up|down|left|right> <repeats>}" n="${2:?usage: hold <arrow> <repeats>}" code t
+    case "$name" in up) code=126 ;; down) code=125 ;; left) code=123 ;; right) code=124 ;;
+        *) die "hold takes an arrow" ;; esac
+    count_action
+    t=$(require_target)
+    guard "$t"
+    "$(pointer_bin)" repeat-key "$code" "$n" || die "hold failed"
+    note "hold: $name x$n"
+}
+
+# Screenshot only the target's window.
+cmd_wshot() {
+    local out="${1:-/tmp/zt-drive-wshot.png}" t fx fy fw fh
+    t=$(require_target)
+    _focus "$t"
+    read -r fx fy fw fh <<< "$(_window_frame "$t")"
+    screencapture -x -o -R"$fx,$fy,$fw,$fh" "$out" || die "screencapture failed"
+    note "$out (${fw}x${fh} points)"
+}
+
 cmd_shot() {
     local out="${1:-/tmp/zt-drive-shot.png}" t
     t=$(require_target)
@@ -349,6 +450,12 @@ case "${1:-}" in
     verify-symbol)  shift; cmd_verify_symbol "$@" ;;
     run)            shift; cmd_run "$@" ;;
     chord)          shift; cmd_chord "$@" ;;
+    key)            shift; cmd_key "$@" ;;
+    window)         shift; cmd_window "$@" ;;
+    click)          shift; cmd_click "$@" ;;
+    hover)          shift; cmd_hover "$@" ;;
+    hold)           shift; cmd_hold "$@" ;;
+    wshot)          shift; cmd_wshot "$@" ;;
     shot)           shift; cmd_shot "$@" ;;
     waitgone)       shift; cmd_waitgone "$@" ;;
     port)           shift; cmd_port "$@" ;;
@@ -365,9 +472,15 @@ usage: zt-drive.sh <command>
 
   run <command>          paste a command line into the focused pane
   chord <key> [mods]     e.g. chord w command | chord '\\' command,shift
+  key <name> [mods]      return|escape|tab|space|up|down|left|right, e.g. key return command
+  click <x> <y>          click at a point in the dev window (window-relative points)
+  hover <x> <y>          move the pointer there
+  hold <arrow> <n>       hold an arrow key for n repeats
+  window                 print the dev window's frame
   quit                   send ⌘Q
 
   shot [path]            screenshot to inspect state
+  wshot [path]           screenshot of the dev window only (2x pixels per point)
   waitgone <pid> [secs]  poll until a pid exits
   port <number>          LISTENING | free
   sweep                  report anything left running
