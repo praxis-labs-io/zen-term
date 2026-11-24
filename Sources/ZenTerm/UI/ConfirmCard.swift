@@ -1,7 +1,7 @@
 import AppKit
 
 final class ConfirmCard: ModalShell, ModalOverlay {
-    static let width: CGFloat = 420
+    static let width: CGFloat = 300
 
     private let onConfirm: () -> Void
     private let start: ConfirmPrompt.Start
