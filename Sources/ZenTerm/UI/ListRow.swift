@@ -65,6 +65,8 @@ class ListRow: ControlView, ThemeReapplying {
     private weak var subtitleLine: NSTextField?
     private let subtitleTip = TooltipHost(label: "")
     var onChoose: () -> Void
+    var onSecondaryClick: (() -> Void)?
+    var onSpace: (() -> Void)?
     // The pointer moves a list's cursor instead of filling its own row, or two rows would look chosen.
     var onPointerEnter: (() -> Void)? {
         didSet { refreshFill() }
@@ -425,8 +427,22 @@ class ListRow: ControlView, ThemeReapplying {
 
     override func mouseDown(with event: NSEvent) {
         hideTooltip()
+        if event.modifierFlags.contains(.control), let onSecondaryClick { return onSecondaryClick() }
         isPressed = true
         if focusesOnClick { window?.makeFirstResponder(self) }
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let onSecondaryClick else { return super.rightMouseDown(with: event) }
+        hideTooltip()
+        onSecondaryClick()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let onSpace, KeyboardFocus.key(for: event) == .activate, KeyboardFocus.isSpace(event) else {
+            return super.keyDown(with: event)
+        }
+        onSpace()
     }
 
     // A control inside the row that acts on its press passes the release up the responder chain to here.

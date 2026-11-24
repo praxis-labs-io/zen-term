@@ -23,13 +23,6 @@ extension WindowController {
                 message: "\(name ?? "This tool") is open. Close it to get back to your panes.")
     }
 
-    static func floatCloseBlockedToast(isPane: Bool, name: String?) -> ToastContent {
-        isPane
-            ? ToastContent(
-                variant: .info, title: "Float pane", message: "Close \(name ?? "the float pane") first, then ⌘W.")
-            : ToastContent(variant: .info, title: "Tool float", message: "Close \(name ?? "the tool") first, then ⌘W.")
-    }
-
     static func newWorktreeRefusedToast(_ refusal: SidebarController.NewWorktreeRefusal) -> ToastContent {
         ToastContent(variant: .info, title: "New worktree", message: refusal.message)
     }

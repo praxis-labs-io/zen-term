@@ -325,8 +325,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
   row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
-  stack, modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
-  sits above toasts because it owns the keyboard. `closeModal()` in
+  stack, modal card. Toasts sit above floats so a toast about a float, such as a chord it blocks, stays
+  visible; a card sits above toasts because it owns the keyboard. `closeModal()` in
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab. An open modal is the window's
   `hoverCover`: every control ordered behind it shows no hover, apart from the owner's own
   suppression. A popover the card opens mounts on the content view, in front of the card, and keeps
@@ -502,7 +502,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`NavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
-  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row).
+  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row). An
+  Agents row whose surface is a pane, not a drawer or tool float, gets the same menu with
+  Close, which takes `confirmClosing`, the close-stakes confirm ⌘W uses.
   Space opens it on the focused row. Focus stays on the row, whose ↑/↓ walk the menu and
   ↵ chooses; Esc closes it back to the row.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**
@@ -539,8 +541,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `prune` skips it, and its tab ends it. Its presentation events reach the slot through
   `PaneFloats.presenter`, whose own guard drops a hidden one's. It runs hidden, started at the
   card's size (`ToolFloatController.paneContentSize`), since a view never in a window has no frame
-  to size its grid by. `WindowController.focus(_:in:)` shows it, so an Agents row and a jump to
+  to size its grid by. `WindowController.focus(_:in:)` shows it, so `pane.focus`, a card's Switch and a jump to
   a waiting agent reveal its tab and show it, and while shown it is the window's focused surface.
+  Its Agents row toggles it instead (`toggleAgentRow`). `close_pane` over any shown float hides
+  it, so ending one takes its program exiting, `zen pane close` or the row menu's Close.
   A tab's close confirmation names a running one that is hidden.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**

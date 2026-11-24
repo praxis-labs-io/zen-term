@@ -69,6 +69,7 @@ final class SidebarView: NSView, ThemeReapplying {
     var onLeave: (() -> Void)?
     var onFocusChanged: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
+    var onCloseAgent: ((SurfaceID) -> Void)?
     var onActivateHost: ((SSHHostID) -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (SidebarRowID) -> Void
@@ -279,12 +280,14 @@ final class SidebarView: NSView, ThemeReapplying {
         var removedFocusedRow = false
         for (id, row) in agentRows where !ids.contains(id) {
             removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
+            if rowMenu.anchor === row { rowMenu.close() }
             row.removeFromSuperview()
             agentRows[id] = nil
         }
         agentViews = items.map { item in
             let row = agentRow(for: item.id)
             row.render(item)
+            wireMenu(of: row, for: item.id)
             return row
         }
         refreshAgentsSection()
@@ -296,8 +299,38 @@ final class SidebarView: NSView, ThemeReapplying {
         if let row = agentRows[id] { return row }
         let row = SidebarAgentRow { [weak self] in self?.onJump?(id) }
         wire(row)
+        row.onArrowUp = { [weak self, weak row] in self?.arrow(-1, on: row) }
+        row.onArrowDown = { [weak self, weak row] in self?.arrow(1, on: row) }
+        row.onReturn = { [weak self, weak row] in
+            guard let self else { return }
+            if self.isMenuOpen(on: row), self.rowMenu.chooseHighlighted() { return }
+            self.rowMenu.close()
+            self.onJump?(id)
+        }
         agentRows[id] = row
         return row
+    }
+
+    // A row with no menu keeps no handlers, so ⌃-click stays a plain click that jumps.
+    private func wireMenu(of row: SidebarAgentRow, for id: SurfaceID) {
+        guard row.canClose else {
+            if isMenuOpen(on: row) { rowMenu.close() }
+            row.onSpace = nil
+            row.onSecondaryClick = nil
+            return
+        }
+        row.onSpace = { [weak self, weak row] in
+            guard let self, let row, !self.isMenuOpen(on: row) else { return }
+            self.rowMenu.open(self.agentMenuItems(for: id), from: row, highlightingFirst: true)
+        }
+        row.onSecondaryClick = { [weak self, weak row] in
+            guard let self, let row else { return }
+            self.rowMenu.open(self.agentMenuItems(for: id), from: row)
+        }
+    }
+
+    private func agentMenuItems(for id: SurfaceID) -> [[SidebarRowMenu.Item]] {
+        [[SidebarRowMenu.Item(title: "Close", action: nil) { [weak self] in self?.onCloseAgent?(id) }]]
     }
 
     private func wire(_ row: SidebarJumpRow) {
@@ -437,9 +470,9 @@ final class SidebarView: NSView, ThemeReapplying {
         rowMenu.close()
     }
 
-    private func isMenuOpen(on row: NavRow?) -> Bool { rowMenu.isOpen && row != nil && rowMenu.anchor === row }
+    private func isMenuOpen(on row: ListRow?) -> Bool { rowMenu.isOpen && row != nil && rowMenu.anchor === row }
 
-    private func arrow(_ delta: Int, on row: NavRow?) {
+    private func arrow(_ delta: Int, on row: ListRow?) {
         if isMenuOpen(on: row) { rowMenu.moveHighlight(delta) } else { moveFocus(delta) }
     }
 

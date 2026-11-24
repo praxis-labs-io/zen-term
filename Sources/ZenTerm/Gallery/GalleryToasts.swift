@@ -28,13 +28,6 @@
                     ]
                 ),
                 (
-                    "Float before ⌘W",
-                    [
-                        Window.floatCloseBlockedToast(isPane: false, name: "Lazygit"),
-                        Window.floatCloseBlockedToast(isPane: true, name: "review"),
-                    ]
-                ),
-                (
                     "New worktree refused",
                     SidebarController.NewWorktreeRefusal.allCases.map(Window.newWorktreeRefusedToast)
                 ),
