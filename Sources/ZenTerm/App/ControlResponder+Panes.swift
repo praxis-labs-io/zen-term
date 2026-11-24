@@ -1,3 +1,4 @@
+import AppLog
 import ControlProtocol
 import Foundation
 import PaneKit
@@ -141,30 +142,28 @@ extension ControlResponder {
                 guard case .success(let place) = pane(.token(token), for: request) else { return false }
                 return Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) != nil
             }
-            let cap = blockedHolds.now().addingTimeInterval(BlockedHolds.longestHold)
-            hold(into: token, by: cap, whileBlocked: isBlocked) { [self] in _ = deliver(to: token, for: request) }
             if request.args.enter == true, Self.startsTurn(request.args.text ?? "") {
                 place.window.noteTaskSubmitted(to: place.pane)
             }
-            guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
-                return reply(.success(PaneSendResult(queued: true)))
+            var wait: PaneWait?
+            if request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) {
+                wait = hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
+            } else {
+                reply(.success(PaneSendResult(queued: true)))
             }
-            hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
-        }
-    }
-
-    // Waits out a blocked agent, then the person's draft, as often as either comes back, so neither takes the paste.
-    func hold(
-        into token: Int, by cap: Date, whileBlocked isBlocked: @escaping () -> Bool,
-        then deliver: @escaping () -> Void
-    ) {
-        blockedHolds.hold(by: cap, whileBlocked: isBlocked) { [self] in
-            guard let surface = locate(pane: token)?.pane.surfaceID else { return }
-            let deliverUnlessBlocked = { [self] in
-                isBlocked() ? hold(into: token, by: cap, whileBlocked: isBlocked, then: deliver) : deliver()
+            let drop = { (reason: String) in
+                Log.warning("Dropped a pane.send queued for pane \(token): \(reason).", category: .control)
+                wait?.cancel()
+                reply(.failure(ControlError(.failed, "The send queued for pane \(token) was dropped: \(reason).")))
             }
-            guard paneDrafts.isHolding(surface) else { return deliverUnlessBlocked() }
-            paneDrafts.queue(surface, deliverUnlessBlocked)
+            paneDrafts.queue(
+                place.pane.surfaceID,
+                PaneDrafts.Message(
+                    isBlocked: isBlocked,
+                    deliver: { [self] in
+                        if case .failure(let error) = deliver(to: token, for: request) { drop(error.message) }
+                    },
+                    drop: drop))
         }
     }
 
@@ -382,18 +381,21 @@ extension ControlResponder {
         return .success(timeout)
     }
 
+    @discardableResult
     func hold(
         waitOn place: PanePlace, output: String?, timeout: Int, for request: ControlRequest, hangup: ControlHangup,
         reply: @escaping (ControlReply) -> Void
-    ) {
+    ) -> PaneWait? {
         let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
         let answered: (PaneWait.Answer) -> Void = {
             reply(.success(WaitResult(reason: $0.reason, exitCode: $0.exitCode, text: $0.text, pane: $0.pane)))
         }
         guard let wait = PaneWait(watched(place), caller: caller, output: output, reply: answered) else {
-            return reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
+            reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
+            return nil
         }
         paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+        return wait
     }
 
     private func waitOnChildren(

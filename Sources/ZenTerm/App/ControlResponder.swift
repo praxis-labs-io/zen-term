@@ -13,7 +13,6 @@ struct ControlResponder {
     var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
     var paneWaits = PaneWaits()
     var paneDrafts = PaneDrafts()
-    var blockedHolds = BlockedHolds()
     var interruptGroup: (pid_t) -> Bool = ControlResponder.interrupt(group:)
 
     func respond(

@@ -662,13 +662,16 @@ agent queues in `PaneDrafts`, also app-wide, while the person has unsent text at
 `WindowController.keyReachedFocus` feeds it each key the chrome did not claim from
 `KeyInterceptor`, the path that also answers an agent by typing, classed by `DraftEdit` (text, the Up
 and Down arrows and Tab write; Return submits; Ctrl-C and Ctrl-U clear), and
-`WindowController.paste` feeds it a paste. The person's Return flushes the queue on the next main-queue
-turn, after the key reached the surface. A `pane.run` child's note to its parent (`HelperNote`)
+`WindowController.paste` feeds it a paste. Each surface has one ordered queue that the draft's
+release and the blocked recheck both drain, so a newer message never passes a held one. The
+person's Return drains it through `PaneDrafts.after`, after the key reached the surface. A message
+the queue drops (its pane closed, or its agent blocked 10 minutes from when the queue could deliver)
+goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
 `onHelperNote`. A child's submitted `pane.send` to its parent marks it in its window until its next turn or its parent's
-next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after `ControlResponder.hold(into:)` waits out a
-blocked agent in `BlockedHolds` and a draft in `PaneDrafts`, as a queued `pane.send` does. `pane.send`, `pane.keys` and a held note
+next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after the parent's `PaneDrafts` queue waits out a
+blocked agent and a draft, as a queued `pane.send` does. `pane.send`, `pane.keys` and a held note
 all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker

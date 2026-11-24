@@ -1,3 +1,4 @@
+import AppLog
 import Foundation
 
 extension ControlResponder {
@@ -6,14 +7,17 @@ extension ControlResponder {
         let isBlocked = { [self] in
             parentPlace(of: note).map { Self.refusal(.paste, into: $0, from: nil, force: nil) != nil } ?? false
         }
-        let cap = blockedHolds.now().addingTimeInterval(BlockedHolds.longestHold)
-        hold(into: note.parent, by: cap, whileBlocked: isBlocked) { [self] in
+        let deliver = { [self] in
             guard let place = parentPlace(of: note), place.window.runsAgent(place.pane),
                 place.pane.surface.isStarted, note.outlivesHelper || locate(pane: note.helper) != nil,
                 !isStale(note)
             else { return }
             paste(note.text, from: note.helper, into: place, enter: true)
         }
+        let drop = { (reason: String) in
+            Log.warning("Dropped pane \(note.helper)'s note to pane \(note.parent): \(reason).", category: .control)
+        }
+        paneDrafts.queue(parent.pane.surfaceID, PaneDrafts.Message(isBlocked: isBlocked, deliver: deliver, drop: drop))
     }
 
     private func isStale(_ note: HelperNote) -> Bool {

@@ -13,7 +13,6 @@ final class ControlHelperNoteTests: WindowTestCase {
     private var spawned: [RecordingSurface] = []
     private let waits = PaneWaits()
     private let drafts = PaneDrafts()
-    private let notes = BlockedHolds()
     private let clock = Clock()
     private let originalPresence = WindowController.isPresent
 
@@ -51,8 +50,6 @@ final class ControlHelperNoteTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(.builtIn)
         drafts.now = { [clock] in clock.now }
         drafts.after = { [clock] in clock.after($0, $1) }
-        notes.now = { [clock] in clock.now }
-        notes.after = { [clock] in clock.after($0, $1) }
     }
 
     override func tearDownWithError() throws {
@@ -87,7 +84,7 @@ final class ControlHelperNoteTests: WindowTestCase {
     private var responder: ControlResponder {
         ControlResponder(
             windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first },
-            paneWaits: waits, paneDrafts: drafts, blockedHolds: notes)
+            paneWaits: waits, paneDrafts: drafts)
     }
 
     private func token(of surface: RecordingSurface) throws -> Int {
@@ -200,9 +197,7 @@ final class ControlHelperNoteTests: WindowTestCase {
 
     private func sendDraft(in c: WindowController) throws {
         try sendKeys([.returnKey], to: c)
-        let drained = expectation(description: "main queue")
-        DispatchQueue.main.async { drained.fulfill() }
-        wait(for: [drained], timeout: 2)
+        clock.advance(0)
     }
 
     func test_aHelperThatStopsTellsItsParent() throws {
@@ -354,11 +349,11 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.blocked(.permission), from: parent)
 
         report(.done, from: helper)
-        clock.advance(BlockedHolds.recheck * 5)
+        clock.advance(PaneDrafts.blockedRecheck * 5)
         XCTAssertEqual(parent.inputs, [], "the note answered the parent's permission prompt")
 
         report(.working, from: parent)
-        clock.advance(BlockedHolds.recheck)
+        clock.advance(PaneDrafts.blockedRecheck)
 
         let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
@@ -373,9 +368,9 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.blocked(.permission), from: parent)
         report(.done, from: helper)
 
-        for _ in 0..<Int(BlockedHolds.longestHold) { clock.advance(BlockedHolds.recheck) }
+        for _ in 0..<Int(PaneDrafts.longestBlockedHold) { clock.advance(PaneDrafts.blockedRecheck) }
         report(.idle, from: parent)
-        clock.advance(BlockedHolds.recheck)
+        clock.advance(PaneDrafts.blockedRecheck)
 
         XCTAssertEqual(parent.inputs, [])
     }
@@ -395,7 +390,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, [])
 
         report(.idle, from: parent)
-        clock.advance(BlockedHolds.recheck)
+        clock.advance(PaneDrafts.blockedRecheck)
 
         let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
@@ -590,7 +585,7 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         try close(helper, by: parent)
         report(.working, from: parent)
-        clock.advance(BlockedHolds.recheck)
+        clock.advance(PaneDrafts.blockedRecheck)
 
         XCTAssertEqual(parent.inputs, [])
     }
@@ -813,7 +808,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.working, from: helper)
 
         report(.working, from: parent)
-        clock.advance(BlockedHolds.recheck)
+        clock.advance(PaneDrafts.blockedRecheck)
 
         let token = try token(of: helper)
         XCTAssertEqual(

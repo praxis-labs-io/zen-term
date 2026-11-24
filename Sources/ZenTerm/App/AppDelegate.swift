@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let worktreeRemovals = WorktreeRemovalTracker()
     private let paneWaits = PaneWaits()
     private let paneDrafts = PaneDrafts()
-    private let blockedHolds = BlockedHolds()
     private let claudeSetupOffer = ClaudeSetupOffer()
     private var controlResponder: ControlResponder?
     private let keys = KeyInterceptor()
@@ -102,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             bringForward: { Self.bringForward($0) },
             isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals,
             runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) }, paneWaits: paneWaits,
-            paneDrafts: paneDrafts, blockedHolds: blockedHolds)
+            paneDrafts: paneDrafts)
         controlResponder = responder
         let control = ControlServer { responder.respond(to: $0, hangup: $1, reply: $2) }
         control.start()

@@ -13,7 +13,6 @@ final class ControlPaneSendTests: WindowTestCase {
     private var spawned: [RecordingSurface] = []
     private let waits = PaneWaits()
     private let drafts = PaneDrafts()
-    private let blocked = BlockedHolds()
     private let clock = Clock()
     private let originalPresence = WindowController.isPresent
 
@@ -51,8 +50,6 @@ final class ControlPaneSendTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(.builtIn)
         drafts.now = { [clock] in clock.now }
         drafts.after = { [clock] in clock.after($0, $1) }
-        blocked.now = { [clock] in clock.now }
-        blocked.after = { [clock] in clock.after($0, $1) }
     }
 
     override func tearDownWithError() throws {
@@ -85,7 +82,7 @@ final class ControlPaneSendTests: WindowTestCase {
     private var responder: ControlResponder {
         ControlResponder(
             windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first },
-            paneWaits: waits, paneDrafts: drafts, blockedHolds: blocked)
+            paneWaits: waits, paneDrafts: drafts)
     }
 
     private func send(
@@ -176,7 +173,7 @@ final class ControlPaneSendTests: WindowTestCase {
 
         try sendKeys([.returnKey], to: c)
         XCTAssertEqual(agent.inputs, [], "the person's Return reaches the pane before the message")
-        drainMainQueue()
+        clock.advance(0)
 
         XCTAssertEqual(agent.inputs, [.paste("review x.swift"), .submit])
     }
@@ -193,7 +190,7 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertTrue(isQueued(send("second", to: try token(of: agent), enter: true)))
         try sendKeys([.returnKey], to: c)
         XCTAssertTrue(isQueued(send("third", to: try token(of: agent), enter: true)), "behind the one held")
-        drainMainQueue()
+        clock.advance(0)
         let fourth = send("fourth", to: try token(of: agent), enter: true)
 
         XCTAssertFalse(isQueued(fourth))
@@ -245,7 +242,7 @@ final class ControlPaneSendTests: WindowTestCase {
             clock.advance(3600)
             XCTAssertEqual(agent.inputs, delivered, "\(key) left a draft")
             try sendKeys([.returnKey], to: c)
-            drainMainQueue()
+            clock.advance(0)
             delivered.append(.paste("go"))
             XCTAssertEqual(agent.inputs, delivered)
         }
@@ -324,9 +321,69 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [], "a paste would answer the user's prompt")
 
         report(.working, from: agent)
-        clock.advance(BlockedHolds.recheck)
+        clock.advance(PaneDrafts.blockedRecheck)
 
         XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
+    func test_theBlockedCapStartsWhenTheDraftIsSent_notWhenTheSendWasQueued() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+        clock.advance(PaneDrafts.longestBlockedHold + 300)
+
+        try sendKeys([.returnKey], to: c)
+        report(.blocked(.permission), from: agent)
+        clock.advance(0)
+        clock.advance(PaneDrafts.blockedRecheck)
+        report(.working, from: agent)
+        clock.advance(PaneDrafts.blockedRecheck)
+
+        XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
+    func test_queuedSendsKeepTheirOrderThroughABlock_soANewerSendNeverPassesThem() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x", to: c)
+        XCTAssertTrue(isQueued(send("a", to: try token(of: agent))))
+        XCTAssertTrue(isQueued(send("b", to: try token(of: agent))))
+
+        try sendKeys([.returnKey], to: c)
+        report(.blocked(.permission), from: agent)
+        clock.advance(0)
+        report(.working, from: agent)
+        XCTAssertTrue(isQueued(send("c", to: try token(of: agent))), "behind the two still held")
+        clock.advance(PaneDrafts.blockedRecheck)
+
+        XCTAssertEqual(agent.inputs, [.paste("a"), .paste("b"), .paste("c")])
+    }
+
+    func test_aQueuedSendDroppedAtDelivery_answersItsWaitWithTheReason() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x", to: c)
+        let answer = send("go", to: try token(of: agent), enter: true, wait: true, timeout: 30)
+
+        try sendKeys([.returnKey], to: c)
+        report(.blocked(.permission), from: agent)
+        clock.advance(0)
+        for _ in 0...Int(PaneDrafts.longestBlockedHold) { clock.advance(PaneDrafts.blockedRecheck) }
+
+        guard case .failure(let error) = answer.reply else { return XCTFail("\(answer.reply as Any)") }
+        XCTAssertEqual(error.code, .failed)
+        XCTAssertTrue(error.message.contains("dropped"), error.message)
+        XCTAssertEqual(waits.pending.count, 0, "the dropped send's wait is over")
+        report(.working, from: agent)
+        clock.advance(PaneDrafts.blockedRecheck)
+        XCTAssertEqual(agent.inputs, [])
     }
 
     func test_aQueuedSendThatWaitsStartsItsWaitAtOnce() throws {
@@ -339,7 +396,7 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertNil(answer.reply)
 
         try sendKeys([.returnKey], to: c)
-        drainMainQueue()
+        clock.advance(0)
         report(.working, from: agent)
         report(.done, from: agent)
 

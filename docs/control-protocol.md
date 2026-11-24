@@ -316,8 +316,10 @@ Into a pane that runs an agent:
   arrive in order, each on its own, right after the person's Return, or 2 seconds after the key
   that cleared it. A send within 2 seconds of any other key into the pane is queued the same way.
   Keys into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued
-  send whose agent is `blocked` when its turn comes waits until it is not, and after 10 minutes it is
-  dropped. A queued send with `enter` is a handed task for `pane.wait`'s `children` from the moment
+  send whose agent is `blocked` when its turn comes waits until it is not, and is dropped once the
+  agent stays blocked 10 minutes from when the person sent or cleared their text. A queued send that
+  is dropped, there or because its pane closed or refused it, answers a `wait` with a `failed` error
+  that gives the reason. A queued send with `enter` is a handed task for `pane.wait`'s `children` from the moment
   it is queued.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
   `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
