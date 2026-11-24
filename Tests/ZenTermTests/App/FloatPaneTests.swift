@@ -494,4 +494,28 @@ final class FloatPaneTests: WindowTestCase {
             toastTexts(in: c).contains("Closing this tab will stop everything running in it."),
             "\(toastTexts(in: c))")
     }
+
+    func test_aShownFloatPaneIsTheFocusedPane_forZenDraftsAndSeen() throws {
+        let c = makeWindow()
+        let drafts = PaneDrafts()
+        c.paneDrafts = drafts
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let float = try openFloat(in: c, beside: lead)
+        let program = try surface(float)
+        let id = try XCTUnwrap(c.pane(token: float)?.pane.surfaceID)
+        let leadID = try XCTUnwrap(c.pane(token: lead)?.pane.surfaceID)
+        program.delegate?.surface(
+            program, didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs you"))
+        drainMainQueue()
+
+        try show(float, in: c)
+        drainMainQueue()
+        c.keyReachedFocus()
+
+        let got = try XCTUnwrap(try answer(.paneGet).get() as? ListResult.Pane)
+        XCTAssertEqual(got.token, float, "a request naming no pane reaches the pane on screen")
+        XCTAssertNotNil(drafts.lastKey(into: id))
+        XCTAssertNil(drafts.lastKey(into: leadID))
+        XCTAssertEqual(c.surfaceAttentionForTesting(id), .idle)
+    }
 }

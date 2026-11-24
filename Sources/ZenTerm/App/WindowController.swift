@@ -2604,7 +2604,8 @@ final class WindowController: NSObject {
 
     func focusedPane(of tab: TabID) -> PaneHandle? {
         guard let c = controller(tab) else { return nil }
-        return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
+        let focused = floats.shownPaneSurface.flatMap { c.isFloatPane($0) ? $0 : nil } ?? c.focusedSurfaceID
+        return c.paneHandles.first { $0.surfaceID == focused }
     }
 
     func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?, cwd: URL?)
