@@ -311,8 +311,8 @@ Into a pane that runs an agent:
   refused, since a question about the task is the parent's to answer; a `permission` or `auth`
   block refuses the parent too. A `working` agent takes the text into its running turn.
 - While the person has unsent text at its prompt, the send is queued and answers
-  `{"queued":true}` at once. Text is unsent from the first typed character or paste into the pane
-  until Return sends it, or Ctrl-C, Ctrl-U or Escape clears it, with no time limit. Queued sends
+  `{"queued":true}` at once. Text is unsent from the first typed character, Up or Down arrow, Tab or paste
+  into the pane until Return sends it, or Ctrl-C or Ctrl-U clears it, with no time limit. Queued sends
   arrive in order, each on its own, right after the person's Return, or 2 seconds after the key
   that cleared it. A send within 2 seconds of any other key into the pane is queued the same way.
   Keys into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued

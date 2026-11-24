@@ -5,7 +5,8 @@ enum DraftEdit: Equatable {
     case write, submit, clear, none
 
     private static let returnKeys: Set<UInt16> = [36, 76]
-    private static let escapeKey: UInt16 = 53
+    // Up, Down and Tab recall or complete text at an agent's prompt.
+    private static let recallingKeys: Set<UInt16> = [126, 125, 48]
     private static let clearingControlKeys: Set<String> = ["c", "u"]
     private static let functionKeys: ClosedRange<UInt32> = 0xF700...0xF8FF
 
@@ -13,8 +14,8 @@ enum DraftEdit: Equatable {
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
         if Self.returnKeys.contains(event.keyCode) {
             self = modifiers.isEmpty ? .submit : .write
-        } else if event.keyCode == Self.escapeKey && modifiers.isEmpty {
-            self = .clear
+        } else if Self.recallingKeys.contains(event.keyCode) {
+            self = modifiers.isEmpty ? .write : .none
         } else if modifiers == .control {
             let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
             self = Self.clearingControlKeys.contains(key) ? .clear : .none

@@ -660,7 +660,8 @@ with `enter`, sits in its window's `TaskPickups` until the agent's next report p
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent queues in `PaneDrafts`, also app-wide, while the person has unsent text at its prompt.
 `WindowController.keyReachedFocus` feeds it each key the chrome did not claim from
-`KeyInterceptor`, the path that also answers an agent by typing, classed by `DraftEdit`, and
+`KeyInterceptor`, the path that also answers an agent by typing, classed by `DraftEdit` (text, the Up
+and Down arrows and Tab write; Return submits; Ctrl-C and Ctrl-U clear), and
 `WindowController.paste` feeds it a paste. The person's Return flushes the queue on the next main-queue
 turn, after the key reached the surface. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent

@@ -224,7 +224,7 @@ final class ControlPaneSendTests: WindowTestCase {
         let agent = try XCTUnwrap(spawned.first)
         report(.idle, from: agent)
         try focus(agent, in: c)
-        try sendKeys([.arrowUp], to: c)
+        try sendKeys([.arrowLeft], to: c)
         XCTAssertTrue(isQueued(send("go", to: try token(of: agent))), "the quiet pause still holds it")
 
         clock.advance(PaneDrafts.quiet)
@@ -232,12 +232,45 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [.paste("go")])
     }
 
+    func test_upDownOrTabStartADraft_sinceTheyRecallOrCompleteText() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+
+        var delivered: [RecordingSurface.Input] = []
+        for key: TypedKey in [.arrowUp, .arrowDown, .tab] {
+            try sendKeys([key], to: c)
+            XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+            clock.advance(3600)
+            XCTAssertEqual(agent.inputs, delivered, "\(key) left a draft")
+            try sendKeys([.returnKey], to: c)
+            drainMainQueue()
+            delivered.append(.paste("go"))
+            XCTAssertEqual(agent.inputs, delivered)
+        }
+    }
+
+    func test_escapeLeavesTheDraft() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "half", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+
+        try sendKeys([.escape], to: c)
+        clock.advance(3600)
+
+        XCTAssertEqual(agent.inputs, [])
+    }
+
     func test_keysThatAnswerABlockedAgentStartNoDraft() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)
         report(.blocked(.permission), from: agent)
         try focus(agent, in: c)
-        try sendKeys(typing: "1", to: c)
+        try sendKeys([.arrowDown, .tab, .character("1")], to: c)
         report(.working, from: agent)
         let answer = send("go", to: try token(of: agent))
 
@@ -284,7 +317,7 @@ final class ControlPaneSendTests: WindowTestCase {
         try focus(agent, in: c)
         try sendKeys(typing: "x", to: c)
         XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
-        try sendKeys([.escape], to: c)
+        try sendKeys([.controlU], to: c)
 
         report(.blocked(.question), from: agent)
         clock.advance(PaneDrafts.quiet)

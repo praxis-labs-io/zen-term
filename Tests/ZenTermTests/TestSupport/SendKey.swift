@@ -6,7 +6,7 @@ import XCTest
 // A key a person types, through `KeyInterceptor` and then the window, the path it takes before the responder chain.
 enum TypedKey {
     case character(String)
-    case returnKey, escape, arrowUp, controlU
+    case returnKey, escape, tab, arrowUp, arrowDown, arrowLeft, controlU
 
     func event(in window: NSWindow) throws -> NSEvent {
         let (characters, bare, flags, keyCode): (String, String, NSEvent.ModifierFlags, UInt16) =
@@ -14,7 +14,10 @@ enum TypedKey {
             case .character(let typed): (typed, typed, [], 12)
             case .returnKey: ("\r", "\r", [], 36)
             case .escape: ("\u{1b}", "\u{1b}", [], 53)
+            case .tab: ("\t", "\t", [], 48)
             case .arrowUp: ("\u{F700}", "\u{F700}", [.function, .numericPad], 126)
+            case .arrowDown: ("\u{F701}", "\u{F701}", [.function, .numericPad], 125)
+            case .arrowLeft: ("\u{F702}", "\u{F702}", [.function, .numericPad], 123)
             case .controlU: ("\u{15}", "u", .control, 32)
             }
         return try XCTUnwrap(
