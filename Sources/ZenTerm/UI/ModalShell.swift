@@ -88,8 +88,7 @@ class ModalShell: NSView, ThemeReapplying {
         let selection = (window?.firstResponder as? NSTextView)?.selectedRange()
         confirm.present(
             ConfirmCard(
-                title: "Unsaved changes", message: "Closing now discards your changes.",
-                cancelLabel: "Keep editing", confirmLabel: "Discard changes",
+                .unsavedChanges,
                 onCancel: { [weak self, weak returnFocus] in
                     self?.confirm.dismiss { self?.refocus(returnFocus, selecting: selection) }
                 },

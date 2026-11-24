@@ -130,14 +130,6 @@ final class ToastPresenterTests: WindowTestCase {
             toast.performKeyEquivalent(with: keyEvent(53, "\u{1b}")), "nor Esc, which vim wants")
     }
 
-    func test_confirmToast_claimsReturnAndEsc() {
-        let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
-        let toast = presenter.confirm(content(), actions: actions())
-
-        XCTAssertTrue(toast.performKeyEquivalent(with: keyEvent(36, "\r")), "Return answers")
-        XCTAssertTrue(toast.performKeyEquivalent(with: keyEvent(53, "\u{1b}")), "and Esc cancels")
-    }
-
     func test_show_mountsToastThenAutoDismisses() {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12, dismissAfter: 0.05)
@@ -199,7 +191,7 @@ final class ToastPresenterTests: WindowTestCase {
     func test_dismiss_isIdempotent_removesExactlyOnce() {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
-        let toast = presenter.confirm(content(), actions: actions())
+        let toast = presenter.showSticky(content(), actions: actions())
         XCTAssertEqual(arrangedToasts(in: host).count, 1)
 
         presenter.dismiss(toast)

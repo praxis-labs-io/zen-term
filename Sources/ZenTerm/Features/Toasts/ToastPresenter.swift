@@ -103,19 +103,10 @@ final class ToastPresenter {
         autoDismiss: Bool = false
     ) -> ToastView {
         dispatchPrecondition(condition: .onQueue(.main))
-        let toast = ToastView(
-            content: content, actions: actions, armsKeys: false, showsClose: showsClose)
+        let toast = ToastView(content: content, actions: actions, showsClose: showsClose)
         stack.addArrangedSubview(toast)
         toast.animateIn()
         if autoDismiss { armAutoDismiss(toast) }
-        return toast
-    }
-
-    @discardableResult
-    func confirm(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
-        let toast = ToastView(content: content, actions: actions)
-        stack.addArrangedSubview(toast)
-        toast.animateIn()
         return toast
     }
 

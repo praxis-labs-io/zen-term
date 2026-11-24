@@ -13,7 +13,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     }
 
     struct Removal {
-        let consequence: () -> String?
+        let session: () -> SSHConnection.State?
         let perform: () -> String?
     }
 
@@ -148,16 +148,21 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
         guard !isDismissing else { return }
         guard let removal, let editing, confirm.card == nil else { return }
         errorLabel.clear()
-        let name = editing.entry.displayName
-        let message =
-            removal.consequence().map { "Removing \(name) will \($0)." }
-            ?? "Removing \(name) takes it off your remote hosts. Your SSH config stays."
         confirm.present(
             ConfirmCard(
-                title: "Remove \(name)", message: message,
-                confirmLabel: "Remove",
+                Self.removePrompt(named: editing.entry.displayName, session: removal.session()),
                 onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.removeButton) } },
                 onConfirm: { [weak self] in self?.confirm.dismiss { self?.performRemoval() } }))
+    }
+
+    static func removePrompt(named name: String, session: SSHConnection.State?) -> ConfirmPrompt {
+        let message: String
+        switch session {
+        case .connected: message = "Removing \(name) will disconnect it and stop everything running in it."
+        case .connecting: message = "Removing \(name) will stop connecting to it and close its tabs."
+        case .failed, nil: message = "Removing \(name) takes it off your remote hosts. Your SSH config stays."
+        }
+        return ConfirmPrompt(title: "Remove \(name)", body: .message(message), confirmLabel: "Remove")
     }
 
     private func performRemoval() {

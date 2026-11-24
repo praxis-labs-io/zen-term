@@ -507,8 +507,8 @@ final class FloatPaneTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen)
         XCTAssertTrue(
-            toastTexts(in: c).contains("Closing this tab will stop everything running in it, including review."),
-            "\(toastTexts(in: c))")
+            confirmTexts(in: c).contains("Closing this tab will stop everything running in it, including review."),
+            "\(confirmTexts(in: c))")
     }
 
     func test_closingAShownFloatsTabDoesNotNameIt() throws {
@@ -522,8 +522,8 @@ final class FloatPaneTests: WindowTestCase {
         c.handle(.closeTab)
 
         XCTAssertTrue(
-            toastTexts(in: c).contains("Closing this tab will stop everything running in it."),
-            "\(toastTexts(in: c))")
+            confirmTexts(in: c).contains("Closing this tab will stop everything running in it."),
+            "\(confirmTexts(in: c))")
     }
 
     func test_aShownFloatPaneIsTheFocusedPane_forZenDraftsAndSeen() throws {
@@ -637,7 +637,7 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertFalse(c.floatsForTesting.isOpen)
         XCTAssertFalse(scratch.terminated)
         XCTAssertTrue(isOpen(lead, in: c), "⌘W reached the pane under the float")
-        XCTAssertTrue(toastTexts(in: c).isEmpty, "\(toastTexts(in: c))")
+        XCTAssertTrue(confirmTexts(in: c).isEmpty, "\(confirmTexts(in: c))")
     }
 
     func test_cmdW_withNoFloatShown_stillClosesThePane() throws {
@@ -808,8 +808,8 @@ final class FloatPaneTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen)
         XCTAssertTrue(
-            toastTexts(in: c).contains("Closing this pane will stop the process running in it."),
-            "\(toastTexts(in: c))")
+            confirmTexts(in: c).contains("Closing this pane will stop the process running in it."),
+            "\(confirmTexts(in: c))")
         XCTAssertTrue(isOpen(family.helper, in: c))
 
         try pressConfirmClose(in: c)
@@ -830,8 +830,8 @@ final class FloatPaneTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen)
         XCTAssertTrue(
-            toastTexts(in: c).contains("Closing this pane will stop the process running in it, including review."),
-            "\(toastTexts(in: c))")
+            confirmTexts(in: c).contains("Closing this pane will stop the process running in it, including review."),
+            "\(confirmTexts(in: c))")
         XCTAssertTrue(isOpen(parent, in: c))
 
         try pressConfirmClose(in: c)

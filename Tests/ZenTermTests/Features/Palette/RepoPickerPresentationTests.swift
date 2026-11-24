@@ -160,7 +160,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is not replaced")
-        XCTAssertFalse(c.isConfirmOpen, "a card, never the toast confirm")
+        XCTAssertFalse(c.isConfirmOpen, "the picker's own card, not the window's close confirm")
     }
 
     func test_clickingAndDraggingAcrossTheConfirm_opensNoRowBeneathIt() throws {

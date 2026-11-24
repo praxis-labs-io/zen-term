@@ -29,12 +29,74 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(text.contains("feature/one has 3 uncommitted files."), "\(text)")
     }
 
-    func test_opening_focusesCancel() throws {
+    func test_anUnfocusedStart_focusesNoButton() throws {
         let (card, _) = mount()
 
         card.focusInitialResponder()
 
+        XCTAssertTrue(window?.firstResponder === card, "the card holds the keyboard itself")
+        XCTAssertFalse(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+        XCTAssertFalse(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Remove")), in: window))
+    }
+
+    func test_anUnfocusedStart_returnAnswersNothing() throws {
+        let (card, sink) = mount()
+        card.focusInitialResponder()
+
+        try send(key("\r", keyCode: 36))
+        try send(key("\u{3}", keyCode: 76, flags: [.numericPad, .function]))
+
+        XCTAssertEqual(sink.confirmed, 0, "a delete cannot be undone, so Return must not answer it")
+        XCTAssertEqual(sink.cancelled, 0)
+        XCTAssertTrue(window?.firstResponder === card)
+    }
+
+    func test_anUnfocusedStart_tabReachesCancel_andShiftTabTheConfirm() throws {
+        let (card, sink) = mount()
+        card.focusInitialResponder()
+
+        try send(key("\t", keyCode: 48))
         XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+
+        card.focusInitialResponder()
+        try send(key("\u{19}", keyCode: 48, flags: .shift))
+        let remove = try XCTUnwrap(button(in: card, title: "Remove"))
+        XCTAssertTrue(KeyboardFocus.isFocused(remove, in: window))
+
+        try send(key("\r", keyCode: 36))
+        XCTAssertEqual(sink.confirmed, 1, "once the person moves onto it, Return answers")
+    }
+
+    func test_anUnfocusedStart_escCancels() throws {
+        let (card, sink) = mount()
+        card.focusInitialResponder()
+
+        try send(escapeKey())
+
+        XCTAssertEqual(sink.cancelled, 1)
+        XCTAssertEqual(sink.confirmed, 0)
+    }
+
+    func test_aConfirmStart_focusesTheConfirmButton_andReturnAnswers() throws {
+        let (card, sink) = mount(start: .onConfirm)
+
+        card.focusInitialResponder()
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Remove")), in: window))
+
+        try send(key("\r", keyCode: 36))
+
+        XCTAssertEqual(sink.confirmed, 1)
+        XCTAssertEqual(sink.cancelled, 0)
+    }
+
+    func test_aConfirmStart_escCancels() throws {
+        let (card, sink) = mount(start: .onConfirm)
+        card.focusInitialResponder()
+
+        try send(escapeKey())
+
+        XCTAssertEqual(sink.cancelled, 1)
+        XCTAssertEqual(sink.confirmed, 0)
     }
 
     func test_returnOnTheFocusedConfirm_confirms() throws {
@@ -63,16 +125,6 @@ final class ConfirmCardTests: WindowTestCase {
         card.focusInitialResponder()
 
         try XCTUnwrap(button(in: card, title: "Cancel")).keyDown(with: try key(" ", keyCode: 49))
-
-        XCTAssertEqual(sink.cancelled, 1)
-        XCTAssertEqual(sink.confirmed, 0)
-    }
-
-    func test_escCancels() throws {
-        let (card, sink) = mount()
-        card.focusInitialResponder()
-
-        XCTAssertTrue(card.performKeyEquivalent(with: try escapeKey()))
 
         XCTAssertEqual(sink.cancelled, 1)
         XCTAssertEqual(sink.confirmed, 0)
@@ -126,7 +178,7 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(icons.allSatisfy { $0.image != nil }, "every mark resolves to a symbol")
     }
 
-    func test_clickingChecklistText_leavesFocusOnCancel() throws {
+    func test_clickingChecklistText_leavesFocusWhereItWas() throws {
         let card = mountChecklist([
             .init(mark: .lost, text: [.init(text: "Removing it loses 1 file", tone: .ink(.muted))], rows: [])
         ])
@@ -147,7 +199,7 @@ final class ConfirmCardTests: WindowTestCase {
         NSApp.postEvent(try click(.leftMouseUp), atStart: false)
         text.mouseDown(with: try click(.leftMouseDown))
 
-        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+        XCTAssertTrue(window?.firstResponder === card)
     }
 
     func test_aPlainMessage_hasNoChecklist() {
@@ -187,12 +239,12 @@ final class ConfirmCardTests: WindowTestCase {
             label.alignmentRect(forFrame: label.frame).maxX, try XCTUnwrap(label.superview).bounds.maxX)
     }
 
-    private func mount(message: String = "feature/one has nothing uncommitted.") -> (
-        card: ConfirmCard, sink: Sink
-    ) {
+    private func mount(
+        message: String = "feature/one has nothing uncommitted.", start: ConfirmPrompt.Start = .unfocused
+    ) -> (card: ConfirmCard, sink: Sink) {
         let sink = Sink()
         let card = ConfirmCard(
-            title: "Remove Worktree", message: message, confirmLabel: "Remove",
+            ConfirmPrompt(title: "Remove Worktree", body: .message(message), confirmLabel: "Remove", start: start),
             onCancel: { sink.cancelled += 1 },
             onConfirm: { sink.confirmed += 1 })
         let win = NSWindow(
@@ -207,7 +259,7 @@ final class ConfirmCardTests: WindowTestCase {
 
     private func mountChecklist(_ items: [ConfirmCardChecklist.Item]) -> ConfirmCard {
         let card = ConfirmCard(
-            title: "Remove Worktree", items: items, confirmLabel: "Remove",
+            ConfirmPrompt(title: "Remove Worktree", body: .checklist(items), confirmLabel: "Remove"),
             onCancel: {}, onConfirm: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
@@ -253,16 +305,22 @@ final class ConfirmCardTests: WindowTestCase {
             }
     }
 
+    private func send(_ event: NSEvent) throws {
+        try XCTUnwrap(window).sendEvent(event)
+    }
+
     private func focusRemove(in card: ConfirmCard) throws -> AppButton {
         card.focusInitialResponder()
+        try send(key("\t", keyCode: 48))
         try XCTUnwrap(button(in: card, title: "Cancel")).keyDown(with: try arrowRight())
         return try XCTUnwrap(button(in: card, title: "Remove"))
     }
 
-    private func key(_ character: String, keyCode: UInt16) throws -> NSEvent {
+    private func key(_ character: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window?.windowNumber ?? 0,
                 context: nil, characters: character, charactersIgnoringModifiers: character, isARepeat: false,
                 keyCode: keyCode))
     }
@@ -270,8 +328,9 @@ final class ConfirmCardTests: WindowTestCase {
     private func escapeKey() throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-                context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window?.windowNumber ?? 0, context: nil, characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}",
                 isARepeat: false, keyCode: 53))
     }
 

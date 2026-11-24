@@ -588,8 +588,9 @@ final class SearchLifecycleTests: WindowTestCase {
                 "a close confirm",
                 {
                     $0.presentConfirm(
-                        variant: .destructive, title: "Close Pane", message: "Running work will stop.",
-                        confirmLabel: "Close", onConfirm: {})
+                        ConfirmPrompt(
+                            title: "Close Pane", body: .message("Running work will stop."), confirmLabel: "Close"),
+                        onConfirm: {})
                 }
             ),
             ("the window closing", { $0.windowWillClose(Notification(name: NSWindow.willCloseNotification)) }),

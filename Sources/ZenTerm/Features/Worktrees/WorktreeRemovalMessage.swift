@@ -3,6 +3,15 @@ import Foundation
 enum WorktreeRemovalMessage {
     typealias Item = ConfirmCardChecklist.Item
 
+    static func prompt(
+        for worktree: Worktree, state: WorktreeState?, carried: [String], closes: ClosedByRemoval
+    ) -> ConfirmPrompt {
+        ConfirmPrompt(
+            title: "Remove Worktree",
+            body: .checklist(items(for: worktree, state: state, carried: carried, closes: closes)),
+            confirmLabel: "Remove")
+    }
+
     static func items(
         for worktree: Worktree, state: WorktreeState?, carried: [String], closes: ClosedByRemoval
     ) -> [Item] {

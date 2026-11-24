@@ -176,7 +176,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.deleted, 0)
     }
 
-    func test_delete_asksFirst_withFocusOnCancel_andOnlyConfirmingDeletes() throws {
+    func test_delete_asksFirst_withNoButtonFocused_andOnlyConfirmingDeletes() throws {
         let ws = Workspace(title: "zen-term", path: try makeRealDir(), tabs: [], env: [:])
         let (overlay, sink) = mount(editing: ws, withDelete: true)
 
@@ -187,7 +187,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertTrue(
             visibleText(in: card).contains(
                 "Deleting zen-term removes its tabs, layout and environment. The folder stays."))
-        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+        XCTAssertTrue(window?.firstResponder === card)
         XCTAssertEqual(sink.deleted, 0)
 
         try XCTUnwrap(button(in: card, title: "Delete")).onTap()

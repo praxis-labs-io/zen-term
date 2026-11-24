@@ -24,11 +24,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     var onDismissed: (() -> Void)?
     private(set) var isDismissing = false
     private let hasActions: Bool
-    // A non-modal toast must never take first responder, or it steals terminal input.
-    private let gatesFocus: Bool
-    private let confirmAction: (() -> Void)?
-    // Not what the dismiss chords run: on a keybind-conflict card it is Revert, which rewrites the config.
-    private let cancelAction: (() -> Void)?
     private let variant: ToastVariant
     private let titleLabel: NSTextField
     private let titleTailLabel: NSTextField?
@@ -54,13 +49,9 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     private var shortcutSlots: [ShortcutSlot] = []
 
     init(
-        content: ToastContent, actions: [ToastAction], armsKeys: Bool = true,
-        showsClose: Bool = false
+        content: ToastContent, actions: [ToastAction], showsClose: Bool = false
     ) {
         self.hasActions = !actions.isEmpty
-        self.gatesFocus = armsKeys && !actions.isEmpty
-        self.confirmAction = actions.first { $0.kind != .cancel }?.run
-        self.cancelAction = actions.first { $0.kind == .cancel }?.run
         self.variant = content.variant
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
@@ -157,7 +148,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // Click-only: a `keyEquivalent` answers only when the traversal reaches the button, so the card owns Return and Esc.
+    // Click-only: a toast never takes a key from the terminal.
     private static func button(for action: ToastAction) -> AppButton {
         let variant: AppButton.Variant
         switch action.kind {
@@ -189,33 +180,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
             group.addArrangedSubview(cap)
             keycap = cap
         }
-    }
-
-    override var acceptsFirstResponder: Bool { gatesFocus }
-
-    // Both entry points: this misses bare keys under some focused hosts, and `keyDown` needs first responder.
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if answer(event) { return true }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if !answer(event) { super.keyDown(with: event) }
-    }
-
-    // Bare keys only, or an unbound ⌥⏎ would quit the app.
-    private func answer(_ event: NSEvent) -> Bool {
-        guard gatesFocus, !isDismissing, KeyboardFocus.isUnmodified(event) else { return false }
-        if KeyboardFocus.isReturn(event) {
-            confirmAction?()
-            return confirmAction != nil
-        }
-        if KeyboardFocus.key(for: event) == .delete {
-            cancelAction?()
-            return cancelAction != nil
-        }
-        guard let cancelAction else { return false }
-        return ModalEscape.handle(event, in: window, dismissing: isDismissing, close: cancelAction)
     }
 
     override func mouseDown(with event: NSEvent) {
