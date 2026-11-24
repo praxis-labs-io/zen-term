@@ -54,6 +54,7 @@ final class SidebarController {
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
+    var onCloseAgent: (SurfaceID) -> Void = { _ in }
     var onActivateHost: (SSHHostID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
     var onFocusYield: () -> Void = {}
@@ -89,6 +90,7 @@ final class SidebarController {
         }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
+        view.onCloseAgent = { [weak self] in self?.onCloseAgent($0) }
         view.onActivateHost = { [weak self] in self?.onActivateHost($0) }
     }
 

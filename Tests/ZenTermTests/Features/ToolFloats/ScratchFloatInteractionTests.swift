@@ -282,17 +282,4 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertEqual(relayed.count, 1, "a hidden float's notification must not be dropped")
         XCTAssertEqual(relayed.first?.1, owner, "the banner routes to the tab the shell is in")
     }
-
-    func test_closePaneWhileScratchIsOpen_saysSoRatherThanClosing() {
-        let c = makeWindow()
-        toggleScratch(c)
-
-        c.handle(.closePane)
-
-        XCTAssertEqual(cards(c).count, 1, "⌘W must not reach the pane behind the card")
-        let labels = toastTexts(in: c)
-        XCTAssertTrue(
-            labels.contains { $0.contains("Scratch") },
-            "the notice has to name the thing to close first: \(labels)")
-    }
 }

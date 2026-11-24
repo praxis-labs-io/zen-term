@@ -15,6 +15,7 @@ struct SidebarAgentItem: Equatable {
     var role = Role.agent
     var startedBy: String?
     var process = ProcessIcon.unknownAgent
+    var canClose = false
 }
 
 // The Agents list's own ordering, and the state a row speaks since its title never names it.
@@ -130,6 +131,8 @@ final class SidebarAgentRow: SidebarJumpRow {
         if case .process = role { return processJumpHint }
         return jumpHint
     }
+
+    var canClose: Bool { item?.canClose == true }
 
     var itemForTesting: SidebarAgentItem? { item }
 

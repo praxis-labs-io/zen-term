@@ -11,9 +11,7 @@ final class NavRow: ListRow {
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
-    var onSecondaryClick: (() -> Void)?
     var onReturn: (() -> Void)?
-    var onSpace: (() -> Void)?
     var onEscape: (() -> Void)?
     var onFocusChanged: (() -> Void)?
 
@@ -114,18 +112,6 @@ final class NavRow: ListRow {
         layoutSubtreeIfNeeded()
     }
 
-    override func mouseDown(with event: NSEvent) {
-        guard event.modifierFlags.contains(.control), let onSecondaryClick else { return super.mouseDown(with: event) }
-        tooltip?.hide(from: self)
-        onSecondaryClick()
-    }
-
-    override func rightMouseDown(with event: NSEvent) {
-        guard let onSecondaryClick else { return super.rightMouseDown(with: event) }
-        tooltip?.hide(from: self)
-        onSecondaryClick()
-    }
-
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
         case .up: onArrowUp?()
@@ -133,7 +119,6 @@ final class NavRow: ListRow {
         case .down: onArrowDown?()
         case .right, .tab(shift: false): onEnterDetail?()
         case .activate where onReturn != nil && KeyboardFocus.isReturn(event): onReturn?()
-        case .activate where onSpace != nil && KeyboardFocus.isSpace(event): onSpace?()
         case .escape where onEscape != nil && KeyboardFocus.isUnmodified(event): onEscape?()
         default: super.keyDown(with: event)
         }
