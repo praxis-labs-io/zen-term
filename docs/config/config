@@ -217,7 +217,8 @@
 # completion-toast = off              # off | sticky | auto
 
 # Seconds a notice that clears itself stays up. Covers every notice that clears
-# itself, not only the two above.
+# itself, not only the two above. The count stops while the notices are
+# unfolded and starts again from the top when they fold.
 # In-app Settings edit: applies to the next notice.
 # toast-duration = 4                  # 1-60
 
