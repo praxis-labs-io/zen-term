@@ -4,7 +4,7 @@ final class AppButton: NSButton, HoverSuppressing {
     enum Variant { case primary, secondary, muted, destructive, link }
 
     private static let height = ChromeMetrics.Height.control
-    private static let horizontalPadding = ChromeMetrics.Spacing.s8
+    static let horizontalPadding = ChromeMetrics.Spacing.s8
     private static let keycapGap = ChromeMetrics.Spacing.s6
 
     var onTap: () -> Void

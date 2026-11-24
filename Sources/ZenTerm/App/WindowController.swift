@@ -123,7 +123,7 @@ final class WindowController: NSObject {
                     DispatchQueue.main.async {
                         self.showToast(
                             ToastContent(
-                                variant: .positive, title: "Diagnostics Exported",
+                                variant: .positive, title: "Diagnostics exported",
                                 message:
                                     "Saved \(destination.lastPathComponent). It holds your logs and system info."
                             ))
@@ -133,7 +133,7 @@ final class WindowController: NSObject {
                     DispatchQueue.main.async {
                         self.showToast(
                             ToastContent(
-                                variant: .warning, title: "Export Failed",
+                                variant: .warning, title: "Export failed",
                                 message: "Couldn't write the diagnostics file: \(error.localizedDescription)"))
                     }
                 }
@@ -401,10 +401,10 @@ final class WindowController: NSObject {
         let content =
             floats.shownPaneSurface == nil
             ? ToastContent(
-                variant: .info, title: "Tool Float",
+                variant: .info, title: "Tool float",
                 message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes.")
             : ToastContent(
-                variant: .info, title: "Float Pane",
+                variant: .info, title: "Float pane",
                 message: "\(shownFloatPaneName ?? "This float pane") is open. Close it to get back to your panes.")
         toasts.show(content)
     }
@@ -412,9 +412,9 @@ final class WindowController: NSObject {
     private var floatCloseBlockContent: ToastContent {
         floats.shownPaneSurface == nil
             ? ToastContent(
-                variant: .info, title: "Tool Float", message: "Close \(activeFloatName ?? "the tool") first, then ⌘W.")
+                variant: .info, title: "Tool float", message: "Close \(activeFloatName ?? "the tool") first, then ⌘W.")
             : ToastContent(
-                variant: .info, title: "Float Pane",
+                variant: .info, title: "Float pane",
                 message: "Close \(shownFloatPaneName ?? "the float pane") first, then ⌘W.")
     }
 
@@ -422,7 +422,7 @@ final class WindowController: NSObject {
 
     private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
         guard noNewWorktreeToasts.allows(refusal) else { return }
-        toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
+        toasts.show(ToastContent(variant: .info, title: "New worktree", message: refusal.message))
     }
 
     private var activeWorkspace: WorkspaceController? { selection.workspace }
@@ -875,13 +875,13 @@ final class WindowController: NSObject {
     private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]
 
     private func presentWorktreeRemovedToast(for id: WorkspaceID, named name: String) {
-        let close = ToastAction(title: "Close Workspace", kind: .primary) { [weak self] in
+        let close = ToastAction(title: "Close workspace", kind: .primary) { [weak self] in
             guard let self, let toast = self.worktreeRemovedToasts[id] else { return }
             self.toasts.dismiss(toast)
             self.requestCloseWorkspace(id: id)
         }
         let toast = toasts.showSticky(
-            ToastContent(variant: .warning, title: "Worktree Removed", message: "\(name) is no longer on disk."),
+            ToastContent(variant: .warning, title: "Worktree removed", message: "\(name) is no longer on disk."),
             actions: [close], showsClose: true)
         toast.onClose = { [weak self, weak toast] in toast.map { self?.toasts.dismiss($0) } }
         toast.onDismissed = { [weak self, weak toast] in
@@ -1513,7 +1513,7 @@ final class WindowController: NSObject {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) { closeTab($0) } }
         toasts.show(
             ToastContent(
-                variant: .warning, title: "Couldn't Connect to",
+                variant: .warning, title: "Couldn't connect to",
                 titleTail: " \(GeneralConfig.current.displayName(of: host))", message: nil))
     }
 
@@ -1535,7 +1535,7 @@ final class WindowController: NSObject {
     private func toastFloatsStayLocal(on host: SSHHostID) {
         toasts.show(
             ToastContent(
-                variant: .info, title: "Tool Floats",
+                variant: .info, title: "Tool floats",
                 message: "Tool floats run on this Mac, not on \(GeneralConfig.current.displayName(of: host))."))
     }
 
@@ -1653,7 +1653,7 @@ final class WindowController: NSObject {
                 self.pendingModal = nil
                 self.toasts.show(
                     ToastContent(
-                        variant: .warning, title: "Couldn't Open New Worktree",
+                        variant: .warning, title: "Couldn't open new worktree",
                         message: "\(name) is no longer in the workspaces file."))
                 return
             }
@@ -1714,7 +1714,7 @@ final class WindowController: NSObject {
                     } else {
                         self.toasts.show(
                             ToastContent(
-                                variant: .warning, title: "Couldn't Create the Worktree",
+                                variant: .warning, title: "Couldn't create the worktree",
                                 message: error.localizedDescription))
                     }
                 }
@@ -1741,7 +1741,7 @@ final class WindowController: NSObject {
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
-            ToastContent(variant: .warning, title: "Couldn't Copy Everything", message: "\(list)."))
+            ToastContent(variant: .warning, title: "Couldn't copy everything", message: "\(list)."))
     }
 
     private func removeSelectedWorktreeInPicker() {
@@ -1774,7 +1774,7 @@ final class WindowController: NSObject {
             guard otherWindowCloseToasts.allows() else { return }
             toasts.show(
                 ToastContent(
-                    variant: .info, title: "Open in Another Window",
+                    variant: .info, title: "Open in another window",
                     message: "Close \(running.removedWorktreeName ?? running.name) from the window it is open in."))
             return
         }
@@ -1803,7 +1803,7 @@ final class WindowController: NSObject {
             guard let self, let error else { return }
             self.toasts.show(
                 ToastContent(
-                    variant: .warning, title: "Couldn't Remove \(name)",
+                    variant: .warning, title: "Couldn't remove \(name)",
                     message: error.localizedDescription))
         }
     }
@@ -2092,7 +2092,7 @@ final class WindowController: NSObject {
         } catch {
             toasts.show(
                 ToastContent(
-                    variant: .warning, title: "Couldn't Reorder Tool Floats",
+                    variant: .warning, title: "Couldn't reorder tool floats",
                     message: "Failed to update the config file: \(error.localizedDescription)"))
             return
         }
@@ -2240,7 +2240,7 @@ final class WindowController: NSObject {
         } catch {
             toasts.show(
                 ToastContent(
-                    variant: .warning, title: "Couldn't Reorder Workspaces",
+                    variant: .warning, title: "Couldn't reorder workspaces",
                     message: "Failed to update the workspaces file: \(error.localizedDescription)"))
             return false
         }
@@ -4507,11 +4507,11 @@ final class WindowController: NSObject {
 
     private func presentSurfaceFailureToast(retry: @escaping () -> Void, close: @escaping () -> Void) {
         let content = ToastContent(
-            variant: .warning, title: "Terminal Didn't Start",
+            variant: .warning, title: "Terminal didn't start",
             message: "The terminal surface failed to launch.")
         weak var toast: ToastView?
         let actions = [
-            ToastAction(title: "Close Pane", kind: .destructive) { [weak self] in
+            ToastAction(title: "Close pane", kind: .destructive) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 close()
             },

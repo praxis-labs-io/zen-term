@@ -3,7 +3,6 @@ import TerminalKit
 enum ToastVariant: Equatable {
     case info, positive, warning, destructive
 
-    /// Returns the role, not a resolved color, so the badge can go through `chrome.tint(_:alpha:)`.
     func role(in chrome: ChromeTheme) -> TerminalColor {
         switch self {
         case .info: return chrome.info

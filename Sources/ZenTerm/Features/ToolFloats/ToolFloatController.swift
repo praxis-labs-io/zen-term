@@ -512,7 +512,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         }
         onRequestToast?(
             ToastContent(
-                variant: .warning, title: "Terminal Didn't Start",
+                variant: .warning, title: "Terminal didn't start",
                 message: "\(descriptor) failed to launch. Open it again to retry."))
         surfaceDidExit(s, code: nil)
     }
