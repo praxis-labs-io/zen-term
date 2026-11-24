@@ -518,4 +518,32 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertNil(drafts.lastKey(into: leadID))
         XCTAssertEqual(c.surfaceAttentionForTesting(id), .idle)
     }
+
+    func test_switchOnAHiddenFloatPanesCard_showsTheFloatInItsTab() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let home = try XCTUnwrap(c.pane(token: lead)?.tab)
+        let float = try openFloat(in: c, beside: lead)
+        let program = try surface(float)
+        _ = try answer(.tabNew)
+        let other = try XCTUnwrap(everyPane(c).last.flatMap { c.pane(token: $0.token)?.tab })
+        c.selectTab(other)
+        program.delegate?.surface(
+            program, didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs you"))
+        drainMainQueue()
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+
+        let button = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == "Switch" })
+        button.performClick(nil)
+        drainMainQueue()
+
+        XCTAssertEqual(c.activeTabIDForTesting, home)
+        XCTAssertTrue(c.floatsForTesting.shownSurface === program)
+        XCTAssertNil(c.waitingToastForTesting(tab: home), "showing the float answers its card")
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
 }

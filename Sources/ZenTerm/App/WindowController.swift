@@ -3586,7 +3586,15 @@ final class WindowController: NSObject {
         let edge = drawerEdge(of: surface, in: id)
         return CardAddress(
             title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: drawerTail(edge),
-            destination: edge.map { drawerDestination($0, in: id) })
+            destination: edge.map { drawerDestination($0, in: id) } ?? floatPaneDestination(surface, in: id))
+    }
+
+    // Bringing a float pane's tab forward leaves the float hidden, so Switch shows it.
+    private func floatPaneDestination(_ surface: SurfaceID?, in id: TabID) -> CardDestination? {
+        guard let surface, controller(id)?.isFloatPane(surface) == true else { return nil }
+        return CardDestination(
+            shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
+            open: { [weak self] in self?.focus(surface, in: id) })
     }
 
     private func cardAddress(of surface: SurfaceID, in id: TabID) -> CardAddress {
