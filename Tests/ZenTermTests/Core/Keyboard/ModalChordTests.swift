@@ -115,6 +115,38 @@ final class ModalChordTests: WindowTestCase {
         XCTAssertEqual(fired, [], "and fill screen must not run behind it")
     }
 
+    func test_thePaletteChordOverAForm_leavesTheFormUp() throws {
+        let c = makeWindow()
+        let form = ChordClaimingOverlay()
+        present(form, in: c)
+        let keys = interceptor(for: c)
+        keys.onReservedChord = { c.handle($0) }
+        let commandShiftP = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "P", charactersIgnoringModifiers: "p",
+                isARepeat: false, keyCode: 35))
+
+        XCTAssertNil(keys.route(commandShiftP), "premise: the chord is consumed as the palette toggle")
+
+        XCTAssertNotNil(form.window, "the palette must not replace a form")
+    }
+
+    func test_aChordThatOpensAnotherSurface_doesNothingOverAForm() {
+        let c = makeWindow()
+        let form = ChordClaimingOverlay()
+        present(form, in: c)
+        let chords: [KeyInterceptor.ReservedChord] = [
+            .toggleRepoPicker, .toggleCommandPalette, .openSettings, .reportIssue, .newTool,
+            .toggleToolFloat(ToolFloat.scratch.id),
+        ]
+
+        for chord in chords { c.handle(chord) }
+
+        XCTAssertNotNil(form.window, "every one of \(chords) left the form up")
+        XCTAssertFalse(c.floatsForTesting.isOpen, "no float opened behind the form")
+    }
+
     func test_aFixedKeyTheModalDoesNotOwn_isStillConsumedAsItsChord() throws {
         let c = makeWindow()
         present(ChordClaimingOverlay(), in: c)

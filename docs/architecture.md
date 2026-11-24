@@ -536,7 +536,8 @@ New modal surfaces compose the existing primitives.
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
-  back one step, a click outside closes the stack), `FormCard` for forms (body scrolls, footer pinned,
+  back one step, a click outside closes the stack; a form whose inputs differ from its opening
+  snapshot asks first, and its Cancel button never asks), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
@@ -556,8 +557,8 @@ New modal surfaces compose the existing primitives.
 - **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
   (files or config), and a toast confirm when it only ends running processes (closing a
   pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
-  form hosts its card through `ConfirmSlot`; Cancel hands focus back to the button that
-  opened it. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
+  card opens through the `ConfirmSlot` every `ModalShell` owns; Cancel hands focus back to what held it before the
+  card opened. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
   only Return or a click confirms.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.
@@ -618,7 +619,9 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   would drop. App-global
   chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
-  open card, which stays open. A card is offered every other chord first
+  open card, which stays open. A chord that opens another surface (the palette, the workspace
+  picker, Settings, Report Issue, New Tool, a float) replaces the palette, picker or Settings, and
+  does nothing over a form. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
   what it declines; a key it `owns` passes `passThroughGuard` to reach it as a key event
   (⌘↩ in the report, worktree, tool float, workspace and remote host forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes

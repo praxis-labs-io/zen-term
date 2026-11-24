@@ -8,6 +8,14 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private static let namePlaceholder = "Named after the folder"
     private static let launchFocusChord = Chord(command: true, key: "l")
 
+    private struct Inputs: Equatable {
+        let title, folder: String
+        let env: [[String]]
+        let carry: Set<String>
+        let tabs: [Workspace.Tab]
+        let launchFocus: Workspace.LaunchFocus
+    }
+
     private enum FocusSpot {
         case chip
         case region(Workspace.Region)
@@ -19,7 +27,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (Workspace) -> String?
     private let onDelete: (() -> String?)?
     private var form: WorkspaceForm
-    private lazy var confirm = ConfirmSlot(over: self)
 
     private lazy var header = ModalHeader(title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace")
 
@@ -43,6 +50,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private lazy var addButton = ModalShell.submitButton(title: editingWorkspace == nil ? "Add Workspace" : "Save")
     private let errorLabel = FormErrorLabel(maximumLines: 3)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
+    private var openingInputs: Inputs?
 
     init(
         editing: Workspace? = nil, existingTitles: Set<String>,
@@ -60,6 +68,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         prefill()
         renderTabs()
         refreshValidity()
+        openingInputs = inputs
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -72,7 +81,13 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     var noticeForTesting: String? { notice.isHidden ? nil : notice.stringValue }
     var undoButtonForTesting: AppButton? { undoButton.isHidden ? nil : undoButton }
 
-    override var isShowingOverlaidCard: Bool { confirm.isShowing }
+    override var hasUnsavedChanges: Bool { inputs != openingInputs }
+
+    private var inputs: Inputs {
+        Inputs(
+            title: titleField.text, folder: folderPicker.text, env: envRows.map { [$0.key, $0.value] },
+            carry: Set(carryPicker.carried), tabs: form.tabs, launchFocus: form.launchFocus)
+    }
 
     func focusInitialResponder() {
         if let card = confirm.card { return card.focusInitialResponder() }
@@ -81,6 +96,11 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     override func cancel() {
         if !tabStrip.cancelRename() { super.cancel() }
+    }
+
+    override func dismiss() {
+        tabStrip.commitRename()
+        super.dismiss()
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -443,7 +463,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         carryPicker.workspaceFolder = ws.path
     }
 
-    private func closeForm() { super.cancel() }
+    private func closeForm() { cancelDiscardingChanges() }
 
     private func delete() {
         guard !isDismissing, let editingWorkspace, confirm.card == nil else { return }

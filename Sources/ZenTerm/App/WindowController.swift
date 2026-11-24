@@ -234,6 +234,15 @@ final class WindowController: NSObject {
                 return nil
             }
         }
+
+        var isForm: Bool {
+            switch self {
+            case .repoPicker, .commandPalette, .settings: return false
+            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .renameWorkspace, .worktreeForm,
+                .sshHostForm:
+                return true
+            }
+        }
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
@@ -2850,6 +2859,7 @@ final class WindowController: NSObject {
                 return
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
+                guard !modal.kind.isForm else { return }
                 guard activeWorkspace != nil || chord.worksWithoutTab || togglesRunningFloat(chord) else { return }
                 closingModalKind = modal.kind
                 closeModal()

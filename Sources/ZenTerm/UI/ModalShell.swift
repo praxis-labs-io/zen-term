@@ -8,11 +8,13 @@ class ModalShell: NSView, ThemeReapplying {
     private let onCancel: () -> Void
     private let onDismiss: (() -> Void)?
     private var gate = DismissGate()
+    private(set) lazy var confirm = ConfirmSlot(over: self)
 
     var isDismissing: Bool { gate.isDismissing }
     // Declared on the class: a protocol-extension default would bind statically in `performKeyEquivalent`.
-    var isShowingOverlaidCard: Bool { false }
+    var isShowingOverlaidCard: Bool { confirm.isShowing }
     var isBusy: Bool { false }
+    var hasUnsavedChanges: Bool { false }
 
     init(width: CGFloat, onCancel: @escaping () -> Void, onDismiss: (() -> Void)? = nil) {
         self.onCancel = onCancel
@@ -69,14 +71,45 @@ class ModalShell: NSView, ThemeReapplying {
         window?.makeFirstResponder(view)
     }
 
-    func cancel() {
+    func cancel() { leave(through: onCancel) }
+
+    func dismiss() { leave(through: onDismiss ?? onCancel) }
+
+    // The Cancel button is an explicit choice, so it never asks about unsaved changes.
+    func cancelDiscardingChanges() {
         guard !isDismissing, !isBusy else { return }
         onCancel()
     }
 
-    func dismiss() {
-        guard !isDismissing, !isBusy else { return }
-        (onDismiss ?? onCancel)()
+    private func leave(through exit: @escaping () -> Void) {
+        guard !isDismissing, !isBusy, !confirm.isShowing else { return }
+        guard hasUnsavedChanges else { return exit() }
+        let returnFocus = focusedView
+        let selection = (window?.firstResponder as? NSTextView)?.selectedRange()
+        confirm.present(
+            ConfirmCard(
+                title: "Unsaved changes", message: "Closing now discards your changes.",
+                cancelLabel: "Keep editing", confirmLabel: "Discard changes",
+                onCancel: { [weak self, weak returnFocus] in
+                    self?.confirm.dismiss { self?.refocus(returnFocus, selecting: selection) }
+                },
+                onConfirm: { [weak self] in self?.confirm.dismiss(then: exit) }))
+    }
+
+    private func refocus(_ view: NSView?, selecting selection: NSRange?) {
+        guard let view, view.window === window, !view.isHiddenOrHasHiddenAncestor else {
+            (self as? ModalOverlay)?.focusInitialResponder()
+            return
+        }
+        focus(view)
+        guard let selection, let editor = window?.firstResponder as? NSTextView else { return }
+        editor.setSelectedRange(selection)
+    }
+
+    private var focusedView: NSView? {
+        let responder = window?.firstResponder
+        if let editor = responder as? NSTextView, let field = editor.delegate as? NSTextField { return field }
+        return responder as? NSView
     }
 
     func animateIn() {

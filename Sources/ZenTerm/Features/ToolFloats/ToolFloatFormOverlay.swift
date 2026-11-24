@@ -3,12 +3,17 @@ import AppKit
 final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
 
+    private struct Inputs: Equatable {
+        let title, icon, command, dir, width, height: String
+        let chord: Chord?
+        let git, persist, toolbar: Int
+    }
+
     private let editingFloat: ToolFloat?
     private let existingIDs: Set<String>
     private let capturer: KeybindCapturing?
     private let onSubmit: (ToolFloat) -> String?
     private let onDelete: (() -> String?)?
-    private lazy var confirm = ConfirmSlot(over: self)
 
     private lazy var header = ModalHeader(title: editingFloat == nil ? "New Tool Float" : "Edit Tool Float")
 
@@ -43,6 +48,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private lazy var submitButton = ModalShell.submitButton(title: editingFloat == nil ? "Add Tool Float" : "Save")
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
     private let errorLabel = FormErrorLabel(maximumLines: 3)
+    private var openingInputs: Inputs?
 
     init(
         editing: ToolFloat?, existingIDs: Set<String>, capturer: KeybindCapturing?,
@@ -58,13 +64,22 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight).isActive = true
         embed(buildContent())
         prefill()
+        openingInputs = inputs
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
-    override var isShowingOverlaidCard: Bool { confirm.isShowing }
+    override var hasUnsavedChanges: Bool { inputs != openingInputs }
+
+    private var inputs: Inputs {
+        Inputs(
+            title: titleField.text, icon: iconPicker.selected, command: commandField.text, dir: dirPicker.text,
+            width: widthField.text, height: heightField.text, chord: capturedChord,
+            git: gitSegment.selectedIndex, persist: persistSegment.selectedIndex,
+            toolbar: toolbarSegment.selectedIndex)
+    }
 
     func focusInitialResponder() {
         if let card = confirm.card { return card.focusInitialResponder() }
@@ -155,7 +170,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
             [SectionCaption("Toolbar button"), NSStackView.huggingRow(toolbarSegment)],
             spacing: ChromeMetrics.Spacing.s6)
 
-        cancelButton.onTap = { [weak self] in self?.cancel() }
+        cancelButton.onTap = { [weak self] in self?.cancelDiscardingChanges() }
         submitButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, submitButton] {
             button.isKeyboardFocusable = true

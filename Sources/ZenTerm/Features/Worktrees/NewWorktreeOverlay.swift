@@ -3,6 +3,11 @@ import AppKit
 final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
 
+    private struct Inputs: Equatable {
+        let branch: String
+        let base: Int
+    }
+
     private let workspace: Workspace
     private let options: WorktreeStore.CreateOptions
     private let onSubmit: (Request) -> Void
@@ -30,6 +35,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private let createButton = ModalShell.submitButton(title: "Create Worktree")
 
     private var isWorking = false
+    private var openingInputs: Inputs?
 
     init(
         workspace: Workspace, options: WorktreeStore.CreateOptions,
@@ -44,12 +50,17 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight).isActive = true
         embed(buildContent())
         baseChanged(baseSegment.selectedIndex)
+        openingInputs = inputs
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     // `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
     override var isBusy: Bool { isWorking }
+
+    override var hasUnsavedChanges: Bool { inputs != openingInputs }
+
+    private var inputs: Inputs { Inputs(branch: branchField.text, base: baseSegment.selectedIndex) }
 
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
@@ -141,7 +152,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         phaseGroup.setViews([spinner, phaseLabel], in: .leading)
         phaseGroup.isHidden = true
 
-        cancelButton.onTap = { [weak self] in self?.cancel() }
+        cancelButton.onTap = { [weak self] in self?.cancelDiscardingChanges() }
         createButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, createButton] {
             button.isKeyboardFocusable = true
@@ -231,7 +242,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
-        guard !isWorking else { return }
+        guard !isWorking, !confirm.isShowing else { return }
         branchField.closeList()
         let validation = validate(submitting: true)
         guard validation.isValid else { return validation.revealFirstInvalid() }
