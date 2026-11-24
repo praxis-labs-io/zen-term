@@ -563,6 +563,22 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertEqual(hidden.height, shown.height, accuracy: 1, "it starts at the card's size")
     }
 
+    func test_paneChordsOverAShownFloatPane_nameThePane() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let float = try openFloat(in: c, beside: lead)
+        try tab(of: lead, in: c).updateRecord(pane: float) { $0.name = "review" }
+        try show(float, in: c)
+
+        c.handle(.closePane)
+        c.handle(.navLeft)
+
+        let texts = toastTexts(in: c)
+        XCTAssertTrue(texts.contains("Close review first, then ⌘W."), "\(texts)")
+        XCTAssertTrue(texts.contains("review is open. Close it to get back to your panes."), "\(texts)")
+        XCTAssertTrue(texts.contains("Float Pane"), "\(texts)")
+    }
+
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap { descendants(of: $0) }
     }

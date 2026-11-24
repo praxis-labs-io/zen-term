@@ -387,14 +387,33 @@ final class WindowController: NSObject {
             .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
     }
 
+    private var shownFloatPaneName: String? {
+        guard let shown = floats.shownPaneSurface else { return nil }
+        return allTabControllers.lazy.flatMap(\.paneHandles).first { $0.surfaceID == shown }.map(Self.paneName)
+    }
+
     private var floatBlockToasts = ToastThrottle<Bool>()
 
     private func toastFloatBlocked() {
         guard floatBlockToasts.allows() else { return }
-        toasts.show(
-            ToastContent(
+        let content =
+            floats.shownPaneSurface == nil
+            ? ToastContent(
                 variant: .info, title: "Tool Float",
-                message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
+                message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes.")
+            : ToastContent(
+                variant: .info, title: "Float Pane",
+                message: "\(shownFloatPaneName ?? "This float pane") is open. Close it to get back to your panes.")
+        toasts.show(content)
+    }
+
+    private var floatCloseBlockContent: ToastContent {
+        floats.shownPaneSurface == nil
+            ? ToastContent(
+                variant: .info, title: "Tool Float", message: "Close \(activeFloatName ?? "the tool") first, then ⌘W.")
+            : ToastContent(
+                variant: .info, title: "Float Pane",
+                message: "Close \(shownFloatPaneName ?? "the float pane") first, then ⌘W.")
     }
 
     private var noNewWorktreeToasts = ToastThrottle<SidebarController.NewWorktreeRefusal>()
@@ -2930,10 +2949,7 @@ final class WindowController: NSObject {
         if floats.isOpen {
             switch chord {
             case .closePane:
-                toasts.show(
-                    ToastContent(
-                        variant: .info, title: "Tool Float",
-                        message: "Close \(activeFloatName ?? "the tool") first, then ⌘W."))
+                toasts.show(floatCloseBlockContent)
                 return
             case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane, .focusSidebar,
                 .splitVertical, .splitHorizontal,
