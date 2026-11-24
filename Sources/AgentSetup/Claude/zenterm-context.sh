@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Code SessionStart hook installed by `zen setup claude`: in a live ZenTerm pane, say so, name a helper's parent, and point at the zen skill.
+# Claude Code SessionStart hook installed by `zen setup claude`: in a live ZenTerm pane, say so, name a helper's parent, point at the zen skill, and have a new top-level session name its tab.
 
 [ -n "$ZEN_CONTROL_SOCK" ] || exit 0
 command -v zen >/dev/null 2>&1 || exit 0
@@ -7,6 +7,17 @@ zen --socket "$ZEN_CONTROL_SOCK" hello >/dev/null 2>&1 || exit 0
 
 field() {
   printf '%s' "$1" | plutil -extract "$2" raw -o - - 2>/dev/null | tr -d '\n`'
+}
+
+start=""
+[ -t 0 ] || start=$(field "$(cat)" source)
+
+names_its_tab() {
+  [ -n "$1" ] && [ "$(field "$1" tab_named)" != true ] || return 1
+  case "$start" in
+    startup | clear) return 0 ;;
+  esac
+  return 1
 }
 
 where="a ZenTerm pane"
@@ -20,7 +31,7 @@ case "$ZEN_PANE" in
     parent=$(field "$info" parent)
     case "$parent" in
       '' | *[!0-9]*)
-        [ -n "$info" ] && rename="
+        names_its_tab "$info" && rename="
 - Your first action after the user's first prompt: name your tab for the task in 2 or 3 words with \`zen tab rename \"<words>\"\`."
         ;;
       *)
