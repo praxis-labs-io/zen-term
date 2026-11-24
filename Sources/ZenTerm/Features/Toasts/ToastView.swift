@@ -6,16 +6,19 @@ struct ToastContent: Equatable {
     let titleTail: String?
     let message: String?
     let icon: String?
+    /// Lines of `message` that are labels, drawn in the title's ink above the muted lines they name.
+    let labels: Set<String>
 
     init(
         variant: ToastVariant, title: String, titleTail: String? = nil, message: String?,
-        icon: String? = nil
+        icon: String? = nil, labels: Set<String> = []
     ) {
         self.variant = variant
         self.title = title
         self.titleTail = titleTail
         self.message = message
         self.icon = icon
+        self.labels = labels
     }
 }
 
@@ -35,6 +38,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     private let titleTailLabel: NSTextField?
     private var titleFloor: NSLayoutConstraint?
     private let messageLabel: NSTextField?
+    private let messageLabels: Set<String>
     private var actionButtons: [AppButton] = []
 
     static let width: CGFloat = 300
@@ -72,6 +76,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
         self.messageLabel = content.message.map { NSTextField(wrappingLabelWithString: $0) }
+        self.messageLabels = content.labels
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -99,8 +104,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
             updateTitleFloor()
         }
 
-        messageLabel?.font = Self.messageFont
-        messageLabel?.textColor = Self.messageColor
+        restyleMessage()
         messageLabel?.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         let headerSpacer = NSView()
@@ -284,8 +288,22 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         glyph.contentTintColor = variant.role(in: Theme.current.chrome).nsColor
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
-        messageLabel?.textColor = Self.messageColor
+        restyleMessage()
     }
+
+    private func restyleMessage() {
+        guard let messageLabel else { return }
+        let text = NSMutableAttributedString()
+        for (index, line) in messageLabel.stringValue.components(separatedBy: "\n").enumerated() {
+            if index > 0 { text.append(NSAttributedString(string: "\n")) }
+            let color = messageLabels.contains(line) ? Self.titleColor : Self.messageColor
+            let attributes: [NSAttributedString.Key: Any] = [.font: Self.messageFont, .foregroundColor: color]
+            text.append(NSAttributedString(string: line, attributes: attributes))
+        }
+        messageLabel.attributedStringValue = text
+    }
+
+    var messageForTesting: NSAttributedString? { messageLabel?.attributedStringValue }
 
     var actionTitleColorsForTesting: [NSColor] {
         actionButtons.compactMap {

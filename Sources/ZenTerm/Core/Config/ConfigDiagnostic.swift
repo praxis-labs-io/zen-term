@@ -128,8 +128,10 @@ struct ConfigDiagnostic: Hashable {
         }
     }
 
-    /// Two lines because a long title plus its detail overruns the 236pt toast column.
-    var summary: String { "\(title)\n  \(detail)" }
+    /// Two lines because a long title plus its detail overruns the toast column.
+    var summary: String { "\(label)\n\(detail)" }
+
+    var label: String { "\(title):" }
 
     /// Compared as a set: `ConfigWriter` sorts the lines it emits, so any Settings write can reorder them.
     static func announcement(
@@ -146,6 +148,6 @@ struct ConfigDiagnostic: Hashable {
         }
         return ToastContent(
             variant: .warning, title: "\(diagnostics.count) problems in your config",
-            message: diagnostics.map(\.summary).joined(separator: "\n\n"))
+            message: diagnostics.map(\.summary).joined(separator: "\n\n"), labels: Set(diagnostics.map(\.label)))
     }
 }
