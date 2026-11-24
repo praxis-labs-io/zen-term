@@ -118,6 +118,15 @@ final class ControlResponseTests: XCTestCase {
                 + "\n")
     }
 
+    func test_aFloatPaneSaysSo_andAnyOtherPaneOmitsTheField() throws {
+        let float = ListResult.Pane(token: 40, drawer: nil, float: true, title: "", cwd: nil, busy: false, agent: nil)
+        let pane = ListResult.Pane(token: 31, drawer: nil, title: "", cwd: nil, busy: false, agent: nil)
+
+        XCTAssertTrue(text(try JSONEncoder().encode(float)).contains(#""float":true"#))
+        XCTAssertFalse(text(try JSONEncoder().encode(pane)).contains("float"))
+        XCTAssertEqual(try JSONDecoder().decode(ListResult.Pane.self, from: JSONEncoder().encode(float)), float)
+    }
+
     func test_aRefusalCarriesWhatForceWouldEnd() throws {
         let pane = ListResult.Pane(token: 31, drawer: nil, title: "npm run dev", cwd: "/app", busy: true, agent: nil)
         let refusal = ControlError(

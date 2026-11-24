@@ -2365,7 +2365,8 @@ final class WindowController: NSObject {
                 name: agent.name, state: Self.agentState(tone), report: agentStates.status(of: pane.surfaceID))
         }
         return ListResult.Pane(
-            token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
+            token: pane.token, drawer: pane.drawer.map(Self.drawer), float: pane.location == .float ? true : nil,
+            title: pane.surface.title,
             cwd: pane.cwd?.path, busy: pane.surface.isBusy,
             process: onHost ? nil : Self.processListing(of: pane.surface), agent: agent, name: pane.record.name,
             parent: pane.record.parent.flatMap { NavRegistry.shared.isLive(token: $0) ? $0 : nil },
@@ -2591,7 +2592,7 @@ final class WindowController: NSObject {
         guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
         let spared = closedByItsParent ? pane.token : nil
-        if c.isSinglePane { return closeStakes(tab: tab, sparingWorkOf: spared) }
+        if c.isSinglePane, pane.location == .tree { return closeStakes(tab: tab, sparingWorkOf: spared) }
         let busy = !closedByItsParent && pane.surface.isBusy
         let children = childStakes(closing: [], panes: [pane.token], sparingWorkOf: spared)
         return CloseStakes(
@@ -2686,7 +2687,7 @@ final class WindowController: NSObject {
         var cascadedTabs: [FamilyTab] = []
         let tabCloses = { (key: FamilyTab) in
             tabs.contains(key)
-                || every.filter { $0.key == key && $0.pane.drawer == nil }.allSatisfy {
+                || every.filter { $0.key == key && $0.pane.location == .tree }.allSatisfy {
                     closing.contains($0.pane.token)
                 }
         }
@@ -2702,9 +2703,9 @@ final class WindowController: NSObject {
             for key in Set(every.map(\.key))
             where !tabs.contains(key) && !cascadedTabs.contains(key) && tabCloses(key) {
                 cascadedTabs.append(key)
-                for drawer in every where drawer.key == key && drawer.pane.drawer != nil {
-                    closing.insert(drawer.pane.token)
-                    children.append(drawer)
+                for owned in every where owned.key == key && owned.pane.location != .tree {
+                    closing.insert(owned.pane.token)
+                    children.append(owned)
                 }
                 grew = true
             }
@@ -2767,7 +2768,7 @@ final class WindowController: NSObject {
 
     func removePane(_ token: Int, in tab: TabID) {
         guard let c = controller(tab) else { return }
-        if c.isSinglePane { return removeTab(tab) }
+        if c.isSinglePane, !c.isFloatPane(token: token) { return removeTab(tab) }
         c.close(pane: token)
     }
 
@@ -3380,6 +3381,7 @@ final class WindowController: NSObject {
             self?.helperExited(exit)
         }
         c.onPaneTokensReleased = { [weak self] tokens in self?.familyWindows.forEach { $0.closeChildren(of: tokens) } }
+        c.floatPanePresenter = floats
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -3413,6 +3415,7 @@ final class WindowController: NSObject {
             ids.forEach { self?.attention.register($0, tab: id) }
         }
         c.onSurfacesReleased = { [weak self] ids in
+            ids.forEach { self?.floats.hidePane($0) }
             self?.paneWaits.panesClosed(ids)
             self?.paneDrafts.panesClosed(ids)
             self?.workspace(of: id)?.connection?.release(ids)
@@ -3964,6 +3967,7 @@ final class WindowController: NSObject {
     private func isOnScreen(_ surface: SurfaceID?, in id: TabID) -> Bool {
         guard id == activeWorkspace?.activeID else { return false }
         guard let surface else { return true }
+        if floats.shownPaneSurface == surface { return true }
         return controller(id)?.isOnScreen(surface) ?? true
     }
 
@@ -4341,6 +4345,9 @@ final class WindowController: NSObject {
 
     func focus(_ surface: SurfaceID, in tab: TabID) {
         reveal(tab)
+        if let c = controller(tab), c.isFloatPane(surface), let view = c.surface(surface) {
+            return floats.showPane(view, id: surface, tab: tab)
+        }
         if floats.isOpen { closeFloatForTabChange() }
         controller(tab)?.focus(surface: surface)
     }
@@ -4457,6 +4464,8 @@ final class WindowController: NSObject {
     func drawerAttentionForTesting(_ edge: DrawerEdge) -> SurfaceAttention { drawerAttention(edge) }
 
     func floatAttentionForTesting(_ id: String) -> SurfaceAttention { floatAttention(id) }
+
+    func surfaceAttentionForTesting(_ id: SurfaceID) -> SurfaceAttention { attention.state(of: id) }
 
     var dockForTesting: ToggleDock { dock }
 

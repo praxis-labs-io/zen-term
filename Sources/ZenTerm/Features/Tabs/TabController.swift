@@ -19,6 +19,7 @@ final class TabController: NSObject {
     // Layer-backed so floats added into it later render their drop shadows.
     private let content = NSView()
     private let paneCanvas: PaneCanvasController
+    private let paneFloats: PaneFloats
     private let canvas: NSView
 
     private static var bottomDrawerFraction: CGFloat { GeneralConfig.current.bottomDrawerFraction }
@@ -114,12 +115,22 @@ final class TabController: NSObject {
     }
 
     var onLaunchedPaneExited: ((LaunchedPaneExit) -> Void)? {
-        get { paneCanvas.onLaunchedPaneExited }
-        set { paneCanvas.onLaunchedPaneExited = newValue }
+        didSet {
+            paneCanvas.onLaunchedPaneExited = onLaunchedPaneExited
+            paneFloats.onLaunchedPaneExited = onLaunchedPaneExited
+        }
     }
 
     var onPaneTokensReleased: (([Int]) -> Void)? {
-        didSet { paneCanvas.onPaneTokensReleased = onPaneTokensReleased }
+        didSet {
+            paneCanvas.onPaneTokensReleased = onPaneTokensReleased
+            paneFloats.onPaneTokensReleased = onPaneTokensReleased
+        }
+    }
+
+    var floatPanePresenter: TerminalSurfaceDelegate? {
+        get { paneFloats.presenter }
+        set { paneFloats.presenter = newValue }
     }
 
     var pinnedTitle: String?
@@ -143,7 +154,7 @@ final class TabController: NSObject {
     var isSinglePane: Bool { paneCanvas.paneCount == 1 }
 
     var allSurfaces: [TerminalSurface] {
-        paneCanvas.allSurfaces + [bottomDrawerSurface, rightDrawerSurface].compactMap { $0 }
+        paneCanvas.allSurfaces + [bottomDrawerSurface, rightDrawerSurface].compactMap { $0 } + paneFloats.surfaces
     }
 
     var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
@@ -192,11 +203,14 @@ final class TabController: NSObject {
 
     var surfaceIDs: [SurfaceID] {
         paneCanvas.liveSurfaceIDs + [bottomDrawerSurfaceID, rightDrawerSurfaceID].compactMap { $0 }
+            + paneFloats.surfaceIDs
     }
 
     var paneHandles: [PaneHandle] {
-        paneCanvas.paneHandles + [drawerHandle(.bottom), drawerHandle(.right)].compactMap { $0 }
+        paneCanvas.paneHandles + [drawerHandle(.bottom), drawerHandle(.right)].compactMap { $0 } + paneFloats.handles
     }
+
+    func isFloatPane(_ surface: SurfaceID) -> Bool { paneFloats.contains(surface: surface) }
 
     private func drawerHandle(_ edge: DrawerEdge) -> PaneHandle? {
         let drawer: (token: Int?, id: SurfaceID?, surface: TerminalSurface?)
@@ -206,16 +220,18 @@ final class TabController: NSObject {
         }
         guard let token = drawer.token, let surfaceID = drawer.id, let surface = drawer.surface else { return nil }
         return PaneHandle(
-            token: token, surfaceID: surfaceID, surface: surface, drawer: edge, cwd: surface.currentDirectory)
+            token: token, surfaceID: surfaceID, surface: surface, location: .drawer(edge),
+            cwd: surface.currentDirectory)
     }
 
     func surface(_ id: SurfaceID) -> TerminalSurface? {
         if id == bottomDrawerSurfaceID { return bottomDrawerSurface }
         if id == rightDrawerSurfaceID { return rightDrawerSurface }
-        return paneCanvas.surface(id)
+        return paneFloats.surface(id) ?? paneCanvas.surface(id)
     }
 
     func focus(surface id: SurfaceID) {
+        guard !paneFloats.contains(surface: id) else { return }
         guard id != focusedSurfaceID else { return restoreUnifiedFocus() }
         exitZoomIfNeeded()
         if id == bottomDrawerSurfaceID {
@@ -296,6 +312,8 @@ final class TabController: NSObject {
             initialCWD: initialCWD, initialCommand: initialCommand, env: env, backingScale: backingScale,
             isToolFloatOpen: isToolFloatOpen, readsForeground: readsForeground, makeSurface: makeSurface,
             startSurface: startSurface)
+        paneFloats = PaneFloats(
+            env: env, backingScale: backingScale, makeSurface: makeSurface, startSurface: startSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()
@@ -329,6 +347,19 @@ final class TabController: NSObject {
             self?.onSurfaceEvent?(surface, event)
         }
         paneCanvas.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
+        wireFloats()
+    }
+
+    private func wireFloats() {
+        paneFloats.onNotification = { [weak self] id, n in self?.onNotification?(id, n) }
+        paneFloats.onCommandFinished = { [weak self] id, result in self?.onCommandFinished?(id, result) }
+        paneFloats.onProgress = { [weak self] id, p in self?.onProgress?(id, p) }
+        paneFloats.onProgramStatus = { [weak self] id, status in self?.onProgramStatus?(id, status) }
+        paneFloats.onTitle = { [weak self] id, title in self?.onTitle?(id, title) }
+        paneFloats.onProgramLaunched = { [weak self] id, command in self?.onProgramLaunched?(id, command) }
+        paneFloats.onSurfacesRegistered = { [weak self] ids in self?.onSurfacesRegistered?(ids) }
+        paneFloats.onSurfacesReleased = { [weak self] ids in self?.onSurfacesReleased?(ids) }
+        paneFloats.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
 
     private func paneZoomEndedInternally() {
@@ -349,10 +380,23 @@ final class TabController: NSObject {
             ?? .tooSmall
     }
 
-    func close(pane token: Int) { paneCanvas.close(token: token) }
+    func close(pane token: Int) {
+        if paneFloats.contains(token: token) { return paneFloats.close(token: token) }
+        paneCanvas.close(token: token)
+    }
 
     func updateRecord(pane token: Int, _ change: (inout PaneRecord) -> Void) {
+        if paneFloats.contains(token: token) { return paneFloats.updateRecord(token: token, change) }
         paneCanvas.updateRecord(token: token, change)
+    }
+
+    func isFloatPane(token: Int) -> Bool { paneFloats.contains(token: token) }
+
+    // Starts hidden, sized to the card the window will show it in, so showing it does not reflow it.
+    func openFloatPane(running program: PaneProgram?, cwd: URL?) -> Int {
+        let area = content.bounds.size
+        let size = area.width > 0 && area.height > 0 ? ToolFloatController.paneContentSize(in: area) : nil
+        return paneFloats.open(running: program, cwd: cwd ?? sessionCWD, size: size)
     }
 
     @discardableResult func closeFocused() -> Bool {
@@ -386,6 +430,7 @@ final class TabController: NSObject {
     }
 
     func shutdown() {
+        paneFloats.shutdown()
         paneCanvas.shutdown()
         bottomDrawerSurface?.terminate()
         bottomDrawerSurface = nil

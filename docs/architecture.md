@@ -197,7 +197,7 @@ and keycaps derive from `order` at render time. A label is `pinnedTitle ?? liveT
 `WindowController` owns one window: its workspaces, the toast presenter, tool floats, the
 single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a `TabList`,
 its `TabController`s and their titles. `TabController` owns one tab: a
-`PaneCanvasController` and two drawers.
+`PaneCanvasController`, two drawers and its float panes (`PaneFloats`).
 
 - **A window starts with one workspace, with no config entry**, and shows either a workspace
   or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
@@ -274,10 +274,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   in bash, an sh that is bash, and ksh. dash shows its traps only to itself, not to a `$(trap)`,
   so it marks inline only. The command runs bare, so each of its jobs leads its own foreground
   group. The mark can trail the child exit, so a child exit with no code yet holds the close
-  until the mark or `exitMarkGrace` (async). The window
+  until the mark or `LaunchedExitHold.markGrace` (async). The window
   keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
   run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
-  Every pane and drawer token a tab releases reaches its window (`onPaneTokensReleased`),
+  Every pane, drawer and float pane token a tab releases reaches its window (`onPaneTokensReleased`),
   which hands it to every window (`appWindows`), since a child sits wherever its `pane` put it.
   Each closes that token's children on the next main-queue turn, since the release lands
   mid-rebuild of a canvas that may hold a child. A child's own release cascades the same way.
@@ -358,8 +358,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   active tab; over a Connect screen, which has none, its card files under
   `untabbedCardSlot`, a `TabID` never minted.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
-  the active workspace, a drawer while that holds and it is open, a float while it is
-  shown. Coming on screen, or the window becoming key over it,
+  the active workspace, a drawer while that holds and it is open, a float or float pane
+  while it is shown. Coming on screen, or the window becoming key over it,
   answers a surface and takes down the card it raised. A visit answers only what it puts
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
@@ -521,6 +521,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   float button, and the Connect screen hides the whole dock. There a float's card, shortcut
   or palette row opens or closes it only while it is open, completed or waiting; any other
   toggle toasts in a connected host.
+- **A float pane is a tab's pane shown in the float slot.** `PaneFloats` owns it the way the tab
+  owns a drawer: token, `$ZEN_PANE`, record, exit report and close all go through the tab, and
+  `PaneHandle.location` tells it from a split or a drawer. `ToolFloatController` only shows it
+  (`showPane`, with Scratch's card and no spec): hiding or another float opening keeps it running,
+  `prune` skips it, and its tab ends it. Its presentation events reach the slot through
+  `PaneFloats.presenter`, whose own guard drops a hidden one's. It runs hidden, started at the
+  card's size (`ToolFloatController.paneContentSize`), since a view never in a window has no frame
+  to size its grid by. `WindowController.focus(_:in:)` shows it.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
@@ -634,7 +642,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 `NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`,
 exported as `$ZEN_SOCK`; per-pid so a dev build cannot unlink the installed app's socket.
 Failure is silent. `NavGuard.shouldPassThrough` passes Ctrl-nav only. An open tool float
-also claims Ctrl-nav and gets no `$ZEN_PANE`.
+also claims Ctrl-nav and gets no `$ZEN_PANE`. A float pane gets one, registered with no
+navigation, so it stays live as a `parent`.
 
 **The control socket** backs `zen` (`docs/control-protocol.md`). `ControlServer` listens on
 `control.<pid>.sock` beside the nav socket, exported as `$ZEN_CONTROL_SOCK` by

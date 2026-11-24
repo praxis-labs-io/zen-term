@@ -24,14 +24,14 @@ whose uid is not the app's. The server is on whenever the app runs.
 
 ## Discovery
 
-Every pane and drawer shell gets:
+Every pane, drawer and float pane shell gets:
 
 | Var                | Value                                                |
 | ------------------ | ---------------------------------------------------- |
 | `ZEN_CONTROL_SOCK` | Absolute path to this instance's control socket.    |
 | `ZEN_PANE`         | This pane's token (also the nav protocol's token).   |
 
-Tool floats get neither. A shell that outlives its instance (a tmux session across a
+Tool floats get neither: a float pane is one of its tab's panes, which a tool float is not. A shell that outlives its instance (a tmux session across a
 relaunch) holds a dead `$ZEN_CONTROL_SOCK`, and its `$ZEN_PANE` names a pane in that
 dead instance, since tokens restart in a new one.
 
@@ -139,8 +139,9 @@ No arguments.
 ### `list`
 
 No arguments. Every window, its workspaces in sidebar order with remote hosts' workspaces
-last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers. A drawer
-is listed from its first opening until it closes, shown or hidden.
+last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers, then its float panes in the order they
+opened. A drawer is listed from its first opening until it closes, shown or hidden; a float pane
+is listed while it is open, shown or hidden.
 
 ```json
 {"windows":[{"id":"w1","key":true,"workspaces":[{
@@ -165,6 +166,9 @@ is listed from its first opening until it closes, shown or hidden.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
 - `drawer`: `bottom` or `right`, absent for a pane.
+- `float`: `true` for a float pane, a pane its tab owns that shows in the window's float card
+  instead of the split tree. Absent otherwise. A float pane closes with its tab and its
+  parent like any pane, never splits, and `pane.close` on it leaves its tab open.
 - `title`: the title the program last set. A pane started with a command is titled with
   that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.

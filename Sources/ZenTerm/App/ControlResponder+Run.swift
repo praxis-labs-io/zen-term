@@ -96,8 +96,8 @@ extension ControlResponder {
         return WaitResult(
             reason: .exited, exitCode: answer.exitCode, text: answer.text,
             pane: ListResult.Pane(
-                token: pane.token, drawer: pane.drawer, title: pane.title, cwd: pane.cwd, busy: pane.busy,
-                process: pane.process, agent: pane.agent, name: pane.name, parent: pane.parent,
+                token: pane.token, drawer: pane.drawer, float: pane.float, title: pane.title, cwd: pane.cwd,
+                busy: pane.busy, process: pane.process, agent: pane.agent, name: pane.name, parent: pane.parent,
                 firstTask: firstTask ?? pane.firstTask))
     }
 }
