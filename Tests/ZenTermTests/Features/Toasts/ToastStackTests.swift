@@ -174,11 +174,11 @@ final class ToastStackTests: WindowTestCase {
             descendants(of: pile).compactMap { $0 as? ToastView }.isEmpty, "the countdowns to run again once folded")
     }
 
-    func test_showLess_foldsTheStack() {
+    func test_showLess_foldsTheStack() throws {
         let presenter = presenter()
         showThree(on: presenter)
         let pile = presenter.pileForTesting
-        click(toast(titled: "Third")!)
+        click(try XCTUnwrap(toast(titled: "Third")))
         XCTAssertTrue(pile.isUnfolded, "precondition")
 
         click(pile.showLessForTesting)

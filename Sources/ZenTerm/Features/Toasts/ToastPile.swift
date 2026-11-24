@@ -13,7 +13,7 @@ final class ToastPile: NSView {
     private var clickMonitor: Any?
     private let foldsOnClickOutside: Bool
 
-    // Board 16's recession, three deep: each card behind is fainter, with no token to name the step.
+    // A fixed alpha mask: each folded card behind is fainter, and no chrome token names a recession step.
     private static let plateOpacity: [Float] = [0.75, 0.45]
     private static let plateDrop = ChromeMetrics.Spacing.s12
     private static let plateInset = ChromeMetrics.Spacing.s10
@@ -59,7 +59,7 @@ final class ToastPile: NSView {
         return [front] + settled.reversed().filter { $0 !== front }
     }
 
-    /// `holdsChoice` puts the card in front ahead of anything newer, so a pending choice is never folded away.
+    // `holdsChoice` keeps the card in front of anything newer, so a pending choice is never folded away.
     func add(_ card: NSView, holdsChoice: Bool = false) {
         cards.append(card)
         if holdsChoice { choices.insert(ObjectIdentifier(card)) }
@@ -73,7 +73,6 @@ final class ToastPile: NSView {
         relayout(animated: true, arriving: card)
     }
 
-    /// Starts a card's exit: the next one steps forward while it is still leaving.
     func release(_ card: NSView) {
         guard cards.contains(where: { $0 === card }) else { return }
         leaving.insert(ObjectIdentifier(card))
