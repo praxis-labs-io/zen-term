@@ -287,6 +287,7 @@ final class SidebarView: NSView, ThemeReapplying {
         agentViews = items.map { item in
             let row = agentRow(for: item.id)
             row.render(item)
+            wireMenu(of: row, for: item.id)
             return row
         }
         refreshAgentsSection()
@@ -306,21 +307,30 @@ final class SidebarView: NSView, ThemeReapplying {
             self.rowMenu.close()
             self.onJump?(id)
         }
-        row.onSpace = { [weak self, weak row] in
-            guard let self, let row, !self.isMenuOpen(on: row) else { return }
-            self.rowMenu.open(self.agentMenuItems(for: id, on: row), from: row, highlightingFirst: true)
-        }
-        row.onSecondaryClick = { [weak self, weak row] in
-            guard let self, let row else { return }
-            self.rowMenu.open(self.agentMenuItems(for: id, on: row), from: row)
-        }
         agentRows[id] = row
         return row
     }
 
-    private func agentMenuItems(for id: SurfaceID, on row: SidebarAgentRow) -> [[SidebarRowMenu.Item]] {
-        guard row.canClose else { return [] }
-        return [[SidebarRowMenu.Item(title: "Close", action: nil) { [weak self] in self?.onCloseAgent?(id) }]]
+    // A row with no menu keeps no handlers, so ⌃-click stays a plain click that jumps.
+    private func wireMenu(of row: SidebarAgentRow, for id: SurfaceID) {
+        guard row.canClose else {
+            if isMenuOpen(on: row) { rowMenu.close() }
+            row.onSpace = nil
+            row.onSecondaryClick = nil
+            return
+        }
+        row.onSpace = { [weak self, weak row] in
+            guard let self, let row, !self.isMenuOpen(on: row) else { return }
+            self.rowMenu.open(self.agentMenuItems(for: id), from: row, highlightingFirst: true)
+        }
+        row.onSecondaryClick = { [weak self, weak row] in
+            guard let self, let row else { return }
+            self.rowMenu.open(self.agentMenuItems(for: id), from: row)
+        }
+    }
+
+    private func agentMenuItems(for id: SurfaceID) -> [[SidebarRowMenu.Item]] {
+        [[SidebarRowMenu.Item(title: "Close", action: nil) { [weak self] in self?.onCloseAgent?(id) }]]
     }
 
     private func wire(_ row: SidebarJumpRow) {

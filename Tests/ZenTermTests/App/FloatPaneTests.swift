@@ -748,6 +748,44 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertFalse(isOpen(family.helper, in: c), "Return chose Close on an idle float pane")
     }
 
+    func test_controlClickOnARowWithNoMenu_jumpsAsAClickDoes() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        let family = try helperFloat(in: c)
+        let row = try agentRow(of: family.helper, in: c)
+        let view = c.sidebarForTesting.view
+        view.renderAgents(
+            view.agentRowsForTesting.compactMap(\.itemForTesting).map { item in
+                var unclosable = item
+                unclosable.canClose = false
+                return unclosable
+            })
+
+        try sendClick(to: row, flags: .control)
+
+        XCTAssertFalse(rowMenu.isOpen)
+        XCTAssertTrue(c.floatsForTesting.shownSurface === (try surface(family.helper)), "Control-click jumped")
+    }
+
+    func test_closeConfirmedAfterThePaneExited_leavesTheTabsOtherPane() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        c.handle(.splitVertical)
+        let agent = try XCTUnwrap(everyPane(c).last?.token)
+        try becomeAgent(agent)
+        try surface(agent).isBusy = true
+        try rightClick(try agentRow(of: agent, in: c), in: c)
+        try chooseClose(in: c)
+        XCTAssertTrue(c.isConfirmOpen, "precondition")
+
+        try surface(agent).isBusy = false
+        XCTAssertNil(error(try answer(.paneClose, ControlArgs(pane: .token(agent)))))
+        XCTAssertFalse(isOpen(agent, in: c), "precondition")
+        if c.isConfirmOpen { try pressConfirmClose(in: c) }
+
+        XCTAssertTrue(isOpen(lead, in: c), "the stale Close took the tab and its other pane")
+    }
+
     func test_closeOnAnIdleFloatPane_closesItWithoutAsking() throws {
         let c = makeWindow()
         let family = try helperFloat(in: c)

@@ -3235,7 +3235,9 @@ final class WindowController: NSObject {
         }
         let lastPane = c.isSinglePane && found.pane.location == .tree
         confirmClosing(found.pane, in: found.tab, lastPane: lastPane) { [weak self] in
-            self?.removePane(found.pane.token, in: found.tab)
+            guard let self, let live = self.pane(where: { $0.surfaceID == surface }), live.tab == found.tab
+            else { return }
+            self.removePane(live.pane.token, in: live.tab)
         }
     }
 
@@ -3268,7 +3270,7 @@ final class WindowController: NSObject {
             variant: .warning, title: subject.title,
             message: CloseWarning.message(
                 closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close", onConfirm: close)
+            confirmLabel: "Close", answering: tab, onConfirm: close)
     }
 
     private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
