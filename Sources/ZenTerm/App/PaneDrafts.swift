@@ -12,6 +12,7 @@ final class PaneDrafts {
     // A nil length is text ZenTerm could not count, which only Return or a clearing key ends.
     private struct Draft {
         var length: Int?
+        var endsInBackslash = false
     }
 
     // So a message does not land in the prompt just as the person starts typing into it.
@@ -30,15 +31,14 @@ final class PaneDrafts {
     private var scheduled: Set<SurfaceID> = []
 
     func typed(_ edit: DraftEdit, into surface: SurfaceID) {
-        guard edit != .submit else {
-            lastKeys[surface] = nil
-            drafts[surface] = nil
-            return after(0) { [weak self] in self?.drain(surface) }
-        }
+        guard edit != .submit else { return submit(surface) }
         lastKeys[surface] = now()
+        drafts[surface]?.endsInBackslash = false
         switch edit {
         case .add(let text):
-            drafts[surface] = Draft(length: (drafts[surface] ?? Draft(length: 0)).length.map { $0 + text.count })
+            drafts[surface] = Draft(
+                length: (drafts[surface] ?? Draft(length: 0)).length.map { $0 + text.count },
+                endsInBackslash: text.hasSuffix("\\"))
         case .addUnknown:
             drafts[surface] = Draft(length: nil)
         case .removeOne:
@@ -73,6 +73,18 @@ final class PaneDrafts {
             blockedSince[surface] = nil
             queues.removeValue(forKey: surface)?.forEach { $0.drop("its pane closed") }
         }
+    }
+
+    // Claude Code reads a backslash before Return as a newline, so that Return sends nothing.
+    private func submit(_ surface: SurfaceID) {
+        guard drafts[surface]?.endsInBackslash != true else {
+            lastKeys[surface] = now()
+            drafts[surface]?.endsInBackslash = false
+            return
+        }
+        lastKeys[surface] = nil
+        drafts[surface] = nil
+        after(0) { [weak self] in self?.drain(surface) }
     }
 
     private func endDraft(_ surface: SurfaceID) {

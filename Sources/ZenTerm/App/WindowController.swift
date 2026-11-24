@@ -3994,8 +3994,13 @@ final class WindowController: NSObject {
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
     func keyReachedFocus(_ event: NSEvent) {
         guard !search.isEditing, let surface = presentFocusedSurface else { return }
-        paneDrafts.typed(answersPrompt(surface) ? .none : DraftEdit(event), into: surface)
+        let edit = answersPrompt(surface) ? .none : DraftEdit(event, composing: isComposing(surface))
+        paneDrafts.typed(edit, into: surface)
         answerTypedAgent()
+    }
+
+    private func isComposing(_ surface: SurfaceID) -> Bool {
+        (terminalSurface(surface)?.view as? NSTextInputClient)?.hasMarkedText() == true
     }
 
     // A key into a blocked agent answers its prompt, so it neither starts the draft nor sends it.

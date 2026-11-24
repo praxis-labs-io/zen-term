@@ -13,7 +13,13 @@ enum DraftEdit: Equatable {
     private static let deletingControlKeys: Set<String> = ["h", "k", "w"]
     private static let functionKeys: ClosedRange<UInt32> = 0xF700...0xF8FF
 
-    init(_ event: NSEvent) {
+    // While an input method composes, a key edits its marked text, and only it knows what reaches the prompt.
+    init(_ event: NSEvent, composing: Bool) {
+        let edit = DraftEdit(event)
+        self = composing && edit != .none && edit != .clear ? .addUnknown : edit
+    }
+
+    private init(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
         if Self.returnKeys.contains(event.keyCode) {
             self = modifiers.isEmpty ? .submit : .add("\n")

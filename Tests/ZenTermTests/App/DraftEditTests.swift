@@ -5,14 +5,16 @@ import XCTest
 
 final class DraftEditTests: XCTestCase {
     private func key(
-        _ characters: String, bare: String? = nil, flags: NSEvent.ModifierFlags = [], keyCode: UInt16 = 0
+        _ characters: String, bare: String? = nil, flags: NSEvent.ModifierFlags = [], keyCode: UInt16 = 0,
+        composing: Bool = false
     ) throws -> DraftEdit {
         DraftEdit(
             try XCTUnwrap(
                 NSEvent.keyEvent(
                     with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
                     context: nil, characters: characters, charactersIgnoringModifiers: bare ?? characters,
-                    isARepeat: false, keyCode: keyCode)))
+                    isARepeat: false, keyCode: keyCode)),
+            composing: composing)
     }
 
     func test_returnSends_andKeypadEnterToo_butAModifiedReturnWritesANewline() throws {
@@ -56,5 +58,13 @@ final class DraftEditTests: XCTestCase {
         XCTAssertEqual(try key("\u{19}", bare: "\t", flags: .shift, keyCode: 48), .none)
         XCTAssertEqual(try key("v", flags: .command, keyCode: 9), .none)
         XCTAssertEqual(try key("\u{1}", bare: "a", flags: .control, keyCode: 0), .none)
+    }
+
+    func test_whileAnInputMethodComposesAKeyAddsUnknownText_butEscapeAndClearingKeysKeepTheirMeaning() throws {
+        XCTAssertEqual(try key("\r", keyCode: 36, composing: true), .addUnknown)
+        XCTAssertEqual(try key("n", keyCode: 45, composing: true), .addUnknown)
+        XCTAssertEqual(try key("\u{7f}", keyCode: 51, composing: true), .addUnknown)
+        XCTAssertEqual(try key("\u{1b}", keyCode: 53, composing: true), .none)
+        XCTAssertEqual(try key("\u{15}", bare: "u", flags: .control, keyCode: 32, composing: true), .clear)
     }
 }

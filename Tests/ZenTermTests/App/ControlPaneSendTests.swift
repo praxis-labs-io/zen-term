@@ -253,6 +253,42 @@ final class ControlPaneSendTests: WindowTestCase {
         }
     }
 
+    func test_aReturnThatConfirmsAnInputMethodsTextSendsNothing() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+
+        agent.resizingView.markedText = "にほん"
+        try sendKeys([.returnKey], to: c)
+        agent.resizingView.markedText = ""
+        clock.advance(3600)
+        XCTAssertEqual(agent.inputs, [], "the Return confirmed the composition")
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(0)
+        XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
+    func test_aReturnAfterATypedBackslashIsANewline_andTheNextReturnSends() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "a\\", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent))))
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(3600)
+        XCTAssertEqual(agent.inputs, [], "Claude Code took the backslash and Return as a newline")
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(0)
+        XCTAssertEqual(agent.inputs, [.paste("go")])
+    }
+
     func test_aKeyThatMovesWithoutWritingStartsNoDraft() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)
