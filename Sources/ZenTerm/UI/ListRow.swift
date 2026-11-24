@@ -126,6 +126,10 @@ class ListRow: ControlView, ThemeReapplying {
         return subtitleLine.lastBaselineOffsetFromBottom
     }
 
+    var titleLabelForTesting: NSTextField { titleLabel }
+
+    var subtitleLineForTesting: NSTextField? { subtitleLine }
+
     var processBadgeForTesting: IconBadge? {
         guard case .process = content.leading else { return nil }
         return processBadge

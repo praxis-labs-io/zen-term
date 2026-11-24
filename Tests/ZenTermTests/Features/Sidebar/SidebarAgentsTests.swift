@@ -1028,12 +1028,15 @@ final class SidebarAgentsTests: WindowTestCase {
         _ = try split(c)
         let body =
             "Wants to run swift test. It rebuilds GhosttyKit first, which takes a few minutes on a cold cache."
-        notify(agent, body)
+        notify(agent, "Done")
         let row = try XCTUnwrap(rows(c).first)
+        let shortHeight = row.frame.height
+        notify(agent, body)
 
+        XCTAssertTrue(rows(c).first === row, "precondition: the message re-renders the same row")
         XCTAssertEqual(row.summaryTextForTesting, "pi", "the message never replaces the title")
-        XCTAssertEqual(
-            row.frame.height, SidebarAgentRow.height - row.trimmedSubtitleDescent, "the message does not grow the row")
+        XCTAssertEqual(row.frame.height, shortHeight, "the message does not grow the row")
+        try assertInkCentered(row)
 
         try hover(row, in: c)
 
