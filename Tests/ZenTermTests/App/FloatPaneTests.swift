@@ -88,7 +88,8 @@ final class FloatPaneTests: WindowTestCase {
         in c: WindowController, beside token: Int, running program: PaneProgram? = nil, parent: Int? = nil
     ) throws -> Int {
         let owner = try tab(of: token, in: c)
-        let float = owner.openFloatPane(running: program, cwd: nil)
+        let id = try XCTUnwrap(c.pane(token: token)?.tab)
+        let float = try XCTUnwrap(c.openFloatPane(in: id, running: program, cwd: nil))
         if let parent { owner.updateRecord(pane: float) { $0.parent = parent } }
         return float
     }
@@ -541,6 +542,25 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertEqual(c.activeTabIDForTesting, home)
         XCTAssertTrue(c.floatsForTesting.shownSurface === program)
         XCTAssertNil(c.waitingToastForTesting(tab: home), "showing the float answers its card")
+    }
+
+    func test_aFloatOpenedFromANeverShownTabStartsAtTheCardsSize_afterTheWindowResized() throws {
+        let c = makeWindow()
+        _ = try answer(.tabNew)
+        let agentPane = try XCTUnwrap(everyPane(c).last?.token)
+        try becomeAgent(agentPane)
+        c.window.setContentSize(NSSize(width: 1300, height: 850))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let helper = try run(ControlArgs(cmd: "claude"), from: agentPane)
+        let hidden = try surface(helper).view.frame.size
+        try show(helper, in: c)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let shown = try surface(helper).view.frame.size
+        XCTAssertGreaterThan(shown.width, 0)
+        XCTAssertEqual(hidden.width, shown.width, accuracy: 1, "it starts at the card's size")
+        XCTAssertEqual(hidden.height, shown.height, accuracy: 1, "it starts at the card's size")
     }
 
     private func descendants(of view: NSView) -> [NSView] {

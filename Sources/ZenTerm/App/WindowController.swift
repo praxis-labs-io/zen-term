@@ -188,6 +188,9 @@ final class WindowController: NSObject {
         return controller
     }()
 
+    // Always laid out, so a float pane opened in a tab that is not showing sizes to the card it will show in.
+    private let floatArea = NSLayoutGuide()
+
     private var floatGutter:
         (
             leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
@@ -646,6 +649,7 @@ final class WindowController: NSObject {
         container.addSubview(tabBar)
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
+        installFloatArea()
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
         let dockTrailing = dock.trailingAnchor.constraint(
             equalTo: container.trailingAnchor, constant: -ChromeMetrics.windowGutter)
@@ -1087,13 +1091,23 @@ final class WindowController: NSObject {
     private func presentWindowFloat(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: floatArea.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: floatArea.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: floatArea.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: floatArea.bottomAnchor),
+        ])
+    }
+
+    private func installFloatArea() {
+        container.addLayoutGuide(floatArea)
         let gutter = ChromeMetrics.windowGutter
         let insets = (
-            leading: overlay.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
-            trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
-            top: overlay.topAnchor.constraint(
+            leading: floatArea.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
+            trailing: floatArea.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
+            top: floatArea.topAnchor.constraint(
                 equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
-            bottom: overlay.bottomAnchor.constraint(
+            bottom: floatArea.bottomAnchor.constraint(
                 equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
         floatGutter = insets
@@ -2550,8 +2564,8 @@ final class WindowController: NSObject {
         return nil
     }
 
-    func openFloatPane(in tab: TabID, running program: PaneProgram, cwd: URL?) -> Int? {
-        controller(tab)?.openFloatPane(running: program, cwd: cwd)
+    func openFloatPane(in tab: TabID, running program: PaneProgram?, cwd: URL?) -> Int? {
+        controller(tab)?.openFloatPane(running: program, cwd: cwd, in: floatArea.frame.size)
     }
 
     func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {

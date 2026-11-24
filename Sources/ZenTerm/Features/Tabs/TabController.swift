@@ -393,8 +393,7 @@ final class TabController: NSObject {
     func isFloatPane(token: Int) -> Bool { paneFloats.contains(token: token) }
 
     // Starts hidden, sized to the card the window will show it in, so showing it does not reflow it.
-    func openFloatPane(running program: PaneProgram?, cwd: URL?) -> Int {
-        let area = content.bounds.size
+    func openFloatPane(running program: PaneProgram?, cwd: URL?, in area: NSSize) -> Int {
         let size = area.width > 0 && area.height > 0 ? ToolFloatController.paneContentSize(in: area) : nil
         return paneFloats.open(running: program, cwd: cwd ?? sessionCWD, size: size)
     }
