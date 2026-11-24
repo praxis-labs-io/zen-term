@@ -123,12 +123,12 @@ final class ControlPaneRunTests: WindowTestCase {
         surface.delegate?.surface(surface, programStatusDidChange: TerminalProgramStatus(state: state, app: "claude"))
     }
 
-    func test_runOpensABackgroundTabInTheCallersWorkspace_recordingItsNameAndParent() throws {
+    func test_aTabRunOpensABackgroundTabInTheCallersWorkspace_recordingItsNameAndParent() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
         let showing = c.activeTabIDForTesting
 
-        let opened = try run(ControlArgs(cmd: "claude", name: "review"), from: caller)
+        let opened = try run(ControlArgs(cmd: "claude", name: "review", float: false), from: caller)
 
         XCTAssertNil(opened.firstTask)
         XCTAssertEqual(c.activeTabIDForTesting, showing, "the helper took the screen")
@@ -180,6 +180,28 @@ final class ControlPaneRunTests: WindowTestCase {
             try run(ControlArgs(cwd: tree.path, cmd: "htop"), from: caller, in: tree.path).get() as? PaneRunResult)
 
         XCTAssertEqual(try startFolder(of: given.pane), tree.path)
+    }
+
+    func test_aFloatRunFromARemovedWorktree_startsInItsParentsFolder() throws {
+        let c = makeWindow()
+        let parent = URL(fileURLWithPath: try folder("parent"))
+        let tree = URL(fileURLWithPath: try folder("worktree"))
+        c.openWorkspaceForTesting(
+            Workspace(title: "parent: one", path: tree, tabs: [], env: [:]),
+            origin: WorktreeOrigin(
+                parent: Workspace(title: "parent", path: parent, tabs: [], env: [:]),
+                worktree: Worktree(path: tree, branch: "one", head: "0000000", isLocked: false)))
+        let agent = try XCTUnwrap(spawned.last)
+        report(.working, from: agent)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        let opened = try XCTUnwrap(
+            try run(ControlArgs(cmd: "htop"), from: try token(of: agent), in: tree.path).get() as? PaneRunResult)
+
+        XCTAssertEqual(try listed(opened.pane, in: c).float, true, "precondition: an agent's run is a float")
+        XCTAssertEqual(try startFolder(of: opened.pane), parent.path)
     }
 
     func test_cwdOverridesTheCallersFolder() throws {
@@ -247,7 +269,7 @@ final class ControlPaneRunTests: WindowTestCase {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
 
-        let opened = try run(ControlArgs(cmd: "htop", focus: true), from: caller)
+        let opened = try run(ControlArgs(cmd: "htop", focus: true, float: false), from: caller)
 
         XCTAssertTrue(c.focusedSurfaceForTesting === (try surface(opened.pane)))
     }
@@ -282,7 +304,7 @@ final class ControlPaneRunTests: WindowTestCase {
     func test_aNameAddressesThePaneAnywhereATokenDoes() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
-        let opened = try run(ControlArgs(cmd: "htop", name: "review"), from: caller)
+        let opened = try run(ControlArgs(cmd: "htop", name: "review", float: false), from: caller)
         let helper = try surface(opened.pane)
 
         _ = try answer(.paneSend, ControlArgs(pane: .name("review"), text: "hi", enter: true))
@@ -461,9 +483,10 @@ final class ControlPaneRunTests: WindowTestCase {
         let lead = try token(of: XCTUnwrap(spawned.first))
         let parent = try run(ControlArgs(cmd: "claude", focus: true, split: .right), from: lead).pane
         let child = try run(
-            ControlArgs(cmd: "claude", name: "review", outliveParent: outliving ? true : nil), from: parent
+            ControlArgs(cmd: "claude", name: "review", float: false, outliveParent: outliving ? true : nil),
+            from: parent
         ).pane
-        let grandchild = try run(ControlArgs(cmd: "claude", name: "tests"), from: child).pane
+        let grandchild = try run(ControlArgs(cmd: "claude", name: "tests", float: false), from: child).pane
         return (lead, parent, child, grandchild)
     }
 
@@ -578,7 +601,7 @@ final class ControlPaneRunTests: WindowTestCase {
     func test_closingATabOrAWorkspaceClosesTheChildrenStartedInIt() throws {
         let c = makeWindow()
         let lead = try token(of: XCTUnwrap(spawned.first))
-        let helper = try run(ControlArgs(cmd: "claude"), from: lead).pane
+        let helper = try run(ControlArgs(cmd: "claude", float: false), from: lead).pane
         let child = try run(ControlArgs(cmd: "claude"), from: helper).pane
         let helperTab = try XCTUnwrap(c.pane(token: helper)?.tab)
 
@@ -603,7 +626,9 @@ final class ControlPaneRunTests: WindowTestCase {
         let b = makeWindow()
         let elsewhere = try token(of: XCTUnwrap(spawned.last))
         let parent = try run(ControlArgs(cmd: "claude", split: .right), from: lead).pane
-        let child = try run(ControlArgs(cmd: "claude", pane: .token(elsewhere), name: "review"), from: parent).pane
+        let child = try run(
+            ControlArgs(cmd: "claude", pane: .token(elsewhere), name: "review", float: false), from: parent
+        ).pane
         XCTAssertTrue(isOpen(child, in: b), "the child opened beside the pane it was given")
         return (a, b, parent, child)
     }
@@ -755,11 +780,11 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(try listed(family.grandchild, in: c).parent, family.child)
     }
 
-    func test_anAgentQuittingInAPaneThatStaysOpenClosesNothing() throws {
+    func test_anAgentQuittingInAPaneThatStaysOpenClosesNoTabItStarted() throws {
         let c = makeWindow()
         let lead = try token(of: XCTUnwrap(spawned.first))
         let helper = try run(ControlArgs(cmd: "claude", split: .right, keep: true), from: lead).pane
-        let child = try run(ControlArgs(cmd: "claude"), from: helper).pane
+        let child = try run(ControlArgs(cmd: "claude", float: false), from: helper).pane
         let quitting = try surface(helper)
 
         quitting.delegate?.surface(quitting, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
@@ -774,7 +799,7 @@ final class ControlPaneRunTests: WindowTestCase {
         let c = makeWindow()
         let lead = try token(of: XCTUnwrap(spawned.first))
         let parent = try run(ControlArgs(cmd: "claude", focus: true, split: .right), from: lead).pane
-        let child = try run(ControlArgs(cmd: "claude", name: "review"), from: parent).pane
+        let child = try run(ControlArgs(cmd: "claude", name: "review", float: false), from: parent).pane
         let childTab = try XCTUnwrap(c.pane(token: child)?.tab)
         try XCTUnwrap(c.controllerForTesting(tab: childTab)).toggleBottomDrawer()
         let drawer = try XCTUnwrap(spawned.last)
@@ -833,7 +858,7 @@ final class ControlPaneRunTests: WindowTestCase {
         c.floatsForTesting.resolveRepoRoot = { $1($0) }
         let lead = try token(of: XCTUnwrap(spawned.first))
         let parent = try run(ControlArgs(cmd: "claude", split: .right), from: lead).pane
-        let child = try run(ControlArgs(cmd: "claude"), from: parent).pane
+        let child = try run(ControlArgs(cmd: "claude", float: false), from: parent).pane
         let leadTab = try XCTUnwrap(c.pane(token: lead)?.tab)
         c.selectTab(try XCTUnwrap(c.pane(token: child)?.tab))
         let before = spawned.count

@@ -163,4 +163,14 @@ final class ControlRequestTests: XCTestCase {
                     split: .down, keep: true, outliveParent: true),
                 caller: ControlCaller(pane: 31)))
     }
+
+    func test_paneRunsFloatDecodesBothWays_andAbsentLeavesItUnset() throws {
+        let floating = #"{"v":1,"id":3,"cmd":"pane.run","args":{"cmd":"htop","float":true}}"#
+        let tab = #"{"v":1,"id":3,"cmd":"pane.run","args":{"cmd":"htop","float":false}}"#
+        let neither = #"{"v":1,"id":3,"cmd":"pane.run","args":{"cmd":"htop"}}"#
+
+        XCTAssertEqual(try decode(floating).get().args.float, true)
+        XCTAssertEqual(try decode(tab).get().args.float, false)
+        XCTAssertNil(try decode(neither).get().args.float)
+    }
 }

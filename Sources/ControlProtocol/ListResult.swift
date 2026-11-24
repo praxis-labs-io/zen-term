@@ -1,4 +1,4 @@
-/// Every window, its workspaces in sidebar order with SSH hosts' last, their tabs in tab order, and each tab's panes then drawers.
+/// Every window, its workspaces in sidebar order with SSH hosts' last, their tabs in tab order, and each tab's panes, then drawers, then float panes.
 public struct ListResult: ControlPayload, Equatable {
     public let windows: [Window]
 
@@ -80,13 +80,13 @@ public struct ListResult: ControlPayload, Equatable {
         }
     }
 
-    /// One pane or drawer, as `list` and `pane.get` report it. `drawer` is set for a drawer and absent for a pane in
-    /// the tab's split tree; `process` is absent on a host's pane and when the program cannot be read. `name`,
-    /// `parent` and `firstTask` are set for a pane `pane.run` opened: `parent` is the live pane that ran it.
-    /// `tabNamed` is true when the pane's tab carries a name someone gave it, and nil otherwise.
+    /// One pane or drawer, as `list` and `pane.get` report it. `drawer` is set for a drawer, `float` for a float pane,
+    /// and `tabNamed` when its tab carries a name someone gave it. `process` is absent on a host's pane or when the
+    /// program cannot be read. `name`, `parent` (the live pane that ran it) and `firstTask` are set by `pane.run`.
     public struct Pane: ControlPayload, Equatable {
         public let token: Int
         public let drawer: Drawer?
+        public let float: Bool?
         public let title: String
         public let cwd: String?
         public let busy: Bool
@@ -98,11 +98,13 @@ public struct ListResult: ControlPayload, Equatable {
         public let tabNamed: Bool?
 
         public init(
-            token: Int, drawer: Drawer?, title: String, cwd: String?, busy: Bool, process: Process? = nil,
-            agent: Agent?, name: String? = nil, parent: Int? = nil, firstTask: FirstTask? = nil, tabNamed: Bool? = nil
+            token: Int, drawer: Drawer?, float: Bool? = nil, title: String, cwd: String?, busy: Bool,
+            process: Process? = nil, agent: Agent?, name: String? = nil, parent: Int? = nil,
+            firstTask: FirstTask? = nil, tabNamed: Bool? = nil
         ) {
             self.token = token
             self.drawer = drawer
+            self.float = float
             self.title = title
             self.cwd = cwd
             self.busy = busy
@@ -115,7 +117,7 @@ public struct ListResult: ControlPayload, Equatable {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case token, drawer, title, cwd, busy, process, agent, name, parent
+            case token, drawer, float, title, cwd, busy, process, agent, name, parent
             case firstTask = "first_task"
             case tabNamed = "tab_named"
         }

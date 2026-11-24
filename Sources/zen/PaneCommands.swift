@@ -12,9 +12,11 @@ struct PaneCommands: ParsableCommand {
 
     struct Run: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Run a program in a new pane, in a tab behind this one, and print the pane as JSON.",
-            discussion: "The pane closes when the program exits, unless --keep. With --task, zen answers once "
-                + "the task is sent, or says why it was not.")
+            abstract: "Run a program in a new pane, out of sight, and print the pane as JSON.",
+            discussion: "Run from an agent's pane, it opens in a hidden float, which its row in the Agents list "
+                + "opens. A float closes when that agent exits. Otherwise, or with --outlive-parent, it opens in a "
+                + "tab behind this one. The pane closes when the program exits, unless --keep. With --task, zen "
+                + "answers once the task is sent, or says why it was not.")
 
         @OptionGroup var connection: ConnectionOptions
 
@@ -24,10 +26,18 @@ struct PaneCommands: ParsableCommand {
         @Option(help: "A first message to send the program once it reports it is ready.")
         var task: String?
 
-        @Option(help: "Split the pane instead of opening a tab: right or down.")
+        @Option(help: "Split the pane instead of opening a float or tab: right or down.")
         var split: PaneDirection?
 
-        @Option(help: "The pane to split, or whose workspace gets the tab. This pane by default.")
+        @Flag(
+            help: "Open it in a hidden float, from a pane an agent runs in or started. It closes when that agent exits."
+        )
+        var float = false
+
+        @Flag(help: "Open it in a tab behind this one.")
+        var tab = false
+
+        @Option(help: "The pane to split, or whose tab or workspace gets it. This pane by default.")
         var pane: ControlAddress.Pane?
 
         @Option(help: "The folder to start in, instead of this one.")
@@ -78,6 +88,7 @@ struct PaneCommands: ParsableCommand {
         func validate() throws {
             if let first = command.first, ["--help", "-h"].contains(first) { throw CleanExit.helpRequest(self) }
             if commandLine.isEmpty { throw ValidationError("pane run needs a command to run.") }
+            if float, tab { throw ValidationError("Pass --float or --tab, not both.") }
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")
             }
@@ -95,7 +106,8 @@ struct PaneCommands: ParsableCommand {
             ControlArgs(
                 cwd: try cwd.map { try CommandPath.folder($0, in: folder) }, cmd: commandLine, focus: focus, pane: pane,
                 name: name, output: output, timeout: wait ? timeout : nil,
-                task: task, split: split, keep: keep, outliveParent: outliveParent, wait: wait)
+                task: task, split: split, float: float ? true : (tab ? false : nil), keep: keep,
+                outliveParent: outliveParent, wait: wait)
         }
 
         func run() throws {

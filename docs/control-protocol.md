@@ -24,14 +24,14 @@ whose uid is not the app's. The server is on whenever the app runs.
 
 ## Discovery
 
-Every pane and drawer shell gets:
+Every pane, drawer and float pane shell gets:
 
 | Var                | Value                                                |
 | ------------------ | ---------------------------------------------------- |
 | `ZEN_CONTROL_SOCK` | Absolute path to this instance's control socket.    |
 | `ZEN_PANE`         | This pane's token (also the nav protocol's token).   |
 
-Tool floats get neither. A shell that outlives its instance (a tmux session across a
+Tool floats get neither: a float pane is one of its tab's panes, which a tool float is not. A shell that outlives its instance (a tmux session across a
 relaunch) holds a dead `$ZEN_CONTROL_SOCK`, and its `$ZEN_PANE` names a pane in that
 dead instance, since tokens restart in a new one.
 
@@ -139,8 +139,9 @@ No arguments.
 ### `list`
 
 No arguments. Every window, its workspaces in sidebar order with remote hosts' workspaces
-last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers. A drawer
-is listed from its first opening until it closes, shown or hidden.
+last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers, then its float panes in the order they
+opened. A drawer is listed from its first opening until it closes, shown or hidden; a float pane
+is listed while it is open, shown or hidden.
 
 ```json
 {"windows":[{"id":"w1","key":true,"workspaces":[{
@@ -165,6 +166,10 @@ is listed from its first opening until it closes, shown or hidden.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
 - `drawer`: `bottom` or `right`, absent for a pane.
+- `float`: `true` for a float pane, a pane its tab owns that shows in the window's float card
+  instead of the split tree. Absent otherwise. A float pane closes with its tab and its
+  parent like any pane, and with the agent above it (`pane.run`), never splits, and
+  `pane.close` on it leaves its tab open.
 - `title`: the title the program last set. A pane started with a command is titled with
   that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
@@ -339,11 +344,18 @@ send's wait begins when it is queued, and its `timeout` counts from then.
 
 ### `pane.run`
 
-`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `cwd` (absolute),
-`focus`, `keep`, `outlive_parent`, `wait`, `timeout`, `output`.
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `float`, `pane`, `cwd`
+(absolute), `focus`, `keep`, `outlive_parent`, `wait`, `timeout`, `output`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
-it opens a tab behind the active one in the workspace of `pane` (the caller's by default). It
+it opens a hidden float pane in the tab of `pane` (the caller's by default), or a tab behind
+the active one in that pane's workspace. `float` picks: `true` a float, `false` a tab. Absent,
+it is a float when an agent runs in `caller.pane`, without `outlive_parent`, outside a remote
+host's workspace, with `pane` in the caller's window; a tab otherwise. A float stays hidden
+until its row in the Agents list, `pane.focus` or `focus` shows it. `float: true` is refused
+unless an agent runs in `caller.pane` or a pane above it (its parent, and on up), when `pane`
+is in another window than `caller.pane`, and in a remote host's workspace.
+`float` with `split`, or `float: true` with `outlive_parent`, is a `bad_request`. It
 starts in `cwd`, else in `caller.cwd` when `pane` is the caller's, else in the folder that pane
 last reported. An inherited folder inside a removed worktree starts at the parent workspace's
 folder instead; `cwd` is used as given. A pane launched as `cd <folder> && <program>` never
@@ -356,8 +368,11 @@ in any window, however it closes: `pane.close`, `tab.close`, `workspace.close`, 
 exiting, or the window closing. A close that would end a running child is refused without
 `force`, and its `details` list that child; the app's close confirmation names it too. A
 parent's own `pane.close` on its child is not refused over the child's work (`pane.close`).
-`outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. An agent
-that quits while its pane stays open closes nothing.
+`outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. A float
+pane also closes once no agent runs in its parent or any pane above it, so the agent above it
+exiting closes it even when that agent's pane stays open; that close is not refused over its
+work. An agent that quits while its pane stays open closes nothing else. A pane that must
+outlive the agent that starts it takes `outlive_parent`, which opens a tab.
 
 The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
 the way `tab.new` and `pane.split` run a `cmd`, unless the command ends in its shell's own `exit`
@@ -621,7 +636,7 @@ and nothing when it arrived. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys <pane> <key>... [--force]` takes the keys as arguments, and a name that is not a
 key is a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
+`zen pane run [--name] [--task] [--split right|down] [--float|--tab] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` sends `--float` as `float: true` and `--tab` as `float: false`, and both together is a usage error. It takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
 `-h` prints the help, and `-- --help` runs `--help`. A pane argument,

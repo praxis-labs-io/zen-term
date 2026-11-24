@@ -18,7 +18,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     private var pendingOpen: ToolFloat?
 
-    private var activeFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay, tab: TabID?)?
+    // A nil spec is a tab's float pane: shown here, owned and ended by its tab.
+    private var activeFloat: (spec: ToolFloat?, surface: TerminalSurface, overlay: SurfaceFloatOverlay, tab: TabID?)?
+
+    private var shownPane: SurfaceID?
 
     private var liveFloats: [String: (surface: TerminalSurface, anchor: URL?, spec: ToolFloat, tab: TabID?)] = [:]
 
@@ -72,7 +75,21 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     var isOpen: Bool { activeFloat != nil }
-    var activeID: String? { activeFloat?.spec.id }
+    var activeID: String? { activeFloat?.spec?.id }
+
+    var shownPaneSurface: SurfaceID? {
+        guard let active = activeFloat, active.spec == nil else { return nil }
+        return shownPane
+    }
+
+    private static var paneCard: ToolFloat { .scratch }
+
+    static func paneContentSize(in area: NSSize) -> NSSize {
+        let inset = 2 * ChromeMetrics.Spacing.s10
+        return NSSize(
+            width: max(0, area.width * paneCard.widthFraction - inset),
+            height: max(0, area.height * paneCard.heightFraction - inset))
+    }
 
     var hasBusy: Bool { allSurfaces.contains(where: \.isBusy) }
 
@@ -130,15 +147,15 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     func float(of id: SurfaceID) -> (spec: ToolFloat, tab: TabID?)? {
-        if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
-            return (active.spec, active.tab)
+        if let active = activeFloat, let spec = active.spec, idBySurface[ObjectIdentifier(active.surface)] == id {
+            return (spec, active.tab)
         }
         return liveFloats.values.first { idBySurface[ObjectIdentifier($0.surface)] == id }.map { ($0.spec, $0.tab) }
     }
 
     var allSurfaces: [TerminalSurface] {
         var result = liveFloats.values.map(\.surface)
-        if let active = activeFloat, !result.contains(where: { $0 === active.surface }) {
+        if let active = activeFloat, active.spec != nil, !result.contains(where: { $0 === active.surface }) {
             result.append(active.surface)
         }
         return result
@@ -181,7 +198,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func toggle(_ spec: ToolFloat) {
         if pendingOpen?.id == spec.id { cancelPendingOpen(); return }
-        if activeFloat?.spec.id == spec.id { close(); return }
+        if activeID == spec.id { close(); return }
         cancelPendingOpen()
         if activeFloat != nil { close() }
 
@@ -235,29 +252,43 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         present(live.spec, live.surface, tab: live.tab)
     }
 
+    func showPane(_ surface: TerminalSurface, id: SurfaceID, tab: TabID) {
+        if shownPaneSurface == id { return refocus() }
+        cancelPendingOpen()
+        if activeFloat != nil { close() }
+        present(nil, surface, tab: tab, pane: id)
+    }
+
+    func hidePane(_ id: SurfaceID) {
+        guard shownPaneSurface == id else { return }
+        close()
+    }
+
     private func show(_ spec: ToolFloat, cwd: URL?, anchor: URL?) {
         present(spec, surfaceForFloat(spec, cwd: cwd, anchor: anchor), tab: scopedTab(for: spec))
     }
 
-    private func present(_ spec: ToolFloat, _ surface: TerminalSurface, tab: TabID?) {
+    private func present(_ spec: ToolFloat?, _ surface: TerminalSurface, tab: TabID?, pane: SurfaceID? = nil) {
+        let card = spec ?? Self.paneCard
         if let dismissing = dismissingOverlay, surface.view.isDescendant(of: dismissing) {
             dismissing.removeFromSuperview()
             dismissingOverlay = nil
         }
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
-            widthFraction: spec.widthFraction,
-            heightFraction: spec.heightFraction,
+            widthFraction: card.widthFraction,
+            heightFraction: card.heightFraction,
             contentInset: ChromeMetrics.Spacing.s10,
             cornerRadius: ChromeMetrics.Radius.surface,
             onDismiss: { [weak self] in self?.close() })
         overlay.backgroundOverride = surface.backgroundOverride
         presentOverlay(overlay)
         activeFloat = (spec, surface, overlay, tab)
+        shownPane = pane
         yieldFocus()
         refocus()
         overlay.animateIn()
-        idBySurface[ObjectIdentifier(surface)].map { onShown?($0) }
+        (pane ?? idBySurface[ObjectIdentifier(surface)]).map { onShown?($0) }
         onStateChanged?()
     }
 
@@ -280,7 +311,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func prune(against catalog: [ToolFloat]) {
         let ids = Set(catalog.map(\.id))
         if let pending = pendingOpen, !ids.contains(pending.id) { cancelPendingOpen() }
-        if let active = activeFloat, !ids.contains(active.spec.id) { close() }
+        if let active = activeFloat, let spec = active.spec, !ids.contains(spec.id) { close() }
         for key in Array(liveFloats.keys) where !ids.contains(liveFloats[key]?.spec.id ?? key) {
             discard(key)
         }
@@ -334,7 +365,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         guard let active = activeFloat else { return }
         activeFloat = nil
         let overlay = active.overlay
-        if active.spec.persist != .ephemeral {
+        if active.spec?.persist != .ephemeral {
             dismissingOverlay?.removeFromSuperview()
             dismissingOverlay = overlay
         }
@@ -342,7 +373,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             overlay.removeFromSuperview()
             if self?.dismissingOverlay === overlay { self?.dismissingOverlay = nil }
         }
-        if active.spec.persist == .ephemeral { release(active.surface) }
+        if active.spec?.persist == .ephemeral { release(active.surface) }
         restoreFocus()
         onStateChanged?()
     }
@@ -352,7 +383,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             cancelPendingOpen()
             activeFloat = nil
             active.overlay.removeFromSuperview()
-            release(active.surface)
+            if active.spec != nil { release(active.surface) }
         }
         for key in Array(liveFloats.keys) where liveFloats[key]?.tab == tab {
             liveFloats.removeValue(forKey: key).map { release($0.surface) }
@@ -363,7 +394,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func shutdown() {
         cancelPendingOpen()
         activeFloat?.overlay.removeFromSuperview()
-        activeFloat.map { release($0.surface) }
+        if let active = activeFloat, active.spec != nil { release(active.surface) }
         activeFloat = nil
         dismissingOverlay?.removeFromSuperview()
         dismissingOverlay = nil
@@ -449,7 +480,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     private func entry(for s: TerminalSurface) -> (spec: ToolFloat, tab: TabID?)? {
-        if let active = activeFloat, s === active.surface { return (active.spec, active.tab) }
+        if let active = activeFloat, let spec = active.spec, s === active.surface { return (spec, active.tab) }
         guard let live = liveFloats.values.first(where: { $0.surface === s }) else { return nil }
         return (live.spec, live.tab)
     }

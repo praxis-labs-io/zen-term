@@ -68,6 +68,17 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["wait", "review"]) as? WaitCommand).pane, .name("review"))
     }
 
+    func test_runsFloatAndTabFlagsSendFloat_andNeitherLeavesItToTheApp() throws {
+        let float = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--float", "htop"]) as? PaneCommands.Run)
+        let tab = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--tab", "htop"]) as? PaneCommands.Run)
+        let neither = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "htop"]) as? PaneCommands.Run)
+
+        XCTAssertEqual(try float.args(in: "/").float, true)
+        XCTAssertEqual(try tab.args(in: "/").float, false)
+        XCTAssertNil(try neither.args(in: "/").float)
+        XCTAssertThrowsError(try Zen.parseAsRoot(["pane", "run", "--float", "--tab", "htop"]))
+    }
+
     func test_runTakesItsOptionsThenTheWholeCommand() throws {
         let run = try XCTUnwrap(
             try Zen.parseAsRoot([

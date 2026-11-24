@@ -188,6 +188,9 @@ final class WindowController: NSObject {
         return controller
     }()
 
+    // Always laid out, so a float pane opened in a tab that is not showing sizes to the card it will show in.
+    private let floatArea = NSLayoutGuide()
+
     private var floatGutter:
         (
             leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
@@ -386,14 +389,33 @@ final class WindowController: NSObject {
             .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
     }
 
+    private var shownFloatPaneName: String? {
+        guard let shown = floats.shownPaneSurface else { return nil }
+        return allTabControllers.lazy.flatMap(\.paneHandles).first { $0.surfaceID == shown }.map(Self.paneName)
+    }
+
     private var floatBlockToasts = ToastThrottle<Bool>()
 
     private func toastFloatBlocked() {
         guard floatBlockToasts.allows() else { return }
-        toasts.show(
-            ToastContent(
+        let content =
+            floats.shownPaneSurface == nil
+            ? ToastContent(
                 variant: .info, title: "Tool Float",
-                message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
+                message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes.")
+            : ToastContent(
+                variant: .info, title: "Float Pane",
+                message: "\(shownFloatPaneName ?? "This float pane") is open. Close it to get back to your panes.")
+        toasts.show(content)
+    }
+
+    private var floatCloseBlockContent: ToastContent {
+        floats.shownPaneSurface == nil
+            ? ToastContent(
+                variant: .info, title: "Tool Float", message: "Close \(activeFloatName ?? "the tool") first, then ⌘W.")
+            : ToastContent(
+                variant: .info, title: "Float Pane",
+                message: "Close \(shownFloatPaneName ?? "the float pane") first, then ⌘W.")
     }
 
     private var noNewWorktreeToasts = ToastThrottle<SidebarController.NewWorktreeRefusal>()
@@ -648,6 +670,7 @@ final class WindowController: NSObject {
         container.addSubview(tabBar)
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
+        installFloatArea()
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
         let dockTrailing = dock.trailingAnchor.constraint(
             equalTo: container.trailingAnchor, constant: -ChromeMetrics.windowGutter)
@@ -1089,13 +1112,23 @@ final class WindowController: NSObject {
     private func presentWindowFloat(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: floatArea.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: floatArea.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: floatArea.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: floatArea.bottomAnchor),
+        ])
+    }
+
+    private func installFloatArea() {
+        container.addLayoutGuide(floatArea)
         let gutter = ChromeMetrics.windowGutter
         let insets = (
-            leading: overlay.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
-            trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
-            top: overlay.topAnchor.constraint(
+            leading: floatArea.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
+            trailing: floatArea.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
+            top: floatArea.topAnchor.constraint(
                 equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
-            bottom: overlay.bottomAnchor.constraint(
+            bottom: floatArea.bottomAnchor.constraint(
                 equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
         floatGutter = insets
@@ -2375,7 +2408,8 @@ final class WindowController: NSObject {
                 name: agent.name, state: Self.agentState(tone), report: agentStates.status(of: pane.surfaceID))
         }
         return ListResult.Pane(
-            token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
+            token: pane.token, drawer: pane.drawer.map(Self.drawer), float: pane.location == .float ? true : nil,
+            title: pane.surface.title,
             cwd: pane.cwd?.path, busy: pane.surface.isBusy,
             process: onHost ? nil : Self.processListing(of: pane.surface), agent: agent, name: pane.record.name,
             parent: pane.record.parent.flatMap { NavRegistry.shared.isLive(token: $0) ? $0 : nil },
@@ -2534,9 +2568,34 @@ final class WindowController: NSObject {
 
     func sessionCWD(of id: WorkspaceID) -> URL? { workspaces.first { $0.id == id }?.activeController?.sessionCWD }
 
-    func removedWorktree(of id: WorkspaceID) -> WorktreeOrigin? { workspaces.first { $0.id == id }?.removedWorktree }
+    func outsideRemovedWorktree(_ cwd: URL?, in id: WorkspaceID) -> URL? {
+        workspaces.first { $0.id == id }?.removedWorktree?.relocating(cwd) ?? cwd
+    }
 
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
+
+    func runsAgent(_ surface: SurfaceID) -> Bool { agents.agents[surface].map { !$0.hasExited } ?? false }
+
+    func hasAgent(atOrAbove token: Int) -> Bool {
+        var seen: Set<Int> = []
+        var next: Int? = token
+        while let current = next, seen.insert(current).inserted, let found = familyPane(token: current) {
+            if found.window.runsAgent(found.pane.surfaceID) { return true }
+            next = found.pane.record.parent
+        }
+        return false
+    }
+
+    private func familyPane(token: Int) -> (window: WindowController, pane: PaneHandle)? {
+        for window in familyWindows {
+            if let found = window.pane(token: token) { return (window, found.pane) }
+        }
+        return nil
+    }
+
+    func openFloatPane(in tab: TabID, running program: PaneProgram?, cwd: URL?) -> Int? {
+        controller(tab)?.openFloatPane(running: program, cwd: cwd, in: floatArea.frame.size)
+    }
 
     func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
@@ -2592,7 +2651,8 @@ final class WindowController: NSObject {
 
     func focusedPane(of tab: TabID) -> PaneHandle? {
         guard let c = controller(tab) else { return nil }
-        return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
+        let focused = floats.shownPaneSurface.flatMap { c.isFloatPane($0) ? $0 : nil } ?? c.focusedSurfaceID
+        return c.paneHandles.first { $0.surfaceID == focused }
     }
 
     func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?, cwd: URL?)
@@ -2605,7 +2665,7 @@ final class WindowController: NSObject {
         guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
         let spared = closedByItsParent ? pane.token : nil
-        if c.isSinglePane { return closeStakes(tab: tab, sparingWorkOf: spared) }
+        if c.isSinglePane, pane.location == .tree { return closeStakes(tab: tab, sparingWorkOf: spared) }
         let busy = !closedByItsParent && pane.surface.isBusy
         let children = childStakes(closing: [], panes: [pane.token], sparingWorkOf: spared)
         return CloseStakes(
@@ -2652,10 +2712,7 @@ final class WindowController: NSObject {
         }
 
         private func names(of panes: [FamilyPane]) -> [String] {
-            panes.map(\.pane).map { pane in
-                pane.drawer.map(WindowController.drawerName) ?? pane.record.name
-                    ?? (pane.surface.title.isEmpty ? "pane \(pane.token)" : pane.surface.title)
-            }
+            panes.map(\.pane).map(WindowController.paneName)
         }
     }
 
@@ -2700,7 +2757,7 @@ final class WindowController: NSObject {
         var cascadedTabs: [FamilyTab] = []
         let tabCloses = { (key: FamilyTab) in
             tabs.contains(key)
-                || every.filter { $0.key == key && $0.pane.drawer == nil }.allSatisfy {
+                || every.filter { $0.key == key && $0.pane.location == .tree }.allSatisfy {
                     closing.contains($0.pane.token)
                 }
         }
@@ -2716,9 +2773,9 @@ final class WindowController: NSObject {
             for key in Set(every.map(\.key))
             where !tabs.contains(key) && !cascadedTabs.contains(key) && tabCloses(key) {
                 cascadedTabs.append(key)
-                for drawer in every where drawer.key == key && drawer.pane.drawer != nil {
-                    closing.insert(drawer.pane.token)
-                    children.append(drawer)
+                for owned in every where owned.key == key && owned.pane.location != .tree {
+                    closing.insert(owned.pane.token)
+                    children.append(owned)
                 }
                 grew = true
             }
@@ -2753,6 +2810,28 @@ final class WindowController: NSObject {
         return closing.contains(parent)
     }
 
+    // Async: an agent exit arrives inside its surface callback, which closing a pane would re-enter.
+    private func closeFloatsOutlivingTheirAgents() {
+        guard !didTearDown else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.didTearDown else { return }
+            for window in self.familyWindows {
+                for (tab, pane) in window.floatPanes()
+                where pane.record.parent.map({ !window.hasAgent(atOrAbove: $0) }) ?? false {
+                    window.removePane(pane.token, in: tab)
+                }
+            }
+        }
+    }
+
+    private func floatPanes() -> [(tab: TabID, pane: PaneHandle)] {
+        workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in
+                (workspace.controller(id)?.paneHandles ?? []).filter { $0.location == .float }.map { (id, $0) }
+            }
+        }
+    }
+
     // Async: a release lands mid-rebuild of the canvas it came from, which may hold a child too.
     private func closeChildren(of parents: [Int]) {
         guard !didTearDown else { return }
@@ -2781,7 +2860,7 @@ final class WindowController: NSObject {
 
     func removePane(_ token: Int, in tab: TabID) {
         guard let c = controller(tab) else { return }
-        if c.isSinglePane { return removeTab(tab) }
+        if c.isSinglePane, !c.isFloatPane(token: token) { return removeTab(tab) }
         c.close(pane: token)
     }
 
@@ -2884,10 +2963,7 @@ final class WindowController: NSObject {
         if floats.isOpen {
             switch chord {
             case .closePane:
-                toasts.show(
-                    ToastContent(
-                        variant: .info, title: "Tool Float",
-                        message: "Close \(activeFloatName ?? "the tool") first, then ⌘W."))
+                toasts.show(floatCloseBlockContent)
                 return
             case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane, .focusSidebar,
                 .splitVertical, .splitHorizontal,
@@ -3337,7 +3413,15 @@ final class WindowController: NSObject {
 
     private func hiddenRunningNames(inTab id: TabID) -> [String] {
         let drawers = (controller(id)?.hiddenRunningDrawers ?? []).map(Self.drawerName)
-        return drawers + floats.hiddenRunningTitles(scope: id)
+        let floatPanes = (controller(id)?.paneHandles ?? []).filter {
+            $0.location == .float && $0.surface.isBusy && $0.surfaceID != floats.shownPaneSurface
+        }
+        return drawers + floatPanes.map(Self.paneName) + floats.hiddenRunningTitles(scope: id)
+    }
+
+    private static func paneName(_ pane: PaneHandle) -> String {
+        pane.drawer.map(drawerName) ?? pane.record.name
+            ?? (pane.surface.title.isEmpty ? "pane \(pane.token)" : pane.surface.title)
     }
 
     private func runningNamesInWindow() -> [String] {
@@ -3397,6 +3481,7 @@ final class WindowController: NSObject {
             self?.helperExited(exit)
         }
         c.onPaneTokensReleased = { [weak self] tokens in self?.familyWindows.forEach { $0.closeChildren(of: tokens) } }
+        c.floatPanePresenter = floats
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -3430,6 +3515,7 @@ final class WindowController: NSObject {
             ids.forEach { self?.attention.register($0, tab: id) }
         }
         c.onSurfacesReleased = { [weak self] ids in
+            ids.forEach { self?.floats.hidePane($0) }
             self?.paneWaits.panesClosed(ids)
             self?.paneDrafts.panesClosed(ids)
             self?.workspace(of: id)?.connection?.release(ids)
@@ -3547,7 +3633,15 @@ final class WindowController: NSObject {
         let edge = drawerEdge(of: surface, in: id)
         return CardAddress(
             title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: drawerTail(edge),
-            destination: edge.map { drawerDestination($0, in: id) })
+            destination: edge.map { drawerDestination($0, in: id) } ?? floatPaneDestination(surface, in: id))
+    }
+
+    // Bringing a float pane's tab forward leaves the float hidden, so Switch shows it.
+    private func floatPaneDestination(_ surface: SurfaceID?, in id: TabID) -> CardDestination? {
+        guard let surface, controller(id)?.isFloatPane(surface) == true else { return nil }
+        return CardDestination(
+            shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
+            open: { [weak self] in self?.focus(surface, in: id) })
     }
 
     private func cardAddress(of surface: SurfaceID, in id: TabID) -> CardAddress {
@@ -3983,6 +4077,7 @@ final class WindowController: NSObject {
     private func isOnScreen(_ surface: SurfaceID?, in id: TabID) -> Bool {
         guard id == activeWorkspace?.activeID else { return false }
         guard let surface else { return true }
+        if floats.shownPaneSurface == surface { return true }
         return controller(id)?.isOnScreen(surface) ?? true
     }
 
@@ -3996,6 +4091,7 @@ final class WindowController: NSObject {
     private var focusedSurface: SurfaceID? {
         guard modal == nil, !sidebar.hasFocus else { return nil }
         if let float = floats.activeID { return floats.surfaceID(float) }
+        if let pane = floats.shownPaneSurface { return pane }
         return activeController?.focusedSurfaceID
     }
 
@@ -4172,6 +4268,7 @@ final class WindowController: NSObject {
             endAgent(surface)
         }
         renderAgents()
+        closeFloatsOutlivingTheirAgents()
         return crashed
     }
 
@@ -4190,6 +4287,7 @@ final class WindowController: NSObject {
         endAgent(surface)
         agents.drop(surface)
         renderAgents()
+        closeFloatsOutlivingTheirAgents()
     }
 
     private func takeDownTurnEndNotice(of surface: SurfaceID) {
@@ -4208,6 +4306,7 @@ final class WindowController: NSObject {
         }
         let processesExited = trackProcessExits()
         if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
+        if !exitsAwaitingResult.isEmpty { closeFloatsOutlivingTheirAgents() }
     }
 
     // Unlisted too: a pane with no agent above it can gain one later, and must not return as live.
@@ -4280,7 +4379,7 @@ final class WindowController: NSObject {
         }
         let processRows = panes.values.compactMap { pane -> AgentFamilies.Member? in
             guard pane.record.parent != nil, agents.agents[pane.surfaceID] == nil,
-                !exitedProcesses.contains(pane.surfaceID),
+                pane.location == .float || !exitedProcesses.contains(pane.surfaceID),
                 let place = agentPlace(pane.surfaceID)
             else { return nil }
             let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
@@ -4371,6 +4470,9 @@ final class WindowController: NSObject {
 
     func focus(_ surface: SurfaceID, in tab: TabID) {
         reveal(tab)
+        if let c = controller(tab), c.isFloatPane(surface), let view = c.surface(surface) {
+            return floats.showPane(view, id: surface, tab: tab)
+        }
         if floats.isOpen { closeFloatForTabChange() }
         controller(tab)?.focus(surface: surface)
     }
@@ -4487,6 +4589,8 @@ final class WindowController: NSObject {
     func drawerAttentionForTesting(_ edge: DrawerEdge) -> SurfaceAttention { drawerAttention(edge) }
 
     func floatAttentionForTesting(_ id: String) -> SurfaceAttention { floatAttention(id) }
+
+    func surfaceAttentionForTesting(_ id: SurfaceID) -> SurfaceAttention { attention.state(of: id) }
 
     var dockForTesting: ToggleDock { dock }
 

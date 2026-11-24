@@ -37,8 +37,9 @@ If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
 ## Run a command in a pane
 
 Run slow builds and tests, and anything that doesn't exit on its own (a dev
-server, a watcher, an app launcher), in a pane of its own. It opens in a tab
-behind the one showing, and the user can watch it.
+server, a watcher, an app launcher), in a pane of its own. Run from your pane,
+it opens in a hidden float that the user opens from your row in the Agents
+list. Run from a plain shell, it opens in a tab behind the one showing.
 
 ```sh
 zen pane run --name tests --wait -- swift test                       # waits, prints why it ended
@@ -70,7 +71,10 @@ zen pane read --pane dev --lines 40                                  # its outpu
   with `cd`. `--cwd <folder>` starts it somewhere else.
 - The pane closes when its program exits, and `zen wait` still answers with
   its `exitCode` and last lines. `--keep` leaves it open at a shell.
-- A pane you start closes with your pane. `--outlive-parent` keeps it.
+- A pane you start closes with your pane, and a float also closes when you
+  exit, even if your pane stays open. Anything that must outlive you, such as
+  a server the user keeps using, takes `--outlive-parent`, which opens it in a
+  tab instead. `--tab` opens a tab without that.
 - Leave a server running when your turn ends unless asked to stop it.
 
 ## Delegate to a helper

@@ -86,14 +86,15 @@ final class AgentNestingTests: WindowTestCase {
 
     private func run(
         _ cmd: String, from parent: Pane?, keep: Bool = false, outlivesParent: Bool = false,
-        split: PaneDirection? = nil, in c: WindowController
+        split: PaneDirection? = nil, float: Bool? = nil, in c: WindowController
     ) throws -> Pane {
         var reply: ControlReply?
         responder(c).respond(
             to: ControlRequest(
                 id: 1, cmd: .paneRun,
                 args: ControlArgs(
-                    cmd: cmd, split: split, keep: keep ? true : nil, outliveParent: outlivesParent ? true : nil),
+                    cmd: cmd, split: split, float: float, keep: keep ? true : nil,
+                    outliveParent: outlivesParent ? true : nil),
                 caller: parent.map { ControlCaller(pane: $0.token) })
         ) { reply = $0 }
         let result = try XCTUnwrap(try XCTUnwrap(reply).get() as? PaneRunResult)
@@ -274,7 +275,7 @@ final class AgentNestingTests: WindowTestCase {
     func test_clickingAChildRowOpensItsTab() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let helper = try run("claude", from: root, in: c)
+        let helper = try run("claude", from: root, float: false, in: c)
         let showing = c.activeTabIDForTesting
 
         try click(try row(of: helper, in: c))
@@ -282,6 +283,57 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertNotEqual(c.activeTabIDForTesting, showing)
         XCTAssertEqual(c.activeTabIDForTesting, c.pane(token: helper.token)?.tab)
         XCTAssertEqual(c.focusedSurfaceIDForTesting, helper.id)
+    }
+
+    func test_clickingAFloatsRowRevealsItsTab_andShowsTheFloat() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let helper = try run("claude", from: root, in: c)
+        let ownTab = try XCTUnwrap(c.pane(token: helper.token)?.tab)
+        XCTAssertEqual(c.pane(token: helper.token)?.pane.location, .float, "precondition: an agent's run is a float")
+        responder(c).respond(to: ControlRequest(id: 2, cmd: .tabNew, args: ControlArgs(focus: true), caller: nil)) {
+            _ in
+        }
+        XCTAssertNotEqual(c.activeTabIDForTesting, ownTab, "precondition: another tab shows")
+
+        try click(try row(of: helper, in: c))
+
+        XCTAssertEqual(c.activeTabIDForTesting, ownTab)
+        XCTAssertTrue(c.floatsForTesting.shownSurface === helper.surface)
+    }
+
+    func test_aKeptFloatKeepsItsRowAfterItsProgramEnds_whileItsAgentLives() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let process = try run("make", from: root, keep: true, in: c)
+        let helper = try run("claude", from: root, keep: true, in: c)
+        process.surface.isBusy = true
+        c.trackAgentExitsForTesting()
+
+        process.surface.isBusy = false
+        process.surface.delegate?.surface(
+            process.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        helper.surface.delegate?.surface(
+            helper.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        drainMainQueue()
+        c.trackAgentExitsForTesting()
+
+        XCTAssertNotNil(c.pane(token: process.token), "precondition: the kept float is still open")
+        XCTAssertEqual(Set(items(c).map(\.id)), [root.id, process.id, helper.id])
+    }
+
+    func test_nextWaitingAgentStepsPastTheFloatShowing() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let first = try run("claude", from: root, in: c)
+        let second = try run("claude", from: root, in: c)
+        for helper in [first, second] { report(.blocked(.permission), from: helper) }
+        try click(try row(of: first, in: c))
+        XCTAssertTrue(c.floatsForTesting.shownSurface === first.surface, "precondition")
+
+        c.handle(.nextWaitingAgent)
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === second.surface)
     }
 
     func test_aProcessRunFromAPlainShell_isNotListed() throws {
@@ -309,8 +361,8 @@ final class AgentNestingTests: WindowTestCase {
     func test_whenTheParentAgentLeaves_itsHelperListsTopLevel_andItsProcessIsNotListed() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let helper = try run("claude", from: root, in: c)
-        let process = try run("htop", from: root, in: c)
+        let helper = try run("claude", from: root, float: false, in: c)
+        let process = try run("htop", from: root, float: false, in: c)
 
         root.surface.delegate?.surface(
             root.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
@@ -355,10 +407,10 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.id), [root.id])
     }
 
-    func test_aKeptProcessRowLeavesWhenItsProcessFallsIdle() throws {
+    func test_aKeptProcessRowInATabLeavesWhenItsProcessFallsIdle() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let process = try run("htop", from: root, keep: true, in: c)
+        let process = try run("htop", from: root, keep: true, float: false, in: c)
         process.surface.isBusy = true
         c.trackAgentExitsForTesting()
         XCTAssertNotNil(rows(c).first { $0.itemForTesting?.id == process.id }, "precondition")
@@ -370,10 +422,10 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertNotNil(c.pane(token: process.token), "precondition: the kept pane is still open")
     }
 
-    func test_aKeptProcessThatFinishesBetweenPolls_leavesOnItsFinishMark() throws {
+    func test_aKeptProcessInATabThatFinishesBetweenPolls_leavesOnItsFinishMark() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let process = try run("make", from: root, keep: true, in: c)
+        let process = try run("make", from: root, keep: true, float: false, in: c)
         XCTAssertNotNil(rows(c).first { $0.itemForTesting?.id == process.id }, "precondition")
         let script = process.surface.lastConfig?.args.last ?? ""
         XCTAssertTrue(script.contains("133;D"), "a kept run reports no finish mark: \(script)")
@@ -404,10 +456,10 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.id), [shell.id], "a finished process came back as a live row")
     }
 
-    func test_aKeptHelperWhoseAgentLeftIsNotListedAsAProcess() throws {
+    func test_aKeptHelperInATabWhoseAgentLeftIsNotListedAsAProcess() throws {
         let c = makeWindow()
         let root = try rootAgent(c)
-        let helper = try run("claude", from: root, keep: true, in: c)
+        let helper = try run("claude", from: root, keep: true, float: false, in: c)
 
         helper.surface.delegate?.surface(
             helper.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))

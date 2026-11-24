@@ -33,7 +33,8 @@ enum ListTree {
         return line(
             3,
             [
-                String(pane.token), pane.drawer.map { "\($0.rawValue) drawer" }, pane.title,
+                String(pane.token), pane.drawer.map { "\($0.rawValue) drawer" }, pane.float == true ? "float" : nil,
+                pane.title,
                 pane.cwd, pane.busy ? "busy" : nil, agent,
             ])
     }

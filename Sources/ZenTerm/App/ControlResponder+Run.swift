@@ -14,6 +14,7 @@ extension ControlResponder {
         }
         if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
         if let problem = Self.cwdProblem(request.args) { return reply(.failure(problem)) }
+        if let problem = Self.placementProblem(request.args) { return reply(.failure(problem)) }
         let name = request.args.name
         if let name {
             guard ControlAddress.Pane.isValidName(name) else {
@@ -37,6 +38,16 @@ extension ControlResponder {
             guard let workspace = place.window.workspaceID(of: place.tab) else {
                 return .failure(ControlError(.notFound, "That workspace is gone."))
             }
+            let float: Bool
+            switch opensFloat(request, in: place) {
+            case .failure(let error): return .failure(error)
+            case .success(let opens): float = opens
+            }
+            if float {
+                let start = startFolder(of: place, for: request)
+                let cwd = request.args.cwd != nil ? start : place.window.outsideRemovedWorktree(start, in: workspace)
+                return openFloat(beside: place, running: program, cwd: cwd, focus: focus).map { (place.window, $0) }
+            }
             return openTab(
                 in: WorkspacePlace(window: place.window, id: workspace), cwd: startFolder(of: place, for: request),
                 explicitCWD: request.args.cwd != nil, running: program, focus: focus
@@ -58,6 +69,68 @@ extension ControlResponder {
                 answer(PaneRunResult(pane: token, firstTask: outcome), for: request, hangup: hangup, reply: reply)
             }
         }
+    }
+
+    private static func placementProblem(_ args: ControlArgs) -> ControlError? {
+        guard let float = args.float else { return nil }
+        if args.split != nil {
+            return ControlError(.badRequest, "pane.run takes a split or \(float ? "a float" : "a tab"), not both.")
+        }
+        if float, args.outliveParent == true {
+            return ControlError(
+                .badRequest, "A float closes with its tab, so a pane that outlives its parent opens a tab.")
+        }
+        return nil
+    }
+
+    // A float is opened from its agent's row in the Agents list, which lists only its own window's panes,
+    // and closes when that agent exits.
+    private func opensFloat(_ request: ControlRequest, in place: PanePlace) -> Result<Bool, ControlError> {
+        let caller = request.caller?.pane.flatMap(locate(pane:))
+        let acrossWindows = caller.map { $0.window !== place.window } ?? false
+        switch request.args.float {
+        case false?: return .success(false)
+        case true?:
+            guard let caller, caller.window.hasAgent(atOrAbove: caller.pane.token) else {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "A float opens only from an agent's pane, or a pane an agent started, so the Agents list "
+                            + "can show it."))
+            }
+            if acrossWindows {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "Pane \(place.pane.token) is in another window, and a float opens only in its agent's "
+                            + "window. Leave out --float to open a tab there."))
+            }
+            return .success(true)
+        case nil:
+            let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
+            let fromAgent = caller.map { $0.window.runsAgent($0.pane.surfaceID) } ?? false
+            return .success(fromAgent && request.args.outliveParent != true && !onHost && !acrossWindows)
+        }
+    }
+
+    private func openFloat(beside place: PanePlace, running program: PaneProgram, cwd: URL?, focus: Bool)
+        -> Result<Int, ControlError>
+    {
+        if let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
+            return .failure(
+                ControlError(
+                    .refused,
+                    "Pane \(place.pane.token) is on \(ControlAddress.hostPrefix + host.alias), and a float there "
+                        + "takes no cmd."))
+        }
+        guard let token = place.window.openFloatPane(in: place.tab, running: program, cwd: cwd) else {
+            return .failure(ControlError(.notFound, "That tab is gone."))
+        }
+        if focus, let opened = place.window.pane(token: token) {
+            place.window.focus(opened.pane.surfaceID, in: opened.tab)
+            raise(place.window)
+        }
+        return .success(token)
     }
 
     private static func cwdProblem(_ args: ControlArgs) -> ControlError? {
@@ -96,8 +169,8 @@ extension ControlResponder {
         return WaitResult(
             reason: .exited, exitCode: answer.exitCode, text: answer.text,
             pane: ListResult.Pane(
-                token: pane.token, drawer: pane.drawer, title: pane.title, cwd: pane.cwd, busy: pane.busy,
-                process: pane.process, agent: pane.agent, name: pane.name, parent: pane.parent,
+                token: pane.token, drawer: pane.drawer, float: pane.float, title: pane.title, cwd: pane.cwd,
+                busy: pane.busy, process: pane.process, agent: pane.agent, name: pane.name, parent: pane.parent,
                 firstTask: firstTask ?? pane.firstTask))
     }
 }

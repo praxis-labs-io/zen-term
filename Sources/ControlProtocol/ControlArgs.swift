@@ -26,8 +26,11 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var name: String?
     /// The first message `pane.run` sends its program once the program is ready.
     public var task: String?
-    /// Where `pane.run` splits its pane. Absent opens a tab.
+    /// Where `pane.run` splits its pane. Absent opens a float or a tab, as `float` says.
     public var split: PaneDirection?
+    /// Whether `pane.run` opens a hidden float pane (true) or a tab (false). Absent: a float when the caller runs an
+    /// agent and its pane does not outlive it, else a tab.
+    public var float: Bool?
     /// Whether `pane.run` keeps its pane open after its program exits.
     public var keep: Bool?
     /// Whether `pane.run`'s pane stays open when the pane that ran it closes. Sent as `outlive_parent`.
@@ -47,7 +50,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil,
         branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
         output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
-        keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil, children: WaitChildren? = nil
+        float: Bool? = nil, keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil,
+        children: WaitChildren? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -73,6 +77,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.wait = wait
         self.task = task
         self.split = split
+        self.float = float
         self.keep = keep
         self.outliveParent = outliveParent
         self.children = children
@@ -80,7 +85,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, branch, base
-        case existing, open, name, output, timeout, task, split, keep, wait, children
+        case existing, open, name, output, timeout, task, split, float, keep, wait, children
         case outliveParent = "outlive_parent"
     }
 }

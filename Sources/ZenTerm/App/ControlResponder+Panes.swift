@@ -56,8 +56,12 @@ extension ControlResponder {
         _ place: PanePlace, _ direction: PaneDirection, running command: PaneProgram?, cwd: URL?, focus: Bool
     ) -> Result<Int, ControlError> {
         let token = place.pane.token
-        if place.pane.drawer != nil {
+        switch place.pane.location {
+        case .drawer:
             return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
+        case .float:
+            return .failure(ControlError(.badRequest, "Pane \(token) is a float, and a float does not split."))
+        case .tree: break
         }
         if command != nil, let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
             return .failure(
