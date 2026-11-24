@@ -244,7 +244,8 @@ final class WindowController: NSObject {
             }
         }
     }
-    private var modal: (overlay: ModalOverlay, kind: ModalKind)?
+    // `tab` is the tab a card acts on, when that can be a tab other than the showing one.
+    private var modal: (overlay: ModalOverlay, kind: ModalKind, tab: TabID?)?
 
     // The only trace of a card still loading: stops a second press presenting twice, or a late load presenting after Esc.
     private var pendingModal: ModalKind?
@@ -339,6 +340,7 @@ final class WindowController: NSObject {
 
     private var confirmToast: ToastView?
     private var confirmOnCancel: (() -> Void)?
+    private var confirmTab: TabID?
     var isConfirmOpen: Bool { confirmToast != nil }
 
     // Polled because shells report cwd without OSC 7, so a `cd` sends no event.
@@ -1323,7 +1325,7 @@ final class WindowController: NSObject {
                 self?.closeModal()
             },
             onCancel: { [weak self] in self?.closeModal() })
-        presentModal(overlay, kind: .renameTab)
+        presentModal(overlay, kind: .renameTab, answering: id)
     }
 
     func renameTab(_ id: TabID, to name: String) {
@@ -1361,25 +1363,27 @@ final class WindowController: NSObject {
 
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         guard let workspace = workspace(of: id) else { return }
-        // A background workspace's tab closes without touching what is on screen, or it answers the wrong tab.
-        let isOnScreen = workspace === activeWorkspace
-        if isOnScreen {
+        let isShowing = id == activeWorkspace?.activeID
+        dismissOverlays(closing: id, isShowing: isShowing, dismissingModal: dismissingModal)
+        removeTab(id, from: workspace, remounting: isShowing)
+    }
+
+    func removeTab(_ id: TabID) {
+        guard let workspace = workspace(of: id) else { return }
+        let isShowing = id == activeWorkspace?.activeID
+        dismissOverlays(closing: id, isShowing: isShowing, dismissingModal: false)
+        removeTab(id, from: workspace, remounting: isShowing)
+    }
+
+    // The showing tab takes what answers whatever tab is showing; any tab takes the card or confirm aimed at it.
+    private func dismissOverlays(closing id: TabID, isShowing: Bool, dismissingModal: Bool) {
+        if isShowing {
             if dismissingModal { closeModal() }
             closeFloatForTabChange()
             cancelConfirm()
         }
-        removeTab(id, from: workspace, remounting: isOnScreen)
-    }
-
-    // Only the tab showing takes the float and the confirm with it, since both act on whatever tab is showing.
-    func removeTab(_ id: TabID) {
-        guard let workspace = workspace(of: id) else { return }
-        let isShowing = id == activeWorkspace?.activeID
-        if isShowing {
-            closeFloatForTabChange()
-            cancelConfirm()
-        }
-        removeTab(id, from: workspace, remounting: isShowing)
+        if modal?.tab == id { closeModal() }
+        if confirmTab == id { cancelConfirm() }
     }
 
     private func removeTab(_ id: TabID, from workspace: WorkspaceController, remounting: Bool) {
@@ -1508,14 +1512,14 @@ final class WindowController: NSObject {
         workspaces.first { $0.host == host }?.connection?.state
     }
 
-    private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
+    private func presentModal(_ overlay: ModalOverlay, kind: ModalKind, answering tab: TabID? = nil) {
         if let activeWorkspace, activeWorkspace.activeController == nil { return }
         captureFocusReturn()
         endModes()
         floats.cancelPendingOpen()
         pendingModal = nil
         presentWindowModal(overlay)
-        modal = (overlay, kind)
+        modal = (overlay, kind, tab)
         sidebar.setHoverCovered(true)
         window.hoverCover = overlay
         overlay.focusInitialResponder()
@@ -2237,8 +2241,8 @@ final class WindowController: NSObject {
 
     // Ends modes first, or a mode swallows the Return and Esc that answer the confirm.
     func presentConfirm(
-        variant: ToastVariant, title: String, message: String,
-        confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
+        variant: ToastVariant, title: String, message: String, confirmLabel: String,
+        answering tab: TabID? = nil, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         cancelConfirm()
         // After the card closes, not before: closing it is what hands focus back to the row it was opened from.
@@ -2246,6 +2250,7 @@ final class WindowController: NSObject {
         endModes()
         if sidebar.hasFocus { focusReturn = sidebar.focusedStop ?? focusReturn }
         confirmOnCancel = onCancel
+        confirmTab = tab
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
             ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.cancelConfirm() },
@@ -2272,6 +2277,7 @@ final class WindowController: NSObject {
         guard let toast = confirmToast else { return }
         confirmToast = nil
         confirmOnCancel = nil
+        confirmTab = nil
         toasts.dismiss(toast)
         returnFocusAfterOverlay()
         sidebar.edgeReveal.recheck()
@@ -3248,7 +3254,7 @@ final class WindowController: NSObject {
             variant: .warning, title: subject.title,
             message: CloseWarning.message(
                 closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close"
+            confirmLabel: "Close", answering: id
         ) { [weak self] in self?.closeTab(id) }
     }
 
