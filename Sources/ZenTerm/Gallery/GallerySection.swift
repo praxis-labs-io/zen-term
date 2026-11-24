@@ -17,7 +17,8 @@
             heading.font = ChromeType.font(.body, weight: .semibold)
             heading.textColor = Theme.current.chrome.ink(.normal)
 
-            let stack = NSStackView(views: [heading] + rows.map(Self.line))
+            let lines = rows.map(Self.line)
+            let stack = NSStackView(views: [heading] + lines)
             stack.orientation = .vertical
             stack.alignment = .leading
             stack.spacing = ChromeMetrics.Spacing.s12
@@ -26,27 +27,33 @@
             addSubview(stack)
             NSLayoutConstraint.activate([
                 stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-                stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+                stack.trailingAnchor.constraint(equalTo: trailingAnchor),
                 stack.topAnchor.constraint(equalTo: topAnchor),
                 stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             ])
+            NSLayoutConstraint.activate(lines.map { $0.widthAnchor.constraint(equalTo: stack.widthAnchor) })
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
         private static func line(_ row: Row) -> NSView {
             let caption = SectionCaption(row.label)
-            caption.widthAnchor.constraint(equalToConstant: labelWidth).isActive = true
+            caption.translatesAutoresizingMaskIntoConstraints = false
+            let samples = GallerySamples(row.samples)
 
-            let samples = NSStackView(views: row.samples)
-            samples.orientation = .horizontal
-            samples.alignment = .centerY
-            samples.spacing = ChromeMetrics.Spacing.s16
-
-            let line = NSStackView(views: [caption, samples])
-            line.orientation = .horizontal
-            line.alignment = .centerY
-            line.spacing = 0
+            let line = NSView()
+            line.translatesAutoresizingMaskIntoConstraints = false
+            line.addSubview(caption)
+            line.addSubview(samples)
+            NSLayoutConstraint.activate([
+                caption.leadingAnchor.constraint(equalTo: line.leadingAnchor),
+                caption.widthAnchor.constraint(equalToConstant: labelWidth),
+                caption.centerYAnchor.constraint(equalTo: samples.firstLine.centerYAnchor),
+                samples.leadingAnchor.constraint(equalTo: caption.trailingAnchor),
+                samples.trailingAnchor.constraint(equalTo: line.trailingAnchor),
+                samples.topAnchor.constraint(equalTo: line.topAnchor),
+                samples.bottomAnchor.constraint(equalTo: line.bottomAnchor),
+            ])
             return line
         }
     }

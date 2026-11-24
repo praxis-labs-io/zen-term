@@ -9,8 +9,6 @@
             case list, noMatches, rename
         }
 
-        // ListPopover caps a card at 260pt; the open lists drop into this room instead of over the body.
-        private static let listRoom: CGFloat = 272
         private static let inset: CGFloat = ChromeMetrics.Spacing.s20
 
         private let theme = GalleryTheme()
@@ -102,9 +100,9 @@
             for view in [body, divider, pinned] { root.addSubview(view) }
             NSLayoutConstraint.activate([
                 pinned.topAnchor.constraint(equalTo: root.topAnchor, constant: Self.inset),
+                pinned.bottomAnchor.constraint(equalTo: divider.topAnchor, constant: -Self.inset),
                 pinned.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Self.inset),
                 pinned.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -Self.inset),
-                divider.topAnchor.constraint(equalTo: pinned.bottomAnchor),
                 divider.leadingAnchor.constraint(equalTo: root.leadingAnchor),
                 divider.trailingAnchor.constraint(equalTo: root.trailingAnchor),
                 divider.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
@@ -141,11 +139,7 @@
             samples.alignment = .centerY
             samples.spacing = Self.inset
 
-            let room = NSView()
-            room.translatesAutoresizingMaskIntoConstraints = false
-            room.heightAnchor.constraint(equalToConstant: Self.listRoom).isActive = true
-
-            let pane = NSStackView(views: [controls, samples, room])
+            let pane = NSStackView(views: [controls, samples])
             pane.orientation = .vertical
             pane.alignment = .leading
             pane.spacing = ChromeMetrics.Spacing.s16
@@ -174,6 +168,7 @@
             stack.alignment = .leading
             stack.spacing = ChromeMetrics.Spacing.s32
             stack.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate(sections.map { $0.widthAnchor.constraint(equalTo: stack.widthAnchor) })
 
             let document = FlippedView()
             document.translatesAutoresizingMaskIntoConstraints = false
@@ -185,7 +180,7 @@
                 document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
                 stack.topAnchor.constraint(equalTo: document.topAnchor, constant: Self.inset),
                 stack.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: Self.inset),
-                stack.trailingAnchor.constraint(lessThanOrEqualTo: document.trailingAnchor, constant: -Self.inset),
+                stack.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -Self.inset),
                 stack.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -Self.inset),
             ])
             return scroll
