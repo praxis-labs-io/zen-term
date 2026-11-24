@@ -2,7 +2,7 @@
     import AppKit
 
     enum GalleryButtons {
-        static let variants: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link]
+        static let variants: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link, .quietLink]
 
         static func sections() -> [GallerySection] {
             [appButtons(), iconButtons(), keycaps(), stateDots()]
@@ -15,6 +15,7 @@
             case .muted: return "Muted"
             case .destructive: return "Destructive"
             case .link: return "Link"
+            case .quietLink: return "Quiet link"
             }
         }
 

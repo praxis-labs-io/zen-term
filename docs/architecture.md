@@ -563,7 +563,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `link`; an optional shortcut keycap inside),
+  `link`, `quietLink` for a dismissing link beside another; an optional shortcut keycap inside),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes

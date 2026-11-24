@@ -1,7 +1,7 @@
 import AppKit
 
 final class AppButton: NSButton, HoverSuppressing {
-    enum Variant { case primary, secondary, muted, destructive, link }
+    enum Variant { case primary, secondary, muted, destructive, link, quietLink }
 
     private static let height = ChromeMetrics.Height.control
     static let horizontalPadding = ChromeMetrics.Spacing.s8
@@ -191,7 +191,7 @@ final class AppButton: NSButton, HoverSuppressing {
         if symbolName != nil {
             contentTintColor = textColor
         } else {
-            let isLink = variant == .link
+            let isLink = variant == .link || variant == .quietLink
             let attributes: [NSAttributedString.Key: Any] = [
                 .foregroundColor: textColor,
                 .font: isLink ? ChromeType.font(.body) : ChromeType.font(.small, weight: .semibold),
@@ -213,13 +213,15 @@ final class AppButton: NSButton, HoverSuppressing {
             return (chrome.destructive.nsColor, chrome.fill(isHovered ? .hover : .rest))
         case .link:
             return (chrome.ink(isHovered ? .normal : .subtle), .clear)
+        case .quietLink:
+            return (chrome.ink(isHovered ? .normal : .muted), .clear)
         }
     }
 
     private func disabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
         switch variant {
         case .primary, .muted, .destructive: return (chrome.ink(.faint), chrome.fill(.rest))
-        case .secondary, .link: return (chrome.ink(.faint), .clear)
+        case .secondary, .link, .quietLink: return (chrome.ink(.faint), .clear)
         }
     }
 

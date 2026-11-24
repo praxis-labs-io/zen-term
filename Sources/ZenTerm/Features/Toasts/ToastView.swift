@@ -19,11 +19,6 @@ struct ToastContent: Equatable {
     }
 }
 
-// A label's frame outruns its glyph, so the dot would take the edge of the link beside it.
-private final class ActionSeparator: NSTextField {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-}
-
 final class ToastView: ShadowCardView, ThemeReapplying {
     var onClose: (() -> Void)?
     var onDismissed: (() -> Void)?
@@ -41,7 +36,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     private var titleFloor: NSLayoutConstraint?
     private let messageLabel: NSTextField?
     private var actionButtons: [AppButton] = []
-    private var actionSeparators: [ActionSeparator] = []
 
     static let width: CGFloat = 300
     private static let textInset = ChromeMetrics.Spacing.s16
@@ -59,7 +53,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     static let messageFont: NSFont = ChromeType.font(.small)
     private static var titleColor: NSColor { Theme.current.chrome.ink(.normal) }
     private static var messageColor: NSColor { Theme.current.chrome.ink(.muted) }
-    private static var separatorColor: NSColor { Theme.current.chrome.ink(.faint) }
 
     convenience init(content: ToastContent) {
         self.init(content: content, actions: [])
@@ -186,18 +179,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
 
     // The links' padding sits in the card's inset, so their text lines up with the message's.
     private func linkRow() -> NSView {
-        var views: [NSView] = []
-        for (index, button) in actionButtons.enumerated() {
-            if index > 0 {
-                let separator = ActionSeparator(labelWithString: "·")
-                separator.font = ChromeType.font(.caption)
-                separator.textColor = Self.separatorColor
-                actionSeparators.append(separator)
-                views.append(separator)
-            }
-            views.append(button)
-        }
-        let row = NSStackView(views: views)
+        let row = NSStackView(views: actionButtons)
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 0
@@ -215,7 +197,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     }
 
     private static func link(for action: ToastAction) -> AppButton {
-        AppButton(title: action.title, variant: .link, onTap: action.run)
+        AppButton(title: action.title, variant: action.kind == .cancel ? .quietLink : .link, onTap: action.run)
     }
 
     // Click-only: a `keyEquivalent` answers only when the traversal reaches the button, so the card owns Return and Esc.
@@ -294,7 +276,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
         messageLabel?.textColor = Self.messageColor
-        actionSeparators.forEach { $0.textColor = Self.separatorColor }
     }
 
     var actionTitleColorsForTesting: [NSColor] {
