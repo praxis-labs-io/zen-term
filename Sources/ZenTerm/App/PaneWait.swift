@@ -14,6 +14,7 @@ final class PaneWait {
         let readsForeground: Bool
         let pane: () -> ListResult.Pane?
         let exit: () -> LaunchedPaneExit?
+        let awaitsQueuedTask: () -> Bool
     }
 
     struct Answer {
@@ -65,9 +66,9 @@ final class PaneWait {
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in self?.answer(.timeout) }
     }
 
-    // A pane with `output` waits for that text, not for its agent to stop.
+    // A pane with `output` waits for that text, and one with a task queued for it waits for that task's turn.
     func agentStopped() {
-        guard output == nil else { return }
+        guard answers(.stopped) else { return }
         answer(.stopped)
     }
 
@@ -81,7 +82,9 @@ final class PaneWait {
         answer(.exited, exitCode: exit?.exitCode, text: exit?.lastLines)
     }
 
-    func answers(_ reason: WaitReason) -> Bool { reason != .stopped || output == nil }
+    func answers(_ reason: WaitReason) -> Bool {
+        reason != .stopped || (output == nil && !watched.awaitsQueuedTask())
+    }
 
     func messageArrived() { answer(.message) }
 

@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let worktreeRemovals = WorktreeRemovalTracker()
     private let paneWaits = PaneWaits()
     private let paneDrafts = PaneDrafts()
-    private let parentNotes = ParentNotes()
     private let claudeSetupOffer = ClaudeSetupOffer()
     private var controlResponder: ControlResponder?
     private let keys = KeyInterceptor()
@@ -71,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ThemePublisher.publish()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
-        keys.onKeyToFocus = { [weak self] in self?.keyController()?.keyReachedFocus() }
+        keys.onKeyToFocus = { [weak self] event in self?.keyController()?.keyReachedFocus(event) }
         keys.passThroughGuard = { [weak self] chord, action in
             let firstResponder = NSApp.keyWindow?.firstResponder
             guard let controller = self?.keyController() else {
@@ -102,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             bringForward: { Self.bringForward($0) },
             isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals,
             runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) }, paneWaits: paneWaits,
-            paneDrafts: paneDrafts, parentNotes: parentNotes)
+            paneDrafts: paneDrafts)
         controlResponder = responder
         let control = ControlServer { responder.respond(to: $0, hangup: $1, reply: $2) }
         control.start()

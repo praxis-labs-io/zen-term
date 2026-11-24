@@ -20,9 +20,6 @@ public enum ControlWire {
     /// Seconds past a held command's own timeout before the app gives up on its answer.
     public static let answerMargin = 5
 
-    /// The most seconds a `pane.send` to an agent holds while the person is typing into its pane.
-    public static let longestDraftHold = 60
-
     /// The most seconds `pane.run` waits for its program's first status report before it gives up on the task.
     public static let longestFirstTaskWait = 60
 
@@ -31,14 +28,14 @@ public enum ControlWire {
         cmd == .paneWait || cmd == .paneSend || cmd == .paneRun
     }
 
-    /// The seconds the app takes at most to answer `cmd`: a `pane.wait` its timeout, a `pane.send` the longest
-    /// draft hold and a waiting `pane.run` the longest first-task wait, each plus its wait's timeout when it
-    /// waits, plus `answerMargin`. Any other command, a `pane.run` that does not wait included, `longestReplyWait`.
+    /// The seconds the app takes at most to answer `cmd`: a `pane.wait` or a waiting `pane.send` its wait's timeout,
+    /// a waiting `pane.run` that plus the longest first-task wait, each plus `answerMargin`. Any other command, a
+    /// `pane.send` or `pane.run` that does not wait included, `longestReplyWait`.
     public static func answerWait(for cmd: ControlCommand, _ args: ControlArgs) -> Int {
         let wait = min(max(args.timeout ?? defaultPaneWait, 1), longestPaneWait)
         switch cmd {
         case .paneWait: return wait + answerMargin
-        case .paneSend: return longestDraftHold + (args.wait == true ? wait : 0) + answerMargin
+        case .paneSend where args.wait == true: return wait + answerMargin
         case .paneRun where args.wait == true: return longestFirstTaskWait + wait + answerMargin
         default: return longestReplyWait
         }

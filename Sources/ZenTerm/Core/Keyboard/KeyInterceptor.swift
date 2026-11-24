@@ -78,7 +78,7 @@ final class KeyInterceptor {
     var onModifierChange: ((NSEvent) -> Void)?
 
     // Only keys the chrome did not claim: answering an agent means typing to it, and a chord is not that.
-    var onKeyToFocus: (() -> Void)?
+    var onKeyToFocus: ((NSEvent) -> Void)?
 
     func start() {
         stop()
@@ -102,14 +102,14 @@ final class KeyInterceptor {
                 if !event.isARepeat || action.shouldRepeat { onReservedChord?(action) }
                 return nil
             case .deferToTerminal:
-                onKeyToFocus?()
+                onKeyToFocus?(event)
                 return event
             case .passThrough:
                 break
             }
         }
         if modeHandler?(event) == true { return nil }
-        onKeyToFocus?()
+        onKeyToFocus?(event)
         return event
     }
 

@@ -220,7 +220,7 @@ takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
 
-A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`).
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 

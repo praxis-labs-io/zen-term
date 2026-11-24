@@ -73,7 +73,8 @@
                         label: "Nested",
                         samples: [
                             row(
-                                ListRow.Content(title: "feature/zen-677", leading: .symbol("arrow.branch"), nests: true)
+                                ListRow.Content(
+                                    title: "feature/zen-677", leading: .symbol("arrow.branch"), nesting: .indented)
                             )
                         ]),
                     GallerySection.Row(
