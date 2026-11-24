@@ -103,6 +103,23 @@ final class FloatPaneTests: WindowTestCase {
         return error
     }
 
+    private func becomeAgent(_ token: Int) throws {
+        let program = try surface(token)
+        program.delegate?.surface(
+            program, programStatusDidChange: TerminalProgramStatus(state: .working, app: "claude"))
+        drainMainQueue()
+    }
+
+    private func run(_ args: ControlArgs, from caller: Int?) throws -> Int {
+        try XCTUnwrap(try answer(.paneRun, args, from: caller).get() as? PaneRunResult).pane
+    }
+
+    private func tabCount(_ c: WindowController) -> Int { c.listing().workspaces.flatMap(\.tabs).count }
+
+    private func isFloat(_ token: Int, in c: WindowController) -> Bool {
+        everyPane(c).first { $0.token == token }?.float == true
+    }
+
     private func drainMainQueue() {
         let expectation = expectation(description: "main queue")
         DispatchQueue.main.async { expectation.fulfill() }
@@ -325,5 +342,156 @@ final class FloatPaneTests: WindowTestCase {
         let refusal = try XCTUnwrap(error(try answer(.paneSplit, ControlArgs(pane: .token(float), dir: .right))))
 
         XCTAssertEqual(refusal.code, .badRequest)
+    }
+
+    func test_runFromAnAgentsPaneOpensAHiddenFloatInItsTab() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+        let showing = c.activeTabIDForTesting
+
+        let helper = try run(ControlArgs(cmd: "claude", name: "review"), from: lead)
+
+        XCTAssertTrue(isFloat(helper, in: c))
+        XCTAssertEqual(tabCount(c), 1)
+        XCTAssertEqual(c.pane(token: helper)?.tab, c.pane(token: lead)?.tab)
+        XCTAssertEqual(c.activeTabIDForTesting, showing)
+        XCTAssertNil(c.floatsForTesting.shownSurface, "the float took the screen")
+        XCTAssertEqual(everyPane(c).first { $0.token == helper }?.parent, lead)
+        XCTAssertEqual(everyPane(c).first { $0.token == helper }?.name, "review")
+    }
+
+    func test_runFromAPlainShellOrNoPaneOpensABackgroundTab() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+
+        let fromShell = try run(ControlArgs(cmd: "htop"), from: lead)
+        let fromNowhere = try run(ControlArgs(cmd: "htop"), from: nil)
+
+        XCTAssertFalse(isFloat(fromShell, in: c))
+        XCTAssertFalse(isFloat(fromNowhere, in: c))
+        XCTAssertEqual(tabCount(c), 3)
+    }
+
+    func test_anAgentsRunOpensATabWhenItOutlivesItsParent_orAsksForATab() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+
+        let outliving = try run(ControlArgs(cmd: "claude", outliveParent: true), from: lead)
+        let tab = try run(ControlArgs(cmd: "claude", float: false), from: lead)
+
+        XCTAssertFalse(isFloat(outliving, in: c))
+        XCTAssertFalse(isFloat(tab, in: c))
+        XCTAssertEqual(tabCount(c), 3)
+    }
+
+    func test_floatFromAPaneAnAgentStartedOpensAFloat_butItsDefaultIsATab() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+        let shell = try run(ControlArgs(cmd: "zsh", float: false), from: lead)
+
+        let asked = try run(ControlArgs(cmd: "htop", float: true), from: shell)
+        let defaulted = try run(ControlArgs(cmd: "htop"), from: shell)
+
+        XCTAssertTrue(isFloat(asked, in: c))
+        XCTAssertFalse(isFloat(defaulted, in: c))
+    }
+
+    func test_floatWithNoAgentAboveIsRefused() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+
+        let fromShell = try XCTUnwrap(error(try answer(.paneRun, ControlArgs(cmd: "htop", float: true), from: lead)))
+        let fromNowhere = try XCTUnwrap(error(try answer(.paneRun, ControlArgs(cmd: "htop", float: true))))
+
+        XCTAssertEqual(fromShell.code, .refused)
+        XCTAssertEqual(fromNowhere.code, .refused)
+        XCTAssertEqual(everyPane(c).count, 1)
+    }
+
+    func test_aFloatOrTabWithASplit_andAFloatThatOutlivesItsParent_areRefused() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+
+        for args in [
+            ControlArgs(cmd: "htop", split: .right, float: true),
+            ControlArgs(cmd: "htop", split: .right, float: false),
+            ControlArgs(cmd: "htop", float: true, outliveParent: true),
+        ] {
+            XCTAssertEqual(error(try answer(.paneRun, args, from: lead))?.code, .badRequest, "\(args)")
+        }
+        XCTAssertEqual(everyPane(c).count, 1)
+    }
+
+    func test_aSplitFromAnAgentStillSplits() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+
+        let split = try run(ControlArgs(cmd: "htop", split: .right), from: lead)
+
+        XCTAssertFalse(isFloat(split, in: c))
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).first?.panes.map(\.token), [lead, split])
+    }
+
+    func test_focusShowsTheFloatAtOnce() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        try becomeAgent(lead)
+
+        let helper = try run(ControlArgs(cmd: "claude", focus: true), from: lead)
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === (try surface(helper)))
+    }
+
+    func test_aFloatClosesWhenTheAgentAboveItExits_thoughItsPaneStaysOpen() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let helper = try run(ControlArgs(cmd: "claude", split: .right, keep: true), from: lead)
+        let process = try run(ControlArgs(cmd: "htop"), from: helper)
+        let tab = try run(ControlArgs(cmd: "htop", float: false), from: helper)
+        XCTAssertTrue(isFloat(process, in: c), "precondition: an agent's run is a float")
+        let quitting = try surface(helper)
+
+        quitting.delegate?.surface(quitting, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+
+        waitUntil(!isOpen(process, in: c), "the float closing with its agent")
+        XCTAssertTrue(isOpen(helper, in: c))
+        XCTAssertTrue(isOpen(tab, in: c), "a tab it started closed with the agent")
+    }
+
+    func test_closingATabNamesTheRunningFloatHiddenInIt() throws {
+        let c = makeWindow()
+        _ = try answer(.tabNew)
+        let agentPane = try XCTUnwrap(everyPane(c).last?.token)
+        try becomeAgent(agentPane)
+        let helper = try run(ControlArgs(cmd: "claude", name: "review"), from: agentPane)
+        try surface(helper).isBusy = true
+        c.selectTab(try XCTUnwrap(c.pane(token: agentPane)?.tab))
+
+        c.handle(.closeTab)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(
+            toastTexts(in: c).contains("Closing this tab will stop everything running in it, including review."),
+            "\(toastTexts(in: c))")
+    }
+
+    func test_closingAShownFloatsTabDoesNotNameIt() throws {
+        let c = makeWindow()
+        _ = try answer(.tabNew)
+        let agentPane = try XCTUnwrap(everyPane(c).last?.token)
+        try becomeAgent(agentPane)
+        let helper = try run(ControlArgs(cmd: "claude", focus: true, name: "review"), from: agentPane)
+        try surface(helper).isBusy = true
+
+        c.handle(.closeTab)
+
+        XCTAssertTrue(
+            toastTexts(in: c).contains("Closing this tab will stop everything running in it."),
+            "\(toastTexts(in: c))")
     }
 }

@@ -381,6 +381,23 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(spawned.count, surfaces)
     }
 
+    func test_aRunFromAnAgentOnAHost_defaultsToATab_andAFloatIsRefused() throws {
+        let c = makeWindow()
+        let login = try connected(c)
+        login.delegate?.surface(login, programStatusDidChange: TerminalProgramStatus(state: .working, app: "claude"))
+        drainMainQueue()
+        let agent = try token(of: login)
+        let surfaces = spawned.count
+
+        let defaulted = try error(send(.paneRun, ControlArgs(cmd: "claude"), from: agent))
+        let float = try error(send(.paneRun, ControlArgs(cmd: "claude", float: true), from: agent))
+
+        XCTAssertEqual(
+            defaulted.message, "A tab on ssh:devbox takes no cmd or cwd. It starts the host's login shell.")
+        XCTAssertEqual(float.message, "Pane \(agent) is on ssh:devbox, and a float there takes no cmd.")
+        XCTAssertEqual(spawned.count, surfaces)
+    }
+
     func test_anEmptyCommandForAHostTabOrSplit_isNoCommand() throws {
         let c = makeWindow()
         let login = try token(of: connected(c))

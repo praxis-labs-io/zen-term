@@ -2525,9 +2525,34 @@ final class WindowController: NSObject {
 
     func sessionCWD(of id: WorkspaceID) -> URL? { workspaces.first { $0.id == id }?.activeController?.sessionCWD }
 
-    func removedWorktree(of id: WorkspaceID) -> WorktreeOrigin? { workspaces.first { $0.id == id }?.removedWorktree }
+    func outsideRemovedWorktree(_ cwd: URL?, in id: WorkspaceID) -> URL? {
+        workspaces.first { $0.id == id }?.removedWorktree?.relocating(cwd) ?? cwd
+    }
 
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
+
+    func runsAgent(_ surface: SurfaceID) -> Bool { agents.agents[surface].map { !$0.hasExited } ?? false }
+
+    func hasAgent(atOrAbove token: Int) -> Bool {
+        var seen: Set<Int> = []
+        var next: Int? = token
+        while let current = next, seen.insert(current).inserted, let found = familyPane(token: current) {
+            if found.window.runsAgent(found.pane.surfaceID) { return true }
+            next = found.pane.record.parent
+        }
+        return false
+    }
+
+    private func familyPane(token: Int) -> (window: WindowController, pane: PaneHandle)? {
+        for window in familyWindows {
+            if let found = window.pane(token: token) { return (window, found.pane) }
+        }
+        return nil
+    }
+
+    func openFloatPane(in tab: TabID, running program: PaneProgram, cwd: URL?) -> Int? {
+        controller(tab)?.openFloatPane(running: program, cwd: cwd)
+    }
 
     func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
@@ -2639,10 +2664,7 @@ final class WindowController: NSObject {
         }
 
         private func names(of panes: [FamilyPane]) -> [String] {
-            panes.map(\.pane).map { pane in
-                pane.drawer.map(WindowController.drawerName) ?? pane.record.name
-                    ?? (pane.surface.title.isEmpty ? "pane \(pane.token)" : pane.surface.title)
-            }
+            panes.map(\.pane).map(WindowController.paneName)
         }
     }
 
@@ -2738,6 +2760,28 @@ final class WindowController: NSObject {
     private static func closesWith(_ pane: PaneHandle, _ closing: Set<Int>) -> Bool {
         guard let parent = pane.record.parent, !pane.record.outlivesParent else { return false }
         return closing.contains(parent)
+    }
+
+    // Async: an agent exit arrives inside its surface callback, which closing a pane would re-enter.
+    private func closeFloatsOutlivingTheirAgents() {
+        guard !didTearDown else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.didTearDown else { return }
+            for window in self.familyWindows {
+                for (tab, pane) in window.floatPanes()
+                where pane.record.parent.map({ !window.hasAgent(atOrAbove: $0) }) ?? false {
+                    window.removePane(pane.token, in: tab)
+                }
+            }
+        }
+    }
+
+    private func floatPanes() -> [(tab: TabID, pane: PaneHandle)] {
+        workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in
+                (workspace.controller(id)?.paneHandles ?? []).filter { $0.location == .float }.map { (id, $0) }
+            }
+        }
     }
 
     // Async: a release lands mid-rebuild of the canvas it came from, which may hold a child too.
@@ -3324,7 +3368,15 @@ final class WindowController: NSObject {
 
     private func hiddenRunningNames(inTab id: TabID) -> [String] {
         let drawers = (controller(id)?.hiddenRunningDrawers ?? []).map(Self.drawerName)
-        return drawers + floats.hiddenRunningTitles(scope: id)
+        let floatPanes = (controller(id)?.paneHandles ?? []).filter {
+            $0.location == .float && $0.surface.isBusy && $0.surfaceID != floats.shownPaneSurface
+        }
+        return drawers + floatPanes.map(Self.paneName) + floats.hiddenRunningTitles(scope: id)
+    }
+
+    private static func paneName(_ pane: PaneHandle) -> String {
+        pane.drawer.map(drawerName) ?? pane.record.name
+            ?? (pane.surface.title.isEmpty ? "pane \(pane.token)" : pane.surface.title)
     }
 
     private func runningNamesInWindow() -> [String] {
@@ -3981,6 +4033,7 @@ final class WindowController: NSObject {
     private var focusedSurface: SurfaceID? {
         guard modal == nil, !sidebar.hasFocus else { return nil }
         if let float = floats.activeID { return floats.surfaceID(float) }
+        if let pane = floats.shownPaneSurface { return pane }
         return activeController?.focusedSurfaceID
     }
 
@@ -4146,6 +4199,7 @@ final class WindowController: NSObject {
             endAgent(surface)
         }
         renderAgents()
+        closeFloatsOutlivingTheirAgents()
         return crashed
     }
 
@@ -4164,6 +4218,7 @@ final class WindowController: NSObject {
         endAgent(surface)
         agents.drop(surface)
         renderAgents()
+        closeFloatsOutlivingTheirAgents()
     }
 
     private func takeDownTurnEndNotice(of surface: SurfaceID) {
@@ -4182,6 +4237,7 @@ final class WindowController: NSObject {
         }
         let processesExited = trackProcessExits()
         if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
+        if !exitsAwaitingResult.isEmpty { closeFloatsOutlivingTheirAgents() }
     }
 
     // Unlisted too: a pane with no agent above it can gain one later, and must not return as live.
@@ -4254,7 +4310,7 @@ final class WindowController: NSObject {
         }
         let processRows = panes.values.compactMap { pane -> AgentFamilies.Member? in
             guard pane.record.parent != nil, agents.agents[pane.surfaceID] == nil,
-                !exitedProcesses.contains(pane.surfaceID),
+                pane.location == .float || !exitedProcesses.contains(pane.surfaceID),
                 let place = agentPlace(pane.surfaceID)
             else { return nil }
             let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
