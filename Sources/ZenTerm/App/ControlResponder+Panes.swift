@@ -142,9 +142,6 @@ extension ControlResponder {
                 guard case .success(let place) = pane(.token(token), for: request) else { return false }
                 return Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) != nil
             }
-            if request.args.enter == true, Self.startsTurn(request.args.text ?? "") {
-                place.window.noteTaskSubmitted(to: place.pane)
-            }
             var wait: PaneWait?
             if request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) {
                 wait = hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
@@ -159,6 +156,7 @@ extension ControlResponder {
             paneDrafts.queue(
                 place.pane.surfaceID,
                 PaneDrafts.Message(
+                    isTask: request.args.enter == true && Self.startsTurn(request.args.text ?? ""),
                     isBlocked: isBlocked,
                     deliver: { [self] in
                         if case .failure(let error) = deliver(to: token, for: request) { drop(error.message) }
@@ -430,7 +428,10 @@ extension ControlResponder {
         return PaneWait.Watched(
             surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
             pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } },
-            exit: { [self] in launchedExit(of: token) })
+            exit: { [self] in launchedExit(of: token) },
+            awaitsQueuedTask: { [paneDrafts, surfaceID = place.pane.surfaceID] in
+                paneDrafts.hasQueuedTask(for: surfaceID)
+            })
     }
 
     func launchedExit(of token: Int) -> LaunchedPaneExit? {

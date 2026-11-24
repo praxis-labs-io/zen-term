@@ -559,6 +559,37 @@ final class ControlHelperNoteTests: WindowTestCase {
                 + note("review is blocked on a permission prompt; that decision is the user's", from: helper))
     }
 
+    func test_aChildrenWaitForAnyAnswersOnTheTurnOfATaskQueuedForTheChildsDraft() throws {
+        try assertChildrenWaitAnswersOnTheQueuedTasksTurn(.any)
+    }
+
+    func test_aChildrenWaitForAllAnswersOnTheTurnOfATaskQueuedForTheChildsDraft() throws {
+        try assertChildrenWaitAnswersOnTheQueuedTasksTurn(.all)
+    }
+
+    private func assertChildrenWaitAnswersOnTheQueuedTasksTurn(_ mode: WaitChildren) throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try type(into: helper, in: c)
+        let queued = try XCTUnwrap(try sending("go", from: parent, to: helper)?.get() as? PaneSendResult)
+        XCTAssertEqual(queued.queued, true)
+        let answer = try waitOnChildren(of: parent, mode)
+
+        report(.done, from: helper)
+        XCTAssertNil(answer.reply, "the turn that ended is not the queued task's")
+        XCTAssertEqual(parent.inputs, [], "a helper with a task queued for it has not stopped")
+
+        try sendDraft(in: c)
+        report(.working, from: helper)
+        report(.done, from: helper)
+        waitUntil(answer.reply != nil, "the wait to answer")
+        let got = try XCTUnwrap(try answer.reply?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .stopped)
+    }
+
     func test_aParentThatClosesItsHelperDropsTheNoteHeldForItsDraft() throws {
         let c = makeWindow()
         let parent = try XCTUnwrap(spawned.first)

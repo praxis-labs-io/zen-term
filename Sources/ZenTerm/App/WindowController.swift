@@ -2459,7 +2459,7 @@ final class WindowController: NSObject {
     }
 
     func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
-        if taskPickups.awaitsPickup(pane.surfaceID) { return true }
+        if taskPickups.awaitsPickup(pane.surfaceID) || paneDrafts.hasQueuedTask(for: pane.surfaceID) { return true }
         let listed = listing(of: pane, in: tab)
         guard let agent = listed.agent else { return listed.busy }
         return agent.status.map { $0 == .working } ?? (agent.state == .working)
@@ -3766,7 +3766,9 @@ final class WindowController: NSObject {
     // Read before the change reaches `paneWaits`, which drops the waits it answers.
     private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
         guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
-        if case .stopped = change, helpersReported.contains(surface) { return }
+        if case .stopped = change, helpersReported.contains(surface) || paneDrafts.hasQueuedTask(for: surface) {
+            return
+        }
         onHelperNote?(
             HelperNote(
                 helper: pane.token, name: pane.record.name, parent: parent, change: change,

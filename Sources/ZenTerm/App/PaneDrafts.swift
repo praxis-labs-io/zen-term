@@ -3,6 +3,7 @@ import Foundation
 // What the person has unsent at each pane's prompt, and the messages queued for it in order. App-wide, main-thread only.
 final class PaneDrafts {
     struct Message {
+        let isTask: Bool
         let isBlocked: () -> Bool
         let deliver: () -> Void
         let drop: (_ reason: String) -> Void
@@ -43,6 +44,10 @@ final class PaneDrafts {
 
     func isHolding(_ surface: SurfaceID) -> Bool {
         queues[surface] != nil || drafts.contains(surface) || now() < quietAt(surface)
+    }
+
+    func hasQueuedTask(for surface: SurfaceID) -> Bool {
+        queues[surface]?.contains(where: \.isTask) == true
     }
 
     func queue(_ surface: SurfaceID, _ message: Message) {

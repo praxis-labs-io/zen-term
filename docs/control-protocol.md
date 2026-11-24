@@ -319,8 +319,9 @@ Into a pane that runs an agent:
   send whose agent is `blocked` when its turn comes waits until it is not, and is dropped once the
   agent stays blocked 10 minutes from when the person sent or cleared their text. A queued send that
   is dropped, there or because its pane closed or refused it, answers a `wait` with a `failed` error
-  that gives the reason. A queued send with `enter` is a handed task for `pane.wait`'s `children` from the moment
-  it is queued.
+  that gives the reason. While a send with `enter` other than a slash command is queued, a stop
+  of the agent's turn answers no wait on the pane and sends no `stopped` note, and `children`
+  counts it as working, so each waits for the queued message's turn.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
   `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
   token, and its name after it when it has one, with `&`, `"`, `<` and `>` escaped as `&amp;`,
@@ -329,7 +330,7 @@ Into a pane that runs an agent:
   note to its parent (`pane.run`) arrives the same way, its name escaped the same way.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does. A queued
-send's wait begins when it is queued.
+send's wait begins when it is queued, and its `timeout` counts from then.
 
 ### `pane.run`
 
@@ -507,7 +508,8 @@ A child is working while its agent's `status` is `working`, or, with no `status`
 reads its agent as working. A child that runs no agent is working while its program runs. A child
 handed a task while its `status` was `idle` or `done`, as its first task or as `pane.send` text
 with `enter` other than a slash command, counts as working until its `status` moves past `idle`
-or `done`, clears, or its agent exits, so `all` does not answer before it starts on the task.
+or `done`, clears, or its agent exits, so `all` does not answer before it starts on the task. A
+child with such a send queued for its person's draft counts as working until the send arrives.
 With `all`, each child's `reason` is its latest news while the wait held, so a child that
 stopped and then exited answers `exited` with its `exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
 `bad_request` with `all`.

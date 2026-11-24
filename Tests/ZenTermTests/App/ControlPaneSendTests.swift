@@ -386,6 +386,25 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [])
     }
 
+    func test_aQueuedSendsWaitAnswersOnItsOwnTurn_notOnTheTurnItQueuedBehind() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.working, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "x", to: c)
+        let answer = send("go", to: try token(of: agent), enter: true, wait: true, timeout: 30)
+
+        report(.done, from: agent)
+        XCTAssertNil(answer.reply, "the turn that ended is not the queued message's")
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(0)
+        report(.working, from: agent)
+        report(.done, from: agent)
+        guard case .success(let payload) = answer.reply else { return XCTFail("\(answer.reply as Any)") }
+        XCTAssertEqual((payload as? WaitResult)?.reason, .stopped)
+    }
+
     func test_aQueuedSendThatWaitsStartsItsWaitAtOnce() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)

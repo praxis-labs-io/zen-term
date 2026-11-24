@@ -17,7 +17,9 @@ extension ControlResponder {
         let drop = { (reason: String) in
             Log.warning("Dropped pane \(note.helper)'s note to pane \(note.parent): \(reason).", category: .control)
         }
-        paneDrafts.queue(parent.pane.surfaceID, PaneDrafts.Message(isBlocked: isBlocked, deliver: deliver, drop: drop))
+        paneDrafts.queue(
+            parent.pane.surfaceID, PaneDrafts.Message(isTask: false, isBlocked: isBlocked, deliver: deliver, drop: drop)
+        )
     }
 
     private func isStale(_ note: HelperNote) -> Bool {

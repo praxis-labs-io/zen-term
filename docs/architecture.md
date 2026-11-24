@@ -656,7 +656,9 @@ side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `s
 A wait on the caller's children (`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
 as a single pane's does. A task submitted to a ready agent, a run's first task or a `pane.send`
 with `enter`, sits in its window's `TaskPickups` until the agent's next report past `idle` or
-`done`, a cleared status, or its exit, and the child counts as working meanwhile. A pane `pane.run` opened leaves its exit in its window's
+`done`, a cleared status, or its exit, and the child counts as working meanwhile. A task queued
+in `PaneDrafts` is noted at delivery; until then `PaneDrafts.hasQueuedTask` counts the child as
+working, holds back its `stopped` note, and keeps `PaneWait` from answering its agent's stop. A pane `pane.run` opened leaves its exit in its window's
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent queues in `PaneDrafts`, also app-wide, while the person has unsent text at its prompt.
 `WindowController.keyReachedFocus` feeds it each key the chrome did not claim from
