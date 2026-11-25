@@ -7,7 +7,6 @@ struct SidebarAgentItem: Equatable {
         case process
     }
 
-    // What the row's second line names: a workspace, or a tab-less float's title, in sidebar order.
     struct Place: Hashable {
         let name: String
         let order: Int
@@ -23,7 +22,6 @@ struct SidebarAgentItem: Equatable {
     var process = ProcessIcon.unknownAgent
     var canClose = false
     var place = Place(name: "", order: Int.max)
-    // The agent's name where its chip is the robot, which cannot say which agent it is.
     var agentLabel: String?
 }
 

@@ -8,6 +8,7 @@ final class AgentPickerOverlay: PaletteOverlay {
     }
 
     static let returnAction = "Focus"
+    static let noAgentsText = "No agents running"
 
     private let onFocus: (SurfaceID) -> Void
     private var items: [SidebarAgentItem]
@@ -63,6 +64,10 @@ final class AgentPickerOverlay: PaletteOverlay {
 
     override func returnAction(at index: Int) -> String? { Self.returnAction }
 
+    override func emptyText(for query: String) -> String {
+        query.trimmingCharacters(in: .whitespaces).isEmpty ? Self.noAgentsText : super.emptyText(for: query)
+    }
+
     override func applyFilter(query: String) {
         let q = query.trimmingCharacters(in: .whitespaces)
         let families = Self.families(of: items).compactMap { family -> [SidebarAgentItem]? in
@@ -96,7 +101,6 @@ final class AgentPickerOverlay: PaletteOverlay {
         return families
     }
 
-    // Places in sidebar order; within one, the Agents list's own order.
     private static func grouped(_ families: [[SidebarAgentItem]]) -> [Row] {
         var places: [SidebarAgentItem.Place] = []
         var members: [SidebarAgentItem.Place: [SidebarAgentItem]] = [:]
@@ -160,12 +164,6 @@ final class AgentPickerOverlay: PaletteOverlay {
                 return Content(
                     title: item.summary, leading: .process(item.process), ink: .subtle, nesting: .underTitle)
             }
-        }
-
-        override func reapplyTheme() {
-            render(Self.content(item))
-            apply(item)
-            super.reapplyTheme()
         }
 
         var leadingProcessForTesting: ProcessIcon? {

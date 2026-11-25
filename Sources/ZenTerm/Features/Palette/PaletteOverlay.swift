@@ -82,6 +82,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private let rowsStack = NSStackView()
     private let scrollView: FadingScrollView
     private let emptyLabel: EmptyStateLabel
+    private let defaultEmptyText: String
     private let footer: HintFooter
     private let listVerticalInset: CGFloat = ChromeMetrics.Spacing.s8
     private var listHeight: NSLayoutConstraint!
@@ -98,6 +99,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         placeholder: String, emptyText: String, onDismiss: @escaping () -> Void
     ) {
         self.emptyLabel = EmptyStateLabel(emptyText)
+        self.defaultEmptyText = emptyText
         self.searchPlaceholder = placeholder
         self.footer = HintFooter([], trailingInset: Self.searchInset)
         let doc = FlippedView()
@@ -222,6 +224,8 @@ class PaletteOverlay: ModalShell, ModalOverlay {
 
     func isSelectable(at index: Int) -> Bool { true }
 
+    func emptyText(for query: String) -> String { defaultEmptyText }
+
     func returnAction(at index: Int) -> String? { nil }
 
     func hasMoreActions(at index: Int) -> Bool { false }
@@ -281,6 +285,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         laidOutRows = next
 
         emptyLabel.isHidden = count != 0
+        if count == 0 { emptyLabel.stringValue = emptyText(for: searchField.stringValue) }
         setListHeight(count == 0 ? Self.emptyListHeight : min(total + 2 * listVerticalInset, Self.maxListHeight))
         selected = defaultSelectionIndex()
         updateHighlight()

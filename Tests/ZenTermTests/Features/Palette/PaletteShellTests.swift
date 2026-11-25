@@ -133,6 +133,25 @@ final class PaletteShellTests: WindowTestCase {
         XCTAssertEqual(try barText(in: overlay), [], "nothing to run, so the bar names nothing")
     }
 
+    private func emptyState(in overlay: PaletteOverlay) -> String? {
+        descendants(of: overlay).compactMap { $0 as? EmptyStateLabel }.first { !$0.isHidden }?.stringValue
+    }
+
+    func test_theEmptyState_keepsAPanelsFixedText_forAnyQuery_unlessThePanelSuppliesItsOwn() throws {
+        let stub = StubPalette([])
+        _ = mount(stub)
+        XCTAssertEqual(emptyState(in: stub), "No stubs", "no rows and no query")
+        try type("zzz", into: stub)
+        XCTAssertEqual(emptyState(in: stub), "No stubs", "no match")
+
+        let palette = CommandPaletteOverlay(
+            commands: { [PaletteCommand(title: "New Tab", shortcut: "", category: "Tabs", chord: .newTab)] },
+            onRun: { _ in }, onDismiss: {})
+        _ = mount(palette)
+        try type("zzz", into: palette)
+        XCTAssertEqual(emptyState(in: palette), "No matching commands")
+    }
+
     func test_theBar_isRightAligned() throws {
         let overlay = makeStub()
         _ = mount(overlay)

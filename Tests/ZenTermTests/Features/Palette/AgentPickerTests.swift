@@ -136,7 +136,6 @@ final class AgentPickerTests: WindowTestCase {
         return try XCTUnwrap(sidebarItems(c).first { $0.place.name == title }?.id)
     }
 
-    // Root agent with a helper (a float) and a process under it, plus an agent in a second workspace.
     private func populate(_ c: WindowController) throws -> (root: Pane, helper: Pane, process: Pane, other: SurfaceID) {
         let rootAgent = try rootAgent(c, title: "Fix the login bug")
         let helper = try run("claude", from: rootAgent, in: c)
@@ -218,6 +217,22 @@ final class AgentPickerTests: WindowTestCase {
 
         try type("zzzz", into: picker)
         XCTAssertEqual(picker.rowsForTesting, [])
+    }
+
+    private func emptyState(in picker: AgentPickerOverlay) -> String? {
+        descendants(of: picker).compactMap { $0 as? EmptyStateLabel }.first { !$0.isHidden }?.stringValue
+    }
+
+    func test_aWindowWithNoAgents_saysNoneAreRunning_andAQueryWithNoMatchSaysSo() throws {
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+        XCTAssertEqual(emptyState(in: picker), AgentPickerOverlay.noAgentsText)
+
+        try type("zzzz", into: picker)
+        XCTAssertEqual(emptyState(in: picker), "No matching agents")
+
+        try type("", into: picker)
+        XCTAssertEqual(emptyState(in: picker), AgentPickerOverlay.noAgentsText)
     }
 
     func test_theBar_offersFocus_only() throws {
