@@ -69,12 +69,13 @@ final class UpdateController {
         variant: .info, title: "Updates are off in this build",
         message: "Run from source, so there's no feed.\nThe installed app updates itself.")
 
+    static let updaterDidNotStartNotice = ToastContent(
+        variant: .warning, title: "Couldn't check for updates",
+        message: "The updater didn't start. See the log for details.")
+
     func checkForUpdates() {
         guard started else {
-            announce(
-                ToastContent(
-                    variant: .warning, title: "Couldn't check for updates",
-                    message: "The updater didn't start. See the log for details."))
+            announce(Self.updaterDidNotStartNotice)
             return
         }
         updater.checkForUpdates()

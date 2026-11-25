@@ -330,11 +330,9 @@ final class ClaudeSetupOfferTests: WindowTestCase {
             let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.messageMaxWidth, "wraps: \(line)")
         }
-        let titleRoom = ToastView.messageMaxWidth - ChromeMetrics.Height.xs - ChromeMetrics.Spacing.s6
         for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.claudeUpdateFailedTitle] {
-            let width = (title as NSString).size(withAttributes: [.font: ChromeType.font(.body, weight: .semibold)])
-                .width
-            XCTAssertLessThanOrEqual(width, titleRoom, "wraps: \(title)")
+            let width = (title as NSString).size(withAttributes: [.font: ToastView.titleFont]).width
+            XCTAssertLessThanOrEqual(width, ToastView.titleMaxWidth, "truncates: \(title)")
         }
     }
 }

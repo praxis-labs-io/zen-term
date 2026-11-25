@@ -111,7 +111,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     private func failureToastNames(_ host: String, in c: WindowController) -> Bool {
-        showsToast("Couldn't Connect to", in: c) && showsToast(" \(host)", in: c)
+        showsToast("Couldn't connect to", in: c) && showsToast(" \(host)", in: c)
     }
 
     private func longHostWindow() -> (WindowController, SSHHostID) {
@@ -699,7 +699,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let toast = try XCTUnwrap(cards(in: c).first)
         let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
         let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.alias)" })
-        let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't Connect to" })
+        let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't connect to" })
         XCTAssertGreaterThan(
             lead.intrinsicContentSize.width + tail.intrinsicContentSize.width, toast.frame.width - 60,
             "precondition: the two do not fit")

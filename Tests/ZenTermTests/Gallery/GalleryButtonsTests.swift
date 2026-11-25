@@ -5,10 +5,10 @@ import XCTest
 final class GalleryButtonsTests: XCTestCase {
     func test_theGalleryShowsEveryAppButtonVariant() {
         let shown = GalleryButtons.variants
-        let every: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link]
+        let every: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link, .quietLink]
         for variant in every {
             switch variant {
-            case .primary, .secondary, .muted, .destructive, .link:
+            case .primary, .secondary, .muted, .destructive, .link, .quietLink:
                 XCTAssertTrue(
                     shown.contains(variant),
                     "\(GalleryButtons.title(for: variant)) has no row in the gallery, so its states go unseen")

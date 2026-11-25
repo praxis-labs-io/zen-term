@@ -604,7 +604,7 @@ final class FloatPaneTests: WindowTestCase {
 
         let texts = toastTexts(in: c)
         XCTAssertTrue(texts.contains("review is open. Close it to get back to your panes."), "\(texts)")
-        XCTAssertTrue(texts.contains("Float Pane"), "\(texts)")
+        XCTAssertTrue(texts.contains("Float pane"), "\(texts)")
     }
 
     private func pressCommandW(in c: WindowController) throws {

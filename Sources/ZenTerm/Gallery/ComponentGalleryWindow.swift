@@ -168,7 +168,8 @@
         private func makeBody() -> NSView {
             let sections =
                 GalleryButtons.sections() + GalleryFields.sections() + GalleryPickers.sections()
-                + GalleryCards.sections() + GalleryConfirms.sections() + GalleryTabs.sections() + GalleryType.sections()
+                + GalleryCards.sections() + GalleryToasts.sections() + GalleryConfirms.sections()
+                + GalleryTabs.sections() + GalleryType.sections()
             let stack = NSStackView(views: sections)
             stack.orientation = .vertical
             stack.alignment = .leading

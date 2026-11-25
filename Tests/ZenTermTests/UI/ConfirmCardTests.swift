@@ -198,6 +198,7 @@ final class ConfirmCardTests: WindowTestCase {
         }
         NSApp.postEvent(try click(.leftMouseUp), atStart: false)
         text.mouseDown(with: try click(.leftMouseDown))
+        _ = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true)
 
         XCTAssertTrue(window?.firstResponder === card)
     }

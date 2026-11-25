@@ -92,13 +92,23 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [paletteOnAMenuChord, newTabUnusableBind]))
         XCTAssertEqual(content.title, "2 problems in your config")
         XCTAssertEqual(
+            content.messageLabels, ["Command Palette:", "New Tab:"], "each setting's name heads its problem")
+        let toast = ToastView(content: content)
+        let message = try XCTUnwrap(toast.messageForTesting)
+        let ink = { (line: String) in
+            let at = (message.string as NSString).range(of: line).location
+            return message.attribute(.foregroundColor, at: at, effectiveRange: nil) as? NSColor
+        }
+        XCTAssertEqual(ink("New Tab:"), Theme.current.chrome.ink(.normal), "a setting's name reads in the title's ink")
+        XCTAssertEqual(ink("cmd+q → Quit"), Theme.current.chrome.ink(.muted), "its problem stays muted")
+        XCTAssertEqual(
             content.message,
             """
-            Command Palette
-              cmd+q → Quit
+            Command Palette:
+            cmd+q → Quit
 
-            New Tab
-              cmd+| can't be typed
+            New Tab:
+            cmd+| can't be typed
             """)
         XCTAssertFalse(
             try XCTUnwrap(content.message).contains("in your config"),

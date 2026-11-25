@@ -555,13 +555,19 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   confirm ahead of anything newer, otherwise the newest. A click unfolds it into a list; a click
   outside, Show Less, or one card left folds it. Countdowns hold while it is unfolded and restart
   a whole duration when it folds.
+- **A toast that offers an action stays until it is answered.** Only an attention or completion
+  card under `auto` counts down with its actions. A non-modal card's actions are text links and
+  it never takes focus; a confirm keeps its buttons, because it owns Return and Esc.
+- **A toast's copy and actions come from a static factory on its owner** (`WindowController+Toasts`
+  for the window's), never a literal at the call site. `GalleryToasts` builds the Component
+  Gallery's toast sections from the same factories, so a new toast adds itself there too.
 
 ### The interaction language
 
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `link`; an optional shortcut keycap inside),
+  `link`, `quietLink` for a dismissing link beside another; an optional shortcut keycap inside),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes

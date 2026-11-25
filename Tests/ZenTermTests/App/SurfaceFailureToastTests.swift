@@ -50,7 +50,7 @@ final class SurfaceFailureToastTests: WindowTestCase {
             return XCTFail("the surface-failure toast must mount in the window")
         }
         XCTAssertNotNil(button("Retry", in: toast), "the toast offers Retry")
-        XCTAssertNotNil(button("Close Pane", in: toast), "the toast offers Close Pane")
+        XCTAssertNotNil(button("Close pane", in: toast), "the toast offers Close Pane")
     }
 
     func test_retryButton_runsRetryAndDismisses() {
@@ -77,7 +77,7 @@ final class SurfaceFailureToastTests: WindowTestCase {
         controller.presentSurfaceFailureToastForTesting(retry: { retried += 1 }, close: { closed += 1 })
 
         guard let toast = toastViews(in: controller).first,
-            let close = button("Close Pane", in: toast)
+            let close = button("Close pane", in: toast)
         else { return XCTFail("expected a mounted toast with a Close Pane button") }
 
         close.performClick(nil)
