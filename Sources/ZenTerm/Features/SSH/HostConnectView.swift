@@ -41,7 +41,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         connectButton = AppButton(
             title: "Connect", variant: .primary, onTap: onConnect)
         connectAnywayButton = AppButton(
-            title: "Connect Anyway", variant: .secondary, onTap: onConnect)
+            title: "Connect Anyway", variant: .muted, onTap: onConnect)
         panel = PanelHostView(content: content, meta: nil, fillsContent: true, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false

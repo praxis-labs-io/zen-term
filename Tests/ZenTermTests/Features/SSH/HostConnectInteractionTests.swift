@@ -1243,7 +1243,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(screen.actionButtonForTesting.window)
     }
 
-    func test_anOfflineHost_readsOffline_withNoDot_aDimmedEmblem_andAQuietConnectAnyway() throws {
+    func test_anOfflineHost_readsOffline_withNoDot_aDimmedEmblem_andAFilledButNotAccentConnectAnyway() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
         let chrome = Theme.current.chrome
@@ -1253,7 +1253,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         let button = screen.actionButtonForTesting
         XCTAssertEqual(button.title, "Connect Anyway")
         XCTAssertNotNil(button.window, "the quiet button is the one on screen")
-        XCTAssertNil(button.layer?.backgroundColor.flatMap { $0.alpha > 0 ? $0 : nil }, "not the accent fill")
+        XCTAssertEqual(
+            button.layer?.backgroundColor, chrome.fill(.rest).cgColor, "a visible container, and not the accent fill")
         let emblem = screen.emblemForTesting
         XCTAssertEqual(
             emblem.cellColorsForTesting,
