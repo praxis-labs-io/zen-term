@@ -1490,12 +1490,19 @@ final class WindowController: NSObject {
         land(at: order.navigableWorkspaces.count)
     }
 
+    private func landOnLoginBehindConnect() {
+        guard let host = workspaces.first(where: isBehindConnect)?.host else { return }
+        selection = .host(host)
+        mount(.instant)
+        renderAttention()
+    }
+
     private func land(at place: Int) {
         let remaining = order.navigableWorkspaces
         let landing =
             remaining.isEmpty
             ? workspaces.first { !isBehindConnect($0) }?.id : remaining[min(place, remaining.count - 1)]
-        guard let next = workspaces.first(where: { $0.id == landing }) else { return }
+        guard let next = workspaces.first(where: { $0.id == landing }) else { return landOnLoginBehindConnect() }
         selection = .workspace(next)
         mount(.slide(from: place < remaining.count ? .fromBottom : .fromTop))
         if let tab = next.activeID { visit(tab) }

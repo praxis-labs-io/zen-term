@@ -240,6 +240,19 @@ final class HostConnectLoginTests: WindowTestCase {
         return all(content).contains { $0 is View && !$0.isHidden }
     }
 
+    func test_closingTheOnlyLocalWorkspaceWhileALoginRuns_landsOnItsConnect() throws {
+        let (c, _) = try loggingIn()
+        let local = try XCTUnwrap(c.workspaceIDsForTesting.first { c.host(of: $0) == nil })
+        c.activateWorkspace(local)
+        XCTAssertNil(c.connectViewForTesting)
+
+        c.closeTabForTesting(index: 0)
+
+        XCTAssertNotNil(c.connectViewForTesting, "the window lands on the login's Connect, not a blank canvas")
+        fake.connect()
+        XCTAssertEqual(c.activeConnectionForTesting?.state, .connected, "and its connect still mounts the terminal")
+    }
+
     func test_aLoginThatConnectsWhileAnotherWorkspaceShows_leavesThatWorkspaceUp() throws {
         let (c, _) = try loggingIn()
         let local = try XCTUnwrap(c.workspaceIDsForTesting.first { c.host(of: $0) == nil })
