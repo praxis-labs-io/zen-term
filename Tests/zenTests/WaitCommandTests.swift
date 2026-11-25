@@ -37,6 +37,8 @@ final class WaitCommandTests: XCTestCase {
         XCTAssertEqual(ControlClient.replyTimeout(for: .paneSend, ControlArgs(pane: 34, timeout: 400, wait: true)), 410)
         XCTAssertEqual(ControlWire.answerWait(for: .paneRun, ControlArgs(cmd: "claude")), ControlWire.longestReplyWait)
         XCTAssertEqual(ControlWire.answerWait(for: .paneRun, ControlArgs(cmd: "claude", timeout: 400, wait: true)), 465)
+        XCTAssertEqual(ControlWire.answerWait(for: .sshAskpass, ControlArgs()), ControlWire.longestLoginAnswer + 5)
+        XCTAssertEqual(ControlClient.replyTimeout(for: .sshAskpass, ControlArgs()), ControlWire.longestLoginAnswer + 10)
     }
 
     func test_aMissingPaneOrAnOutOfRangeTimeoutIsAUsageError() {

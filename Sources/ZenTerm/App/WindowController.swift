@@ -1510,6 +1510,15 @@ final class WindowController: NSObject {
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
 
+    func askLogin(
+        _ prompt: String, sshPID: Int?, token: String, hangup: ControlHangup,
+        reply: @escaping SSHConnection.AskpassReply
+    ) -> Bool {
+        workspaces.contains {
+            $0.connection?.ask(prompt, sshPID: sshPID, token: token, hangup: hangup, reply: reply) == true
+        }
+    }
+
     func session(of host: SSHHostID) -> SSHConnection.State? {
         workspaces.first { $0.host == host }?.connection?.state
     }

@@ -23,20 +23,24 @@ public enum ControlWire {
     /// The most seconds `pane.run` waits for its program's first status report before it gives up on the task.
     public static let longestFirstTaskWait = 60
 
+    /// The most seconds `ssh.askpass` holds for a person to answer ssh.
+    public static let longestLoginAnswer = 600
+
     /// Whether `cmd` can hold its answer past `longestReplyWait`, and so sets its own deadline with `answerWait`.
     public static func setsOwnDeadline(_ cmd: ControlCommand) -> Bool {
-        cmd == .paneWait || cmd == .paneSend || cmd == .paneRun
+        cmd == .paneWait || cmd == .paneSend || cmd == .paneRun || cmd == .sshAskpass
     }
 
     /// The seconds the app takes at most to answer `cmd`: a `pane.wait` or a waiting `pane.send` its wait's timeout,
-    /// a waiting `pane.run` that plus the longest first-task wait, each plus `answerMargin`. Any other command, a
-    /// `pane.send` or `pane.run` that does not wait included, `longestReplyWait`.
+    /// a waiting `pane.run` that plus the longest first-task wait, `ssh.askpass` `longestLoginAnswer`, each plus
+    /// `answerMargin`. Any other command, a `pane.send` or `pane.run` that does not wait included, `longestReplyWait`.
     public static func answerWait(for cmd: ControlCommand, _ args: ControlArgs) -> Int {
         let wait = min(max(args.timeout ?? defaultPaneWait, 1), longestPaneWait)
         switch cmd {
         case .paneWait: return wait + answerMargin
         case .paneSend where args.wait == true: return wait + answerMargin
         case .paneRun where args.wait == true: return longestFirstTaskWait + wait + answerMargin
+        case .sshAskpass: return longestLoginAnswer + answerMargin
         default: return longestReplyWait
         }
     }

@@ -43,6 +43,12 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var wait: Bool?
     /// Which of the caller's children `pane.wait` waits on, in place of a pane.
     public var children: WaitChildren?
+    /// The token a host login's ssh was started with, which `ssh.askpass` must carry.
+    public var token: String?
+    /// The question ssh asks, verbatim.
+    public var prompt: String?
+    /// The pid of the ssh that asks. Sent as `ssh_pid`.
+    public var sshPID: Int?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
@@ -51,7 +57,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
         output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
         float: Bool? = nil, keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil,
-        children: WaitChildren? = nil
+        children: WaitChildren? = nil, token: String? = nil, prompt: String? = nil, sshPID: Int? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -81,11 +87,15 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.keep = keep
         self.outliveParent = outliveParent
         self.children = children
+        self.token = token
+        self.prompt = prompt
+        self.sshPID = sshPID
     }
 
     private enum CodingKeys: String, CodingKey {
         case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, branch, base
-        case existing, open, name, output, timeout, task, split, float, keep, wait, children
+        case existing, open, name, output, timeout, task, split, float, keep, wait, children, token, prompt
         case outliveParent = "outlive_parent"
+        case sshPID = "ssh_pid"
     }
 }

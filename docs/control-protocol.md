@@ -22,6 +22,13 @@ The socket file is `0600`, and its folder is created `0700` when missing. Every
 accepted connection checks the peer with `getpeereid` and closes, unread, one
 whose uid is not the app's. The server is on whenever the app runs.
 
+Any process of that user can send any command and claim any `caller.pane`. `ssh.askpass`
+is the one command whose answer is a secret, so it is checked against a token, not a
+caller: each SSH host login gets a fresh random token, valid only until that login
+connects, fails or is closed. A process that can read the login's environment can read
+the token too, so it stops blind callers, not one that targets the login. The app never
+logs an askpass prompt or answer.
+
 ## Discovery
 
 Every pane, drawer and float pane shell gets:
@@ -34,6 +41,10 @@ Every pane, drawer and float pane shell gets:
 Tool floats get neither: a float pane is one of its tab's panes, which a tool float is not. A shell that outlives its instance (a tmux session across a
 relaunch) holds a dead `$ZEN_CONTROL_SOCK`, and its `$ZEN_PANE` names a pane in that
 dead instance, since tokens restart in a new one.
+
+The ssh of an SSH host's first login, started from its Connect screen, also gets
+`SSH_ASKPASS` (the `zen` beside the app), `SSH_ASKPASS_REQUIRE=force` and
+`ZEN_ASKPASS_TOKEN`. No other pane or float gets them.
 
 `zen` uses `$ZEN_CONTROL_SOCK` when something accepts a connect on it, and sends
 `$ZEN_PANE` as `caller.pane`. Otherwise it lists `control.*.sock` in the folder above
@@ -96,7 +107,7 @@ A worktree removal's refusal adds `files`, its uncommitted and untracked files, 
 Requests are decoded off the main thread, applied on it, and written back off it. The app
 answers within 5 minutes, except `pane.wait` and `pane.send` with `wait`, which answer within their
 `timeout` plus 5 seconds, and `pane.run` with `wait`,
-within its `timeout` plus 65 seconds.
+within its `timeout` plus 65 seconds, and `ssh.askpass`, within 10 minutes 5 seconds.
 A client that closes its connection before the answer ends a `pane.wait`. Shutting down only its
 write side is not closing it: the answer still comes.
 
@@ -607,11 +618,23 @@ can be nothing. The aliases a `keybind` line accepts work too. `toggle_float:<id
 id of a configured float. A name that is not an action is `not_found`, and its message
 lists every action.
 
+### `ssh.askpass`
+
+`args`: `token`, `prompt` (both required), `ssh_pid`.
+
+Asks a person the question an SSH host login's ssh asks (`prompt`, verbatim), on that
+host's Connect screen, and answers `{"answer":"<text>"}` once they reply. `token` must be
+the login's `ZEN_ASKPASS_TOKEN`; any other is `not_found`. `ssh_pid` is the asking ssh,
+which tells a repeated question (the last answer didn't work) from the same text asked by
+a ProxyJump's own ssh. A host key question answers exactly `yes` or nothing. A cancelled or
+ended login answers `failed`, as does a newer question from the same login. A client that
+closes its connection withdraws the question.
+
 ## `zen`
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, and
+answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, 10 minutes 10 seconds as askpass, and
 the `--timeout` plus 10 seconds for `zen wait` and `zen pane send --wait`, or 70 more for
 `zen pane run --wait`), 2 usage,
 3 no instance or the connection failed.
@@ -626,6 +649,11 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
 `--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
+With `ZEN_ASKPASS_TOKEN` set and exactly one argument, `zen` is ssh's askpass: it sends the
+argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's pid, prints
+the answer, and exits 0. It never reads stdin. With `SSH_ASKPASS_PROMPT=confirm` it exits 1
+without asking, which ssh reads as no; with `none`, a notice, it exits 0. Any failure exits 1,
+or 3 without an instance, and prints neither prompt nor answer.
 `zen setup claude` and `zen setup claude --remove` edit Claude Code's config, not the app,
 and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the

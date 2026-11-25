@@ -1,3 +1,4 @@
+import ControlProtocol
 import CryptoKit
 import Foundation
 import TerminalKit
@@ -79,6 +80,22 @@ enum SSHLaunch {
 
     private static func controlPathOption(_ controlPath: URL) -> String {
         "ControlPath=\"\(controlPath.path.replacingOccurrences(of: "%", with: "%%"))\""
+    }
+
+    static let askpassKey = "SSH_ASKPASS"
+    static let askpassRequirementKey = "SSH_ASKPASS_REQUIRE"
+
+    // ssh asks askpass only when it has no tty, unless this forces it.
+    static func askpassEnvironment(program: URL, token: String) -> [String: String] {
+        [askpassKey: program.path, askpassRequirementKey: "force", ControlEndpoint.askpassTokenKey: token]
+    }
+
+    // `zen` ships beside the app binary, and `bin/run` builds it beside the dev one.
+    static func askpassProgram(beside executable: URL? = Bundle.main.executableURL) -> URL? {
+        guard let program = executable?.deletingLastPathComponent().appendingPathComponent("zen"),
+            FileManager.default.isExecutableFile(atPath: program.path)
+        else { return nil }
+        return program
     }
 
     static var workingDirectory: URL { ShellLaunch.defaultCWD }
