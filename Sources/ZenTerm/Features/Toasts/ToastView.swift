@@ -6,16 +6,18 @@ struct ToastContent: Equatable {
     let titleTail: String?
     let message: String?
     let icon: String?
+    let messageLabels: Set<String>
 
     init(
         variant: ToastVariant, title: String, titleTail: String? = nil, message: String?,
-        icon: String? = nil
+        icon: String? = nil, messageLabels: Set<String> = []
     ) {
         self.variant = variant
         self.title = title
         self.titleTail = titleTail
         self.message = message
         self.icon = icon
+        self.messageLabels = messageLabels
     }
 }
 
@@ -30,19 +32,36 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     // Not what the dismiss chords run: on a keybind-conflict card it is Revert, which rewrites the config.
     private let cancelAction: (() -> Void)?
     private let variant: ToastVariant
+    private let glyph = NSImageView()
     private let titleLabel: NSTextField
     private let titleTailLabel: NSTextField?
     private var titleFloor: NSLayoutConstraint?
     private let messageLabel: NSTextField?
+    private let messageLabels: Set<String>
     private var actionButtons: [AppButton] = []
-    private let badge: IconBadge
 
     static let width: CGFloat = 300
+    private static let textInset = ChromeMetrics.Spacing.s16
+    private static let closeInset = ChromeMetrics.Spacing.s10
+    private static let closeSide = ChromeMetrics.Height.sm
+    private static let glyphGap = ChromeMetrics.Spacing.s10
+    // The links' padding sits in the card's inset, so their text lines up with the message's.
+    private static let linkRowInset = textInset - AppButton.horizontalPadding
+    private static let glyphConfiguration = NSImage.SymbolConfiguration(
+        pointSize: ChromeMetrics.Icon.md, weight: .semibold)
+    private static let widestGlyph: CGFloat =
+        ToastVariant.allCases.compactMap {
+            NSImage(systemSymbolName: $0.defaultIcon, accessibilityDescription: nil)?
+                .withSymbolConfiguration(glyphConfiguration)?.size.width
+        }.max() ?? ChromeMetrics.Icon.md
 
     // Exposed so copy can be measured against the real wrap budget.
-    static let messageMaxWidth: CGFloat = 236
+    static let messageMaxWidth: CGFloat = width - 2 * textInset
+    static let titleMaxWidth: CGFloat =
+        width - textInset - widestGlyph - glyphGap - glyphGap - closeSide - closeInset
     // A title up to this share of the row never gives way to its tail; a longer title yields first.
     private static let titleFloorShare: CGFloat = 0.55
+    static let titleFont: NSFont = ChromeType.font(.body, weight: .medium)
     static let messageFont: NSFont = ChromeType.font(.small)
     private static var titleColor: NSColor { Theme.current.chrome.ink(.normal) }
     private static var messageColor: NSColor { Theme.current.chrome.ink(.muted) }
@@ -65,16 +84,20 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
         self.messageLabel = content.message.map { NSTextField(wrappingLabelWithString: $0) }
-        let variant = content.variant
-        self.badge = IconBadge(
-            symbol: content.icon ?? variant.defaultIcon, accessibilityDescription: content.title, size: .regular,
-            role: { variant.role(in: $0) })
+        self.messageLabels = content.messageLabels
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
         CardChrome.apply(to: self, tier: .float)
 
-        titleLabel.font = ChromeType.font(.body, weight: .semibold)
+        glyph.image = NSImage(
+            systemSymbolName: content.icon ?? content.variant.defaultIcon, accessibilityDescription: content.title)
+        glyph.symbolConfiguration = Self.glyphConfiguration
+        glyph.contentTintColor = variant.role(in: Theme.current.chrome).nsColor
+        glyph.setContentHuggingPriority(.required, for: .horizontal)
+        glyph.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        titleLabel.font = Self.titleFont
         titleLabel.textColor = Self.titleColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -89,8 +112,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
             updateTitleFloor()
         }
 
-        messageLabel?.font = Self.messageFont
-        messageLabel?.textColor = Self.messageColor
+        restyleMessage()
         messageLabel?.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         let headerSpacer = NSView()
@@ -99,16 +121,24 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         let titleRow = NSStackView(views: [titleLabel] + (titleTailLabel.map { [$0] } ?? []))
         titleRow.orientation = .horizontal
         titleRow.spacing = 0
-        let header = NSStackView(views: [titleRow, headerSpacer])
+        let header = NSStackView(views: [glyph, titleRow, headerSpacer])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = ChromeMetrics.Spacing.s6
-        let lines = [header] + (messageLabel.map { [$0] } ?? [])
-        let col = NSStackView(views: lines)
-        col.orientation = .vertical
-        col.alignment = .leading
-        col.spacing = ChromeMetrics.Spacing.s2
-        for line in lines { line.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true }
+        header.spacing = Self.glyphGap
+        header.setCustomSpacing(0, after: titleRow)
+        header.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.closeSide).isActive = true
+
+        let isOneLine = messageLabel == nil
+        let usesLinks = !gatesFocus
+        if !actions.isEmpty {
+            actionButtons =
+                usesLinks
+                ? Self.primaryLast(actions).map { Self.link(for: $0, alone: actions.count == 1) }
+                : actions.map(Self.button(for:))
+        }
+        if isOneLine, usesLinks {
+            actionButtons.forEach(header.addArrangedSubview)
+        }
 
         for resolve in actions.compactMap(\.shortcut) {
             let slot = ShortcutSlot(group: header, resolve: resolve)
@@ -118,44 +148,77 @@ final class ToastView: ShadowCardView, ThemeReapplying {
 
         if showsClose {
             let close = IconButton(
-                symbol: "xmark", size: NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs),
+                symbol: "xmark", size: NSSize(width: Self.closeSide, height: Self.closeSide),
                 pointSize: ChromeMetrics.Icon.xs,
                 accessibilityLabel: "Dismiss"
             ) { [weak self] in self?.onClose?() }
             header.addArrangedSubview(close)
         }
 
-        if !actions.isEmpty {
-            let spacer = NSView()
-            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            actionButtons = actions.map(Self.button(for:))
-            let row = NSStackView(views: actionButtons + [spacer])
-            row.orientation = .horizontal
-            row.alignment = .centerY
-            row.spacing = ChromeMetrics.Spacing.s6
-            col.addArrangedSubview(row)
-            col.setCustomSpacing(ChromeMetrics.Spacing.s10, after: lines[lines.count - 1])
-            row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
-        }
+        let lines = [header] + (messageLabel.map { [$0] } ?? [])
+        let col = NSStackView(views: lines)
+        col.orientation = .vertical
+        col.alignment = .leading
+        col.spacing = ChromeMetrics.Spacing.s2
+        col.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(col)
 
-        let root = NSStackView(views: [badge, col])
-        root.orientation = .horizontal
-        root.alignment = col.arrangedSubviews.count > 1 ? .top : .centerY
-        root.distribution = .fill
-        root.spacing = ChromeMetrics.Spacing.s12
-        root.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(root)
+        header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+        messageLabel?.widthAnchor.constraint(equalToConstant: Self.messageMaxWidth).isActive = true
 
+        let trailingInset = showsClose ? Self.closeInset : Self.textInset
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s12),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
-            root.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s12),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
+            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.textInset),
+            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
+            col.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s8),
+        ])
+        guard !actionButtons.isEmpty, !(isOneLine && usesLinks) else {
+            let bottomInset = isOneLine ? ChromeMetrics.Spacing.s8 : ChromeMetrics.Spacing.s12
+            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -bottomInset).isActive = true
+            return
+        }
+        let row = usesLinks ? linkRow() : buttonRow()
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+        let rowInset = usesLinks ? Self.linkRowInset : Self.textInset
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: rowInset),
+            row.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.textInset),
+            row.topAnchor.constraint(equalTo: col.bottomAnchor, constant: ChromeMetrics.Spacing.s4),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s8),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    private func linkRow() -> NSView {
+        let row = NSStackView(views: actionButtons)
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 0
+        return row
+    }
+
+    private func buttonRow() -> NSView {
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: actionButtons + [spacer])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = ChromeMetrics.Spacing.s6
+        return row
+    }
+
+    // The answer a toast asks for sits last in ink; every other action recedes before it.
+    private static func primaryLast(_ actions: [ToastAction]) -> [ToastAction] {
+        actions.filter { $0.kind != .primary } + actions.filter { $0.kind == .primary }
+    }
+
+    private static func link(for action: ToastAction, alone: Bool) -> AppButton {
+        let variant: AppButton.Variant = alone || action.kind == .primary ? .link : .quietLink
+        return AppButton(title: action.title, variant: variant, onTap: action.run)
+    }
 
     // Click-only: a `keyEquivalent` answers only when the traversal reaches the button, so the card owns Return and Esc.
     private static func button(for action: ToastAction) -> AppButton {
@@ -181,12 +244,13 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         func refresh() {
             let glyph = resolve()
             guard glyph != keycap?.shortcut else { return }
+            let slot = keycap.flatMap { group.arrangedSubviews.firstIndex(of: $0) } ?? group.arrangedSubviews.count
             keycap.map { group.removeArrangedSubview($0) }
             keycap?.removeFromSuperview()
             keycap = nil
             guard !glyph.isEmpty else { return }
             let cap = KeycapView(shortcut: glyph)
-            group.addArrangedSubview(cap)
+            group.insertArrangedSubview(cap, at: slot)
             keycap = cap
         }
     }
@@ -229,10 +293,25 @@ final class ToastView: ShadowCardView, ThemeReapplying {
 
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: self, tier: .float)
+        glyph.contentTintColor = variant.role(in: Theme.current.chrome).nsColor
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
-        messageLabel?.textColor = Self.messageColor
+        restyleMessage()
     }
+
+    private func restyleMessage() {
+        guard let messageLabel else { return }
+        let text = NSMutableAttributedString()
+        for (index, line) in messageLabel.stringValue.components(separatedBy: "\n").enumerated() {
+            if index > 0 { text.append(NSAttributedString(string: "\n")) }
+            let color = messageLabels.contains(line) ? Self.titleColor : Self.messageColor
+            let attributes: [NSAttributedString.Key: Any] = [.font: Self.messageFont, .foregroundColor: color]
+            text.append(NSAttributedString(string: line, attributes: attributes))
+        }
+        messageLabel.attributedStringValue = text
+    }
+
+    var messageForTesting: NSAttributedString? { messageLabel?.attributedStringValue }
 
     var actionTitleColorsForTesting: [NSColor] {
         actionButtons.compactMap {
@@ -242,8 +321,8 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         }
     }
 
-    var badgeFillForTesting: CGColor? { badge.fillForTesting }
-    var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
+    var glyphTintForTesting: NSColor? { glyph.contentTintColor }
+    var titleForTesting: String { titleLabel.stringValue }
 
     func setTitle(_ title: String) {
         guard titleLabel.stringValue != title else { return }

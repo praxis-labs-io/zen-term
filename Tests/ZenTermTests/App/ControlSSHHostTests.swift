@@ -122,7 +122,7 @@ final class ControlSSHHostTests: WindowTestCase {
     }
 
     private func showsFailureToast(_ c: WindowController) -> Bool {
-        toastTexts(in: c).contains("Couldn't Connect to")
+        toastTexts(in: c).contains("Couldn't connect to")
     }
 
     private func holdingOnlyTheHost(_ c: WindowController, login: () throws -> RecordingSurface) throws

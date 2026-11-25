@@ -588,7 +588,7 @@ final class SearchLifecycleTests: WindowTestCase {
                 "a close confirm",
                 {
                     $0.presentConfirm(
-                        variant: .destructive, title: "Close Pane", message: "Running work will stop.",
+                        ToastContent(variant: .destructive, title: "Close Pane", message: "Running work will stop."),
                         confirmLabel: "Close", onConfirm: {})
                 }
             ),

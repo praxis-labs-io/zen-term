@@ -365,12 +365,12 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         controller.showToast(ToastContent(variant: .destructive, title: "Heads up", message: "Something."))
         let toast = try XCTUnwrap(
             descendants(of: controller.window.contentView!).compactMap { $0 as? ToastView }.first)
-        let before = toast.badgeFillForTesting
+        let before = toast.glyphTintForTesting
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         post(.theme)
 
-        XCTAssertNotEqual(before, toast.badgeFillForTesting, "a toast on screen kept the old theme")
+        XCTAssertNotEqual(before, toast.glyphTintForTesting, "a toast on screen kept the old theme")
     }
 
     func test_themeChange_recolorsEverySettingsCaptionWithoutTheSection() throws {

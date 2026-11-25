@@ -213,7 +213,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             guard let self, generation == self.toggleGeneration else { return }
             self.pendingOpen = nil
             if spec.requiresGitRepo, repoRoot == nil {
-                self.onRequestToast?(self.gitGuardToast(for: spec))
+                self.onRequestToast?(Self.gitGuardToast(for: spec))
                 return
             }
             let anchor = spec.persist == .directory ? (repoRoot ?? cwd?.standardizedFileURL) : nil
@@ -227,7 +227,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         toggleGeneration += 1
     }
 
-    private func gitGuardToast(for spec: ToolFloat) -> ToastContent {
+    static func gitGuardToast(for spec: ToolFloat) -> ToastContent {
         let message: String
         if let dir = spec.dir {
             message =
@@ -509,10 +509,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         } else {
             return
         }
-        onRequestToast?(
-            ToastContent(
-                variant: .warning, title: "Terminal Didn't Start",
-                message: "\(descriptor) failed to launch. Open it again to retry."))
+        onRequestToast?(TabController.surfaceFailedToast(descriptor: descriptor))
         surfaceDidExit(s, code: nil)
     }
 }

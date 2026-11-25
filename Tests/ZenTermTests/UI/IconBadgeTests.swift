@@ -4,6 +4,10 @@ import XCTest
 
 @testable import ZenTerm
 
+private func descendants(of view: NSView) -> [NSView] {
+    view.subviews.flatMap { [$0] + descendants(of: $0) }
+}
+
 final class IconBadgeTests: XCTestCase {
     private var originalTheme: AppTheme!
 
@@ -91,17 +95,11 @@ final class IconBadgeTests: XCTestCase {
             chip.iconFrameForTesting.width, 16 * go.scale, accuracy: 0.01, "Go's wide mark takes a larger box")
     }
 
-    func test_aToastsBadge_keepsItsChip_aTintedRoleFillBehindRoleInk() throws {
+    func test_aToastsGlyph_isABareSymbolInItsRole_notAChip() {
         let toast = ToastView(content: ToastContent(variant: .warning, title: "Title", message: "Message"))
-        let chrome = Theme.current.chrome
-        let role = ToastVariant.warning.role(in: chrome)
-        let badge = try XCTUnwrap(toast.subviews.lazy.compactMap { $0.subviews.first as? IconBadge }.first)
-        badge.layoutSubtreeIfNeeded()
 
-        XCTAssertEqual(badge.fittingSize, NSSize(width: 28, height: 28))
-        XCTAssertEqual(badge.layer?.cornerRadius, ChromeMetrics.Radius.control)
-        XCTAssertEqual(toast.badgeFillForTesting, chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor)
-        XCTAssertEqual(toast.badgeIconTintForTesting, role.nsColor)
+        XCTAssertFalse(descendants(of: toast).contains { $0 is IconBadge }, "the toast still mounts a badge chip")
+        XCTAssertEqual(toast.glyphTintForTesting, ToastVariant.warning.role(in: Theme.current.chrome).nsColor)
     }
 
     func test_anUpdateCardsBadge_isTheBrandMarkOnAnAccentChip() throws {

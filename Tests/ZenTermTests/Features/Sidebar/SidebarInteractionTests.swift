@@ -1139,7 +1139,7 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.handle(.toggleRepoPicker)
         waitUntil(controller.isModalOverlayOpen, "the picker to open")
         controller.presentConfirm(
-            variant: .warning, title: "Close Workspace", message: "This stops everything running in it.",
+            ToastContent(variant: .warning, title: "Close Workspace", message: "This stops everything running in it."),
             confirmLabel: "Close", onConfirm: {})
         controller.window.sendEvent(key(.escape, in: controller))
 
@@ -1156,7 +1156,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
 
         controller.presentConfirm(
-            variant: .warning, title: "Close Workspace", message: "This stops everything running in it.",
+            ToastContent(variant: .warning, title: "Close Workspace", message: "This stops everything running in it."),
             confirmLabel: "Close", onConfirm: {})
         XCTAssertTrue(controller.isConfirmOpen)
         controller.window.sendEvent(key(.escape, in: controller))

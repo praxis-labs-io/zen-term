@@ -132,7 +132,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let row = try XCTUnwrap(rows(of: c).first { $0.titleForTesting == "feature/one" })
         XCTAssertEqual(row.detailForTesting, "removed")
         XCTAssertEqual(c.tabOrderForTesting.count, tabs, "its panes keep running")
-        XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertTrue(toastTexts(in: c).contains("Worktree removed"))
         XCTAssertTrue(toastTexts(in: c).contains("feature/one is no longer on disk."))
         var checks = 0
         WorktreeStore.isRemovedOverrideForTesting = { _ in
@@ -142,12 +142,12 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         c.checkForRemovedWorktreesForTesting()
         waitUntil(checks > 0, "a second check to run")
         drainMainQueue()
-        XCTAssertEqual(toastTexts(in: c).filter { $0 == "Worktree Removed" }.count, 1, "said once, not every tick")
+        XCTAssertEqual(toastTexts(in: c).filter { $0 == "Worktree removed" }.count, 1, "said once, not every tick")
 
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
         c.checkForRemovedWorktreesForTesting()
         waitUntil(!rows(of: c).contains { $0.detailForTesting == "removed" }, "the mark to clear when .git is back")
-        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and its toast goes with it")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree removed"), "and its toast goes with it")
     }
 
     func test_removeWorktreeOnARemovedRow_closesItsWorkspace() throws {
@@ -170,7 +170,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).isEmpty, "the picker steps aside for the close")
         XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
         XCTAssertTrue(titles(of: c).contains("Alpha"), "and only that one")
-        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "no toast left offering to close it")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree removed"), "no toast left offering to close it")
     }
 
     func test_removeWorktreeOnARemovedRowInAnotherWindow_pointsThereOnce() throws {
@@ -211,14 +211,14 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }
         c.checkForRemovedWorktreesForTesting()
-        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        waitUntil(toastTexts(in: c).contains("Worktree removed"), "the toast to arrive")
 
         let pastTheDuration = Date().addingTimeInterval(0.4)
         while Date() < pastTheDuration {
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
         }
 
-        XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"), "it offers an action, so it stays until answered")
+        XCTAssertTrue(toastTexts(in: c).contains("Worktree removed"), "it offers an action, so it stays until answered")
     }
 
     func test_theRemovedToast_dismissesLikeAnyOther() throws {
@@ -227,16 +227,16 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }
         c.checkForRemovedWorktreesForTesting()
-        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        waitUntil(toastTexts(in: c).contains("Worktree removed"), "the toast to arrive")
         let toast = try XCTUnwrap(
             descendants(of: c.window.contentView!).compactMap { $0 as? ToastView }
-                .first { descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == "Worktree Removed" } })
+                .first { descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == "Worktree removed" } })
         let dismiss = try XCTUnwrap(
             descendants(of: toast).compactMap { $0 as? IconButton }.first { $0.accessibilityLabel() == "Dismiss" })
 
         try click(dismiss)
 
-        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree removed"))
         XCTAssertTrue(titles(of: c).contains("feature/one"), "dismissing it keeps the workspace")
     }
 
@@ -246,17 +246,17 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }
         c.checkForRemovedWorktreesForTesting()
-        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        waitUntil(toastTexts(in: c).contains("Worktree removed"), "the toast to arrive")
         XCTAssertFalse(c.window.firstResponder is AppButton, "the toast leaves the keyboard where it was")
         let button = try XCTUnwrap(
             descendants(of: c.window.contentView!).compactMap { $0 as? AppButton }
-                .first { $0.title == "Close Workspace" })
+                .first { $0.title == "Close workspace" })
 
         button.onTap()
 
         XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
         XCTAssertTrue(titles(of: c).contains("Alpha"))
-        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and the toast goes with it")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree removed"), "and the toast goes with it")
     }
 
     func test_anOpenPicker_marksTheRowWhenTheWorktreeGoes() throws {
@@ -295,7 +295,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertFalse(rows(of: c).contains { $0.detailForTesting == "removed" })
-        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree removed"))
     }
 
     func test_removingAWorktree_closesItsWorkspace_evenWithATabOpenedElsewhere() throws {
@@ -313,7 +313,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace goes with its worktree")
         XCTAssertTrue(titles(of: c).contains("Alpha"))
-        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "a removal you confirmed is not news")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree removed"), "a removal you confirmed is not news")
     }
 
     private func titles(of c: WindowController) -> [String] { rows(of: c).map(\.titleForTesting) }

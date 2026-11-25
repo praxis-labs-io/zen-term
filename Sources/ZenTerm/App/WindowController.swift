@@ -122,20 +122,12 @@ final class WindowController: NSObject {
                     try builder.build(to: destination)
                     Log.info("diagnostics exported to \(destination.lastPathComponent)", category: .app)
                     DispatchQueue.main.async {
-                        self.showToast(
-                            ToastContent(
-                                variant: .positive, title: "Diagnostics Exported",
-                                message:
-                                    "Saved \(destination.lastPathComponent). It holds your logs and system info."
-                            ))
+                        self.showToast(Self.diagnosticsExportedToast(file: destination.lastPathComponent))
                     }
                 } catch {
                     Log.error("diagnostics export failed: \(error.localizedDescription)", category: .app)
                     DispatchQueue.main.async {
-                        self.showToast(
-                            ToastContent(
-                                variant: .warning, title: "Export Failed",
-                                message: "Couldn't write the diagnostics file: \(error.localizedDescription)"))
+                        self.showToast(Self.diagnosticsExportFailedToast(reason: error.localizedDescription))
                     }
                 }
             }
@@ -399,22 +391,15 @@ final class WindowController: NSObject {
 
     private func toastFloatBlocked() {
         guard floatBlockToasts.allows() else { return }
-        let content =
-            floats.shownPaneSurface == nil
-            ? ToastContent(
-                variant: .info, title: "Tool Float",
-                message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes.")
-            : ToastContent(
-                variant: .info, title: "Float Pane",
-                message: "\(shownFloatPaneName ?? "This float pane") is open. Close it to get back to your panes.")
-        toasts.show(content)
+        let isPane = floats.shownPaneSurface != nil
+        toasts.show(Self.floatBlockedToast(isPane: isPane, name: isPane ? shownFloatPaneName : activeFloatName))
     }
 
     private var noNewWorktreeToasts = ToastThrottle<SidebarController.NewWorktreeRefusal>()
 
     private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
         guard noNewWorktreeToasts.allows(refusal) else { return }
-        toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
+        toasts.show(Self.newWorktreeRefusedToast(refusal))
     }
 
     private var activeWorkspace: WorkspaceController? { selection.workspace }
@@ -868,14 +853,12 @@ final class WindowController: NSObject {
     private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]
 
     private func presentWorktreeRemovedToast(for id: WorkspaceID, named name: String) {
-        let close = ToastAction(title: "Close Workspace", kind: .primary) { [weak self] in
+        let actions = Self.worktreeRemovedActions { [weak self] in
             guard let self, let toast = self.worktreeRemovedToasts[id] else { return }
             self.toasts.dismiss(toast)
             self.requestCloseWorkspace(id: id)
         }
-        let toast = toasts.showSticky(
-            ToastContent(variant: .warning, title: "Worktree Removed", message: "\(name) is no longer on disk."),
-            actions: [close], showsClose: true)
+        let toast = toasts.showSticky(Self.worktreeRemovedToast(name: name), actions: actions, showsClose: true)
         toast.onClose = { [weak self, weak toast] in toast.map { self?.toasts.dismiss($0) } }
         toast.onDismissed = { [weak self, weak toast] in
             guard let self, let toast, self.worktreeRemovedToasts[id] === toast else { return }
@@ -1450,10 +1433,8 @@ final class WindowController: NSObject {
         Log.info("connect screen closed", category: .workspace)
         guard workspaces.isEmpty else { return land(at: order.navigableWorkspaces.count) }
         presentConfirm(
-            variant: .warning, title: CloseWarning.Subject.lastPane(running: windowIsRunning).title,
-            message: CloseWarning.message(
-                closing: .lastPane(running: windowIsRunning), naming: runningNamesInWindow()),
-            confirmLabel: "Close"
+            Self.closeConfirmToast(.lastPane(running: windowIsRunning), naming: runningNamesInWindow()),
+            confirmLabel: Self.closeConfirmLabel
         ) { [weak self] in self?.window.close() }
     }
 
@@ -1504,10 +1485,7 @@ final class WindowController: NSObject {
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) { closeTab($0) } }
-        toasts.show(
-            ToastContent(
-                variant: .warning, title: "Couldn't Connect to",
-                titleTail: " \(GeneralConfig.current.displayName(of: host))", message: nil))
+        toasts.show(Self.loginFailedToast(host: GeneralConfig.current.displayName(of: host)))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
@@ -1526,10 +1504,7 @@ final class WindowController: NSObject {
     }
 
     private func toastFloatsStayLocal(on host: SSHHostID) {
-        toasts.show(
-            ToastContent(
-                variant: .info, title: "Tool Floats",
-                message: "Tool floats run on this Mac, not on \(GeneralConfig.current.displayName(of: host))."))
+        toasts.show(Self.floatsStayLocalToast(host: GeneralConfig.current.displayName(of: host)))
     }
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
@@ -1644,10 +1619,7 @@ final class WindowController: NSObject {
             guard let self, self.pendingModal == .worktreeForm else { return }
             guard let entry = entries.first(where: { $0.path.standardizedFileURL.path == path }) else {
                 self.pendingModal = nil
-                self.toasts.show(
-                    ToastContent(
-                        variant: .warning, title: "Couldn't Open New Worktree",
-                        message: "\(name) is no longer in the workspaces file."))
+                self.toasts.show(Self.newWorktreeMissingToast(name: name))
                 return
             }
             self.presentNewWorktree(
@@ -1705,10 +1677,7 @@ final class WindowController: NSObject {
                     if stillUp {
                         card?.failWork(error.localizedDescription)
                     } else {
-                        self.toasts.show(
-                            ToastContent(
-                                variant: .warning, title: "Couldn't Create the Worktree",
-                                message: error.localizedDescription))
+                        self.toasts.show(Self.worktreeCreateFailedToast(reason: error.localizedDescription))
                     }
                 }
             })
@@ -1733,8 +1702,7 @@ final class WindowController: NSObject {
         let lost = report.lost
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
-        toasts.show(
-            ToastContent(variant: .warning, title: "Couldn't Copy Everything", message: "\(list)."))
+        toasts.show(Self.carryLostToast(list))
     }
 
     private func removeSelectedWorktreeInPicker() {
@@ -1765,10 +1733,7 @@ final class WindowController: NSObject {
     private func closeRemovedWorkspace(_ running: RunningWorkspace) {
         guard running.window == windowID, let id = running.id else {
             guard otherWindowCloseToasts.allows() else { return }
-            toasts.show(
-                ToastContent(
-                    variant: .info, title: "Open in Another Window",
-                    message: "Close \(running.removedWorktreeName ?? running.name) from the window it is open in."))
+            toasts.show(Self.openInAnotherWindowToast(name: running.removedWorktreeName ?? running.name))
             return
         }
         closeModal()
@@ -1794,10 +1759,7 @@ final class WindowController: NSObject {
     private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
         worktreeRemovals.remove(worktree, in: parent.path) { [weak self] error in
             guard let self, let error else { return }
-            self.toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Remove \(name)",
-                    message: error.localizedDescription))
+            self.toasts.show(Self.worktreeRemoveFailedToast(name: name, reason: error.localizedDescription))
         }
     }
 
@@ -1917,15 +1879,12 @@ final class WindowController: NSObject {
 
     func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
         weak var toast: ToastView?
-        let actions = [
-            ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                toast.map { self?.toasts.dismiss($0) }
-            },
-            ToastAction(title: "Open Settings", kind: .primary) { [weak self] in
+        let actions = Self.configDiagnosticsActions(
+            dismiss: { [weak self] in toast.map { self?.toasts.dismiss($0) } },
+            openSettings: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 self?.openSettings(for: landingScope)
-            },
-        ]
+            })
         let shown = toasts.showSticky(content, actions: actions)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
         toast = shown
@@ -1959,18 +1918,10 @@ final class WindowController: NSObject {
                 guard resolve(conflict) else { return }
                 toast.map { self?.toasts.dismiss($0) }
             }
-            var actions: [ToastAction] = []
-            if conflict.isRevertable {
-                actions.append(
-                    ToastAction(title: "Revert", kind: .cancel) { answer(KeybindConflictResolver.revert) })
-            }
-            if conflict.isAcceptable {
-                actions.append(
-                    ToastAction(title: "Accept", kind: .primary) { answer(KeybindConflictResolver.accept) })
-            }
-            let content = ToastContent(
-                variant: .warning, title: conflict.headline, message: conflict.message)
-            let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+            let actions = Self.conflictActions(
+                conflict, revert: { answer(KeybindConflictResolver.revert) },
+                accept: { answer(KeybindConflictResolver.accept) })
+            let shown = toasts.showSticky(Self.conflictToast(conflict), actions: actions, showsClose: true)
             shown.onClose = { [weak self] in toast.map { self?.toasts.dismiss($0) } }
             toast = shown
             conflictToasts.append((conflict, WeakToast(value: shown)))
@@ -2083,10 +2034,7 @@ final class WindowController: NSObject {
         do {
             try ConfigWriter.applyFloatOrder(floats)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Reorder Tool Floats",
-                    message: "Failed to update the config file: \(error.localizedDescription)"))
+            toasts.show(Self.reorderToolFloatsFailedToast(reason: error.localizedDescription))
             return
         }
         AppConfig.reload()
@@ -2231,10 +2179,7 @@ final class WindowController: NSObject {
         do {
             return try WorkspacesWriter.swap(moved.title, with: neighbour.title)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Reorder Workspaces",
-                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
+            toasts.show(Self.reorderWorkspacesFailedToast(reason: error.localizedDescription))
             return false
         }
     }
@@ -2267,7 +2212,7 @@ final class WindowController: NSObject {
 
     // Ends modes first, or a mode swallows the Return and Esc that answer the confirm.
     func presentConfirm(
-        variant: ToastVariant, title: String, message: String, confirmLabel: String,
+        _ content: ToastContent, confirmLabel: String,
         answering tab: TabID? = nil, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         cancelConfirm()
@@ -2277,15 +2222,13 @@ final class WindowController: NSObject {
         if sidebar.hasFocus { focusReturn = sidebar.focusedStop ?? focusReturn }
         confirmOnCancel = onCancel
         confirmTab = tab
-        let content = ToastContent(variant: variant, title: title, message: message)
-        let actions = [
-            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.cancelConfirm() },
-            ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
+        let actions = Self.confirmActions(
+            confirmLabel: confirmLabel, cancel: { [weak self] in self?.cancelConfirm() },
+            confirm: { [weak self] in
                 guard self?.confirmToast != nil else { return }
                 self?.tearDownConfirm()
                 onConfirm()
-            },
-        ]
+            })
         let toast = toasts.confirm(content, actions: actions)
         confirmToast = toast
         window.makeFirstResponder(toast)
@@ -3189,19 +3132,9 @@ final class WindowController: NSObject {
     func presentQuitConfirm(
         tabCount: Int, windowCount: Int, onQuit: @escaping () -> Void, onCancel: @escaping () -> Void
     ) {
-        let message: String
-        if windowCount > 1 {
-            message =
-                "Quitting will close \(tabCount) tabs in \(windowCount) windows "
-                + "and stop everything running in them."
-        } else if tabCount == 1 {
-            message = "Quitting will close your tab and stop everything running in it."
-        } else {
-            message = "Quitting will close all \(tabCount) tabs and stop everything running in them."
-        }
         presentConfirm(
-            variant: .warning, title: "Quit ZenTerm", message: message,
-            confirmLabel: "Quit", onConfirm: onQuit, onCancel: onCancel)
+            Self.quitConfirmToast(tabCount: tabCount, windowCount: windowCount), confirmLabel: Self.quitConfirmLabel,
+            onConfirm: onQuit, onCancel: onCancel)
     }
 
     private func requestClosePane() {
@@ -3213,9 +3146,7 @@ final class WindowController: NSObject {
         if active.isDrawerFocused {
             guard active.focusedDrawerIsBusy else { active.closeFocusedDrawer(); return }
             presentConfirm(
-                variant: .warning, title: CloseWarning.Subject.drawer.title,
-                message: CloseWarning.message(closing: .drawer, naming: []),
-                confirmLabel: "Close"
+                Self.closeConfirmToast(.drawer, naming: []), confirmLabel: Self.closeConfirmLabel
             ) { [weak self] in self?.activeController?.closeFocusedDrawer() }
             return
         }
@@ -3268,10 +3199,8 @@ final class WindowController: NSObject {
             ? runningNamesInWindow() + children.names(outside: self)
             : (lastPane ? hiddenRunningNames(inTab: tab) : []) + children.names
         presentConfirm(
-            variant: .warning, title: subject.title,
-            message: CloseWarning.message(
-                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close", answering: tab, onConfirm: close)
+            Self.closeConfirmToast(subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            confirmLabel: Self.closeConfirmLabel, answering: tab, onConfirm: close)
     }
 
     private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
@@ -3292,8 +3221,7 @@ final class WindowController: NSObject {
         let subject = CloseWarning.Subject.login(
             host: GeneralConfig.current.displayName(of: host), closing: target)
         presentConfirm(
-            variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: []), confirmLabel: "Close"
+            Self.closeConfirmToast(subject, naming: []), confirmLabel: Self.closeConfirmLabel
         ) { [weak self, weak workspace] in
             guard let self, let workspace, self.workspaces.contains(where: { $0 === workspace }) else { return }
             self.abandonLogin(of: workspace)
@@ -3335,10 +3263,8 @@ final class WindowController: NSObject {
             closesWindow
             ? runningNamesInWindow() + children.names(outside: self) : hiddenRunningNames(inTab: id) + children.names
         presentConfirm(
-            variant: .warning, title: subject.title,
-            message: CloseWarning.message(
-                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close", answering: id
+            Self.closeConfirmToast(subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            confirmLabel: Self.closeConfirmLabel, answering: id
         ) { [weak self] in self?.closeTab(id) }
     }
 
@@ -3366,10 +3292,8 @@ final class WindowController: NSObject {
             ? runningNamesInWindow() + children.names(outside: self)
             : runningTabNames(in: workspace) + children.names
         presentConfirm(
-            variant: .warning, title: subject.title,
-            message: CloseWarning.message(
-                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close"
+            Self.closeConfirmToast(subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            confirmLabel: Self.closeConfirmLabel
         ) { [weak self] in self?.closeTabs(of: workspace) { self?.closeTab($0) } }
     }
 
@@ -3396,11 +3320,9 @@ final class WindowController: NSObject {
             return
         }
         presentConfirm(
-            variant: .warning, title: CloseWarning.Subject.window.title,
-            message: CloseWarning.message(
-                closing: .window, naming: runningNamesInWindow() + children.names(outside: self),
-                closingOtherWindows: children.otherWindows.count),
-            confirmLabel: "Close"
+            Self.closeConfirmToast(
+                .window, naming: runningNamesInWindow() + children.names(outside: self),
+                closingOtherWindows: children.otherWindows.count), confirmLabel: Self.closeConfirmLabel
         ) { [weak self] in self?.window.close() }
     }
 
@@ -3735,7 +3657,7 @@ final class WindowController: NSObject {
 
     private static let blockedMessage = "Waiting for your approval."
 
-    private static let turnEndMessage = "Finished its turn."
+    static let turnEndMessage = "Finished its turn."
 
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
@@ -4021,11 +3943,10 @@ final class WindowController: NSObject {
         let dismissal: GeneralConfig.ToastDismissal
         switch card {
         case .waiting:
-            content = ToastContent(
-                variant: .info, title: title(), titleTail: titleTail, message: message, icon: "bell.fill")
+            content = Self.waitingCardToast(title: title(), titleTail: titleTail, message: message)
             dismissal = GeneralConfig.current.attentionToast
         case .completed(let variant):
-            content = ToastContent(variant: variant, title: title(), titleTail: titleTail, message: message)
+            content = Self.completedCardToast(variant, title: title(), titleTail: titleTail, message: message)
             dismissal = GeneralConfig.current.completionToast
         }
         noticeSurfaces.updateValue(surface, forKey: id)
@@ -4036,14 +3957,9 @@ final class WindowController: NSObject {
             ?? CardDestination(
                 shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
                 open: { [weak self] in self?.reveal(id) })
-        let actions = [
-            ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                self?.answer(id, surface: surface)
-            },
-            ToastAction(title: "Switch", kind: .primary, shortcut: destination.shortcut) {
-                destination.open()
-            },
-        ]
+        let actions = Self.attentionCardActions(
+            shortcut: destination.shortcut, dismiss: { [weak self] in self?.answer(id, surface: surface) },
+            open: destination.open)
         attentionCards[id] = mountAttentionToast(
             for: id, surface: surface, content: content, title: title, actions: actions,
             autoDismiss: dismissal == .auto)
@@ -4171,15 +4087,12 @@ final class WindowController: NSObject {
         switch startup {
         case .notInstalled:
             presentClaudeSetupPrompt(
-                title: "Teach Claude Code to use zen?",
-                message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName),
-                confirm: "Set up", decline: "Don't ask again",
+                Self.claudeSetupOffer(in: ClaudeCodeSetup.folderName),
                 onConfirmed: { [weak self] in self?.showClaudeSetupResult($0) },
                 onDeclined: { [weak self] in self?.claudeSetupOffer?.declineForGood() })
         case .edited(let version):
             presentClaudeSetupPrompt(
-                title: "Update zen for Claude Code?", message: Self.claudeUpdateOfferMessage,
-                confirm: "Update", decline: "Skip this version",
+                Self.claudeUpdateOffer,
                 onConfirmed: { [weak self] in self?.showClaudeUpdateResult($0) },
                 onDeclined: { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) })
         case .updated:
@@ -4192,23 +4105,21 @@ final class WindowController: NSObject {
     }
 
     private func presentClaudeSetupPrompt(
-        title: String, message: String, confirm: String, decline: String,
+        _ prompt: ClaudeSetupPrompt,
         onConfirmed: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void,
         onDeclined: @escaping () -> Void
     ) {
         weak var toast: ToastView?
-        let actions = [
-            ToastAction(title: confirm, kind: .primary) { [weak self] in
+        let actions = prompt.actions(
+            confirmed: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 ClaudeCodeSetup.refresh(applying: .install, completion: onConfirmed)
             },
-            ToastAction(title: decline, kind: .cancel) { [weak self] in
+            declined: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 onDeclined()
-            },
-        ]
-        let shown = toasts.showSticky(
-            ToastContent(variant: .info, title: title, message: message), actions: actions, showsClose: true)
+            })
+        let shown = toasts.showSticky(prompt.content, actions: actions, showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
         toast = shown
     }
@@ -4224,10 +4135,7 @@ final class WindowController: NSObject {
     private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
         switch result {
         case .success:
-            toasts.show(
-                ToastContent(
-                    variant: .positive, title: "Claude Code can use zen",
-                    message: "New Claude sessions load the zen skill."))
+            toasts.show(Self.claudeSetUpToast)
         case .failure(let error):
             showClaudeSetupFailure(error, title: "Couldn't set up Claude Code")
         }
@@ -4243,13 +4151,12 @@ final class WindowController: NSObject {
     static let claudeUpdateFailedTitle = "Couldn't update zen"
 
     private func showClaudeUpdated() {
-        toasts.show(
-            ToastContent(variant: .info, title: "Updated zen for Claude Code", message: "New Claude sessions load it."))
+        toasts.show(Self.claudeUpdatedToast)
     }
 
     private func showClaudeSetupFailure(_ error: ClaudeSetupError, title: String) {
-        let content = ToastContent(variant: .warning, title: title, message: error.message)
-        let shown = toasts.showSticky(content, actions: [], showsClose: true)
+        let shown = toasts.showSticky(
+            Self.claudeSetupFailureToast(title: title, reason: error.message), actions: [], showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
     }
 
@@ -4458,13 +4365,7 @@ final class WindowController: NSObject {
 
     private func toastNothingWaiting() {
         let elsewhere = AttentionCenter.shared.blockedCount(excluding: windowID) > 0
-        toasts.show(
-            ToastContent(
-                variant: .info,
-                title: elsewhere ? "Waiting in another window" : "Nothing is waiting",
-                message: elsewhere
-                    ? "An agent is waiting in another window."
-                    : "No agent in this window is asking for you.\nThe sidebar lists the ones that are."))
+        toasts.show(Self.nothingWaitingToast(elsewhere: elsewhere))
     }
 
     private func toggleAgentRow(_ surface: SurfaceID) {
@@ -4521,21 +4422,17 @@ final class WindowController: NSObject {
     }
 
     private func presentSurfaceFailureToast(retry: @escaping () -> Void, close: @escaping () -> Void) {
-        let content = ToastContent(
-            variant: .warning, title: "Terminal Didn't Start",
-            message: "The terminal surface failed to launch.")
         weak var toast: ToastView?
-        let actions = [
-            ToastAction(title: "Close Pane", kind: .destructive) { [weak self] in
+        let actions = Self.surfaceFailureActions(
+            close: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 close()
             },
-            ToastAction(title: "Retry", kind: .primary) { [weak self] in
+            retry: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 retry()
-            },
-        ]
-        toast = toasts.showSticky(content, actions: actions)
+            })
+        toast = toasts.showSticky(Self.surfaceFailureToast, actions: actions)
     }
 
     func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }

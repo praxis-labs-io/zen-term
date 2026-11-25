@@ -257,7 +257,7 @@ final class AppButtonTests: WindowTestCase {
     private func disabledButtons() -> [(name: String, button: AppButton)] {
         let variants: [(String, AppButton.Variant)] = [
             ("primary", .primary), ("secondary", .secondary), ("muted", .muted),
-            ("destructive", .destructive), ("link", .link),
+            ("destructive", .destructive), ("link", .link), ("quietLink", .quietLink),
         ]
         return variants.map { ($0.0, AppButton(title: "Create Worktree", variant: $0.1)) }
     }

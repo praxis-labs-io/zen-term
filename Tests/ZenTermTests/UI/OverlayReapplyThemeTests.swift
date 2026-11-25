@@ -465,21 +465,18 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         let colorBefore = titleLabel.textColor
         let borderBefore = toast.layer?.borderColor
-        let badgeBefore = toast.badgeFillForTesting
-        let glyphBefore = toast.badgeIconTintForTesting
+        let glyphBefore = toast.glyphTintForTesting
         XCTAssertNotNil(colorBefore)
-        XCTAssertNotNil(badgeBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         toast.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, titleLabel.textColor)
         XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
-        XCTAssertNotEqual(badgeBefore, toast.badgeFillForTesting, "the badge fill stayed stale")
-        XCTAssertNotEqual(glyphBefore, toast.badgeIconTintForTesting, "the badge glyph stayed stale")
+        XCTAssertNotEqual(glyphBefore, toast.glyphTintForTesting, "the glyph stayed stale")
         XCTAssertEqual(
-            toast.badgeIconTintForTesting, Theme.current.chrome.destructive.nsColor,
-            "a destructive toast's badge must carry the destructive role, not the chrome accent")
+            toast.glyphTintForTesting, Theme.current.chrome.destructive.nsColor,
+            "a destructive toast's glyph must carry the destructive role, not the chrome accent")
         window.displayIfNeeded()
         assertRestyledAsCard(toast, tier: .float)
     }
@@ -559,20 +556,20 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             "the primary action must carry the new onAccent")
     }
 
-    func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {
+    func test_toastGlyph_carriesTheVariantTone_notTheChromeAccent() throws {
         let window = makeWindow()
-        func badge(_ variant: ToastVariant) -> NSColor? {
+        func glyph(_ variant: ToastVariant) -> NSColor? {
             let toast = ToastView(content: ToastContent(variant: variant, title: "T", message: "M"))
             toast.translatesAutoresizingMaskIntoConstraints = true
             window.contentView?.addSubview(toast)
             toast.frame = NSRect(x: 0, y: 0, width: 300, height: 80)
-            return toast.badgeIconTintForTesting
+            return toast.glyphTintForTesting
         }
-        let tones = [ToastVariant.info, .positive, .warning, .destructive].map(badge)
+        let tones = [ToastVariant.info, .positive, .warning, .destructive].map(glyph)
         XCTAssertEqual(
             tones.count, Set(tones.map { $0?.description ?? "nil" }).count,
-            "two variants share a badge tone")
-        XCTAssertEqual(badge(.warning), Theme.current.chrome.warning.nsColor)
+            "two variants share a glyph tone")
+        XCTAssertEqual(glyph(.warning), Theme.current.chrome.warning.nsColor)
     }
 
     func test_reapplyTheme_recolorsModalHeaderTitle() throws {

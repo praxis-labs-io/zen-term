@@ -49,6 +49,31 @@ final class ToastPresenterTests: WindowTestCase {
             isARepeat: false, keyCode: keyCode)!
     }
 
+    func test_aChangedShortcut_keepsItsKeycapAheadOfTheCloseButton() throws {
+        var glyph = "⌘1"
+        let toast = ToastView(
+            content: ToastContent(variant: .info, title: "shell", message: "Waiting."),
+            actions: [ToastAction(title: "Switch", kind: .primary, shortcut: { glyph }) {}],
+            armsKeys: false, showsClose: true)
+        let header = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? NSStackView }.first { stack in
+                stack.arrangedSubviews.contains { $0 is IconButton }
+            })
+        func keycapIsBeforeClose() -> Bool {
+            let views = header.arrangedSubviews
+            guard let cap = views.firstIndex(where: { $0 is KeycapView }),
+                let close = views.firstIndex(where: { $0 is IconButton })
+            else { return false }
+            return cap < close
+        }
+        XCTAssertTrue(keycapIsBeforeClose(), "precondition")
+
+        glyph = "⌘2"
+        toast.refreshShortcuts()
+
+        XCTAssertTrue(keycapIsBeforeClose(), "the refreshed keycap jumped past the close button")
+    }
+
     func test_aTitleOnlyToast_laysOutNoEmptyMessageLine() {
         let titled = ToastView(
             content: ToastContent(variant: .warning, title: "Couldn't Connect to devbox", message: nil))
@@ -86,15 +111,14 @@ final class ToastPresenterTests: WindowTestCase {
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
         let tail = " ec2-12-34-56-78.compute-1.amazonaws.com.internal.example-corp-network.net"
         presenter.show(
-            ToastContent(variant: .warning, title: "Couldn't Connect to", titleTail: tail, message: nil))
+            ToastContent(variant: .warning, title: "Couldn't connect to", titleTail: tail, message: nil))
         host.layoutSubtreeIfNeeded()
         let toast = try XCTUnwrap(arrangedToasts(in: host).first)
         let tailLabel = try XCTUnwrap(
             descendants(of: toast).compactMap { $0 as? NSTextField }.first { $0.stringValue == tail })
 
-        let badge = try XCTUnwrap(descendants(of: toast).first { $0 is IconBadge })
-        let rowWidth = toast.frame.width - 24 - 12 - badge.frame.width
-        XCTAssertGreaterThan(tailLabel.intrinsicContentSize.width, rowWidth, "precondition: wider than the row")
+        XCTAssertGreaterThan(
+            tailLabel.intrinsicContentSize.width, ToastView.messageMaxWidth, "precondition: wider than the row")
         XCTAssertEqual(toast.frame.width, ToastView.width, "the card keeps its width")
         XCTAssertLessThanOrEqual(
             tailLabel.convert(tailLabel.bounds, to: toast).maxX, toast.bounds.width, "the tail stays inside the card")
@@ -105,7 +129,7 @@ final class ToastPresenterTests: WindowTestCase {
     func test_aTailWiderThanTheCard_leavesTheTitleReadable() throws {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
-        let title = "Couldn't Connect to"
+        let title = "Couldn't connect to"
         let tail = " ec2-12-34-56-78.compute-1.amazonaws.com.internal.example-corp-network.net"
         presenter.show(ToastContent(variant: .warning, title: title, titleTail: tail, message: nil))
         host.layoutSubtreeIfNeeded()
@@ -206,5 +230,43 @@ final class ToastPresenterTests: WindowTestCase {
         presenter.dismiss(toast)
 
         waitUntil(arrangedToasts(in: host).isEmpty, "exactly one removal, no crash on the second dismiss")
+    }
+
+    func test_aToastWithActions_outlivesTheCountdown() {
+        let host = makeHost()
+        let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12, dismissAfter: 0.05)
+        presenter.show(ToastContent(variant: .info, title: "Plain", message: nil))
+        presenter.showSticky(
+            ToastContent(variant: .warning, title: "Terminal didn't start", message: "Why."),
+            actions: [ToastAction(title: "Retry", kind: .primary) {}])
+
+        waitUntil(arrangedToasts(in: host).count == 1, "the plain toast to run out its countdown")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertEqual(
+            arrangedToasts(in: host).map(\.titleForTesting), ["Terminal didn't start"],
+            "a toast that offers an action stays until you answer it")
+    }
+
+    func test_eachLinkAction_takesItsOwnClick_andRunsItsAction() throws {
+        let host = makeHost()
+        let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
+        var ran: [String] = []
+        let toast = presenter.showSticky(
+            ToastContent(variant: .warning, title: "Terminal didn't start", message: "Why."),
+            actions: ["Close pane", "Retry"].map { title in
+                ToastAction(title: title, kind: .primary) { ran.append(title) }
+            })
+        host.layoutSubtreeIfNeeded()
+
+        for link in buttons(in: toast) {
+            for x in [link.bounds.minX + 1, link.bounds.midX, link.bounds.maxX - 1] {
+                let point = host.convert(link.convert(NSPoint(x: x, y: link.bounds.midY), to: nil), from: nil)
+                XCTAssertTrue(host.hitTest(point) === link, "something covers \(link.title) at x \(x)")
+            }
+            link.performClick(nil)
+        }
+
+        XCTAssertEqual(ran, ["Close pane", "Retry"])
     }
 }
