@@ -79,6 +79,12 @@ final class HostConnectEditHostTests: WindowTestCase {
         try XCTUnwrap(descendants(of: view).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
 
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
     private func configText() -> String {
         (try? String(contentsOf: configRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
@@ -119,6 +125,36 @@ final class HostConnectEditHostTests: WindowTestCase {
         XCTAssertFalse(settingsIsOpen(in: c))
         XCTAssertEqual(c.selectedHostForTesting, devbox)
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+    }
+
+    func test_removingTheHostFromTheFormOpenedOnConnect_landsInSettings() throws {
+        let c = onConnectScreen()
+        try pressEditHost(in: c)
+        let form = try XCTUnwrap(form(in: c))
+
+        try button("Remove", in: form).onTap()
+        let content = try XCTUnwrap(c.window.contentView)
+        let card = try XCTUnwrap(descendants(of: content).compactMap { $0 as? ConfirmCard }.first)
+        try button("Remove", in: card).onTap()
+
+        XCTAssertEqual(configText(), "ssh-host = prod\n")
+        XCTAssertNil(self.form(in: c))
+        XCTAssertTrue(settingsIsOpen(in: c), "nothing is left on a Connect screen for a host that is gone")
+    }
+
+    func test_aConnectScreen_hidesAnAddressThatOnlyRepeatsTheAlias() throws {
+        SSHHostStatusCenter.shared.setDestination("devbox", host: devbox)
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertNil(screen.destinationForTesting, "the name already says devbox")
+
+        SSHHostStatusCenter.shared.setDestination("drew@10.0.0.12", host: devbox)
+        drainMainQueue()
+        XCTAssertEqual(screen.destinationForTesting, "drew@10.0.0.12")
+        SSHHostStatusCenter.shared.setDestination("devbox", host: devbox)
+        drainMainQueue()
+
+        XCTAssertNil(screen.destinationForTesting)
     }
 
     func test_theEditHostChord_inAWorkspace_stillSearchesTheSelection() throws {

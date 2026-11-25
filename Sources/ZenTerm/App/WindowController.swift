@@ -933,7 +933,7 @@ final class WindowController: NSObject {
         let view = HostConnectView(
             host: host, name: GeneralConfig.current.displayName(of: host),
             status: SSHHostStatusCenter.shared.status(of: host),
-            destination: SSHHostStatusCenter.shared.destination(of: host),
+            destination: SSHHostStatusCenter.shared.address(of: host),
             onConnect: { [weak self] in self?.connect(host) },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
@@ -945,7 +945,7 @@ final class WindowController: NSObject {
         let center = SSHHostStatusCenter.shared
         connectView.setName(GeneralConfig.current.displayName(of: connectView.host))
         connectView.setStatus(center.status(of: connectView.host))
-        connectView.setDestination(center.destination(of: connectView.host))
+        connectView.setDestination(center.address(of: connectView.host))
     }
 
     private func mount(_ transition: MountTransition) {
@@ -2072,7 +2072,7 @@ final class WindowController: NSObject {
             removal: edited.map { alias in
                 AddSSHHostOverlay.Removal(
                     session: { [weak self] in self?.removalSession(of: alias) },
-                    perform: { [weak self] in self?.removeSSHHost(alias, from: origin) })
+                    perform: { [weak self] in self?.removeSSHHost(alias) })
             },
             onSubmit: { [weak self] host in
                 edited == nil ? self?.addSSHHost(host, from: origin) : self?.renameSSHHost(host, from: origin)
@@ -2108,7 +2108,7 @@ final class WindowController: NSObject {
         return hostSessionInAnyWindow.map { $0(id) } ?? session(of: id)
     }
 
-    private func removeSSHHost(_ alias: String, from origin: SSHHostFormOrigin) -> String? {
+    private func removeSSHHost(_ alias: String) -> String? {
         let aliases = GeneralConfig.current.sshHostAliases
         let neighbour = aliases.firstIndex(of: alias).flatMap { index in
             aliases.indices.contains(index + 1) ? aliases[index + 1] : index > 0 ? aliases[index - 1] : nil
@@ -2119,7 +2119,7 @@ final class WindowController: NSObject {
             return "Couldn't remove \(alias) from ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
-        leaveSSHHostForm(to: origin, focusing: neighbour.map { .host($0) } ?? .addHost)
+        reopenSettingsOnSSHHosts(focusing: neighbour.map { .host($0) } ?? .addHost)
         return nil
     }
 
@@ -2969,7 +2969,7 @@ final class WindowController: NSObject {
             case .navUp: return navigate(.up)
             case .navDown: return navigate(.down)
             case .closePane: return closeConnectScreen()
-            case .searchSelection: return editHostFromConnectScreen(host)
+            case .searchSelection where !floats.isOpen: return editHostFromConnectScreen(host)
             default: break
             }
         }

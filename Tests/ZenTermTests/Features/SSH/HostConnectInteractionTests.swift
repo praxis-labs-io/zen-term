@@ -153,6 +153,26 @@ final class HostConnectInteractionTests: WindowTestCase {
         return (c, pi)
     }
 
+    func test_theEditHostChord_withAFloatOpenOverConnect_leavesTheFloatsChord() throws {
+        let (c, pi) = try piRunningHiddenOnConnect()
+        ask(pi)
+        c.handle(.toggleToolFloat("pi"))
+        XCTAssertTrue(c.floatsForTesting.isOpen, "precondition: the float is open over Connect")
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "e",
+                charactersIgnoringModifiers: "e", isARepeat: false, keyCode: 14))
+
+        _ = keys.route(event)
+
+        XCTAssertFalse(c.isModalOverlayOpen, "Edit host belongs to Connect, not the float over it")
+        XCTAssertTrue(c.floatsForTesting.isOpen)
+    }
+
     private func ask(_ pi: RecordingSurface) {
         pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "needs input"))
         drainMainQueue()
