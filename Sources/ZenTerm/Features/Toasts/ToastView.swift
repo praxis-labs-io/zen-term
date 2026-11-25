@@ -237,12 +237,13 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         func refresh() {
             let glyph = resolve()
             guard glyph != keycap?.shortcut else { return }
+            let slot = keycap.flatMap { group.arrangedSubviews.firstIndex(of: $0) } ?? group.arrangedSubviews.count
             keycap.map { group.removeArrangedSubview($0) }
             keycap?.removeFromSuperview()
             keycap = nil
             guard !glyph.isEmpty else { return }
             let cap = KeycapView(shortcut: glyph)
-            group.addArrangedSubview(cap)
+            group.insertArrangedSubview(cap, at: slot)
             keycap = cap
         }
     }

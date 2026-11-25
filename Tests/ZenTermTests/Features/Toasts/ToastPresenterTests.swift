@@ -49,6 +49,31 @@ final class ToastPresenterTests: WindowTestCase {
             isARepeat: false, keyCode: keyCode)!
     }
 
+    func test_aChangedShortcut_keepsItsKeycapAheadOfTheCloseButton() throws {
+        var glyph = "⌘1"
+        let toast = ToastView(
+            content: ToastContent(variant: .info, title: "shell", message: "Waiting."),
+            actions: [ToastAction(title: "Switch", kind: .primary, shortcut: { glyph }) {}],
+            armsKeys: false, showsClose: true)
+        let header = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? NSStackView }.first { stack in
+                stack.arrangedSubviews.contains { $0 is IconButton }
+            })
+        func keycapIsBeforeClose() -> Bool {
+            let views = header.arrangedSubviews
+            guard let cap = views.firstIndex(where: { $0 is KeycapView }),
+                let close = views.firstIndex(where: { $0 is IconButton })
+            else { return false }
+            return cap < close
+        }
+        XCTAssertTrue(keycapIsBeforeClose(), "precondition")
+
+        glyph = "⌘2"
+        toast.refreshShortcuts()
+
+        XCTAssertTrue(keycapIsBeforeClose(), "the refreshed keycap jumped past the close button")
+    }
+
     func test_aTitleOnlyToast_laysOutNoEmptyMessageLine() {
         let titled = ToastView(
             content: ToastContent(variant: .warning, title: "Couldn't Connect to devbox", message: nil))
