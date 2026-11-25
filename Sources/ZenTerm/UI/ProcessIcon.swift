@@ -1,12 +1,15 @@
 import AppKit
 import TerminalKit
 
-// The chip a pane's program shows: its brand's own colors, or the theme's when it has no brand.
+// The chip a pane's program shows, in its brand's colors or the theme's; a palette group's, in its purpose tint.
 struct ProcessIcon: Equatable {
     enum Look: Equatable {
         case brand(fill: TerminalColor, glyph: TerminalColor)
         case artwork(fill: TerminalColor)
         case neutral
+        case purpose(AccentSlot)
+        // The one look that may draw an SF Symbol: a tool float's own icon picker name.
+        case catalog(AccentSlot)
     }
 
     let name: String
@@ -16,14 +19,38 @@ struct ProcessIcon: Equatable {
     let scale: CGFloat
 
     var image: NSImage? {
-        if case .artwork = look { return BrandMark.artwork(mark) }
-        return BrandMark.image(mark)
+        switch look {
+        case .artwork: return BrandMark.artwork(mark)
+        case .catalog: return IconCatalog.image(mark, weight: .regular)
+        case .brand, .neutral, .purpose: return BrandMark.image(mark)
+        }
     }
 
     static let shell = neutral("Shell", "terminal")
     static let unknown = neutral("Program", "binary")
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
+
+    static let workspace = purpose("Workspace", "folder", .magenta)
+    static let tab = purpose("Tab", "panel-top", .cyan)
+    static let pane = purpose("Pane", "columns-2", .yellow)
+    static let terminal = purpose("Terminal", "terminal", .green)
+    static let window = purpose("Window", "app-window", .blue)
+    static let tool = purpose("Tool", "hammer", toolTint)
+    static let app = neutral("App", "settings")
+
+    // Floats are terminals too, so the Tools group shares the Terminal hue.
+    private static let toolTint = AccentSlot.green
+
+    // Nil for an icon name nothing draws, such as a typo in config, so the row falls back to its group's chip.
+    static func toolFloat(_ float: ToolFloat) -> ProcessIcon? {
+        let icon = ProcessIcon(name: float.title, mark: float.icon, look: .catalog(toolTint), scale: 1)
+        return icon.image == nil ? nil : icon
+    }
+
+    private static func purpose(_ name: String, _ mark: String, _ hue: AccentSlot) -> ProcessIcon {
+        ProcessIcon(name: name, mark: mark, look: .purpose(hue), scale: lucideScale)
+    }
 
     static func forProgram(_ program: String?) -> ProcessIcon {
         guard let program = program?.lowercased(), !program.isEmpty else { return shell }

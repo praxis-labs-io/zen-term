@@ -128,9 +128,9 @@ final class PaletteInteractionTests: WindowTestCase {
         onDismiss: @escaping () -> Void = {}
     ) -> CommandPaletteOverlay {
         let commands = [
-            PaletteCommand(title: "Split Vertically", shortcut: "⌘D", category: "Panes", chord: .splitVertical),
-            PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: "Panes", chord: .closePane),
-            PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
+            PaletteCommand(title: "Split Vertically", shortcut: "⌘D", category: .panes, chord: .splitVertical),
+            PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: .panes, chord: .closePane),
+            PaletteCommand(title: "New Tab", shortcut: "⌘T", category: .tabs, chord: .newTab),
         ]
         return CommandPaletteOverlay(
             commands: { commands },
@@ -223,6 +223,118 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(ran, .closePane)
     }
 
+    private func catalogPalette() -> CommandPaletteOverlay {
+        CommandPaletteOverlay(
+            commands: { CommandCatalog.commands(tabCount: 3, workspaceCount: 1) }, onRun: { _ in }, onDismiss: {})
+    }
+
+    private func details(in overlay: PaletteOverlay) -> [String: String] {
+        Dictionary(
+            rows(in: overlay).map { ($0.title, $0.detailLabel.isHidden ? "" : $0.detail) },
+            uniquingKeysWith: { first, _ in first })
+    }
+
+    func test_commandPalette_filtering_namesEachRowsCategory() {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        type("close", into: overlay)
+
+        let shown = details(in: overlay)
+        XCTAssertEqual(shown["Close Tab"], "Tabs")
+        XCTAssertEqual(shown["Close Pane"], "Panes")
+        XCTAssertFalse(overlay.rowViews.contains { $0 is PaletteSectionHeader }, "a filtered list has no headers")
+    }
+
+    func test_commandPalette_emptyQuery_groupsUnderHeadersWithNoDetail() {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        type("close", into: overlay)
+        type("", into: overlay)
+
+        XCTAssertTrue(overlay.rowViews.contains { $0 is PaletteSectionHeader })
+        XCTAssertEqual(Set(details(in: overlay).values), [""], "a header already names the category")
+    }
+
+    func test_commandPalette_everyRowLeadsWithItsCommandsChip() {
+        let overlay = catalogPalette()
+        mount(overlay)
+        let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
+        let shown = rows(in: overlay)
+        XCTAssertEqual(shown.count, commands.count)
+        for (row, command) in zip(shown, commands) {
+            XCTAssertEqual(row.title, command.title)
+            XCTAssertEqual(row.content.leading, .process(command.icon), command.title)
+        }
+    }
+
+    func test_commandPalette_aToolFloatsChipDrawsItsConfiguredIcon() throws {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let scratch = try XCTUnwrap(rows(in: overlay).first { $0.title == ToolFloat.scratch.title })
+        let chip = try XCTUnwrap(scratch.processBadgeForTesting, "a float row leads with a chip")
+
+        XCTAssertEqual(chip.process?.mark, ToolFloat.scratch.icon)
+        XCTAssertNotNil(chip.iconImageForTesting, "the chip draws nothing for the float's icon")
+        type("scratch", into: overlay)
+        XCTAssertEqual(scratch.detail, CommandCategory.tools.title)
+    }
+
+    func test_commandPalette_everyChipTakesItsGroupsPurposeTint() throws {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let hues: [CommandCategory: AccentSlot] = [
+            .workspaces: .magenta, .tabs: .cyan, .panes: .yellow, .terminal: .green, .window: .blue, .tools: .green,
+        ]
+        let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
+        let shown = rows(in: overlay)
+        XCTAssertEqual(shown.count, commands.count)
+        for (row, command) in zip(shown, commands) {
+            let chip = try XCTUnwrap(row.processBadgeForTesting, command.title)
+            let expected =
+                hues[command.category].map { $0.color(in: Theme.current.terminal).nsColor }
+                ?? Theme.current.chrome.ink(.normal)
+            XCTAssertEqual(chip.iconTintForTesting, expected, "\(command.title) in \(command.category.title)")
+        }
+    }
+
+    func test_commandPalette_everyHeaderButTheFirst_leavesAGapAboveIt() {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        type("close", into: overlay)
+        type("", into: overlay)
+        window.layoutIfNeeded()
+
+        let headers = overlay.rowViews.enumerated().filter { $0.element is PaletteSectionHeader }
+        XCTAssertGreaterThan(headers.count, 1)
+        for (index, header) in headers {
+            let gap = index == 0 ? 0 : PaletteSectionHeader.sectionGap
+            XCTAssertEqual(header.frame.height, PaletteSectionHeader.height + gap, accuracy: 0.5, "header at \(index)")
+        }
+    }
+
+    func test_aToolFloatWhoseIconDrawsNothing_fallsBackToTheToolsChip() {
+        let typo = ToolFloat(
+            id: "typo", order: 1, title: "Typo", icon: "hammer.fil", command: "", dir: nil, widthFraction: 0.5,
+            heightFraction: 0.5, requiresGitRepo: false, persist: .ephemeral, toggle: Chord(command: true, key: "y"))
+        XCTAssertNil(ProcessIcon.toolFloat(typo))
+        XCTAssertNotNil(ProcessIcon.toolFloat(.scratch))
+        let command = PaletteCommand(
+            title: typo.title, shortcut: "", category: .tools, chord: .toggleToolFloat(typo.id),
+            floatIcon: ProcessIcon.toolFloat(typo))
+        XCTAssertEqual(command.icon, CommandCategory.tools.icon)
+    }
+
+    func test_commandCategory_everyChipsMarkIsBundled() {
+        for category in CommandCategory.allCases {
+            XCTAssertNotNil(
+                category.icon.image, "\(category.title)'s mark \(category.icon.mark) is not in the bundle")
+        }
+    }
+
     func test_commandPalette_searchingSectionName_surfacesTheWholeSection() {
         let overlay = makeCommandPalette()
         mount(overlay)
@@ -233,28 +345,29 @@ final class PaletteInteractionTests: WindowTestCase {
     func test_commandPalette_titleMatchOutranksCategoryOnlyMatch() {
         var ran: KeyInterceptor.ReservedChord?
         let commands = [
-            PaletteCommand(title: "Open Settings", shortcut: "⌘,", category: "Config", chord: .openSettings),
-            PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: "Panes", chord: .closePane),
+            PaletteCommand(title: "Open Settings", shortcut: "⌘,", category: .app, chord: .openSettings),
+            PaletteCommand(
+                title: "Write Screen to File and Open", shortcut: "", category: .terminal, chord: .openScreenFile),
         ]
         let overlay = CommandPaletteOverlay(
             commands: { commands },
             onRun: { ran = $0 }, onDismiss: {})
         mount(overlay)
-        type("con", into: overlay)
-        XCTAssertEqual(overlay.numberOfRows(), 2, "Close Pane by title, Open Settings by category")
+        type("ap", into: overlay)
+        XCTAssertEqual(overlay.numberOfRows(), 2, "Write Screen to File and Open by title, Open Settings by category")
         send(Self.insertNewline, to: overlay)
-        XCTAssertEqual(ran, .closePane)
+        XCTAssertEqual(ran, .openScreenFile)
     }
 
     private func makeLongCommandPalette() -> CommandPaletteOverlay {
         let commands =
             (0..<12).map {
                 PaletteCommand(
-                    title: "Pane action \($0)", shortcut: "⌘\($0)", category: "Panes", chord: .splitVertical)
+                    title: "Pane action \($0)", shortcut: "⌘\($0)", category: .panes, chord: .splitVertical)
             }
             + (0..<12).map {
                 PaletteCommand(
-                    title: "Tab action \($0)", shortcut: "⌥\($0)", category: "Tabs", chord: .newTab)
+                    title: "Tab action \($0)", shortcut: "⌥\($0)", category: .tabs, chord: .newTab)
             }
         return CommandPaletteOverlay(
             commands: { commands },
@@ -440,9 +553,9 @@ final class PaletteInteractionTests: WindowTestCase {
         let overlay = CommandPaletteOverlay(
             commands: {
                 [
-                    PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
+                    PaletteCommand(title: "New Tab", shortcut: "⌘T", category: .tabs, chord: .newTab),
                     PaletteCommand(
-                        title: "New Tab", shortcut: "⌘⇧J", category: "Tools",
+                        title: "New Tab", shortcut: "⌘⇧J", category: .tools,
                         chord: .toggleToolFloat("nt")),
                 ]
             },

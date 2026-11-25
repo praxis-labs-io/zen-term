@@ -52,29 +52,28 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "New Tool Float…", "Settings…", "Reload Config",
-                "Check for Updates",
-                "Report an Issue…",
                 "Open Workspace Picker", "New Workspace", "Previous Workspace", "Next Workspace",
                 "Rename Workspace…", "Close Workspace",
                 "Jump to Waiting Agent",
                 "Open Agent Picker",
-                "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
                 "Rename Tab…", "Close Tab",
+                "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Focus Previous Pane", "Focus Next Pane",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
-                "Focus Mode", "Scroll Mode", "Find in Scrollback", "Find Selection",
+                "Focus Mode", "Close Pane",
+                "Scroll Mode", "Find in Scrollback", "Find Selection",
                 "Scroll Page Up", "Scroll Page Down", "Scroll to Top", "Scroll to Bottom",
                 "Jump to Previous Prompt", "Jump to Next Prompt", "Scroll to Selection",
                 "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
-                "Close Pane",
-                "Toggle Sidebar", "Focus Sidebar", "Fill Screen", "Close Window",
+                "Close Window", "Fill Screen", "Toggle Sidebar", "Focus Sidebar",
+                "New Tool Float…",
+                "Settings…", "Reload Config", "Check for Updates",
                 "Increase Font Size", "Decrease Font Size", "Reset Font Size",
-                "Dismiss Notice", "Dismiss All Notices",
+                "Dismiss Notice", "Dismiss All Notices", "Report an Issue…",
             ])
     }
 
@@ -96,13 +95,13 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_categories_areContiguousInOrder() {
-        let categories = CommandCatalog.commands(tabCount: 3, workspaceCount: 3).map(\.category)
+        let categories = CommandCatalog.commands(tabCount: 3, workspaceCount: 3).map(\.category.title)
         var seen: [String] = []
         for category in categories where seen.last != category {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")
             seen.append(category)
         }
-        XCTAssertEqual(seen, ["Tools", "Config", "Help", "Workspaces", "Drawers", "Tabs", "Panes", "Window"])
+        XCTAssertEqual(seen, ["Workspaces", "Tabs", "Panes", "Terminal", "Window", "Tools", "App"])
     }
 
     func test_selectTab_expandsPerTab() {

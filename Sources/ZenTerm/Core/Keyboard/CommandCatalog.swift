@@ -3,22 +3,14 @@ import Foundation
 struct PaletteCommand {
     let title: String
     let shortcut: String
-    let category: String
+    let category: CommandCategory
     let chord: KeyInterceptor.ReservedChord
+    var floatIcon: ProcessIcon?
+
+    var icon: ProcessIcon { floatIcon ?? category.icon }
 }
 
 enum CommandCatalog {
-    private enum Category {
-        static let panes = "Panes"
-        static let tabs = "Tabs"
-        static let drawers = "Drawers"
-        static let window = "Window"
-        static let tools = "Tools"
-        static let config = "Config"
-        static let help = "Help"
-        static let workspaces = "Workspaces"
-    }
-
     static func spec(for chord: KeyInterceptor.ReservedChord) -> PaletteCommand {
         let glyph = displayGlyph(for: chord)
         switch chord {
@@ -48,43 +40,47 @@ enum CommandCatalog {
         case .moveTabLeft: return tab("Move Tab Left", glyph, chord)
         case .moveTabRight: return tab("Move Tab Right", glyph, chord)
         case .renameTab: return tab("Rename Tab…", glyph, chord)
-        case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", glyph, chord)
-        case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
-        case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
+        case .toggleBottomDrawer: return tab("Toggle Bottom Drawer", glyph, chord)
+        case .toggleRightDrawer: return tab("Toggle Right Drawer", glyph, chord)
+        case .toggleToolFloat(let id):
+            let float = ToolFloatCatalog.byID(id)
+            return .init(
+                title: float?.title ?? id, shortcut: glyph, category: .tools, chord: chord,
+                floatIcon: float.flatMap(ProcessIcon.toolFloat))
         case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
         case .newWorkspace: return workspace("New Workspace", glyph, chord)
-        case .openSettings: return config("Settings…", glyph, chord)
-        case .reloadConfig: return config("Reload Config", glyph, chord)
-        case .checkForUpdates: return config("Check for Updates", glyph, chord)
-        case .reportIssue: return help("Report an Issue…", glyph, chord)
+        case .openSettings: return app("Settings…", glyph, chord)
+        case .reloadConfig: return app("Reload Config", glyph, chord)
+        case .checkForUpdates: return app("Check for Updates", glyph, chord)
+        case .reportIssue: return app("Report an Issue…", glyph, chord)
         case .newTool: return tool("New Tool Float…", glyph, chord)
-        case .increaseFontSize: return window("Increase Font Size", glyph, chord)
-        case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
-        case .resetFontSize: return window("Reset Font Size", glyph, chord)
-        case .toggleScrollMode: return pane("Scroll Mode", glyph, chord)
-        case .toggleSearch: return pane("Find in Scrollback", glyph, chord)
-        case .scrollToTop: return pane("Scroll to Top", glyph, chord)
-        case .scrollToBottom: return pane("Scroll to Bottom", glyph, chord)
-        case .scrollPageUp: return pane("Scroll Page Up", glyph, chord)
-        case .scrollPageDown: return pane("Scroll Page Down", glyph, chord)
-        case .searchSelection: return pane("Find Selection", glyph, chord)
-        case .clearScreen: return pane("Clear Screen", glyph, chord)
-        case .scrollToSelection: return pane("Scroll to Selection", glyph, chord)
-        case .jumpToPreviousPrompt: return pane("Jump to Previous Prompt", glyph, chord)
-        case .jumpToNextPrompt: return pane("Jump to Next Prompt", glyph, chord)
-        case .pasteSelection: return pane("Paste Selection", glyph, chord)
-        case .writeScreenFile: return pane("Write Screen to File", glyph, chord)
-        case .copyScreenFilePath: return pane("Write Screen to File, Copy Path", glyph, chord)
-        case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
-        case .dismissToast: return window("Dismiss Notice", glyph, chord)
-        case .dismissAllToasts: return window("Dismiss All Notices", glyph, chord)
-        case .newWindow: return tab("New Window", glyph, chord)
-        case .selectAll: return pane("Select All", glyph, chord)
+        case .increaseFontSize: return app("Increase Font Size", glyph, chord)
+        case .decreaseFontSize: return app("Decrease Font Size", glyph, chord)
+        case .resetFontSize: return app("Reset Font Size", glyph, chord)
+        case .toggleScrollMode: return terminal("Scroll Mode", glyph, chord)
+        case .toggleSearch: return terminal("Find in Scrollback", glyph, chord)
+        case .scrollToTop: return terminal("Scroll to Top", glyph, chord)
+        case .scrollToBottom: return terminal("Scroll to Bottom", glyph, chord)
+        case .scrollPageUp: return terminal("Scroll Page Up", glyph, chord)
+        case .scrollPageDown: return terminal("Scroll Page Down", glyph, chord)
+        case .searchSelection: return terminal("Find Selection", glyph, chord)
+        case .clearScreen: return terminal("Clear Screen", glyph, chord)
+        case .scrollToSelection: return terminal("Scroll to Selection", glyph, chord)
+        case .jumpToPreviousPrompt: return terminal("Jump to Previous Prompt", glyph, chord)
+        case .jumpToNextPrompt: return terminal("Jump to Next Prompt", glyph, chord)
+        case .pasteSelection: return terminal("Paste Selection", glyph, chord)
+        case .writeScreenFile: return terminal("Write Screen to File", glyph, chord)
+        case .copyScreenFilePath: return terminal("Write Screen to File, Copy Path", glyph, chord)
+        case .openScreenFile: return terminal("Write Screen to File and Open", glyph, chord)
+        case .dismissToast: return app("Dismiss Notice", glyph, chord)
+        case .dismissAllToasts: return app("Dismiss All Notices", glyph, chord)
+        case .newWindow: return window("New Window", glyph, chord)
+        case .selectAll: return terminal("Select All", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
-        case .findNext: return pane("Find Next", glyph, chord)
+        case .findNext: return terminal("Find Next", glyph, chord)
         case .createWorktree: return workspace("New Worktree…", glyph, chord)
         case .removeWorktree: return workspace("Remove Worktree…", glyph, chord)
-        case .findPrevious: return pane("Find Previous", glyph, chord)
+        case .findPrevious: return terminal("Find Previous", glyph, chord)
         case .selectWorkspace(let n): return workspace("Select Workspace \(n)", glyph, chord)
         case .prevWorkspace: return workspace("Previous Workspace", glyph, chord)
         case .nextWorkspace: return workspace("Next Workspace", glyph, chord)
@@ -100,10 +96,9 @@ enum CommandCatalog {
     }
 
     static func commands(tabCount: Int, workspaceCount: Int, onHost: Bool = false) -> [PaletteCommand] {
-        var chords: [KeyInterceptor.ReservedChord] = ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
-        chords += [.newTool]
-        chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
-        chords += [.toggleRepoPicker, .newWorkspace, .prevWorkspace, .nextWorkspace]
+        var chords: [KeyInterceptor.ReservedChord] = [
+            .toggleRepoPicker, .newWorkspace, .prevWorkspace, .nextWorkspace,
+        ]
         if workspaceCount > 0 {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
@@ -111,28 +106,33 @@ enum CommandCatalog {
         if !onHost || tabCount > 0 { chords += [.closeWorkspace] }
         chords += [.nextWaitingAgent, .toggleAgentPicker]
         chords += [
-            .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
         ]
         if tabCount > 0 {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }
         }
+        chords += [.toggleBottomDrawer, .toggleRightDrawer]
         chords += [
             .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
-            .toggleZoom, .toggleScrollMode, .toggleSearch, .searchSelection,
+            .toggleZoom, .closePane,
+        ]
+        chords += [
+            .toggleScrollMode, .toggleSearch, .searchSelection,
             .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
             .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
             .clearScreen, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
-            .closePane,
         ]
+        chords += [.closeWindow, .fillScreen, .toggleSidebar, .focusSidebar]
+        chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+        chords += [.newTool]
         chords += [
-            .toggleSidebar, .focusSidebar, .fillScreen, .closeWindow, .increaseFontSize, .decreaseFontSize,
-            .resetFontSize,
+            .openSettings, .reloadConfig, .checkForUpdates,
+            .increaseFontSize, .decreaseFontSize, .resetFontSize,
+            .dismissToast, .dismissAllToasts, .reportIssue,
         ]
-        chords += [.dismissToast, .dismissAllToasts]
         return chords.map { onHost && $0 == .closeWorkspace ? disconnect : spec(for: $0) }
     }
 
@@ -143,41 +143,36 @@ enum CommandCatalog {
     private static func pane(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.panes, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .panes, chord: chord)
+    }
+    private static func terminal(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: .terminal, chord: chord)
     }
     private static func tab(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.tabs, chord: chord)
-    }
-    private static func drawer(
-        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
-    ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.drawers, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .tabs, chord: chord)
     }
     private static func window(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.window, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .window, chord: chord)
     }
     private static func tool(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.tools, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .tools, chord: chord)
     }
-    private static func config(
+    private static func app(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.config, chord: chord)
-    }
-    private static func help(
-        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
-    ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.help, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .app, chord: chord)
     }
     private static func workspace(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.workspaces, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .workspaces, chord: chord)
     }
 }

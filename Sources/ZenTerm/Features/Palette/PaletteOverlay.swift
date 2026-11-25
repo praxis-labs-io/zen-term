@@ -260,13 +260,14 @@ class PaletteOverlay: ModalShell, ModalOverlay {
             let id = rowIdentity(at: index)
             let row: LaidOutRow
             if let id, let reused = reusable.removeValue(forKey: id) {
+                reused.height.constant = Self.height(of: reused.view, at: index)
                 rowsStack.insertArrangedSubview(reused.view, at: index)
                 row = reused
             } else {
                 let view = makeRow(at: index)
                 if animatesNextReload { arrived.append(view) }
                 rowsStack.insertArrangedSubview(view, at: index)
-                let heightConstraint = view.heightAnchor.constraint(equalToConstant: Self.height(of: view))
+                let heightConstraint = view.heightAnchor.constraint(equalToConstant: Self.height(of: view, at: index))
                 NSLayoutConstraint.activate([
                     view.widthAnchor.constraint(equalTo: rowsStack.widthAnchor), heightConstraint,
                 ])
@@ -297,8 +298,9 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         }
     }
 
-    private static func height(of row: PaletteRowView) -> CGFloat {
-        row is PaletteSectionHeader ? PaletteSectionHeader.height : ChromeMetrics.Height.lg
+    private static func height(of row: PaletteRowView, at index: Int) -> CGFloat {
+        guard row is PaletteSectionHeader else { return ChromeMetrics.Height.lg }
+        return PaletteSectionHeader.height + (index == 0 ? 0 : PaletteSectionHeader.sectionGap)
     }
 
     private func setListHeight(_ height: CGFloat) {

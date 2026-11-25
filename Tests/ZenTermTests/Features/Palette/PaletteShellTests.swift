@@ -145,7 +145,7 @@ final class PaletteShellTests: WindowTestCase {
         XCTAssertEqual(emptyState(in: stub), "No stubs", "no match")
 
         let palette = CommandPaletteOverlay(
-            commands: { [PaletteCommand(title: "New Tab", shortcut: "", category: "Tabs", chord: .newTab)] },
+            commands: { [PaletteCommand(title: "New Tab", shortcut: "", category: .tabs, chord: .newTab)] },
             onRun: { _ in }, onDismiss: {})
         _ = mount(palette)
         try type("zzz", into: palette)
@@ -252,7 +252,7 @@ final class PaletteShellTests: WindowTestCase {
         GitRepoStatus.resetForTesting()
         addTeardownBlock { GitRepoStatus.resetForTesting() }
         let commands = (1...30).map {
-            PaletteCommand(title: "Command \($0)", shortcut: "", category: "Tabs", chord: .newTab)
+            PaletteCommand(title: "Command \($0)", shortcut: "", category: .tabs, chord: .newTab)
         }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("zenterm-shell-\(UUID().uuidString)")
         let agents = (1...30).map {

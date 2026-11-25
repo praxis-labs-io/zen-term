@@ -89,7 +89,7 @@ final class HintFooterTests: WindowTestCase {
 
     func test_thePalette_showsItsHintsThroughTheSharedFooter() throws {
         let overlay = CommandPaletteOverlay(
-            commands: { [PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab)] },
+            commands: { [PaletteCommand(title: "New Tab", shortcut: "⌘T", category: .tabs, chord: .newTab)] },
             onRun: { _ in }, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         overlay.frame = NSRect(x: 0, y: 0, width: 700, height: 500)
