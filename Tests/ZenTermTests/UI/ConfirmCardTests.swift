@@ -146,6 +146,7 @@ final class ConfirmCardTests: WindowTestCase {
         }
         NSApp.postEvent(try click(.leftMouseUp), atStart: false)
         text.mouseDown(with: try click(.leftMouseDown))
+        _ = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true)
 
         XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
     }
