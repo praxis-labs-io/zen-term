@@ -617,6 +617,9 @@ New modal surfaces compose the existing primitives.
   Animation durations, on-screen lingers and hover intent live on `Motion`. Behavior
   debounces, polls, timeouts and a gesture's tuned delay stay with their owner, and a
   control's own loop period (a spinner step, a progress sweep) stays local to it.
+- **Every `Spinner` steps on one shared clock.** Each starts its loop on the next tick of a
+  grid shared by all of them, so a window redraws at the spinner's frame rate however many
+  spin.
 
 ## Key handling
 

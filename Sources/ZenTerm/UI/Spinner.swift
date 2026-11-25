@@ -3,18 +3,36 @@ import TerminalKit
 
 // `NSProgressIndicator` tints from `effectiveAppearance`, which the chrome bans.
 final class Spinner: NSView, ThemeReapplying {
-    private let pixels: [CALayer] = (0..<6).map { _ in CALayer() }
+    struct Frame {
+        let rotation: CGFloat
+        let arcLength: CGFloat
+    }
+
     private static let size: CGFloat = 13
-    private static let pixelSize: CGFloat = 3
-    // Pixel art of the spinner, not chrome spacing.
-    // swiftlint:disable:next untokened_spacing_constant
-    private static let pixelGap: CGFloat = 2
-    private static let frameDuration: CFTimeInterval = 1.0 / 6
-    private static let trail: [Float] = [1, 0.7, 0.45, 0.25, 0.1, 0]
-    private static let stepKey = "zenterm.spin"
-    private static let clockwiseCells: [(column: Int, rowFromTop: Int)] = [
-        (0, 0), (1, 0), (1, 1), (1, 2), (0, 2), (0, 1),
-    ]
+    // The ring's own geometry, not a chrome corner radius.
+    // swiftlint:disable:next untokened_radius
+    private static let ringRadius: CGFloat = 5.25
+    private static let ringWidth: CGFloat = 1.5
+    private static let turnKey = "zenterm.spin.turn"
+    private static let stretchKey = "zenterm.spin.stretch"
+
+    // Every spinner steps on this one grid so the window redraws 30 times a second however many spin.
+    static let frameInterval: CFTimeInterval = 1.0 / 30
+    private static let turnPeriod: CFTimeInterval = 1.5
+    private static let stretchPeriod: CFTimeInterval = 2
+    private static let shortestArc: CGFloat = 0.05
+    private static let longestArc: CGFloat = 0.8
+    private static let leadAtLongest: CGFloat = 0.15
+
+    // 6 s is the first moment the 1.5 s turn and the 2 s stretch line up again.
+    private static let loopFrames = 180
+    static let frames: [Frame] = (0..<loopFrames).map(frame(at:))
+
+    private static let loopDuration = Double(loopFrames) * frameInterval
+    private static let keyTimes = (0...loopFrames).map { NSNumber(value: Double($0) / Double(loopFrames)) }
+
+    private let arc = CAShapeLayer()
+    private let stillDot = StateDot()
 
     var role: KeyPath<ChromeTheme, TerminalColor> = \.accent { didSet { reapplyTheme() } }
 
@@ -29,8 +47,18 @@ final class Spinner: NSView, ThemeReapplying {
         super.init(frame: .zero)
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
-        pixels.forEach { layer?.addSublayer($0) }
-        for (index, pixel) in pixels.enumerated() { pixel.opacity = Self.opacity(of: index, leadAt: 0) }
+        arc.fillColor = nil
+        arc.lineWidth = Self.ringWidth
+        arc.lineCap = .round
+        layer?.addSublayer(arc)
+        arc.strokeEnd = Self.shortestArc
+        stillDot.translatesAutoresizingMaskIntoConstraints = false
+        stillDot.isHidden = true
+        addSubview(stillDot)
+        NSLayoutConstraint.activate([
+            stillDot.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stillDot.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
         reapplyTheme()
     }
 
@@ -40,44 +68,81 @@ final class Spinner: NSView, ThemeReapplying {
         NSSize(width: Self.size, height: Self.size)
     }
 
+    var stillDotStateForTesting: StateDot.State? { stillDot.isHidden ? nil : stillDot.state }
+    var arcForTesting: CAShapeLayer { arc }
+
     override func layout() {
         super.layout()
-        let pitch = Self.pixelSize + Self.pixelGap
-        let gridWidth = 2 * Self.pixelSize + Self.pixelGap
-        let gridHeight = 3 * Self.pixelSize + 2 * Self.pixelGap
-        let origin = CGPoint(
-            x: ((bounds.width - gridWidth) / 2).rounded(), y: ((bounds.height - gridHeight) / 2).rounded())
-        for (pixel, cell) in zip(pixels, Self.clockwiseCells) {
-            pixel.frame = CGRect(
-                x: origin.x + CGFloat(cell.column) * pitch, y: origin.y + CGFloat(2 - cell.rowFromTop) * pitch,
-                width: Self.pixelSize, height: Self.pixelSize)
+        let box = CGRect(
+            x: ((bounds.width - Self.size) / 2).rounded(), y: ((bounds.height - Self.size) / 2).rounded(),
+            width: Self.size, height: Self.size)
+        let ring = CGMutablePath()
+        ring.addArc(
+            center: CGPoint(x: Self.size / 2, y: Self.size / 2), radius: Self.ringRadius, startAngle: 0,
+            endAngle: -2 * .pi, clockwise: true)
+        withoutImplicitMotion {
+            arc.frame = box
+            arc.path = ring
         }
         applySpin()
     }
 
     func reapplyTheme() {
-        let color = Theme.current.chrome[keyPath: role].nsColor.cgColor
-        pixels.forEach { $0.backgroundColor = color }
+        withoutImplicitMotion { arc.strokeColor = Theme.current.chrome[keyPath: role].nsColor.cgColor }
+        if !stillDot.isHidden { stillDot.state = stillDotState }
+    }
+
+    private var stillDotState: StateDot.State { role == \ChromeTheme.working ? .working : .live }
+
+    private func withoutImplicitMotion(_ change: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        change()
+        CATransaction.commit()
     }
 
     private func applySpin() {
-        if isSpinning, pixels.first?.animation(forKey: Self.stepKey) != nil { return }
-        pixels.forEach { $0.removeAnimation(forKey: Self.stepKey) }
-        guard isSpinning, !Motion.isReduceMotionEnabled() else { return }
-        let frames = pixels.count
-        let keyTimes = (0...frames).map { NSNumber(value: Double($0) / Double(frames)) }
-        for (index, pixel) in pixels.enumerated() {
-            let step = CAKeyframeAnimation(keyPath: "opacity")
-            step.calculationMode = .discrete
-            step.keyTimes = keyTimes
-            step.values = (0..<frames).map { Self.opacity(of: index, leadAt: $0) }
-            step.duration = Self.frameDuration * Double(frames)
-            step.repeatCount = .infinity
-            pixel.add(step, forKey: Self.stepKey)
+        let showsStillDot = isSpinning && Motion.isReduceMotionEnabled()
+        stillDot.state = showsStillDot ? stillDotState : nil
+        stillDot.isHidden = !showsStillDot
+        withoutImplicitMotion { arc.isHidden = showsStillDot }
+        if isSpinning, !showsStillDot, arc.animation(forKey: Self.turnKey) != nil { return }
+        arc.removeAnimation(forKey: Self.turnKey)
+        arc.removeAnimation(forKey: Self.stretchKey)
+        guard isSpinning, !showsStillDot else { return }
+        let firstTick = (CACurrentMediaTime() / Self.frameInterval).rounded(.up) * Self.frameInterval
+        let beginTime = arc.convertTime(firstTick, from: nil)
+        let turn = Self.step("transform.rotation.z", Self.frames.map { NSNumber(value: Double($0.rotation)) })
+        let stretch = Self.step("strokeEnd", Self.frames.map { NSNumber(value: Double($0.arcLength)) })
+        for (key, step) in [(Self.turnKey, turn), (Self.stretchKey, stretch)] {
+            step.beginTime = beginTime
+            arc.add(step, forKey: key)
         }
     }
 
-    private static func opacity(of cell: Int, leadAt lead: Int) -> Float {
-        trail[(lead - cell + trail.count) % trail.count]
+    private static func step(_ keyPath: String, _ values: [NSNumber]) -> CAKeyframeAnimation {
+        let step = CAKeyframeAnimation(keyPath: keyPath)
+        step.calculationMode = .discrete
+        step.keyTimes = keyTimes
+        step.values = values
+        step.duration = loopDuration
+        step.repeatCount = .infinity
+        step.fillMode = .backwards
+        return step
+    }
+
+    private static func frame(at index: Int) -> Frame {
+        let time = Double(index) * frameInterval
+        let stretches = (time / stretchPeriod).rounded(.down)
+        let phase = CGFloat(time / stretchPeriod - stretches)
+        let growing = phase < 0.5
+        let progress = growing ? phase * 2 : (phase - 0.5) * 2
+        let arcLength =
+            growing
+            ? shortestArc + (longestArc - shortestArc) * progress
+            : longestArc - (longestArc - shortestArc) * progress
+        let lead = growing ? leadAtLongest * progress : leadAtLongest + (1 - leadAtLongest) * progress
+        let turns = CGFloat(time / turnPeriod + stretches) + lead
+        return Frame(rotation: -2 * .pi * turns, arcLength: arcLength)
     }
 }
