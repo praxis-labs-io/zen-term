@@ -161,16 +161,27 @@ final class NewWorkspaceTests: WindowTestCase {
             "a workspace without a config entry never counts as the configured one being open")
     }
 
-    func test_anEmptyQuery_listsNoNewWorkspaceRow_andTheFieldShowsTheChord() throws {
+    func test_theBar_namesTheNewWorkspaceChord_typingOrNot() throws {
         let c = makeWindow()
         let picker = try openPicker(in: c)
-        c.window.layoutIfNeeded()
+        let new = HintFooter.Hint(keys: "⌘⌃T", label: RepoPickerOverlay.newHintLabel)
 
-        XCTAssertNil(newWorkspaceRowIfListed(of: picker))
-        let tip = try XCTUnwrap(picker.newTipForTesting, "the field's trailing slot names the chord")
-        XCTAssertTrue(tip.isDescendant(of: picker.card))
-        XCTAssertEqual(descendants(of: tip).compactMap { ($0 as? KeycapView)?.shortcut }, ["⌘⌃T"])
-        XCTAssertEqual(descendants(of: tip).compactMap { ($0 as? NSTextField)?.stringValue }.first, "New")
+        XCTAssertNil(newWorkspaceRowIfListed(of: picker), "an empty query lists no New Workspace row")
+        XCTAssertTrue(picker.barHintsForTesting.contains(new), "the bar names the chord with nothing typed")
+
+        try type("api", into: picker, in: c)
+
+        XCTAssertTrue(picker.barHintsForTesting.contains(new), "and while a query is typed")
+    }
+
+    func test_withNewWorkspaceUnbound_theBarNamesNoChord() throws {
+        var config = GeneralConfig.current
+        config.keymap = config.keymap.filter { $0.value != .newWorkspace }
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+
+        XCTAssertFalse(picker.barHintsForTesting.contains { $0.label == RepoPickerOverlay.newHintLabel })
     }
 
     func test_cmdCtrlT_withThePickerOpen_opensAWorkspace_andClosesThePicker() throws {
@@ -224,18 +235,16 @@ final class NewWorkspaceTests: WindowTestCase {
         XCTAssertNil(pickerIn(c), "the picker closes")
     }
 
-    func test_theRow_followsTheQuery_andLeavesWithIt_handingTheSlotBackTheChord() throws {
+    func test_theRow_followsTheQuery_andLeavesWithIt() throws {
         let c = makeWindow()
         let picker = try openPicker(in: c)
 
         try type("api", into: picker, in: c)
         XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace “api”")
-        XCTAssertNil(picker.newTipForTesting, "the row names the chord while it is listed")
 
         try type("", into: picker, in: c)
 
         XCTAssertNil(newWorkspaceRowIfListed(of: picker))
-        XCTAssertNotNil(picker.newTipForTesting)
         XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName], "nothing was made")
     }
 

@@ -207,14 +207,6 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         )
     }
 
-    var searchAccessory: NSView? {
-        didSet {
-            guard searchAccessory !== oldValue else { return }
-            oldValue?.removeFromSuperview()
-            if let searchAccessory { searchRow.setViews([searchAccessory], in: .trailing) }
-        }
-    }
-
     func numberOfRows() -> Int { fatalError("subclass must override numberOfRows()") }
 
     func makeRow(at index: Int) -> PaletteRowView { fatalError("subclass must override makeRow(at:)") }

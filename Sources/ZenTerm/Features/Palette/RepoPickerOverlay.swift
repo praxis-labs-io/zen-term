@@ -13,6 +13,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         case worktree(Worktree, parent: Workspace)
     }
 
+    static let newHintLabel = "New"
+
     enum State: String {
         case current = "Current"
         case open = "Open"
@@ -72,7 +74,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             placeholder: "Search workspaces",
             emptyText: "",
             onDismiss: onDismiss)
-        refreshNewTip()
 
         let probes = configuredPaths.union((open + elsewhere).map { $0.folder.standardizedFileURL })
         churnProbed = probes
@@ -319,14 +320,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
-    private func refreshNewTip() {
-        guard newWorkspaceName == nil, let chord = Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)
-        else { return searchAccessory = nil }
-        searchAccessory = HintFooter.Item(HintFooter.Hint(keys: chord.displayGlyph, label: "New"))
-    }
-
-    var newTipForTesting: HintFooter.Item? { searchAccessory as? HintFooter.Item }
-
     var newWorkspaceName: String? { newWorkspaceName(currentQuery) }
 
     private func newWorkspaceName(_ query: String) -> String? {
@@ -459,7 +452,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             open: open, elsewhere: elsewhere, entries: entries, listings: listings, configured: configuredPaths,
             owners: worktreeOwners)
         rows = Self.list(groups, query: newWorkspaceName(query))
-        refreshNewTip()
     }
 
     private static func score(_ worktree: Worktree, _ query: String) -> Int? {
@@ -480,6 +472,9 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func shortcutHints(at index: Int) -> [HintFooter.Hint] {
         let keymap = GeneralConfig.current.keymap
         var hints: [HintFooter.Hint] = []
+        if let chord = Chord.displayed(.newWorkspace, in: keymap) {
+            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: Self.newHintLabel))
+        }
         if createTarget != nil, let chord = Chord.displayed(.createWorktree, in: keymap) {
             hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "New Worktree"))
         }

@@ -163,43 +163,6 @@ final class PaletteShellTests: WindowTestCase {
             accuracy: 0.5, "the bar's last key sits on the search row's trailing inset")
     }
 
-    func test_theSearchFieldsTrailingSlot_sitsAfterTheField_andTheFieldStillTakesTyping() throws {
-        let overlay = makeStub()
-        let window = mount(overlay)
-        let tip = NSTextField(labelWithString: "New")
-        overlay.searchAccessory = tip
-        overlay.layoutSubtreeIfNeeded()
-        let field = try searchField(in: overlay)
-
-        XCTAssertTrue(tip.isDescendant(of: overlay.card), "the slot's view is not in the panel")
-        let fieldFrame = overlay.card.convert(field.bounds, from: field)
-        let tipFrame = overlay.card.convert(tip.bounds, from: tip)
-        XCTAssertGreaterThanOrEqual(tipFrame.minX, fieldFrame.maxX, "the slot sits after the field")
-        XCTAssertLessThanOrEqual(tipFrame.maxX, overlay.card.bounds.maxX, "the slot runs off the panel")
-        XCTAssertEqual(tipFrame.midY, fieldFrame.midY, accuracy: 1, "the slot sits on the field's line")
-
-        overlay.focusQuery()
-        XCTAssertTrue((window.firstResponder as? NSTextView)?.delegate === field, "the field lost the keyboard")
-        try type("bet", into: overlay)
-        XCTAssertEqual(try barText(in: overlay), ["Open", "⏎", "Actions", "⌘K"], "typing no longer filters")
-    }
-
-    func test_replacingTheTrailingSlot_dropsTheOldView() {
-        let overlay = makeStub()
-        _ = mount(overlay)
-        let first = NSView()
-        let second = NSView()
-
-        overlay.searchAccessory = first
-        overlay.searchAccessory = second
-
-        XCTAssertNil(first.superview)
-        XCTAssertTrue(second.isDescendant(of: overlay.card))
-
-        overlay.searchAccessory = nil
-        XCTAssertNil(second.superview)
-    }
-
     private func makeLongStub() -> StubPalette {
         StubPalette((1...30).map { .init(title: "Entry \($0)", action: "Run", hasMoreActions: false) })
     }

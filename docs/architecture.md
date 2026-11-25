@@ -578,10 +578,10 @@ New modal surfaces compose the existing primitives.
 - **Palette panels provide content only.** The command palette, workspace picker and agent picker subclass
   `PaletteOverlay` and supply `numberOfRows`, `makeRow`, `rowIdentity`, `isSelectable`,
   `applyFilter`, `activate`, `returnAction`, `shortcutHints`, `hasMoreActions`, `emptyText(for:)`
-  (the empty state's words for the current query, the init's text by default) and
-  `searchAccessory`. Rows are `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns
-  width, max height, row height, position, the search field, the bar and the empty state, and no
-  panel overrides them, so every panel opens at the same spot and size.
+  (the empty state's words for the current query, the init's text by default). Rows are
+  `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns width, max height, row
+  height, position, the search field, the bar and the empty state, and no panel overrides them, so
+  every panel opens at the same spot and size.
   A row's qualifier (the picker's Current, Open or Other window, an agent's name) goes right after
   its title in `ListRow.Content.titleSuffix`; the trailing column holds only branch, category and
   shortcut.

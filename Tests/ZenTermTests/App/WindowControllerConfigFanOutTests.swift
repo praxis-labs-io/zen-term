@@ -399,4 +399,21 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
 
         XCTAssertEqual(barKeys("New Worktree"), rebound.displayGlyph, "the bar still names the chord that moved")
     }
+
+    func test_keymapChange_reachesTheNewWorkspaceChordInTheRepoPickersBar() throws {
+        let picker = try openRepoPicker()
+        func newKeys() -> String? {
+            picker.barHintsForTesting.first { $0.label == RepoPickerOverlay.newHintLabel }?.keys
+        }
+        var config = GeneralConfig.current
+        XCTAssertEqual(newKeys(), Chord.displayed(.newWorkspace, in: config.keymap)?.displayGlyph, "premise")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.rebind(.newWorkspace, to: rebound)
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
+
+        XCTAssertEqual(newKeys(), rebound.displayGlyph, "the bar names the chord that moved")
+    }
 }
