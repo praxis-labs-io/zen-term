@@ -172,23 +172,23 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
 
-    func test_aWorktreeRow_leadsWithThePlainWorktreeMark_andAWorkspaceRowWithAFolder() throws {
+    func test_everyRow_leadsWithALucideChip_inTheWorkspacesTint() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
-
         overlay.setWorktrees(listing(repo, "one"), for: repo)
+        type("alp", into: overlay)
         overlay.layoutSubtreeIfNeeded()
 
-        let parent = try XCTUnwrap(rowViews(in: overlay)[0] as? RepoPickerOverlay.RowView)
-        let child = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
-        XCTAssertEqual(child.content.leading, .symbol(ProcessIcon.worktree.mark))
-        XCTAssertNil(child.processBadgeForTesting, "a worktree row draws its mark plain, not on a chip")
-        func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
-        let mark = try XCTUnwrap(walk(child).compactMap { $0 as? NSImageView }.first, "the row draws no mark")
-        XCTAssertNotNil(mark.image, "the Lucide mark did not resolve")
-        XCTAssertGreaterThan(mark.frame.width, 0)
-        XCTAssertEqual(parent.content.leading, .symbol(RepoPickerOverlay.RowView.workspaceSymbol))
+        let rows = overlay.rowViews.compactMap { $0 as? ListRow }
+        XCTAssertEqual(
+            rows.map(\.content.leading),
+            [.process(.newWorkspace), .process(.workspace), .process(.workspaceWorktree), .process(.addWorkspace)])
+        for row in rows {
+            let badge = try XCTUnwrap(row.processBadgeForTesting, "\(row.title) leads with no chip")
+            XCTAssertEqual(badge.process?.look, .purpose(.magenta), "\(row.title) is not in the Workspaces tint")
+            XCTAssertNotNil(badge.process?.image, "\(row.title)'s Lucide mark is not in the bundle")
+        }
     }
 
     func test_branchSitsInTheSameColumnOnAWorkspaceAndAWorktree() throws {

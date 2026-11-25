@@ -338,11 +338,11 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .newWorkspace:
             return ActionRowView(
-                symbol: "plus", title: newWorkspaceName.map { "New Workspace “\($0)”" } ?? "New Workspace",
+                icon: .newWorkspace, title: newWorkspaceName.map { "New Workspace “\($0)”" } ?? "New Workspace",
                 shortcut: Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)?.displayGlyph,
                 emphasis: .listed)
         case .add:
-            return ActionRowView(symbol: "folder.badge.plus", title: "Add Workspace…", shortcut: nil)
+            return ActionRowView(icon: .addWorkspace, title: "Add Workspace…", shortcut: nil)
         case .open(let workspace), .elsewhere(let workspace):
             if let removing = removingWorktree(workspace) { return RemovingRowView(worktree: removing) }
             return RowView(open: workspace, state: state(at: index))
@@ -585,10 +585,10 @@ final class RepoPickerOverlay: PaletteOverlay {
             var ink: ChromeTheme.InkLevel { self == .listed ? .normal : .muted }
         }
 
-        init(symbol: String, title: String, shortcut: String?, emphasis: Emphasis = .quiet) {
+        init(icon: ProcessIcon, title: String, shortcut: String?, emphasis: Emphasis = .quiet) {
             super.init(
                 Content(
-                    title: title, leading: .symbol(symbol), trailing: shortcut.map { .keycap($0) },
+                    title: title, leading: .process(icon), trailing: shortcut.map { .keycap($0) },
                     ink: emphasis.ink))
         }
 
@@ -624,10 +624,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             var isChild: Bool { self == .openChild || self == .closedChild }
 
-            var symbol: String { isChild ? ProcessIcon.worktree.mark : RowView.workspaceSymbol }
+            var icon: ProcessIcon { isChild ? .workspaceWorktree : .workspace }
         }
-
-        static let workspaceSymbol = "folder"
 
         let workspace: Workspace?
         let worktree: Worktree?
@@ -694,7 +692,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.statusPath = statusPath
             super.init(
                 Content(
-                    title: label, note: state?.rawValue, leading: .symbol(style.symbol), ink: style.ink,
+                    title: label, note: state?.rawValue, leading: .process(style.icon), ink: style.ink,
                     nesting: style.isChild ? .indented : .none))
 
             churnLabel.alignment = .right

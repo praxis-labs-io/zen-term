@@ -101,7 +101,8 @@ the glyph in full hue (`ProcessIcon.Look.purpose`). ANSI red is never a purpose 
 `blocked`. Process marks are never SF
 Symbols, except a tool float's own icon in its palette row (`ProcessIcon.toolFloat`), which is
 an icon picker name; a generic chip's glyph is Lucide, unmodified. In a row, a chip leads it
-(`ListRow.Leading.process`, at `.small`): an Agents row and a worktree row in the sidebar.
+(`ListRow.Leading.process`, at `.small`): an Agents row, a worktree row in the sidebar, and a
+palette row.
 
 ## State
 
