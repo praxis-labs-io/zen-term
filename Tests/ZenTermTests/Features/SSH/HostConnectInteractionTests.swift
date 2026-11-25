@@ -1429,4 +1429,20 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(screen.nameFieldForTesting.lineBreakMode, .byTruncatingTail)
         XCTAssertEqual(screen.addressFieldForTesting.lineBreakMode, .byTruncatingMiddle)
     }
+
+    func test_aFloatOverConnect_veilsTheConnectPanel() throws {
+        let (c, pi) = try piRunningHiddenOnConnect()
+        ask(pi)
+        let panel = try XCTUnwrap(
+            c.connectViewForTesting?.descendants(ofType: PanelHostView.self).first)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertTrue(c.floatsForTesting.isOpen, "premise: pi is over Connect")
+        XCTAssertTrue(panel.isVeiledForTesting)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertFalse(panel.isVeiledForTesting)
+    }
 }

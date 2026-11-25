@@ -282,4 +282,32 @@ final class WindowControllerToolFloatTests: WindowTestCase {
             toastViews(c).count, 1,
             "repeats inside the throttle window must coalesce into the one card already up")
     }
+
+    private func panelHosts(_ c: WindowController) -> [PanelHostView] {
+        c.window.contentView?.descendants(ofType: PanelHostView.self) ?? []
+    }
+
+    func test_aToolFloat_veilsEveryPaneAndDrawer_andClosingItClearsThem() {
+        let c = makeWindow()
+        c.handle(.splitHorizontal)
+        c.handle(.toggleBottomDrawer)
+        XCTAssertGreaterThanOrEqual(panelHosts(c).count, 3, "premise: two panes and a drawer")
+        XCTAssertFalse(panelHosts(c).contains(where: \.isVeiledForTesting))
+
+        c.handle(.toggleToolFloat("btop"))
+
+        XCTAssertTrue(panelHosts(c).allSatisfy(\.isVeiledForTesting))
+
+        c.handle(.toggleToolFloat("btop"))
+
+        XCTAssertFalse(panelHosts(c).contains(where: \.isVeiledForTesting))
+    }
+
+    func test_thePalette_leavesThePanesClear() {
+        let c = makeWindow()
+
+        c.handle(.toggleCommandPalette)
+
+        XCTAssertFalse(panelHosts(c).contains(where: \.isVeiledForTesting))
+    }
 }
