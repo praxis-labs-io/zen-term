@@ -663,7 +663,9 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   down and right do nothing. It has no tab, so dispatch drops any chord that is not
   `worksWithoutTab`, except ⌘T,
   which connects, ⌘W, which lands where a close of the last workspace row would (or, with no
-  workspace left, confirms and closes the window as the last pane does), and a float toggle, which opens or closes only a running
+  workspace left, confirms and closes the window as the last pane does), ⌘E (Find Selection),
+  which opens the host's edit form (with no float open) and returns to Connect when it saves or
+  cancels, or to Settings when it removes the host, and a float toggle, which opens or closes only a running
   float that is open or needs you and is silent otherwise, and a card stays open for a chord it
   would drop. App-global
   chords bypass it in `AppDelegate.route`; a palette pick
@@ -863,8 +865,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
-  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its host
-  tile carries no badge.
+  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its emblem
+  (`HostSignature`) is drawn from the ssh alias, never the display name, so renaming a host keeps it.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs

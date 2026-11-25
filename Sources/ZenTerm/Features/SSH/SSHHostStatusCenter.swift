@@ -34,6 +34,9 @@ final class SSHHostStatusCenter {
 
     func destination(of host: SSHHostID) -> String? { destinations[host] }
 
+    // A destination that only repeats the alias tells the reader nothing, so it is no address.
+    func address(of host: SSHHostID) -> String? { destination(of: host).flatMap { $0 == host.alias ? nil : $0 } }
+
     func setDestination(_ destination: String?, host: SSHHostID) {
         guard destinations[host] != destination else { return }
         destinations[host] = destination

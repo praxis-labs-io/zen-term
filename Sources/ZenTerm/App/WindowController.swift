@@ -216,6 +216,8 @@ final class WindowController: NSObject {
     private let verticalSlideFade = EdgeFade(axis: .vertical)
     static let slideFadeDepth: CGFloat = 8
 
+    private enum SSHHostFormOrigin { case settings, connectScreen }
+
     private enum ModalKind {
         case repoPicker, commandPalette, agentPicker, workspaceForm, settings, toolFloatForm, reportIssue
         case renameTab, renameWorkspace, worktreeForm, sshHostForm
@@ -930,7 +932,7 @@ final class WindowController: NSObject {
         let view = HostConnectView(
             host: host, name: GeneralConfig.current.displayName(of: host),
             status: SSHHostStatusCenter.shared.status(of: host),
-            destination: SSHHostStatusCenter.shared.destination(of: host),
+            destination: SSHHostStatusCenter.shared.address(of: host),
             onConnect: { [weak self] in self?.connect(host) },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
@@ -942,7 +944,7 @@ final class WindowController: NSObject {
         let center = SSHHostStatusCenter.shared
         connectView.setName(GeneralConfig.current.displayName(of: connectView.host))
         connectView.setStatus(center.status(of: connectView.host))
-        connectView.setDestination(center.destination(of: connectView.host))
+        connectView.setDestination(center.address(of: connectView.host))
     }
 
     private func mount(_ transition: MountTransition) {
@@ -1855,10 +1857,10 @@ final class WindowController: NSObject {
         }
         let sshHostsSection = SettingsSSHHostsSection()
         sshHostsSection.onAddHost = { [weak self] in
-            self?.openSSHHostForm(.add(taken: Set(GeneralConfig.current.sshHostAliases)))
+            self?.openSSHHostForm(.add(taken: Set(GeneralConfig.current.sshHostAliases)), from: .settings)
         }
         sshHostsSection.onEditHost = { [weak self] host, address in
-            self?.openSSHHostForm(.edit(host, address: address))
+            self?.openSSHHostForm(.edit(host, address: address), from: .settings)
         }
         sshHostsSection.initialFocus = focus
         let sections: [SettingsSection] = [
@@ -2051,7 +2053,12 @@ final class WindowController: NSObject {
         AppConfig.reload()
     }
 
-    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode) {
+    private func editHostFromConnectScreen(_ host: SSHHostID) {
+        let address = SSHHostStatusCenter.shared.address(of: host)
+        openSSHHostForm(.edit(GeneralConfig.current.sshHost(host), address: address), from: .connectScreen)
+    }
+
+    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode, from origin: SSHHostFormOrigin) {
         closeModal()
         let edited: String? =
             switch mode {
@@ -2066,29 +2073,31 @@ final class WindowController: NSObject {
                     perform: { [weak self] in self?.removeSSHHost(alias) })
             },
             onSubmit: { [weak self] host in
-                edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host)
+                edited == nil ? self?.addSSHHost(host, from: origin) : self?.renameSSHHost(host, from: origin)
             },
-            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited.map { .host($0) }) },
+            onCancel: { [weak self] in self?.leaveSSHHostForm(to: origin, focusing: edited.map { .host($0) }) },
             onDismiss: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .sshHostForm)
     }
 
-    private func addSSHHost(_ host: SSHHostEntry) -> String? {
-        saveSSHHost(host) { try SSHHostsWriter.add(host) }
+    private func addSSHHost(_ host: SSHHostEntry, from origin: SSHHostFormOrigin) -> String? {
+        saveSSHHost(host, from: origin) { try SSHHostsWriter.add(host) }
     }
 
-    private func renameSSHHost(_ host: SSHHostEntry) -> String? {
-        saveSSHHost(host) { try SSHHostsWriter.rename(host.alias, to: host.name) }
+    private func renameSSHHost(_ host: SSHHostEntry, from origin: SSHHostFormOrigin) -> String? {
+        saveSSHHost(host, from: origin) { try SSHHostsWriter.rename(host.alias, to: host.name) }
     }
 
-    private func saveSSHHost(_ host: SSHHostEntry, _ write: () throws -> Void) -> String? {
+    private func saveSSHHost(
+        _ host: SSHHostEntry, from origin: SSHHostFormOrigin, _ write: () throws -> Void
+    ) -> String? {
         do {
             try write()
         } catch {
             return "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
-        reopenSettingsOnSSHHosts(focusing: .host(host.alias))
+        leaveSSHHostForm(to: origin, focusing: .host(host.alias))
         return nil
     }
 
@@ -2110,6 +2119,13 @@ final class WindowController: NSObject {
         AppConfig.reload()
         reopenSettingsOnSSHHosts(focusing: neighbour.map { .host($0) } ?? .addHost)
         return nil
+    }
+
+    private func leaveSSHHostForm(to origin: SSHHostFormOrigin, focusing focus: SettingsSSHHostsSection.Focus?) {
+        switch origin {
+        case .settings: reopenSettingsOnSSHHosts(focusing: focus)
+        case .connectScreen: closeModal()
+        }
     }
 
     private func reopenSettingsOnSSHHosts(focusing focus: SettingsSSHHostsSection.Focus? = nil) {
@@ -2955,6 +2971,7 @@ final class WindowController: NSObject {
             case .navUp: return navigate(.up)
             case .navDown: return navigate(.down)
             case .closePane: return closeConnectScreen()
+            case .searchSelection where !floats.isOpen: return editHostFromConnectScreen(host)
             default: break
             }
         }
