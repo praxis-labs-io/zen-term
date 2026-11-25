@@ -21,8 +21,8 @@ extension Motion {
         static let settledToHandOff: TimeInterval = 0.55
         static let handOffFadeOut: TimeInterval = 0.35
         static let handOffScale: CGFloat = 0.985
-        static let terminalFadeIn: TimeInterval = 0.45
-        static let terminalDelay: TimeInterval = 0.18
+        static let terminalFadeIn: TimeInterval = 0.25
+        static let terminalDelay: TimeInterval = 0.1
         static let reducedCrossfade: TimeInterval = 0.2
         static let reducedTerminalFade: TimeInterval = 0.15
     }

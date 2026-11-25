@@ -158,9 +158,15 @@ enum Motion {
         fadeIn.toValue = 1
         fadeIn.duration = reduced ? Timing.reducedTerminalFade : Timing.terminalFadeIn
         fadeIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        let pop = Spring.make(keyPath: "transform")
+        pop.fromValue = NSValue(caTransform3D: centeredScale(entranceScale, in: inLayer.bounds))
+        pop.toValue = NSValue(caTransform3D: CATransform3DIdentity)
         if !reduced {
-            fadeIn.beginTime = inLayer.convertTime(CACurrentMediaTime(), from: nil) + Timing.terminalDelay
-            fadeIn.fillMode = .backwards
+            inLayer.transform = CATransform3DIdentity
+            for entering in [fadeIn, pop] {
+                entering.beginTime = inLayer.convertTime(CACurrentMediaTime(), from: nil) + Timing.terminalDelay
+                entering.fillMode = .backwards
+            }
         }
         let outLayer = reduced ? nil : outgoing?.layer
         let shrunk = outLayer.map { centeredScale(Timing.handOffScale, in: $0.bounds) }
@@ -179,6 +185,7 @@ enum Motion {
 
         run(completion: completion) {
             inLayer.add(fadeIn, forKey: "motion.opacity")
+            if !reduced { inLayer.add(pop, forKey: "motion.transform") }
             outLayer?.add(fadeOut, forKey: "motion.opacity")
             outLayer?.add(shrink, forKey: "motion.transform")
         }
