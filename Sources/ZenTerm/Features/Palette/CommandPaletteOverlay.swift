@@ -25,13 +25,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
         self.rows = Self.grouped(resolved)
         self.onRun = onRun
         super.init(
-            placeholder: "Search commands…",
+            placeholder: "Search commands",
             emptyText: "No matching commands",
-            footerHints: [
-                HintFooter.Hint(keys: "⏎", label: "run"),
-                HintFooter.Hint(keys: "↑↓", label: "move"),
-                HintFooter.Hint(keys: "⎋", label: "close"),
-            ],
             rowHeight: Self.commandHeight,
             onDismiss: onDismiss)
     }
@@ -108,6 +103,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
                 .map { .command($0.command) }
         }
     }
+
+    override func returnAction(at index: Int) -> String? { "Run" }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         guard rows.indices.contains(index), case .command(let command) = rows[index] else { return }

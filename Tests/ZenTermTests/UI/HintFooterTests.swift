@@ -55,14 +55,20 @@ final class HintFooterTests: WindowTestCase {
         XCTAssertEqual(descendants(of: footer).compactMap { $0 as? KeycapView }.map(\.shortcut), ["⏎", "⎋"])
     }
 
-    func test_setHint_hidesAndShowsOneHint() {
+    func test_eachHint_readsLabelThenKey_rightAligned() throws {
         let footer = makeFooter()
+        let save = try XCTUnwrap(labels(in: footer).first { $0.stringValue == "Save" })
+        let keycaps = descendants(of: footer).compactMap { $0 as? KeycapView }
+        let saveKey = try XCTUnwrap(keycaps.first { $0.shortcut == "⏎" })
+        let cancelKey = try XCTUnwrap(keycaps.first { $0.shortcut == "⎋" })
 
-        footer.setHint("Cancel", isShown: false)
-
-        let cancel = labels(in: footer).first { $0.stringValue == "Cancel" }
-        XCTAssertEqual(cancel?.isHiddenOrHasHiddenAncestor, true)
-        XCTAssertEqual(labels(in: footer).first { $0.stringValue == "Save" }?.isHiddenOrHasHiddenAncestor, false)
+        XCTAssertLessThan(
+            footer.convert(save.bounds, from: save).maxX, footer.convert(saveKey.bounds, from: saveKey).minX,
+            "the label leads its key")
+        XCTAssertEqual(
+            footer.convert(cancelKey.bounds, from: cancelKey).maxX,
+            footer.bounds.maxX - ChromeMetrics.Spacing.modalInsets.right, accuracy: 0.5,
+            "the last key sits on the trailing inset")
     }
 
     func test_reapplyTheme_recolorsLabelsKeycapsAndHairline() throws {
@@ -82,15 +88,16 @@ final class HintFooterTests: WindowTestCase {
     }
 
     func test_thePalette_showsItsHintsThroughTheSharedFooter() throws {
-        let overlay = CommandPaletteOverlay(commands: { [] }, onRun: { _ in }, onDismiss: {})
+        let overlay = CommandPaletteOverlay(
+            commands: { [PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab)] },
+            onRun: { _ in }, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         overlay.frame = NSRect(x: 0, y: 0, width: 700, height: 500)
         overlay.layoutSubtreeIfNeeded()
 
         let footer = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? HintFooter }.first)
 
-        let texts = descendants(of: footer).compactMap { ($0 as? NSTextField)?.stringValue }
-        XCTAssertTrue(["run", "move", "close"].allSatisfy(texts.contains))
+        XCTAssertEqual(footer.hints, [HintFooter.Hint(keys: "⏎", label: "Run")], "no move or close hints")
         XCTAssertEqual(footer.frame.height, ChromeMetrics.Border.width + ChromeMetrics.Height.lg)
     }
 }

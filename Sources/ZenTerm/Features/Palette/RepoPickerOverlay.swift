@@ -67,9 +67,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.onAddWorkspace = onAddWorkspace
         self.onNewWorkspace = onNewWorkspace
         super.init(
-            placeholder: "Search workspaces…",
+            placeholder: "Search workspaces",
             emptyText: "",
-            footerHints: Self.footerHints(),
             rowHeight: ChromeMetrics.Height.lg,
             onDismiss: onDismiss)
 
@@ -430,36 +429,26 @@ final class RepoPickerOverlay: PaletteOverlay {
         return candidates.compactMap { FuzzyMatch.score(query, $0) }.max()
     }
 
-    override func reapplyKeymap() {
-        setFooterHints(Self.footerHints())
-        super.reapplyKeymap()
+    override func returnAction(at index: Int) -> String? {
+        if case .newWorkspace = rows[index] { return "New Workspace" }
+        return openState(row: rows[index]) == .closed ? "Open" : "Switch"
     }
 
-    static func footerHints() -> [HintFooter.Hint] {
-        var hints = [
-            HintFooter.Hint(keys: "⏎", label: "new workspace"), HintFooter.Hint(keys: "⏎", label: "open"),
-            HintFooter.Hint(keys: "⏎", label: "switch"),
-        ]
-        if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
-            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "new worktree"))
+    override func shortcutHints(at index: Int) -> [HintFooter.Hint] {
+        let keymap = GeneralConfig.current.keymap
+        var hints: [HintFooter.Hint] = []
+        if createTarget != nil, let chord = Chord.displayed(.createWorktree, in: keymap) {
+            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "New Worktree"))
         }
-        if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
-            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "remove worktree"))
-            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "close workspace"))
+        if let chord = Chord.displayed(.removeWorktree, in: keymap) {
+            if selectedWorktree != nil {
+                hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "Remove Worktree"))
+            }
+            if selectedRemovedWorkspace != nil {
+                hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "Close Workspace"))
+            }
         }
         return hints
-    }
-
-    override func selectionChanged() {
-        var makes = false
-        if rows.indices.contains(selected), case .newWorkspace = rows[selected] { makes = true }
-        let switches = rows.indices.contains(selected) && openState(row: rows[selected]) != .closed
-        setFooterHint("new workspace", isShown: makes)
-        setFooterHint("open", isShown: !makes && !switches)
-        setFooterHint("switch", isShown: switches)
-        setFooterHint("new worktree", isShown: createTarget != nil)
-        setFooterHint("remove worktree", isShown: selectedWorktree != nil)
-        setFooterHint("close workspace", isShown: selectedRemovedWorkspace != nil)
     }
 
     struct CreateTarget: Equatable {
@@ -584,23 +573,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             var ink: ChromeTheme.InkLevel { self == .workspace ? .normal : .faint }
         }
 
-        static let branchMaxWidth: CGFloat = 220
-
-        static let branchMinWidth: CGFloat = 120
-
-        // Below the title's compression resistance, so a long branch gives way to its floor before the name truncates.
-        private static let branchYield = NSLayoutConstraint.Priority(
-            NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
-
         let workspace: Workspace?
         let worktree: Worktree?
         let running: RunningWorkspace?
         let style: Style
         let label: String
         private let statusPath: URL?
-        private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
-        private var branchFloor: NSLayoutConstraint!
 
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
@@ -663,15 +642,8 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.statusPath = statusPath
             super.init(
                 Content(
-                    title: label, leading: style == .child ? .process(.worktree) : nil, ink: style.ink,
+                    title: label, leading: style == .child ? .symbol(ProcessIcon.worktree.mark) : nil, ink: style.ink,
                     nesting: style == .child ? .indented : .none))
-
-            branchLabel.font = ChromeType.font(.caption)
-            branchLabel.textColor = Theme.current.chrome.ink(.muted)
-            branchLabel.alignment = .right
-            branchLabel.lineBreakMode = .byTruncatingTail
-            branchLabel.setContentHuggingPriority(.required, for: .horizontal)
-            branchLabel.setContentCompressionResistancePriority(Self.branchYield, for: .horizontal)
 
             churnLabel.alignment = .right
             churnLabel.lineBreakMode = .byClipping
@@ -679,13 +651,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             churnLabel.setContentHuggingPriority(.required, for: .horizontal)
             churnLabel.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
 
-            branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
-            branchFloor.priority = .defaultHigh
-            NSLayoutConstraint.activate([
-                branchLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.branchMaxWidth),
-                branchFloor,
-            ])
-            accessories = [churnLabel, branchLabel]
+            accessories = [churnLabel, detailLabel]
             applyGitStatus()
         }
 
@@ -705,21 +671,18 @@ final class RepoPickerOverlay: PaletteOverlay {
             let head =
                 worktree.map(\.name)
                 ?? GitRepoStatus.branch(statusPath)
-            branchLabel.stringValue = head ?? ""
-            branchLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })
-            setAccessibilityValue(branchLabel.accessibilityLabel())
-            branchFloor.constant = min(
-                branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
+            detail = head ?? ""
+            detailLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })
+            setAccessibilityValue(detailLabel.accessibilityLabel())
 
             let churn = GitRepoStatus.churn(statusPath) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
         }
 
         private func applyRemoved(_ name: String) {
-            branchLabel.stringValue = "\(name) \(WorktreeOrigin.removedDetail)"
-            branchLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
-            setAccessibilityValue(branchLabel.accessibilityLabel())
-            branchFloor.constant = min(branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
+            detail = "\(name) \(WorktreeOrigin.removedDetail)"
+            detailLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
+            setAccessibilityValue(detailLabel.accessibilityLabel())
             churnLabel.attributedStringValue = NSAttributedString()
         }
     }

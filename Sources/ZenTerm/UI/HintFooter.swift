@@ -1,7 +1,7 @@
 import AppKit
 
 final class HintFooter: NSView, ThemeReapplying {
-    struct Hint {
+    struct Hint: Equatable {
         let keys: String
         let label: String
     }
@@ -9,9 +9,9 @@ final class HintFooter: NSView, ThemeReapplying {
     private let hairline = NSView()
     private let pairs = NSStackView()
     private var labels: [NSTextField] = []
-    private var itemsByLabel: [String: NSView] = [:]
+    private(set) var hints: [Hint] = []
 
-    init(_ hints: [Hint]) {
+    init(_ hints: [Hint], trailingInset: CGFloat = ChromeMetrics.Spacing.modalInsets.right) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -33,7 +33,7 @@ final class HintFooter: NSView, ThemeReapplying {
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width + ChromeMetrics.Height.lg),
-            pairs.centerXAnchor.constraint(equalTo: centerXAnchor),
+            pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
             pairs.centerYAnchor.constraint(
                 equalTo: centerYAnchor, constant: ChromeMetrics.Border.width / 2),
         ])
@@ -42,14 +42,11 @@ final class HintFooter: NSView, ThemeReapplying {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func setHints(_ hints: [Hint]) {
+        guard hints != self.hints else { return }
+        self.hints = hints
         pairs.arrangedSubviews.forEach { $0.removeFromSuperview() }
         labels = []
-        itemsByLabel = [:]
         hints.forEach { pairs.addArrangedSubview(makeItem($0)) }
-    }
-
-    func setHint(_ label: String, isShown: Bool) {
-        itemsByLabel[label]?.isHidden = !isShown
     }
 
     func reapplyTheme() {
@@ -64,11 +61,10 @@ final class HintFooter: NSView, ThemeReapplying {
         label.font = ChromeType.font(.caption, weight: .medium)
         label.textColor = Theme.current.chrome.ink(.muted)
         labels.append(label)
-        let item = NSStackView(views: [keycap, label])
+        let item = NSStackView(views: [label, keycap])
         item.orientation = .horizontal
-        item.spacing = ChromeMetrics.Spacing.s4
+        item.spacing = ChromeMetrics.Spacing.s6
         item.alignment = .centerY
-        itemsByLabel[hint.label] = item
         return item
     }
 }

@@ -162,11 +162,10 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
     }
 
     private func hintIsShown(_ label: String, in picker: RepoPickerOverlay) -> Bool {
-        guard
-            let field = descendants(of: picker).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.stringValue == label })
-        else { return false }
-        return !field.isHiddenOrHasHiddenAncestor
+        guard let bar = descendants(of: picker).compactMap({ $0 as? HintFooter }).first else { return false }
+        return descendants(of: bar).compactMap { $0 as? NSTextField }.contains {
+            $0.stringValue == label && !$0.isHiddenOrHasHiddenAncestor
+        }
     }
 
     func test_returnOnAWorkspaceOpenInAnotherWindow_switchesThere_ratherThanOpeningASecondCopy() throws {
@@ -261,8 +260,8 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
 
         let picker = try openPicker(in: one, on: "Alpha")
 
-        XCTAssertTrue(hintIsShown("switch", in: picker), "↵ crosses to the window holding it")
-        XCTAssertFalse(hintIsShown("open", in: picker), "it is not opened a second time")
+        XCTAssertTrue(hintIsShown("Switch", in: picker), "↵ crosses to the window holding it")
+        XCTAssertFalse(hintIsShown("Open", in: picker), "it is not opened a second time")
     }
 
     func test_aWorkspaceOpenNowhere_stillOpensIntoTheAskingWindow() throws {

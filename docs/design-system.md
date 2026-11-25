@@ -97,8 +97,7 @@ A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`
 step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
 program runs, so a resting shell and a worktree are never branded. Process marks are never SF
 Symbols; a generic chip's glyph is Lucide, unmodified. In a row, a chip leads it
-(`ListRow.Leading.process`, at `.small`): an Agents row, a worktree row in the sidebar and the
-workspace picker.
+(`ListRow.Leading.process`, at `.small`): an Agents row and a worktree row in the sidebar.
 
 ## State
 
@@ -220,6 +219,8 @@ takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
 
+The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned, its bottom moving with the results, a search field with a trailing slot. A palette row leads with a plain icon, never a chip (`ListRow.Leading.symbol`, which takes a Lucide mark too), and its detail (a branch, a category) sits in muted ink just left of its shortcut. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
+
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
@@ -230,7 +231,7 @@ A mark on a rounded chip is an `IconBadge`: tinted by one role, or a process chi
 [Process chips](#process-chips)).
 
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
-`HintFooter` in its place. The shared hairline rule is `Divider`, and the shared muted "nothing here"
+`HintFooter` in its place: right aligned, each hint its Title Case label then its key. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.
 
 ## Extending the system

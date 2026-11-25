@@ -27,17 +27,21 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     func test_theCreateHint_readsTheChordFromTheLiveKeymap() {
         setKeymap([Chord(command: true, shift: true, key: "n"): .createWorktree])
+        let overlay = makeRepoPicker(entries: [workspace("alpha")])
+        mount(overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        let hint = RepoPickerOverlay.footerHints().first { $0.label == "new worktree" }
+        let hint = overlay.barHintsForTesting.first { $0.label == "New Worktree" }
         XCTAssertEqual(hint?.keys, "⌘⇧N")
     }
 
     func test_withTheActionUnbound_theHintIsGone() {
         setKeymap([:])
+        let overlay = makeRepoPicker(entries: [workspace("alpha")])
+        mount(overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        let hints = RepoPickerOverlay.footerHints()
-        XCTAssertNil(hints.first { $0.label == "new worktree" })
-        XCTAssertEqual(hints.map(\.label), ["new workspace", "open", "switch"])
+        XCTAssertEqual(overlay.barHintsForTesting.map(\.label), ["Open"])
     }
 
     func test_theCreateTarget_isNilOnTheActionRows() {
@@ -108,7 +112,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
 
-    func test_aWorktreeRow_leadsWithTheWorktreeChip_andAWorkspaceRowWithNone() throws {
+    func test_aWorktreeRow_leadsWithThePlainWorktreeMark_andAWorkspaceRowWithNone() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -118,11 +122,13 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let parent = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
         let child = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
-        let chip = try XCTUnwrap(child.processBadgeForTesting, "a worktree row draws no chip")
-        XCTAssertEqual(chip.process, .worktree)
-        XCTAssertTrue(chip.isDescendant(of: child), "the chip is not in the row")
-        XCTAssertGreaterThan(chip.frame.width, 0)
-        XCTAssertNil(parent.processBadgeForTesting, "a workspace row is not a worktree")
+        XCTAssertEqual(child.content.leading, .symbol(ProcessIcon.worktree.mark))
+        XCTAssertNil(child.processBadgeForTesting, "a worktree row draws its mark plain, not on a chip")
+        func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
+        let mark = try XCTUnwrap(walk(child).compactMap { $0 as? NSImageView }.first, "the row draws no mark")
+        XCTAssertNotNil(mark.image, "the Lucide mark did not resolve")
+        XCTAssertGreaterThan(mark.frame.width, 0)
+        XCTAssertNil(parent.content.leading, "a workspace row is not a worktree")
     }
 
     func test_branchSitsInTheSameColumnOnAWorkspaceAndAWorktree() throws {
@@ -462,15 +468,28 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     func test_theRemoveHint_readsTheChordFromTheLiveKeymap() {
         setKeymap([Chord(option: true, key: "⌫"): .removeWorktree])
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        let hint = RepoPickerOverlay.footerHints().first { $0.label == "remove worktree" }
+        let hint = overlay.barHintsForTesting.first { $0.label == "Remove Worktree" }
         XCTAssertEqual(hint?.keys, "⌥⌫")
     }
 
     func test_withRemoveUnbound_theHintIsGone() {
         setKeymap([:])
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        XCTAssertNil(RepoPickerOverlay.footerHints().first { $0.label == "remove worktree" })
+        XCTAssertNotNil(overlay.selectedWorktree, "premise: a worktree is selected")
+        XCTAssertNil(overlay.barHintsForTesting.first { $0.label == "Remove Worktree" })
     }
 
     func test_theRemoveHint_showsOnlyOverAWorktreeRow() throws {
@@ -482,16 +501,16 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha")
-        XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "hidden over a workspace")
+        XCTAssertFalse(hintIsShown("Remove Worktree", in: overlay), "hidden over a workspace")
 
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertNotNil(overlay.selectedWorktree)
-        XCTAssertTrue(hintIsShown("remove worktree", in: overlay), "shown over a worktree")
+        XCTAssertTrue(hintIsShown("Remove Worktree", in: overlay), "shown over a worktree")
 
         send(#selector(NSResponder.moveUp(_:)), to: overlay)
 
-        XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "and hidden again on the way back")
+        XCTAssertFalse(hintIsShown("Remove Worktree", in: overlay), "and hidden again on the way back")
     }
 
     func test_theCreateHint_isHiddenOnTheAddRow() {
@@ -500,12 +519,12 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        XCTAssertTrue(hintIsShown("new worktree", in: overlay), "shown over a workspace")
+        XCTAssertTrue(hintIsShown("New Worktree", in: overlay), "shown over a workspace")
 
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
-        XCTAssertFalse(hintIsShown("new worktree", in: overlay))
+        XCTAssertFalse(hintIsShown("New Worktree", in: overlay))
     }
 
     func test_theReturnHint_namesWhatTheSelectedRowDoes() {
@@ -514,17 +533,17 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
 
-        XCTAssertTrue(hintIsShown("new workspace", in: overlay), "↵ makes one from the top row")
-        XCTAssertFalse(hintIsShown("open", in: overlay), "it opens nothing")
+        XCTAssertTrue(hintIsShown("New Workspace", in: overlay), "↵ makes one from the top row")
+        XCTAssertFalse(hintIsShown("Open", in: overlay), "it opens nothing")
 
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        XCTAssertTrue(hintIsShown("open", in: overlay))
-        XCTAssertFalse(hintIsShown("new workspace", in: overlay))
+        XCTAssertTrue(hintIsShown("Open", in: overlay))
+        XCTAssertFalse(hintIsShown("New Workspace", in: overlay))
 
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        XCTAssertTrue(hintIsShown("open", in: overlay), "and on the worktree under it")
+        XCTAssertTrue(hintIsShown("Open", in: overlay), "and on the worktree under it")
     }
 
     func test_overAnOpenWorkspace_theReturnHintSaysSwitch() {
@@ -535,11 +554,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        XCTAssertTrue(hintIsShown("switch", in: overlay), "↵ on an open workspace switches to it")
+        XCTAssertTrue(hintIsShown("Switch", in: overlay), "↵ on an open workspace switches to it")
 
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
-        XCTAssertFalse(hintIsShown("switch", in: overlay), "a closed one opens")
+        XCTAssertFalse(hintIsShown("Switch", in: overlay), "a closed one opens")
     }
 
     func test_aWorktreeOpenInItsMirroredSubfolder_leavesConfigured_withoutThatFolderOnDisk() throws {
@@ -592,11 +611,10 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
-        guard
-            let field = walk(overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.stringValue == label })
-        else { return false }
-        return !field.isHiddenOrHasHiddenAncestor
+        guard let bar = walk(overlay).compactMap({ $0 as? HintFooter }).first else { return false }
+        return walk(bar).compactMap { $0 as? NSTextField }.contains {
+            $0.stringValue == label && !$0.isHiddenOrHasHiddenAncestor
+        }
     }
 
     func test_aWorktreeBeingRemoved_rendersAsRemoving() {

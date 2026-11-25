@@ -4,6 +4,14 @@ import AppKit
 class ModalShell: NSView, ThemeReapplying {
     static let submitChord = Chord(command: true, key: "⏎")
 
+    enum Placement {
+        case centered
+        // A list that filters as you type grows and shrinks from the bottom, so its search field stays put.
+        case pinnedTop
+    }
+
+    private static let pinnedTopInset = ChromeMetrics.Spacing.s32
+
     let card = CardView()
     private let onCancel: () -> Void
     private let onDismiss: (() -> Void)?
@@ -16,7 +24,10 @@ class ModalShell: NSView, ThemeReapplying {
     var isBusy: Bool { false }
     var hasUnsavedChanges: Bool { false }
 
-    init(width: CGFloat, onCancel: @escaping () -> Void, onDismiss: (() -> Void)? = nil) {
+    init(
+        width: CGFloat, placement: Placement = .centered, onCancel: @escaping () -> Void,
+        onDismiss: (() -> Void)? = nil
+    ) {
         self.onCancel = onCancel
         self.onDismiss = onDismiss
         super.init(frame: .zero)
@@ -40,11 +51,21 @@ class ModalShell: NSView, ThemeReapplying {
             backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
             cardWidth,
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
         ])
+        switch placement {
+        case .centered:
+            NSLayoutConstraint.activate([
+                card.centerYAnchor.constraint(equalTo: centerYAnchor),
+                card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+            ])
+        case .pinnedTop:
+            NSLayoutConstraint.activate([
+                card.topAnchor.constraint(equalTo: topAnchor, constant: Self.pinnedTopInset),
+                card.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -Self.pinnedTopInset),
+            ])
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }

@@ -6,6 +6,13 @@ protocol PaletteRowView: NSView {
 }
 
 class SelectableRowView: ListRow, PaletteRowView {
+    static let detailMaxWidth: CGFloat = 220
+
+    static let detailMinWidth: CGFloat = 120
+
+    // Below the title's compression resistance, so a long detail gives way to its floor before the title truncates.
+    private static let detailYield = NSLayoutConstraint.Priority(NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
+
     var onActivate: (() -> Void)? {
         get { onChoose }
         set { onChoose = newValue ?? {} }
@@ -15,26 +22,62 @@ class SelectableRowView: ListRow, PaletteRowView {
         set { isHighlighted = newValue }
     }
 
-    init(_ content: Content) {
+    let detailLabel = NSTextField(labelWithString: "")
+    private var detailFloor: NSLayoutConstraint!
+
+    var detail: String {
+        get { detailLabel.stringValue }
+        set {
+            detailLabel.stringValue = newValue
+            detailLabel.isHidden = newValue.isEmpty
+            detailFloor.constant = min(detailLabel.intrinsicContentSize.width, Self.detailMinWidth)
+        }
+    }
+
+    init(_ content: Content, detail: String = "") {
         super.init(content) {}
+        detailLabel.font = ChromeType.font(.caption)
+        detailLabel.alignment = .right
+        detailLabel.lineBreakMode = .byTruncatingTail
+        detailLabel.setContentHuggingPriority(.required, for: .horizontal)
+        detailLabel.setContentCompressionResistancePriority(Self.detailYield, for: .horizontal)
+        detailFloor = detailLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+        detailFloor.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth), detailFloor,
+        ])
+        self.detail = detail
+        accessories = [detailLabel]
+        applyDetailInk()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func reapplyTheme() {
+        super.reapplyTheme()
+        applyDetailInk()
+    }
+
+    private func applyDetailInk() { detailLabel.textColor = Theme.current.chrome.ink(.muted) }
 }
 
 class PaletteOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 560
+    static let actionsHint = HintFooter.Hint(keys: "⌘K", label: "Actions")
+    private static let returnKey = "⏎"
+    private static let searchInset = ChromeMetrics.Spacing.s12
     // NSStackView holds the search row's vertical insets at 250, so the list yields first only from below that.
     private static let listHeightPriority = NSLayoutConstraint.Priority(
         NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
 
-    private let searchGlyph = NSTextField(labelWithString: "⌕")
+    private let searchGlyph = NSImageView()
     private let searchField = NSTextField()
+    private let searchRow = NSStackView()
     private let searchPlaceholder: String
     private let divider = Divider()
     private let rowsStack = NSStackView()
     private let scrollView: FadingScrollView
-    private let emptyLabel: NSTextField
+    private let emptyLabel: EmptyStateLabel
     private let footer: HintFooter
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
@@ -51,22 +94,22 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private var animatesNextReload = false
 
     init(
-        placeholder: String, emptyText: String, footerHints: [HintFooter.Hint],
-        rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = ChromeMetrics.Height.xl,
-        onDismiss: @escaping () -> Void
+        placeholder: String, emptyText: String, rowHeight: CGFloat, maxListHeight: CGFloat = 320,
+        emptyListHeight: CGFloat = ChromeMetrics.Height.xl, onDismiss: @escaping () -> Void
     ) {
         self.defaultRowHeight = rowHeight
         self.maxListHeight = maxListHeight
         self.emptyListHeight = emptyListHeight
-        self.emptyLabel = NSTextField(labelWithString: emptyText)
+        self.emptyLabel = EmptyStateLabel(emptyText)
         self.searchPlaceholder = placeholder
-        self.footer = HintFooter(footerHints)
+        self.footer = HintFooter([], trailingInset: Self.searchInset)
         let doc = FlippedView()
         self.scrollView = FadingScrollView(document: doc)
-        super.init(width: Self.width, onCancel: onDismiss)
+        super.init(width: Self.width, placement: .pinnedTop, onCancel: onDismiss)
 
-        searchGlyph.font = ChromeType.font(.title, weight: .regular)
-        searchGlyph.textColor = Theme.current.chrome.ink(.muted)
+        searchGlyph.image = IconCatalog.image("magnifyingglass", pointSize: ChromeMetrics.Icon.md, weight: .regular)
+        searchGlyph.contentTintColor = Theme.current.chrome.ink(.muted)
+        searchGlyph.setContentHuggingPriority(.required, for: .horizontal)
         searchField.font = ChromeType.font(.title, weight: .regular)
         applyPlaceholder()
         searchField.isBordered = false
@@ -76,12 +119,11 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         searchField.textColor = Theme.current.chrome.ink(.normal)
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        let searchRow = NSStackView(views: [searchGlyph, searchField])
+        searchRow.setViews([searchGlyph, searchField], in: .leading)
         searchRow.orientation = .horizontal
+        searchRow.alignment = .centerY
         searchRow.spacing = ChromeMetrics.Spacing.s8
-        searchRow.edgeInsets = NSEdgeInsets(
-            top: ChromeMetrics.Spacing.s12, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s12,
-            right: ChromeMetrics.Spacing.s12)
+        searchRow.edgeInsets = NSEdgeInsets(top: 0, left: Self.searchInset, bottom: 0, right: Self.searchInset)
 
         rowsStack.orientation = .vertical
         rowsStack.spacing = 0
@@ -90,10 +132,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        emptyLabel.font = ChromeType.font(.body)
-        emptyLabel.textColor = Theme.current.chrome.ink(.muted)
         emptyLabel.alignment = .center
-        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
         emptyLabel.isHidden = true
         scrollView.contentView.addSubview(emptyLabel)
 
@@ -108,6 +147,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
 
         NSLayoutConstraint.activate([
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            searchRow.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xl),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footer.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -122,6 +162,8 @@ class PaletteOverlay: ModalShell, ModalOverlay {
             rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -listVerticalInset),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.contentView.centerXAnchor),
+            emptyLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: scrollView.contentView.leadingAnchor, constant: Self.searchInset),
             emptyLabel.topAnchor.constraint(
                 equalTo: scrollView.contentView.topAnchor, constant: ChromeMetrics.Spacing.s20),
         ])
@@ -140,11 +182,11 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        searchGlyph.textColor = chrome.ink(.muted)
+        searchGlyph.contentTintColor = chrome.ink(.muted)
         searchField.textColor = chrome.ink(.normal)
         searchField.applyThemedEditor()
         applyPlaceholder()
-        emptyLabel.textColor = chrome.ink(.muted)
+        emptyLabel.reapplyTheme()
         reapplyKeymap()
     }
 
@@ -166,6 +208,14 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         )
     }
 
+    var searchAccessory: NSView? {
+        didSet {
+            guard searchAccessory !== oldValue else { return }
+            oldValue?.removeFromSuperview()
+            if let searchAccessory { searchRow.setViews([searchAccessory], in: .trailing) }
+        }
+    }
+
     func numberOfRows() -> Int { fatalError("subclass must override numberOfRows()") }
 
     func makeRow(at index: Int) -> PaletteRowView { fatalError("subclass must override makeRow(at:)") }
@@ -176,6 +226,12 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     func rowHeight(at index: Int) -> CGFloat { defaultRowHeight }
 
     func isSelectable(at index: Int) -> Bool { true }
+
+    func returnAction(at index: Int) -> String? { nil }
+
+    func hasMoreActions(at index: Int) -> Bool { false }
+
+    func shortcutHints(at index: Int) -> [HintFooter.Hint] { [] }
 
     func applyFilter(query: String) { fatalError("subclass must override applyFilter(query:)") }
 
@@ -305,18 +361,19 @@ class PaletteOverlay: ModalShell, ModalOverlay {
 
     private func updateHighlight() {
         for (i, row) in laidOutRows.enumerated() { row.view.isSelected = (i == selected) }
-        selectionChanged()
+        refreshBar()
     }
 
-    func selectionChanged() {}
-
-    func setFooterHint(_ label: String, isShown: Bool) {
-        footer.setHint(label, isShown: isShown)
-    }
-
-    func setFooterHints(_ hints: [HintFooter.Hint]) {
+    private func refreshBar() {
+        guard laidOutRows.indices.contains(selected), isSelectable(at: selected),
+            let action = returnAction(at: selected)
+        else { return footer.setHints([]) }
+        var hints = [HintFooter.Hint(keys: Self.returnKey, label: action)] + shortcutHints(at: selected)
+        if hasMoreActions(at: selected) { hints.append(Self.actionsHint) }
         footer.setHints(hints)
     }
+
+    var barHintsForTesting: [HintFooter.Hint] { footer.hints }
 
     private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
         guard laidOutRows.indices.contains(selected) else { return }
