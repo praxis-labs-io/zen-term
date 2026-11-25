@@ -18,6 +18,9 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     private var pendingOpen: ToolFloat?
 
+    /// Set while a pending open replaced a shown float, so the panes stay covered across the probe.
+    private var holdsCover = false
+
     // A nil spec is a tab's float pane: shown here, owned and ended by its tab.
     private var activeFloat: (spec: ToolFloat?, surface: TerminalSurface, overlay: SurfaceFloatOverlay, tab: TabID?)?
 
@@ -75,6 +78,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     var isOpen: Bool { activeFloat != nil }
+    var coversPanes: Bool { isOpen || holdsCover }
     var activeID: String? { activeFloat?.spec?.id }
 
     var shownPaneSurface: SurfaceID? {
@@ -198,22 +202,29 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func toggle(_ spec: ToolFloat) {
         if pendingOpen?.id == spec.id { cancelPendingOpen(); return }
         if activeID == spec.id { close(); return }
-        cancelPendingOpen()
-        if activeFloat != nil { close() }
+        let covering = coversPanes
+        pendingOpen = nil
+        toggleGeneration += 1
 
         let cwd = floatCWD(spec)
         guard spec.requiresGitRepo || spec.persist == .directory else {
+            holdsCover = false
+            if activeFloat != nil { close() }
             show(spec, cwd: cwd, anchor: nil)
             return
         }
-        toggleGeneration += 1
+        holdsCover = covering
+        if activeFloat != nil { close() }
         let generation = toggleGeneration
         pendingOpen = spec
         resolveRepoRoot(cwd) { [weak self] repoRoot in
             guard let self, generation == self.toggleGeneration else { return }
             self.pendingOpen = nil
+            let held = self.holdsCover
+            self.holdsCover = false
             if spec.requiresGitRepo, repoRoot == nil {
                 self.onRequestToast?(Self.gitGuardToast(for: spec))
+                if held { self.onStateChanged?() }
                 return
             }
             let anchor = spec.persist == .directory ? (repoRoot ?? cwd?.standardizedFileURL) : nil
@@ -225,6 +236,9 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         guard pendingOpen != nil else { return }
         pendingOpen = nil
         toggleGeneration += 1
+        guard holdsCover else { return }
+        holdsCover = false
+        onStateChanged?()
     }
 
     static func gitGuardToast(for spec: ToolFloat) -> ToastContent {

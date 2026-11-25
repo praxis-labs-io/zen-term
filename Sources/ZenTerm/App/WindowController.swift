@@ -148,7 +148,11 @@ final class WindowController: NSObject {
             startShell: { [weak self] surface, id, launch in
                 Self.surfaceStart(over: self?.activeWorkspace?.connection)(surface, id, launch)
             })
-        controller.onStateChanged = { [weak self] in self?.renderDock() }
+        controller.onStateChanged = { [weak self] in
+            guard let self else { return }
+            self.window.floatCoversPanes = self.floats.coversPanes
+            self.renderDock()
+        }
         controller.onFocusChanged = { [weak self] in self?.syncWindowFocus() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         controller.onProgress = { [weak self] surface, progress in

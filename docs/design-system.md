@@ -190,6 +190,10 @@ tool float's terminal host keeps the terminal background.
 A drawn shadow (one outside a see-through card) reads `FloatShadow.color(_:)` and the
 tier's `contextBlur` and `offset`.
 
+While a tool float or float pane is up, each pane under it fades toward its own background
+through `PaneVeilView`, at `ChromeTheme.paneVeil` as a layer opacity. The gaps between panes
+stay as they are. Palettes, menus and forms do not veil.
+
 ## Motion
 
 Animation goes through `Motion`. Its helpers check Reduce Motion themselves, except

@@ -669,4 +669,64 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "lazygit").count, 1, "exactly one float, not two")
     }
+
+    func test_swappingToAProbingFloat_keepsThePanesCovered_untilItLands() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, _, _, deliver) = makeHeldProbeFloats(cwd: repo)
+        var covered: [Bool] = []
+        floats.onStateChanged = { covered.append(floats.coversPanes) }
+        floats.toggle(spec("btop", persist: .window))
+
+        floats.toggle(spec("lazygit", persist: .directory))
+
+        XCTAssertFalse(floats.isOpen, "premise: btop closed and lazygit is still probing")
+        XCTAssertTrue(floats.coversPanes)
+
+        deliver()
+
+        XCTAssertTrue(floats.isOpen)
+        XCTAssertFalse(covered.contains(false), "the panes never flash clear between the two floats")
+    }
+
+    func test_aFirstOpenThatProbes_leavesThePanesClearUntilItLands() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, _, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        XCTAssertFalse(floats.coversPanes)
+
+        deliver()
+        XCTAssertTrue(floats.coversPanes)
+    }
+
+    func test_aSwapThatFailsItsGitGuard_uncoversThePanes() throws {
+        let plain = try makeDir("plain", git: false)
+        let (floats, _, _, deliver) = makeHeldProbeFloats(cwd: plain)
+        var changes = 0
+        floats.onStateChanged = { changes += 1 }
+        floats.toggle(spec("btop", persist: .window))
+        floats.toggle(spec("gitdash", persist: .ephemeral, git: true))
+        XCTAssertTrue(floats.coversPanes)
+        let before = changes
+
+        deliver()
+
+        XCTAssertFalse(floats.coversPanes)
+        XCTAssertGreaterThan(changes, before, "the window must hear that the panes are clear")
+    }
+
+    func test_cancellingASwap_uncoversThePanes() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, _, _, _) = makeHeldProbeFloats(cwd: repo)
+        var changes = 0
+        floats.onStateChanged = { changes += 1 }
+        floats.toggle(spec("btop", persist: .window))
+        floats.toggle(spec("lazygit", persist: .directory))
+        let before = changes
+
+        floats.cancelPendingOpen()
+
+        XCTAssertFalse(floats.coversPanes)
+        XCTAssertGreaterThan(changes, before, "the window must hear that the panes are clear")
+    }
 }

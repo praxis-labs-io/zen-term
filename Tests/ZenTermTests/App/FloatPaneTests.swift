@@ -849,4 +849,20 @@ final class FloatPaneTests: WindowTestCase {
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap { descendants(of: $0) }
     }
+
+    func test_aShownFloatPane_veilsThePanes_andHidingItClearsThem() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let float = try openFloat(in: c, beside: lead)
+        let hosts = { (c.window.contentView?.descendants(ofType: PanelHostView.self)) ?? [] }
+
+        try show(float, in: c)
+
+        XCTAssertFalse(hosts().isEmpty)
+        XCTAssertTrue(hosts().allSatisfy(\.isVeiledForTesting))
+
+        c.floatsForTesting.close()
+
+        XCTAssertFalse(hosts().contains(where: \.isVeiledForTesting))
+    }
 }

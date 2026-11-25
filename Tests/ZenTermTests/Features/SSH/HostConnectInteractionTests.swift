@@ -1351,4 +1351,20 @@ final class HostConnectInteractionTests: WindowTestCase {
                 "the detail wraps wider than it is at \(width)")
         }
     }
+
+    func test_aFloatOverConnect_veilsTheConnectPanel() throws {
+        let (c, pi) = try piRunningHiddenOnConnect()
+        ask(pi)
+        let panel = try XCTUnwrap(
+            c.connectViewForTesting.map { descendants(of: $0).compactMap { $0 as? PanelHostView } }?.first)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertTrue(c.floatsForTesting.isOpen, "premise: pi is over Connect")
+        XCTAssertTrue(panel.isVeiledForTesting)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertFalse(panel.isVeiledForTesting)
+    }
 }
