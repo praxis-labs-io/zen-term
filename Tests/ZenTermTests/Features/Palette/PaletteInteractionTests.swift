@@ -261,11 +261,11 @@ final class PaletteInteractionTests: WindowTestCase {
         let overlay = catalogPalette()
         mount(overlay)
         let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
-        let expected = Dictionary(
-            commands.map { ($0.title, ListRow.Leading.symbol($0.category.symbol)) },
-            uniquingKeysWith: { first, _ in first })
-        for row in rows(in: overlay) {
-            XCTAssertEqual(row.content.leading, expected[row.title], row.title)
+        let shown = rows(in: overlay)
+        XCTAssertEqual(shown.count, commands.count)
+        for (row, command) in zip(shown, commands) {
+            XCTAssertEqual(row.title, command.title)
+            XCTAssertEqual(row.content.leading, .symbol(command.category.symbol), command.title)
         }
     }
 
