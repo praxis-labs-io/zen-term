@@ -875,7 +875,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
-  first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
+  first), `ControlPersist=60` and `ConnectTimeout=30` (which overrides a host's own), as `xterm-256color` with busy tracking off (a remote shell
   sends no prompt marks). With `-t` it runs `exec env COLORTERM=… TERM_PROGRAM=…
   TERM_PROGRAM_VERSION=… "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude
   reports progress only to a ghostty it recognises, and ssh forwards none of them without the

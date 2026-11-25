@@ -18,6 +18,9 @@ enum SSHLaunch {
 
     static let controlPersistSeconds = 60
 
+    // Without it, an offline host waits out the system's TCP timeout, over a minute.
+    static let connectTimeoutSeconds = 30
+
     static var socketDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ZenTerm", isDirectory: true)
@@ -43,6 +46,7 @@ enum SSHLaunch {
             "-o", "ControlMaster=auto",
             "-o", controlPathOption(controlPath),
             "-o", "ControlPersist=\(controlPersistSeconds)",
+            "-o", "ConnectTimeout=\(connectTimeoutSeconds)",
         ]
         switch form {
         case .loginShell: return options + ["-t", "--", host.alias, loginShellCommand]
