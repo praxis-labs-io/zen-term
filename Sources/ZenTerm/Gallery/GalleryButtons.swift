@@ -91,7 +91,8 @@
                 title: "StateDot",
                 rows: [
                     GallerySection.Row(
-                        label: "Blocked, done, idle, live", samples: StateDot.State.allCases.map(StateDot.init))
+                        label: "Blocked, done, idle, live, working", samples: StateDot.State.allCases.map(StateDot.init)
+                    )
                 ])
         }
 

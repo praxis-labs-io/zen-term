@@ -2,7 +2,7 @@ import AppKit
 
 final class StateDot: NSView, ThemeReapplying {
     enum State: CaseIterable {
-        case blocked, done, idle, live
+        case blocked, done, idle, live, working
 
         var accessibilityValue: String {
             switch self {
@@ -10,6 +10,7 @@ final class StateDot: NSView, ThemeReapplying {
             case .done: return "Agent finished its turn"
             case .idle: return "Agent idle"
             case .live: return "Running"
+            case .working: return "Agent working"
             }
         }
     }
@@ -52,6 +53,7 @@ final class StateDot: NSView, ThemeReapplying {
         case .done: return chrome.done.nsColor
         case .idle: return chrome.ink(.muted)
         case .live: return chrome.accent.nsColor
+        case .working: return chrome.working.nsColor
         }
     }
 }

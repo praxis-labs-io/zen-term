@@ -33,9 +33,9 @@ final class SidebarAgentRowTests: WindowTestCase {
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
     }
 
-    private func spinnerColors(of row: NSView) throws -> [NSColor] {
+    private func spinnerColor(of row: NSView) throws -> NSColor? {
         let spinner = try XCTUnwrap(descendants(row).compactMap { $0 as? Spinner }.first)
-        return (spinner.layer?.sublayers ?? []).compactMap(\.backgroundColor).compactMap { NSColor(cgColor: $0) }
+        return spinner.arcForTesting.strokeColor.flatMap(NSColor.init)
     }
 
     private func descendants(_ view: NSView) -> [NSView] {
@@ -70,17 +70,14 @@ final class SidebarAgentRowTests: WindowTestCase {
             SidebarAgentItem(
                 id: SurfaceID(raw: 1), state: .working, summary: "Working", detail: "zen-term", message: nil))
 
-        let before = try spinnerColors(of: row)
-        XCTAssertEqual(before.count, 6)
-        XCTAssertTrue(before.allSatisfy { $0 == Theme.current.chrome.working.nsColor })
+        XCTAssertEqual(try spinnerColor(of: row), Theme.current.chrome.working.nsColor)
         XCTAssertNotEqual(Theme.current.chrome.working, Theme.current.chrome.accent)
 
         Theme.setCurrentForTesting(try makeThemeWithYellow("#ffaa00"))
         row.reapplyThemeTree()
 
         let yellow = try XCTUnwrap(TerminalColor(hex: "#ffaa00")).nsColor
-        let after = try spinnerColors(of: row)
-        XCTAssertTrue(after.allSatisfy { $0 == yellow }, "\(after)")
+        XCTAssertEqual(try spinnerColor(of: row), yellow)
     }
 
     func test_theDotsAndTheSpinner_centerOnTheTitleLine() throws {
