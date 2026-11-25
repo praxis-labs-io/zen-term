@@ -102,7 +102,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func status(of host: String) -> SSHHostStatus { statusCenter.status(of: SSHHostID(alias: host)) }
 
     private func address(of host: String) -> String? {
-        statusCenter.destination(of: SSHHostID(alias: host)).flatMap { $0 == host ? nil : $0 }
+        statusCenter.address(of: SSHHostID(alias: host))
     }
 
     private func addresses() -> [String: String] {
@@ -149,7 +149,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func entry(of host: String) -> SSHHostEntry {
-        GeneralConfig.current.sshHosts.first { $0.alias == host } ?? SSHHostEntry(alias: host)
+        GeneralConfig.current.sshHost(SSHHostID(alias: host))
     }
 
     private func description(of host: String) -> String? {
