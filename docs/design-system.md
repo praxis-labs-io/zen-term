@@ -221,7 +221,7 @@ takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
 
-The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, a search field with a trailing slot. A palette row's icon is plain, never a chip (`ListRow.Leading.symbol`, which takes a Lucide mark too), and its detail (the picker's branch) sits in muted ink just left of its shortcut. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
+The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, a search field with a trailing slot. A palette row's icon is plain, never a chip (`ListRow.Leading.symbol`, which takes a Lucide mark too), and its detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 

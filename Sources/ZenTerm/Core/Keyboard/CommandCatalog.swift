@@ -3,22 +3,11 @@ import Foundation
 struct PaletteCommand {
     let title: String
     let shortcut: String
-    let category: String
+    let category: CommandCategory
     let chord: KeyInterceptor.ReservedChord
 }
 
 enum CommandCatalog {
-    private enum Category {
-        static let panes = "Panes"
-        static let tabs = "Tabs"
-        static let drawers = "Drawers"
-        static let window = "Window"
-        static let tools = "Tools"
-        static let config = "Config"
-        static let help = "Help"
-        static let workspaces = "Workspaces"
-    }
-
     static func spec(for chord: KeyInterceptor.ReservedChord) -> PaletteCommand {
         let glyph = displayGlyph(for: chord)
         switch chord {
@@ -143,41 +132,41 @@ enum CommandCatalog {
     private static func pane(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.panes, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .panes, chord: chord)
     }
     private static func tab(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.tabs, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .tabs, chord: chord)
     }
     private static func drawer(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.drawers, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .drawers, chord: chord)
     }
     private static func window(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.window, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .window, chord: chord)
     }
     private static func tool(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.tools, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .tools, chord: chord)
     }
     private static func config(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.config, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .config, chord: chord)
     }
     private static func help(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.help, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .help, chord: chord)
     }
     private static func workspace(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: Category.workspaces, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .workspaces, chord: chord)
     }
 }

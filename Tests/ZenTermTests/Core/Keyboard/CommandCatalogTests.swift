@@ -96,7 +96,7 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_categories_areContiguousInOrder() {
-        let categories = CommandCatalog.commands(tabCount: 3, workspaceCount: 3).map(\.category)
+        let categories = CommandCatalog.commands(tabCount: 3, workspaceCount: 3).map(\.category.title)
         var seen: [String] = []
         for category in categories where seen.last != category {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")

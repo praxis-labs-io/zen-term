@@ -12,6 +12,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
     private let resolveCommands: () -> [PaletteCommand]
     private var commands: [PaletteCommand]
     private var rows: [Row]
+    // Filtered rows lose their header, so they name their category instead.
+    private var namesCategories = false
 
     init(
         commands: @escaping () -> [PaletteCommand],
@@ -51,9 +53,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case .header(let title):
             return PaletteSectionHeader(title: title)
         case .command(let command):
-            return SelectableRowView(
-                ListRow.Content(
-                    title: command.title, trailing: command.shortcut.isEmpty ? nil : .keycap(command.shortcut)))
+            let row = CommandRowView(command)
+            row.namesCategory = namesCategories
+            return row
         }
     }
 
@@ -73,6 +75,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
     /// A category-only hit ranks below every title hit, so it never preselects a command the query did not name.
     override func applyFilter(query: String) {
         let q = query.trimmingCharacters(in: .whitespaces)
+        namesCategories = !q.isEmpty
+        for case let row as CommandRowView in rowViews { row.namesCategory = namesCategories }
         if q.isEmpty {
             rows = Self.grouped(commands)
         } else {
@@ -82,7 +86,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
                     if let titleScore = FuzzyMatch.score(q, command.title) {
                         return (command, true, titleScore)
                     }
-                    if let categoryScore = FuzzyMatch.score(q, command.category) {
+                    if let categoryScore = FuzzyMatch.score(q, command.category.title) {
                         return (command, false, categoryScore)
                     }
                     return nil
@@ -105,10 +109,10 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     private static func grouped(_ commands: [PaletteCommand]) -> [Row] {
         var rows: [Row] = []
-        var current: String?
+        var current: CommandCategory?
         for command in commands {
             if command.category != current {
-                rows.append(.header(command.category))
+                rows.append(.header(command.category.title))
                 current = command.category
             }
             rows.append(.command(command))
@@ -116,4 +120,21 @@ final class CommandPaletteOverlay: PaletteOverlay {
         return rows
     }
 
+    final class CommandRowView: SelectableRowView {
+        private let category: CommandCategory
+
+        var namesCategory = false {
+            didSet { detail = namesCategory ? category.title : "" }
+        }
+
+        init(_ command: PaletteCommand) {
+            category = command.category
+            super.init(
+                Content(
+                    title: command.title, leading: .symbol(command.category.symbol),
+                    trailing: command.shortcut.isEmpty ? nil : .keycap(command.shortcut)))
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    }
 }
