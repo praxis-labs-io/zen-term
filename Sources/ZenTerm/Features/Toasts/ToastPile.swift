@@ -158,7 +158,7 @@ final class ToastPile: NSView {
     }
 
     private func relayout(animated: Bool, arriving: NSView? = nil) {
-        superview?.layoutSubtreeIfNeeded()
+        (window?.contentView ?? superview)?.layoutSubtreeIfNeeded()
         NSLayoutConstraint.deactivate(arrangement)
         arrangement = isUnfolded ? listArrangement() : foldedArrangement()
         NSLayoutConstraint.activate(arrangement)
@@ -166,14 +166,14 @@ final class ToastPile: NSView {
         fadeToTargets(sparing: arriving)
         if let arriving { settle(arriving) }
         guard animated, !Motion.isReduceMotionEnabled() else {
-            superview?.layoutSubtreeIfNeeded()
+            (window?.contentView ?? superview)?.layoutSubtreeIfNeeded()
             return
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Motion.pageSlideDuration
             context.timingFunction = Motion.landingTiming
             context.allowsImplicitAnimation = true
-            superview?.layoutSubtreeIfNeeded()
+            (window?.contentView ?? superview)?.layoutSubtreeIfNeeded()
         }
     }
 
