@@ -648,7 +648,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   screen (`HostConnectView`), one `PanelHostView` that takes ↵ and focus, and is themed like a
   pane through the same live-apply paths, but never shows a pane's focus border. Its left edge
   leads into the sidebar (or shows the same hint a pane does when the sidebar is hidden); up,
-  down and right do nothing. It has no tab, so dispatch drops any chord that is not `worksWithoutTab`, except ⌘T,
+  down and right do nothing. It has no tab, so dispatch drops any chord that is not
+  `worksWithoutTab`, except ⌘T,
   which connects, ⌘W, which lands where a close of the last workspace row would (or, with no
   workspace left, confirms and closes the window as the last pane does), and a float toggle, which opens or closes only a running
   float that is open or needs you and is silent otherwise, and a card stays open for a chord it

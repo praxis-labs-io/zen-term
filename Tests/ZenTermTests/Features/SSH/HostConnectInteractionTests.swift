@@ -1100,6 +1100,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertFalse(try showsFocusHalo(c))
         c.handle(.toggleSidebar)
 
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertFalse(c.sidebarForTesting.hasFocus)
         XCTAssertFalse(try showsFocusHalo(c))
     }
 
