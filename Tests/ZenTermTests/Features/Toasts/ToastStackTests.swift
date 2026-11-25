@@ -294,7 +294,8 @@ final class ToastStackTests: WindowTestCase {
         pile.unfold()
 
         XCTAssertGreaterThan(pile.frame.height, folded, "the unfolded list is taller than the fold")
-        XCTAssertEqual(outer.frame.height, pile.frame.height, "the pile's ancestors resize in the same pass as the pile")
+        XCTAssertEqual(
+            outer.frame.height, pile.frame.height, "the pile's ancestors resize in the same pass as the pile")
     }
 }
 
