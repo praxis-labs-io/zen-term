@@ -6,8 +6,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case command(PaletteCommand)
     }
 
-    private static let commandHeight: CGFloat = ChromeMetrics.Height.lg
-
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
 
     /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes in its shortcut glyph when built.
@@ -25,14 +23,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
         self.rows = Self.grouped(resolved)
         self.onRun = onRun
         super.init(
-            placeholder: "Search commands…",
+            placeholder: "Search commands",
             emptyText: "No matching commands",
-            footerHints: [
-                HintFooter.Hint(keys: "⏎", label: "run"),
-                HintFooter.Hint(keys: "↑↓", label: "move"),
-                HintFooter.Hint(keys: "⎋", label: "close"),
-            ],
-            rowHeight: Self.commandHeight,
             onDismiss: onDismiss)
     }
 
@@ -73,11 +65,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         }
     }
 
-    override func rowHeight(at index: Int) -> CGFloat {
-        if case .header = rows[index] { return PaletteSectionHeader.height }
-        return Self.commandHeight
-    }
-
     override func isSelectable(at index: Int) -> Bool {
         if case .command = rows[index] { return true }
         return false
@@ -108,6 +95,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
                 .map { .command($0.command) }
         }
     }
+
+    override func returnAction(at index: Int) -> String? { "Run" }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         guard rows.indices.contains(index), case .command(let command) = rows[index] else { return }

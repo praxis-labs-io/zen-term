@@ -366,32 +366,37 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertTrue(after.contains(rebound.displayGlyph), "the rebind never reached the New Workspace row")
     }
 
-    func test_keymapChange_rebuildsTheRepoPickersFooterHints() throws {
+    func test_keymapChange_reachesTheRepoPickersBar() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-fanout-picker-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        tempRoots.append(root)
+        try "[Alpha]\npath = ~/Dev/alpha\n".write(
+            to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+        ConfigLoader.defaultRootOverrideForTesting = root
+        addTeardownBlock { ConfigLoader.defaultRootOverrideForTesting = nil }
         let picker = try openRepoPicker()
-        func footerItem(_ label: String) -> NSView? {
-            descendants(of: picker).first { ($0 as? NSTextField)?.stringValue == label }?.superview
+        func selectAlpha() {
+            for _ in 0..<picker.numberOfRows() where picker.createTarget?.workspace.title != "Alpha" {
+                _ = picker.control(
+                    NSTextField(), textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+            }
         }
-        func keycap(in item: NSView?) -> String? {
-            item?.subviews.compactMap { ($0 as? KeycapView)?.shortcut }.first
+        func barKeys(_ label: String) -> String? {
+            picker.barHintsForTesting.first { $0.label == label }?.keys
         }
-        func hiddenHints() throws -> [String: Bool] {
-            let labels = ["new workspace", "open", "switch", "new worktree", "remove worktree", "close workspace"]
-            return try Dictionary(uniqueKeysWithValues: labels.map { ($0, try XCTUnwrap(footerItem($0)).isHidden) })
-        }
+        selectAlpha()
         var config = GeneralConfig.current
-        let original = try XCTUnwrap(Chord.displayed(.removeWorktree, in: config.keymap)?.displayGlyph)
-        XCTAssertEqual(keycap(in: footerItem("remove worktree")), original, "premise: the default chord")
-        let hiddenBefore = try hiddenHints()
-        XCTAssertEqual(hiddenBefore["remove worktree"], true, "premise: no worktree is selected")
+        let original = try XCTUnwrap(Chord.displayed(.createWorktree, in: config.keymap)?.displayGlyph)
+        XCTAssertEqual(barKeys("New Worktree"), original, "premise: the bar names the default chord")
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.rebind(.removeWorktree, to: rebound)
+        config.rebind(.createWorktree, to: rebound)
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
+        selectAlpha()
 
-        let item = try XCTUnwrap(footerItem("remove worktree"), "the rebind dropped the hint")
-        XCTAssertEqual(keycap(in: item), rebound.displayGlyph, "the footer still names the chord that moved")
-        XCTAssertEqual(try hiddenHints(), hiddenBefore, "the rebuilt hints ignored the selection")
+        XCTAssertEqual(barKeys("New Worktree"), rebound.displayGlyph, "the bar still names the chord that moved")
     }
 }

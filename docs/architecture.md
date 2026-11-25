@@ -569,10 +569,16 @@ New modal surfaces compose the existing primitives.
   `link`, `quietLink` for a dismissing link beside another; an optional shortcut keycap inside),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
-  for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
+  for card chrome and scrolling, `ModalShell` for a centred card over a backdrop, or one pinned where it would center at full height (Esc goes
   back one step, a click outside closes the stack; a form whose inputs differ from its opening
   snapshot asks first, and its Cancel button never asks), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
+- **Palette panels provide content only.** The command palette and workspace picker subclass
+  `PaletteOverlay` and supply `numberOfRows`, `makeRow`, `rowIdentity`, `isSelectable`,
+  `applyFilter`, `activate`, `returnAction`, `shortcutHints`, `hasMoreActions` and
+  `searchAccessory`. Rows are `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns
+  width, max height, row height, position, the search field, the bar and the empty state, and no
+  panel overrides them, so every panel opens at the same spot and size.
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
   `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
