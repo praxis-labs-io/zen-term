@@ -43,7 +43,7 @@ enum CardChrome {
 
     static func reapplyTheme(to card: NSView, tier: FloatShadow.Tier = .modal) {
         card.layer?.backgroundColor = fill(tier).cgColor
-        reapplyEdge(to: card)
+        card.layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.apply(tier, to: card)
     }
 
