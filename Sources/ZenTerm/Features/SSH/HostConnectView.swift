@@ -149,14 +149,14 @@ final class HostConnectView: NSView, ThemeReapplying {
 
     override var acceptsFirstResponder: Bool { true }
 
-    // Return never trusts a host key: a second Return by habit would skip reading its fingerprint.
+    // Return never answers yes: a second Return by habit would skip reading the key or the warning.
     override func keyDown(with event: NSEvent) {
         if KeyboardFocus.isReturn(event) {
             if login == nil { return onConnect() }
-            if isAskingHostKey { return }
+            if isAskingYesNo { return }
             return submitAnswer()
         }
-        if isAskingHostKey, case .tab = KeyboardFocus.key(for: event) {
+        if isAskingYesNo, case .tab = KeyboardFocus.key(for: event) {
             window?.makeFirstResponder(trustButton)
             return
         }
@@ -220,8 +220,15 @@ final class HostConnectView: NSView, ThemeReapplying {
 
     private var isOffline: Bool { status == .offline }
 
-    private var isAskingHostKey: Bool {
-        if case .hostKey = login?.question?.prompt { return true }
+    private var isAskingYesNo: Bool {
+        switch login?.question?.prompt {
+        case .hostKey, .confirm: return true
+        default: return false
+        }
+    }
+
+    private var isAskingConfirm: Bool {
+        if case .confirm = login?.question?.prompt { return true }
         return false
     }
 
@@ -302,7 +309,8 @@ final class HostConnectView: NSView, ThemeReapplying {
         connectButton.isHidden = isOffline || connecting
         connectAnywayButton.isHidden = !isOffline || connecting
         loginActions.isHidden = !connecting
-        trustButton.isHidden = !isAskingHostKey
+        trustButton.isHidden = !isAskingYesNo
+        trustButton.setTitle(isAskingConfirm ? "Continue" : "Trust")
         applyQuestion()
         let detail = login.flatMap { SSHLoginOutput.detail(of: $0.output) }
         detailLine.stringValue = detail ?? ""

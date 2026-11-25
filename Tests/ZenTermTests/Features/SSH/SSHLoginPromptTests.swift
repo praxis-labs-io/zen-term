@@ -59,15 +59,20 @@ final class SSHLoginPromptTests: XCTestCase {
             .hostKey(type: "ECDSA", fingerprint: "SHA256:Ddh6AiyxUdOZ"))
     }
 
-    func test_theHostKeyAgainPromptsAndTheIPMismatchAreHostKeys_withNoTypeToName() {
+    func test_theHostKeyAgainPrompt_isAHostKey_withNoTypeToName() {
         let again = SSHLoginPrompt.parse("Please type 'yes', 'no' or the fingerprint: ")
         XCTAssertEqual(again, .hostKey(type: nil, fingerprint: nil))
         XCTAssertEqual(again.headline, "New host key")
-        XCTAssertEqual(
-            SSHLoginPrompt.parse(
-                "Warning: the ED25519 host key for 'devbox' differs from the key for the IP address '10.0.0.2'\n"
-                    + "Are you sure you want to continue connecting (yes/no)? "),
-            .hostKey(type: nil, fingerprint: nil))
+    }
+
+    func test_anIPMismatch_isNoNewHostKey_andKeepsSSHsWarning() {
+        let prompt =
+            "Warning: the ED25519 host key for 'devbox' differs from the key for the IP address '10.0.0.2'\n"
+            + "Are you sure you want to continue connecting (yes/no)? "
+        let parsed = SSHLoginPrompt.parse(prompt)
+
+        XCTAssertEqual(parsed, .confirm(question: prompt.trimmingCharacters(in: .whitespacesAndNewlines)))
+        XCTAssertTrue(parsed.headline.hasPrefix("Warning: the ED25519 host key for 'devbox' differs"))
     }
 
     func test_aFingerprint_splitsIntoTwoHalvesOfEqualLength() {

@@ -3,12 +3,14 @@ import Foundation
 // What ssh asks a login through askpass, read from its prompt text, since ssh sends no kind for a question.
 enum SSHLoginPrompt: Equatable {
     case hostKey(type: String?, fingerprint: String?)
+    // Any other yes/no, such as a host key that differs from its IP's, which only ssh's own words can explain.
+    case confirm(question: String)
     case secret(headline: String)
 
     private static let hostKeyMarks = [
-        "(yes/no/[fingerprint])?", "Please type 'yes', 'no' or the fingerprint", "(yes/no)?",
-        "Please type 'yes' or 'no'",
+        "(yes/no/[fingerprint])?", "Please type 'yes', 'no' or the fingerprint", "authenticity of host",
     ]
+    private static let yesNoMarks = ["(yes/no)?", "Please type 'yes' or 'no'"]
     private static let passphrase = #"^Enter passphrase for key '(.+)':?$"#
     // ssh prints at most this many bytes of the key's path, so a path that reaches it may end mid-folder.
     private static let keyPathLimit = 100
@@ -17,9 +19,12 @@ enum SSHLoginPrompt: Equatable {
     private static let serverPromptPrefix = #"^\([^()\s]+@[^()\s]+\) "#
 
     static func parse(_ prompt: String) -> SSHLoginPrompt {
-        if hostKeyMarks.contains(where: prompt.contains) {
-            let key = hostKey(in: prompt)
+        let key = hostKey(in: prompt)
+        if hostKeyMarks.contains(where: prompt.contains) || key != nil {
             return .hostKey(type: key?.type, fingerprint: key?.fingerprint)
+        }
+        if yesNoMarks.contains(where: prompt.contains) {
+            return .confirm(question: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
         }
         return .secret(headline: headline(of: prompt))
     }
@@ -27,6 +32,7 @@ enum SSHLoginPrompt: Equatable {
     var headline: String {
         switch self {
         case .secret(let headline): return headline
+        case .confirm(let question): return question
         case .hostKey(let type?, _): return "New \(type) host key"
         case .hostKey(nil, _): return "New host key"
         }
