@@ -233,7 +233,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `openWorkspacesElsewhere` (so an unconfigured workspace running elsewhere is listed too),
   then the configured workspaces no window has open, in config order, then Add Workspace….
   A group is its lead, its open worktrees, and the lead's unopened worktrees, so a workspace
-  is listed once. A ghost lead is a selectable row that opens its configured entry. A row's
+  is listed once. A ghost lead is a selectable row that opens its configured entry, unless that
+  entry is already listed, when it stays a label. A row's
   state (Current, Open, Other window) reads this window's active workspace, which
   `WindowController` passes in. Placement reads those lists, never `openState`, so nothing
   falls out of the list. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted

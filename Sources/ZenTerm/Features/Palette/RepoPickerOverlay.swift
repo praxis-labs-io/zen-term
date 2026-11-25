@@ -7,7 +7,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         case newWorkspace
         case open(RunningWorkspace)
         case elsewhere(RunningWorkspace)
-        // The closed parent of an open worktree; nil when no configured workspace sits at its folder.
         case closedParent(RunningWorkspace, entry: Workspace?)
         case add
         case workspace(Workspace)
@@ -175,9 +174,13 @@ final class RepoPickerOverlay: PaletteOverlay {
         for (running, placement) in [(open, Placement.here), (elsewhere, .elsewhere)] {
             for members in grouped(running) {
                 let lead = members[0]
-                let parent = entry(at: lead.folder)
-                leads.insert(lead.folder.standardizedFileURL)
-                var rows: [Row] = [lead.id == nil ? .closedParent(lead, entry: parent) : row(lead, placement)]
+                let folder = lead.folder.standardizedFileURL
+                let parent = entry(at: folder)
+                let opensParent = !leads.contains(folder)
+                leads.insert(folder)
+                var rows: [Row] = [
+                    lead.id == nil ? .closedParent(lead, entry: opensParent ? parent : nil) : row(lead, placement)
+                ]
                 rows += members.dropFirst().map { row($0, placement) }
                 if let parent { rows += closedWorktrees(of: parent) }
                 groups.append(Group(placement: placement, rows: rows))
@@ -234,8 +237,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     private static func title(of row: Row) -> String {
         switch row {
-        case .open(let running), .elsewhere(let running), .closedParent(let running, _): return running.name
-        case .workspace(let workspace): return workspace.title
+        case .closedParent(_, let entry?), .workspace(let entry): return entry.title
+        case .open(let running), .elsewhere(let running), .closedParent(let running, nil): return running.name
         case .worktree(let worktree, _): return worktree.name
         case .newWorkspace, .add: return ""
         }
@@ -245,9 +248,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch row {
         case .newWorkspace, .add: return nil
         case .closedParent(_, nil): return nil
-        case .open(let running), .elsewhere(let running), .closedParent(let running, _):
-            return FuzzyMatch.score(query, running.name)
-        case .workspace(let workspace): return FuzzyMatch.score(query, workspace.title)
+        case .closedParent(_, let entry?), .workspace(let entry): return FuzzyMatch.score(query, entry.title)
+        case .open(let running), .elsewhere(let running): return FuzzyMatch.score(query, running.name)
         case .worktree(let worktree, _): return score(worktree, query)
         }
     }
@@ -297,7 +299,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func defaultSelectionIndex() -> Int {
         let selectable = rows.indices.filter { isSelectable(at: $0) }
         guard let query = newWorkspaceName else {
-            return selectable.first { state(at: $0).map { $0 != .current } ?? false } ?? selectable.first ?? 0
+            let notCurrent = selectable.filter { state(at: $0) != .current }
+            return notCurrent.first { state(at: $0) != nil } ?? notCurrent.first ?? selectable.first ?? 0
         }
         return selectable.first { Self.score(rows[$0], query) != nil } ?? selectable.first ?? 0
     }
@@ -609,7 +612,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             case workspace
             case openChild
             case closedChild
-            // The closed parent of an open worktree that no configured workspace can open.
             case ghost
 
             var ink: ChromeTheme.InkLevel {

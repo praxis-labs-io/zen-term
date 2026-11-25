@@ -44,6 +44,50 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             [.open, .otherWindow], "open rows say where they are open, closed ones say nothing")
     }
 
+    func test_aClosedParentOpenInAnotherWindow_isALabel_notASecondCopy() {
+        let repo = path("alpha")
+        let tree = worktree(repo, "one")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)],
+            open: [running(window: 1, name: "alpha", folder: repo, isWorktree: false)],
+            elsewhere: [
+                RunningWorkspace(
+                    window: 2, id: nil, name: "alpha", folder: repo, isWorktree: false, removedWorktreeName: nil),
+                running(window: 2, name: "alpha: one", folder: tree.path),
+            ])
+        mount(overlay)
+
+        XCTAssertEqual(shape(of: overlay), ["open:alpha", "ghost:alpha", "open:alpha: one", "add"])
+        XCTAssertFalse(overlay.isSelectable(at: 1), "alpha is already listed open, so its label is not a stop")
+    }
+
+    func test_withOnlyTheCurrentWorkspaceOpen_theSelectionStartsOnAClosedOne() {
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: path("alpha")), workspace("beta", path: path("beta"))],
+            open: [running(window: 1, name: "alpha", folder: path("alpha"), isWorktree: false)],
+            current: WorkspaceID(raw: 1))
+        mount(overlay)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:beta", "not the one already showing")
+    }
+
+    func test_aClosedParent_isFoundByTheTitleItShows_afterAConfigRename() {
+        let repo = path("alpha")
+        let tree = worktree(repo, "one")
+        let overlay = makeRepoPicker(
+            entries: [workspace("Renamed", path: repo)],
+            open: [
+                RunningWorkspace(
+                    window: 1, id: nil, name: "alpha", folder: repo, isWorktree: false, removedWorktreeName: nil),
+                running(window: 1, name: "alpha: one", folder: tree.path),
+            ])
+        mount(overlay)
+
+        type("Renamed", into: overlay)
+
+        XCTAssertEqual(shape(of: overlay), ["new", "workspace:Renamed", "open:alpha: one", "add"])
+    }
+
     func test_theCreateHint_readsTheChordFromTheLiveKeymap() {
         setKeymap([Chord(command: true, shift: true, key: "n"): .createWorktree])
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
@@ -1082,14 +1126,14 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace], open: [RunningWorkspace] = [], elsewhere: [RunningWorkspace] = [],
-        removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
+        current: WorkspaceID? = nil, removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in },
         onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
         onReveal: @escaping (Int, WorkspaceID) -> Bool = { _, _ in true }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
-            entries: entries, open: open, elsewhere: elsewhere,
+            entries: entries, open: open, elsewhere: elsewhere, current: current,
             removals: removals, openState: openState, onChoose: onChoose, onSwitch: onSwitch, onReveal: onReveal,
             onAddWorkspace: {}, onDismiss: {})
     }
