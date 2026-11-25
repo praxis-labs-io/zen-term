@@ -300,17 +300,18 @@ final class PaletteInteractionTests: WindowTestCase {
     func test_commandPalette_titleMatchOutranksCategoryOnlyMatch() {
         var ran: KeyInterceptor.ReservedChord?
         let commands = [
-            PaletteCommand(title: "Open Settings", shortcut: "⌘,", category: .config, chord: .openSettings),
-            PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: .panes, chord: .closePane),
+            PaletteCommand(title: "Open Settings", shortcut: "⌘,", category: .app, chord: .openSettings),
+            PaletteCommand(
+                title: "Write Screen to File and Open", shortcut: "", category: .panes, chord: .openScreenFile),
         ]
         let overlay = CommandPaletteOverlay(
             commands: { commands },
             onRun: { ran = $0 }, onDismiss: {})
         mount(overlay)
-        type("con", into: overlay)
-        XCTAssertEqual(overlay.numberOfRows(), 2, "Close Pane by title, Open Settings by category")
+        type("ap", into: overlay)
+        XCTAssertEqual(overlay.numberOfRows(), 2, "Write Screen to File and Open by title, Open Settings by category")
         send(Self.insertNewline, to: overlay)
-        XCTAssertEqual(ran, .closePane)
+        XCTAssertEqual(ran, .openScreenFile)
     }
 
     private func makeLongCommandPalette() -> CommandPaletteOverlay {

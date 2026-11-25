@@ -41,21 +41,21 @@ enum CommandCatalog {
         case .moveTabLeft: return tab("Move Tab Left", glyph, chord)
         case .moveTabRight: return tab("Move Tab Right", glyph, chord)
         case .renameTab: return tab("Rename Tab…", glyph, chord)
-        case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", glyph, chord)
-        case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
+        case .toggleBottomDrawer: return tab("Toggle Bottom Drawer", glyph, chord)
+        case .toggleRightDrawer: return tab("Toggle Right Drawer", glyph, chord)
         case .toggleToolFloat(let id):
             let float = ToolFloatCatalog.byID(id)
             return .init(title: float?.title ?? id, shortcut: glyph, category: .tools, chord: chord, icon: float?.icon)
         case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
         case .newWorkspace: return workspace("New Workspace", glyph, chord)
-        case .openSettings: return config("Settings…", glyph, chord)
-        case .reloadConfig: return config("Reload Config", glyph, chord)
-        case .checkForUpdates: return config("Check for Updates", glyph, chord)
-        case .reportIssue: return help("Report an Issue…", glyph, chord)
+        case .openSettings: return app("Settings…", glyph, chord)
+        case .reloadConfig: return app("Reload Config", glyph, chord)
+        case .checkForUpdates: return app("Check for Updates", glyph, chord)
+        case .reportIssue: return app("Report an Issue…", glyph, chord)
         case .newTool: return tool("New Tool Float…", glyph, chord)
-        case .increaseFontSize: return window("Increase Font Size", glyph, chord)
-        case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
-        case .resetFontSize: return window("Reset Font Size", glyph, chord)
+        case .increaseFontSize: return app("Increase Font Size", glyph, chord)
+        case .decreaseFontSize: return app("Decrease Font Size", glyph, chord)
+        case .resetFontSize: return app("Reset Font Size", glyph, chord)
         case .toggleScrollMode: return pane("Scroll Mode", glyph, chord)
         case .toggleSearch: return pane("Find in Scrollback", glyph, chord)
         case .scrollToTop: return pane("Scroll to Top", glyph, chord)
@@ -71,9 +71,9 @@ enum CommandCatalog {
         case .writeScreenFile: return pane("Write Screen to File", glyph, chord)
         case .copyScreenFilePath: return pane("Write Screen to File, Copy Path", glyph, chord)
         case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
-        case .dismissToast: return window("Dismiss Notice", glyph, chord)
-        case .dismissAllToasts: return window("Dismiss All Notices", glyph, chord)
-        case .newWindow: return tab("New Window", glyph, chord)
+        case .dismissToast: return app("Dismiss Notice", glyph, chord)
+        case .dismissAllToasts: return app("Dismiss All Notices", glyph, chord)
+        case .newWindow: return window("New Window", glyph, chord)
         case .selectAll: return pane("Select All", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
         case .findNext: return pane("Find Next", glyph, chord)
@@ -95,10 +95,9 @@ enum CommandCatalog {
     }
 
     static func commands(tabCount: Int, workspaceCount: Int, onHost: Bool = false) -> [PaletteCommand] {
-        var chords: [KeyInterceptor.ReservedChord] = ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
-        chords += [.newTool]
-        chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
-        chords += [.toggleRepoPicker, .newWorkspace, .prevWorkspace, .nextWorkspace]
+        var chords: [KeyInterceptor.ReservedChord] = [
+            .toggleRepoPicker, .newWorkspace, .prevWorkspace, .nextWorkspace,
+        ]
         if workspaceCount > 0 {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
@@ -106,12 +105,12 @@ enum CommandCatalog {
         if !onHost || tabCount > 0 { chords += [.closeWorkspace] }
         chords += [.nextWaitingAgent, .toggleAgentPicker]
         chords += [
-            .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
         ]
         if tabCount > 0 {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }
         }
+        chords += [.toggleBottomDrawer, .toggleRightDrawer]
         chords += [
             .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane,
@@ -123,11 +122,14 @@ enum CommandCatalog {
             .copyScreenFilePath, .openScreenFile,
             .closePane,
         ]
+        chords += [.closeWindow, .fillScreen, .toggleSidebar, .focusSidebar]
+        chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+        chords += [.newTool]
         chords += [
-            .toggleSidebar, .focusSidebar, .fillScreen, .closeWindow, .increaseFontSize, .decreaseFontSize,
-            .resetFontSize,
+            .openSettings, .reloadConfig, .checkForUpdates,
+            .increaseFontSize, .decreaseFontSize, .resetFontSize,
+            .dismissToast, .dismissAllToasts, .reportIssue,
         ]
-        chords += [.dismissToast, .dismissAllToasts]
         return chords.map { onHost && $0 == .closeWorkspace ? disconnect : spec(for: $0) }
     }
 
@@ -145,11 +147,6 @@ enum CommandCatalog {
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: .tabs, chord: chord)
     }
-    private static func drawer(
-        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
-    ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: .drawers, chord: chord)
-    }
     private static func window(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
@@ -160,15 +157,10 @@ enum CommandCatalog {
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: .tools, chord: chord)
     }
-    private static func config(
+    private static func app(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: .config, chord: chord)
-    }
-    private static func help(
-        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
-    ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: .help, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .app, chord: chord)
     }
     private static func workspace(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
