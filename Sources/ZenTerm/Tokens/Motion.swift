@@ -246,11 +246,12 @@ enum Motion {
     }
 
     // Dissolves the layer's next change of content, so a swapped image and fill fade rather than cut.
-    static func crossfade(_ layer: CALayer) {
-        guard !isReduceMotionEnabled() else { return }
+    // A dissolve that stands in for movement asks to run under Reduce Motion too.
+    static func crossfade(_ layer: CALayer, duration: CFTimeInterval = fadeDuration, whenReduced: Bool = false) {
+        guard whenReduced || !isReduceMotionEnabled() else { return }
         let dissolve = CATransition()
         dissolve.type = .fade
-        dissolve.duration = fadeDuration
+        dissolve.duration = duration
         layer.add(dissolve, forKey: "motion.crossfade")
     }
 

@@ -860,11 +860,16 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   a network change is dropped and asked again. A connected host is re-resolved the same way, without a
   probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe. A first login behind
-  Connect reads Connecting in every window until Connect shows its answer.
+  Connect reads Connecting in every window until it ends, or once connected, until Connect says so.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
   destination the probe resolved from the same `ssh -G`. It runs no ssh of its own; what it shows
   of a login comes from that login's connection. Its emblem
   (`HostSignature`) is drawn from the ssh alias, never the display name, so renaming a host keeps it.
+  While a first login runs, the emblem rains (`HostEmblemMotion`, sampled into keyframe tracks a
+  segment at a time, so it never repeats); the answer lands no sooner than `Motion.HostConnect.minimumRain`
+  after Connect, settles into a check or ×, and the words follow once the glyph has formed. Under
+  Reduce Motion the signature holds still and cross-fades to the answer. A login closed without
+  failing (Cancel, Disconnect, a removed host) puts the signature back.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs

@@ -6,12 +6,15 @@ import XCTest
 class WindowTestCase: XCTestCase {
     /// Captured at init, before any setup hook can pin it.
     private let originalReduceMotion = Motion.isReduceMotionEnabled
+    private let originalConnectAfter = MainActor.assumeIsolated { HostConnectView.after }
+    private let originalConnectNow = MainActor.assumeIsolated { HostConnectView.now }
 
     // Fixtures open worktrees at never-created folders the removal check reads as deleted, and Settings writes ~/.claude.
     override func setUpWithError() throws {
         try super.setUpWithError()
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
         PointerRest.resetForTesting()
+        MainActor.assumeIsolated { HostConnectView.after = { _, work in work() } }
         ClaudeCodeSetup.configRootOverrideForTesting = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-claude-\(UUID().uuidString)")
     }
@@ -21,6 +24,10 @@ class WindowTestCase: XCTestCase {
         try super.tearDownWithError()
         Self.closeAllWindows()
         Motion.isReduceMotionEnabled = originalReduceMotion
+        MainActor.assumeIsolated {
+            HostConnectView.after = originalConnectAfter
+            HostConnectView.now = originalConnectNow
+        }
         WorktreeStore.isRemovedOverrideForTesting = nil
         PointerRest.resetForTesting()
         ClaudeCodeSetup.configRootOverrideForTesting.map { try? FileManager.default.removeItem(at: $0) }

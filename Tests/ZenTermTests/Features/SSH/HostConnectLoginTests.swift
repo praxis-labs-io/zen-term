@@ -442,6 +442,18 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertNotEqual(try sidebarDetail(in: c), "Connecting", "cancelled")
     }
 
+    func test_theEmblemRainsWhileConnecting_untilTheLoginIsCancelled() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let (c, _) = try loggingIn()
+        let emblem = try XCTUnwrap(c.connectViewForTesting).emblemForTesting
+        XCTAssertTrue(emblem.isRainingForTesting)
+
+        try pressEscape(in: c)
+
+        XCTAssertFalse(emblem.isRainingForTesting, "no answer is coming, so the signature comes back")
+        XCTAssertNil(emblem.glyphForTesting)
+    }
+
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {
         SSHConnection.askpassProgramOverrideForTesting = .some(nil)
         let (c, login) = try loggingIn()

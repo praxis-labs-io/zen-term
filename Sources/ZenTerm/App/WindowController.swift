@@ -948,6 +948,10 @@ final class WindowController: NSObject {
             onAnswer: { [weak self] in self?.loginBehindConnect(of: host)?.answer($0) },
             onTrust: { [weak self] in self?.loginBehindConnect(of: host)?.trustHostKey() },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
+        view.onAnswerShown = { outcome in
+            if outcome == .connected { SSHHostStatusCenter.shared.setConnecting(false, host: host) }
+        }
+        view.onHandOff = { [weak self] in self?.handOff(to: host) }
         connectView = view
         refreshConnectLogin()
         return view
@@ -1526,6 +1530,9 @@ final class WindowController: NSObject {
     }
 
     private func closeHostWorkspace(_ workspace: WorkspaceController, returningTo host: SSHHostID) {
+        if workspace.connection?.state != .failed, let connectView, connectView.host == host {
+            connectView.abandonLogin()
+        }
         workspaces.removeAll { $0 === workspace }
         workspace.shutdown()
         SSHHostStatusCenter.shared.setConnecting(false, host: host)
@@ -1571,11 +1578,22 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
+    // Connect shows the answer first and hands off once it has settled; a host left meanwhile stays in the background.
     private func loginConnected(_ workspace: WorkspaceController, on host: SSHHostID) {
-        SSHHostStatusCenter.shared.setConnecting(false, host: host)
+        if case .host(let shown) = selection, shown == host, let connectView, connectView.host == host {
+            connectView.setOutcome(.connected)
+        } else {
+            SSHHostStatusCenter.shared.setConnecting(false, host: host)
+        }
         refreshConnectLogin()
-        guard case .host(let shown) = selection, shown == host, workspaces.contains(where: { $0 === workspace })
-        else { return renderAttention() }
+        renderAttention()
+    }
+
+    private func handOff(to host: SSHHostID) {
+        defer { if let connectView, connectView.host == host { connectView.setOutcome(nil) } }
+        guard case .host(let shown) = selection, shown == host,
+            let workspace = workspaces.first(where: { $0.host == host && !isBehindConnect($0) })
+        else { return }
         activate(workspace.id, transition: .instant)
     }
 

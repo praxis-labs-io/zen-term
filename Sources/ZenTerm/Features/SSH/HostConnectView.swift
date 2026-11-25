@@ -40,6 +40,16 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let onTrust: () -> Void
     private var login: Login?
     private var outcome: Outcome?
+    private var isAnswerShown = false
+    private var rainStartedAt: CFTimeInterval?
+    private var answers = 0
+    var onAnswerShown: ((Outcome) -> Void)?
+    var onHandOff: (() -> Void)?
+
+    static var now: () -> CFTimeInterval = { CACurrentMediaTime() }
+    static var after: (TimeInterval, @escaping () -> Void) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
     private var status: SSHHostStatus
     private let emblem: HostEmblemView
     private let nameLine = NSTextField(labelWithString: "")
@@ -161,7 +171,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     // Return never answers yes: a second Return by habit would skip reading the key or the warning.
     override func keyDown(with event: NSEvent) {
         if KeyboardFocus.isReturn(event) {
-            if login == nil, outcome != .connected { return onConnect() }
+            if login == nil, outcome == nil || isFailed(shownOutcome) { return onConnect() }
             if isAskingYesNo { return }
             return submitAnswer()
         }
@@ -184,16 +194,26 @@ final class HostConnectView: NSView, ThemeReapplying {
         guard login != self.login else { return }
         let asked = login?.question != self.login?.question
         let heldFocus = holdsFocus
+        let started = self.login == nil && login != nil
         self.login = login
         if asked { answerField.setText("") }
+        if started, outcome == nil { startRain() }
         applyStatus()
         if heldFocus, asked { window?.makeFirstResponder(focusTarget) }
     }
 
+    // The answer lands once the rain has run its minimum, and the words follow once the glyph has formed.
     func setOutcome(_ outcome: Outcome?) {
         guard outcome != self.outcome else { return }
         self.outcome = outcome
+        isAnswerShown = false
+        answers += 1
         applyStatus()
+        guard let outcome else { return stopRain() }
+        let answer = answers
+        let now = Self.now()
+        let lands = max(now, (rainStartedAt ?? now) + Motion.HostConnect.minimumRain)
+        Self.after(lands - now) { [weak self] in self?.land(outcome, answer: answer) }
     }
 
     func setStatus(_ status: SSHHostStatus) {
@@ -316,21 +336,71 @@ final class HostConnectView: NSView, ThemeReapplying {
         }
     }
 
-    private var shownOutcome: Outcome? { login == nil ? outcome : nil }
+    // A login that ended without failing was closed on purpose, so no answer is coming.
+    func abandonLogin() {
+        guard outcome == nil else { return }
+        stopRain()
+    }
+
+    private func startRain() {
+        let now = Self.now()
+        rainStartedAt = now
+        emblem.startRain(at: now)
+    }
+
+    private func stopRain() {
+        rainStartedAt = nil
+        emblem.show(nil)
+    }
+
+    private func land(_ outcome: Outcome, answer: Int) {
+        guard answer == answers else { return }
+        let now = Self.now()
+        let settles = emblem.resolve(to: Self.glyph(for: outcome), at: now)
+        rainStartedAt = nil
+        let wordsAfter = Motion.isReduceMotionEnabled() ? 0 : Motion.HostConnect.answerDelay
+        Self.after(wordsAfter) { [weak self] in self?.showAnswer(outcome, answer: answer) }
+        guard outcome == .connected else { return }
+        Self.after(settles - now + Motion.HostConnect.settledToHandOff) { [weak self] in
+            guard let self, answer == self.answers else { return }
+            self.onHandOff?()
+        }
+    }
+
+    private func showAnswer(_ outcome: Outcome, answer: Int) {
+        guard answer == answers else { return }
+        isAnswerShown = true
+        applyStatus()
+        Motion.slideFade(
+            statusLine, appearing: true, from: CGVector(dx: 0, dy: -ChromeMetrics.Spacing.s4),
+            duration: Motion.HostConnect.statusEntrance)
+        if isFailed(outcome) {
+            retryButton.wantsLayer = true
+            retryButton.layer?.opacity = 0
+            Self.after(Motion.HostConnect.actionDelay) { [weak self] in
+                guard let self, answer == self.answers else { return }
+                Motion.springScaleFade(self.retryButton, appearing: true)
+            }
+        }
+        onAnswerShown?(outcome)
+    }
+
+    private var shownOutcome: Outcome? { login == nil && isAnswerShown ? outcome : nil }
+
+    private var isAwaitingAnswer: Bool { login != nil || (outcome != nil && !isAnswerShown) }
 
     private func applyStatus() {
-        let connecting = login != nil
+        let connecting = isAwaitingAnswer
         let outcome = shownOutcome
         let settled = connecting || outcome != nil
         statusWord.stringValue =
             login?.question?.prompt.headline ?? statusText(connecting: connecting, outcome: outcome)
         onlineDot.isHidden = isOffline || settled
         emblem.setDimmed(isOffline && !settled)
-        emblem.show(outcome.map(Self.glyph))
         connectButton.isHidden = isOffline || settled
         connectAnywayButton.isHidden = !isOffline || settled
         retryButton.isHidden = !isFailed(outcome)
-        loginActions.isHidden = !connecting
+        loginActions.isHidden = login == nil
         trustButton.isHidden = !isAskingYesNo
         trustButton.setTitle(isAskingConfirm ? "Continue" : "Trust")
         applyQuestion()
