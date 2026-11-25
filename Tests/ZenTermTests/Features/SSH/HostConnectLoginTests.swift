@@ -487,6 +487,18 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertEqual(try sidebarDetail(in: c), "Connected")
     }
 
+    func test_aHostLeftWhileItConnects_stopsItsEmblemRaining() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let (c, _) = try loggingIn()
+        let emblem = try XCTUnwrap(c.connectViewForTesting).emblemForTesting
+        let local = try XCTUnwrap(c.workspaceIDsForTesting.first, "the window opened on a local workspace")
+        c.activateWorkspaceForTesting(local)
+
+        fake.connect()
+
+        XCTAssertFalse(emblem.isRainingForTesting, "nobody is watching, and no answer will land on it")
+    }
+
     func test_reapplyingTheThemeMidRain_keepsOneChainOfSegments() throws {
         Motion.isReduceMotionEnabled = { false }
         let (c, _) = try loggingIn()

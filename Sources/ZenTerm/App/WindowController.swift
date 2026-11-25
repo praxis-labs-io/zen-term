@@ -1604,6 +1604,7 @@ final class WindowController: NSObject {
             connectView.setOutcome(.connected)
         } else {
             SSHHostStatusCenter.shared.setConnecting(false, host: host)
+            if let connectView, connectView.host == host { connectView.abandonLogin() }
         }
         refreshConnectLogin()
         renderAttention()
