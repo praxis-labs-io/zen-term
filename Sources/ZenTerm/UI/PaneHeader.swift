@@ -110,7 +110,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
             let button = IconButton(
                 symbol: control.symbol,
                 size: NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs),
-                pointSize: ChromeMetrics.Icon.sm, accessibilityLabel: control.label,
+                pointSize: ChromeMetrics.Icon.xs, accessibilityLabel: control.label, restInk: .muted,
                 onClick: { [weak self] in self?.onControl(control) })
             button.firesOnRelease = true
             buttons[control] = button

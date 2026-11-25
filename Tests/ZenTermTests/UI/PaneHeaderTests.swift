@@ -78,6 +78,17 @@ final class PaneHeaderTests: WindowTestCase {
         XCTAssertEqual(chosen, [.splitVertical])
     }
 
+    func test_aControl_restsMuted_andLightsUnderThePointer() throws {
+        let (header, _) = mounted()
+        header.isActive = true
+        let button = try XCTUnwrap(header.buttonForTesting(.close))
+        XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.muted), "controls recede behind the name")
+
+        try enter(button)
+
+        XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.normal))
+    }
+
     func test_aNarrowHeader_dropsEveryControlButClose() {
         XCTAssertEqual(
             mounted().0.visibleControlsForTesting, [.splitHorizontal, .splitVertical, .focusMode, .close])
