@@ -11,9 +11,9 @@ protocol HoverSuppressing: NSView {
 }
 
 extension NSView {
-    func hoverSuppressingDescendants() -> [any HoverSuppressing] {
-        let own = (self as? any HoverSuppressing).map { [$0] } ?? []
-        return own + subviews.flatMap { $0.hoverSuppressingDescendants() }
+    func descendants<T>(ofType type: T.Type) -> [T] {
+        let own = (self as? T).map { [$0] } ?? []
+        return own + subviews.flatMap { $0.descendants(ofType: type) }
     }
 
     var pointerIsInside: Bool {

@@ -110,8 +110,11 @@ final class HostConnectInteractionTests: WindowTestCase {
         return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
     }
 
-    private func failureToastNames(_ host: String, in c: WindowController) -> Bool {
-        showsToast("Couldn't connect to", in: c) && showsToast(" \(host)", in: c)
+    private func showsFailure(_ detail: String? = nil, in c: WindowController) -> Bool {
+        guard let screen = c.connectViewForTesting, screen.emblemForTesting.glyphForTesting == .cross else {
+            return false
+        }
+        return detail.map { screen.detailForTesting == $0 } ?? true
     }
 
     private func longHostWindow() -> (WindowController, SSHHostID) {
@@ -151,6 +154,26 @@ final class HostConnectInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat("pi"))
         c.activate(host)
         return (c, pi)
+    }
+
+    func test_theEditHostChord_withAFloatOpenOverConnect_leavesTheFloatsChord() throws {
+        let (c, pi) = try piRunningHiddenOnConnect()
+        ask(pi)
+        c.handle(.toggleToolFloat("pi"))
+        XCTAssertTrue(c.floatsForTesting.isOpen, "precondition: the float is open over Connect")
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "e",
+                charactersIgnoringModifiers: "e", isARepeat: false, keyCode: 14))
+
+        _ = keys.route(event)
+
+        XCTAssertFalse(c.isModalOverlayOpen, "Edit host belongs to Connect, not the float over it")
+        XCTAssertTrue(c.floatsForTesting.isOpen)
     }
 
     private func ask(_ pi: RecordingSurface) {
@@ -193,7 +216,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         let screen = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertTrue(c.window.firstResponder === screen)
-        XCTAssertEqual(screen.titleForTesting, "Connect to devbox")
+        XCTAssertEqual(screen.nameForTesting, "devbox")
         XCTAssertEqual(c.tabOrderForTesting, [])
         XCTAssertEqual(c.window.title, "devbox")
     }
@@ -398,7 +421,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.tabOrderForTesting.count, 1)
     }
 
-    func test_aLoginThatEndsBeforeConnecting_returnsToConnect_andWarns() throws {
+    func test_aLoginThatEndsBeforeConnecting_returnsToConnect_andShowsItFailed() throws {
         let (c, login) = try connected()
         c.handle(.splitVertical)
         let waiting = try XCTUnwrap(spawned.last)
@@ -408,7 +431,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertTrue(failureToastNames("devbox", in: c))
+        XCTAssertTrue(showsFailure(in: c))
     }
 
     func test_reselectingAConnectedHost_landsOnItsWorkspace() throws {
@@ -472,11 +495,12 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(
             connection.isAwaitingLogin(on: c.floatsForTesting.surfaceID(ToolFloat.scratch.id)),
             "after a drop, Scratch is the surface that logs in again")
+        scratch.rows = ["devbox: Permission denied (publickey)."]
         scratch.delegate?.surfaceDidExit(scratch, code: 255)
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(failureToastNames("devbox", in: c))
+        XCTAssertTrue(showsFailure("devbox: Permission denied (publickey).", in: c))
     }
 
     func test_aConnectedHost_hidesYourToolFloatButtons_andALocalWorkspaceShowsThem() throws {
@@ -685,38 +709,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox:")
     }
 
-    func test_theConnectFailure_keepsItsTitleWhole_andTruncatesALongHostInTheMiddle() throws {
-        let (c, long) = longHostWindow()
-        spawned = []
-        c.handle(.newTab)
-        fake.ready?()
-        let login = try XCTUnwrap(spawned.first)
-
-        login.delegate?.surfaceDidExit(login, code: 255)
-        drainMainQueue()
-        c.window.contentView?.layoutSubtreeIfNeeded()
-
-        let toast = try XCTUnwrap(cards(in: c).first)
-        let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
-        let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.alias)" })
-        let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't connect to" })
-        XCTAssertGreaterThan(
-            lead.intrinsicContentSize.width + tail.intrinsicContentSize.width, toast.frame.width - 60,
-            "precondition: the two do not fit")
-        XCTAssertGreaterThanOrEqual(lead.frame.width, lead.intrinsicContentSize.width, "the title was cut")
-        XCTAssertLessThan(tail.frame.width, tail.intrinsicContentSize.width, "the host name should give way")
-        XCTAssertEqual(tail.lineBreakMode, NSLineBreakMode.byTruncatingMiddle)
-        XCTAssertLessThanOrEqual(tail.convert(tail.bounds, to: toast).maxX, toast.bounds.width)
-    }
-
-    func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillWarns() throws {
+    func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillShowsItFailed() throws {
         let (c, login) = try connected()
 
         login.delegate?.surfaceDidExit(login, code: 255)
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(failureToastNames("devbox", in: c))
+        XCTAssertTrue(showsFailure(in: c))
     }
 
     func test_closingTheLoginWhileConnecting_asksFirst_andChangesNothingUntilAnswered() throws {
@@ -742,7 +742,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.activeConnectionForTesting?.state, .connecting)
     }
 
-    func test_confirmingTheLoginClose_returnsToConnect_withoutAFailureToast() throws {
+    func test_confirmingTheLoginClose_returnsToConnect_withoutAFailure() throws {
         let (c, login) = try connected()
         c.handle(.splitVertical)
         let waiting = try XCTUnwrap(spawned.last)
@@ -756,7 +756,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertTrue(login.terminated)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertFalse(failureToastNames("devbox", in: c), "the user closed it; nothing failed")
+        XCTAssertFalse(showsFailure(in: c), "the user closed it; nothing failed")
     }
 
     func test_closingAWaitingPaneWhileConnecting_doesNotAsk() throws {
@@ -930,7 +930,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         fake.connect()
 
         XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
-        XCTAssertFalse(failureToastNames("devbox", in: c), "the user closed it", file: file, line: line)
+        XCTAssertFalse(showsFailure(in: c), "the user closed it", file: file, line: line)
         XCTAssertEqual(waiting?.startCount ?? 0, 0, "waiting panes never start", file: file, line: line)
     }
 
@@ -969,7 +969,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.isConfirmOpen, "Disconnect says what it does, so it never asks")
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertFalse(failureToastNames("devbox", in: c), "the user ended it")
+        XCTAssertFalse(showsFailure(in: c), "the user ended it")
         XCTAssertEqual(waiting.startCount, 0)
     }
 
@@ -1050,7 +1050,7 @@ final class HostConnectInteractionTests: WindowTestCase {
             pane.borderForTesting.width, ChromeMetrics.Border.paneFocus, "a pane beside the login keeps its halo")
         login.delegate?.surfaceDidExit(login, code: 255)
         drainMainQueue()
-        XCTAssertTrue(failureToastNames("devbox", in: c), "precondition: the login failed")
+        XCTAssertTrue(showsFailure(in: c), "precondition: the login failed")
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(try showsFocusHalo(c), "failed")
 
@@ -1120,11 +1120,12 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     func test_theConnectButton_isTheFilledPrimaryButton_withNoOutlineOfItsOwn() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
-        let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
+        let button = try XCTUnwrap(c.connectViewForTesting).actionButtonForTesting
+        XCTAssertEqual(button.title, "Connect")
 
         XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
-        XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
 
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
@@ -1196,29 +1197,108 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
     }
 
-    func test_anOnlineHost_saysItSignsInWithYourSSHConfig() throws {
-        SSHHostStatusCenter.shared.setReachable(true, host: host)
-        let c = onConnectScreen()
-
-        XCTAssertEqual(try XCTUnwrap(c.connectViewForTesting).detailForTesting, "Signs in with your ssh config.")
+    private func loadTheme(_ text: String) throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-connect-theme-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        try text.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
+        Theme.setCurrentForTesting(ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn))
     }
 
-    func test_anOfflineHost_offersToConnectAnyway() throws {
+    private func emblemColors(lit: CGColor, unlit: CGColor, _ emblem: HostEmblemView) -> [CGColor] {
+        emblem.litForTesting.map { $0 ? lit : unlit }
+    }
+
+    func test_anOnlineHost_readsOnline_withThePositiveDot_andConnect() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+
+        XCTAssertEqual(screen.statusForTesting, "Online")
+        XCTAssertTrue(screen.showsOnlineDotForTesting)
+        XCTAssertEqual(screen.onlineDotForTesting.colorForTesting, Theme.current.chrome.positive.nsColor.cgColor)
+        XCTAssertEqual(screen.actionButtonForTesting.title, "Connect")
+        XCTAssertNotNil(screen.actionButtonForTesting.window)
+    }
+
+    func test_anOfflineHost_readsOffline_withNoDot_aDimmedEmblem_andAFilledButNotAccentConnectAnyway() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let chrome = Theme.current.chrome
+
+        XCTAssertEqual(screen.statusForTesting, "Offline")
+        XCTAssertFalse(screen.showsOnlineDotForTesting)
+        let button = screen.actionButtonForTesting
+        XCTAssertEqual(button.title, "Connect Anyway")
+        XCTAssertNotNil(button.window, "the quiet button is the one on screen")
+        XCTAssertEqual(
+            button.layer?.backgroundColor, chrome.fill(.rest).cgColor, "a visible container, and not the accent fill")
+        let emblem = screen.emblemForTesting
+        XCTAssertEqual(
+            emblem.cellColorsForTesting,
+            emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
+    }
+
+    func test_returnOnAnOfflineHost_stillConnects() throws {
         let c = onConnectScreen()
 
-        XCTAssertEqual(
-            try XCTUnwrap(c.connectViewForTesting).detailForTesting, "devbox appears offline. Connect anyway?")
+        try press(36, "\r", in: c)
+        fake.ready?()
+
+        XCTAssertEqual(spawned.first?.lastConfig?.command, "/usr/bin/ssh")
+    }
+
+    func test_clickingConnectAnyway_connects() throws {
+        let c = onConnectScreen()
+
+        try press(button: "Connect Anyway", in: c)
+        fake.ready?()
+
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(spawned.first?.lastConfig?.command, "/usr/bin/ssh")
     }
 
     func test_aHostComingOnline_updatesTheConnectScreenItIsShowing() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        XCTAssertEqual(screen.detailForTesting, "devbox appears offline. Connect anyway?", "precondition: offline")
+        XCTAssertEqual(screen.statusForTesting, "Offline", "precondition: offline")
 
         SSHHostStatusCenter.shared.setReachable(true, host: host)
         drainMainQueue()
 
-        XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
+        let chrome = Theme.current.chrome
+        XCTAssertEqual(screen.statusForTesting, "Online")
+        XCTAssertTrue(screen.showsOnlineDotForTesting)
+        XCTAssertEqual(screen.actionButtonForTesting.title, "Connect")
+        XCTAssertNotNil(screen.actionButtonForTesting.window)
+        let emblem = screen.emblemForTesting
+        XCTAssertEqual(
+            emblem.cellColorsForTesting,
+            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
+    }
+
+    func test_theConnectScreen_showsNoKeyHints() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+
+        XCTAssertTrue(descendants(screen).allSatisfy { !($0 is HintFooter) })
+    }
+
+    func test_theEmblem_isTheAliasSignature_onTheChipTile() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        let c = onConnectScreen()
+        let emblem = try XCTUnwrap(c.connectViewForTesting).emblemForTesting
+        let chrome = Theme.current.chrome
+
+        XCTAssertEqual(emblem.litForTesting, HostSignature.cells(of: host))
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
+        XCTAssertTrue(emblem.hasSheenUnderCellsForTesting, "the tile carries the chips' sheen, below the dots")
+        XCTAssertEqual(emblem.frame.size, NSSize(width: HostEmblemView.tileSide, height: HostEmblemView.tileSide))
+        XCTAssertEqual(
+            emblem.cellColorsForTesting,
+            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
     }
 
     func test_theConnectScreen_showsWhereSSHWillSignIn_fromTheProbesResolution() throws {
@@ -1240,6 +1320,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     func test_clickingConnect_connects() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
 
         try press(button: "Connect", in: c)
@@ -1249,26 +1330,24 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(spawned.first?.lastConfig?.command, "/usr/bin/ssh")
     }
 
-    func test_aThemeChange_recolorsTheRoute() throws {
+    func test_aThemeChange_recolorsTheEmblem() throws {
         SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
-        let route = try XCTUnwrap(c.connectViewForTesting).routeForTesting
-        let strokeBefore = route.lineStrokeForTesting
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-connect-theme-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        try "background = #010101\nforeground = #fefefe\npalette = 2=#00ff00\n"
-            .write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
-        Theme.setCurrentForTesting(ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn))
+        let emblem = try XCTUnwrap(c.connectViewForTesting).emblemForTesting
+        let before = emblem.cellColorsForTesting
+        try loadTheme("background = #010101\nforeground = #fefefe\n")
 
         postConfigChange(.theme)
 
-        XCTAssertNotEqual(route.lineStrokeForTesting, strokeBefore)
-        XCTAssertEqual(route.lineStrokeForTesting, Theme.current.chrome.ink(.muted).cgColor)
+        let chrome = Theme.current.chrome
+        XCTAssertNotEqual(emblem.cellColorsForTesting, before)
+        XCTAssertEqual(
+            emblem.cellColorsForTesting,
+            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
     }
 
-    func test_atTheSmallestWindow_connectStaysOnScreen_andTheRouteGivesWay() throws {
+    func test_atTheSmallestWindow_connectStaysOnScreen_andTheEmblemGivesWay() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
         let content = try XCTUnwrap(c.window.contentView)
@@ -1277,33 +1356,28 @@ final class HostConnectInteractionTests: WindowTestCase {
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
         content.layoutSubtreeIfNeeded()
 
-        let button = screen.connectButtonForTesting
+        let button = screen.actionButtonForTesting
         let panel = screen.panelForTesting
         XCTAssertNotNil(button.window, "the button was detached")
         XCTAssertTrue(
             panel.bounds.contains(button.convert(button.bounds, to: panel)), "Connect is clipped off the screen")
         XCTAssertTrue(
-            screen.detachedForTesting.contains(screen.routeForTesting), "the route should give way before Connect does")
+            screen.detachedForTesting.contains(screen.emblemForTesting),
+            "the emblem should give way before Connect does")
     }
 
-    func test_aThemeChange_whileTheRouteGaveWay_recolorsItWhenTheWindowGrowsBack() throws {
+    func test_aThemeChange_whileTheEmblemGaveWay_recolorsItWhenTheWindowGrowsBack() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
         let content = try XCTUnwrap(c.window.contentView)
-        let route = screen.routeForTesting
+        let emblem = screen.emblemForTesting
         let fullSize = content.frame.size
         c.window.setContentSize(c.window.contentMinSize)
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
         content.layoutSubtreeIfNeeded()
-        XCTAssertTrue(screen.detachedForTesting.contains(route), "premise: the route gave way")
-        let strokeBefore = route.lineStrokeForTesting
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-connect-theme-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        try "background = #010101\nforeground = #fefefe\n"
-            .write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
-        Theme.setCurrentForTesting(ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn))
+        XCTAssertTrue(screen.detachedForTesting.contains(emblem), "premise: the emblem gave way")
+        let before = emblem.cellColorsForTesting
+        try loadTheme("background = #010101\nforeground = #fefefe\n")
 
         postConfigChange(.theme)
         c.window.setContentSize(fullSize)
@@ -1311,44 +1385,63 @@ final class HostConnectInteractionTests: WindowTestCase {
         content.layoutSubtreeIfNeeded()
 
         let chrome = Theme.current.chrome
-        XCTAssertNotNil(route.window, "premise: the route came back")
-        XCTAssertNotEqual(route.lineStrokeForTesting, strokeBefore)
-        XCTAssertEqual(route.lineStrokeForTesting, chrome.ink(.muted).cgColor)
-        for endpoint in [route.macForTesting, route.destinationForTesting] {
-            XCTAssertEqual(endpoint.tileFillForTesting, chrome.fill(.rest).cgColor)
-            XCTAssertEqual(endpoint.nameColorForTesting, chrome.ink(.muted))
-        }
+        XCTAssertNotNil(emblem.window, "premise: the emblem came back")
+        XCTAssertNotEqual(emblem.cellColorsForTesting, before)
+        XCTAssertEqual(
+            emblem.cellColorsForTesting,
+            emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
     }
 
-    func test_atTheNarrowestWidths_withTheWidestGutter_theScreenFitsTheWindow() throws {
+    func test_aLongNameAndAddress_truncateInsideTheColumn_atEveryWidth() throws {
         var config = GeneralConfig.current
         config.windowGutter = 64
         GeneralConfig.setCurrentForTesting(config)
-        let (c, _) = longHostWindow()
+        let (c, long) = longHostWindow()
+        SSHHostStatusCenter.shared.setDestination(
+            "deploy-automation@build-runner-07.internal.example-company.net", host: long)
+        addTeardownBlock { SSHHostStatusCenter.shared.setDestination(nil, host: long) }
+        drainMainQueue()
         let screen = try XCTUnwrap(c.connectViewForTesting)
         let content = try XCTUnwrap(c.window.contentView)
 
-        let widths = [(SidebarController.minimumDockableWidth, true), (c.window.contentMinSize.width, false)]
+        let widths = [
+            (1200, true), (SidebarController.minimumDockableWidth, true), (c.window.contentMinSize.width, false),
+        ]
         for (width, docked) in widths {
             c.window.setContentSize(NSSize(width: width, height: 800))
             c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
             content.layoutSubtreeIfNeeded()
             XCTAssertEqual(c.sidebarForTesting.isDocked, docked, "precondition at \(width)")
 
-            let route = screen.routeForTesting
-            XCTAssertNotNil(route.window, "precondition: tall enough to keep the route at \(width)")
-            let routeFrame = route.convert(route.bounds, to: content)
             let panelFrame = screen.panelForTesting.convert(screen.panelForTesting.bounds, to: content)
             XCTAssertEqual(content.bounds.width, width, "the screen pushed the window's content wider at \(width)")
             XCTAssertLessThanOrEqual(panelFrame.maxX, width, "the screen runs off the window at \(width)")
-            XCTAssertLessThanOrEqual(routeFrame.maxX, panelFrame.maxX, "the route runs off the screen at \(width)")
-            XCTAssertGreaterThanOrEqual(routeFrame.minX, panelFrame.minX, "the route runs off the screen at \(width)")
-            let detail = screen.detailFieldForTesting
-            XCTAssertGreaterThanOrEqual(
-                detail.frame.height, detail.intrinsicContentSize.height, "the detail is cut short at \(width)")
-            XCTAssertLessThanOrEqual(
-                detail.intrinsicContentSize.width, detail.frame.width + 1,
-                "the detail wraps wider than it is at \(width)")
+            for field in [screen.nameFieldForTesting, screen.addressFieldForTesting] {
+                let frame = field.convert(field.bounds, to: content)
+                let laidOut = field.alignmentRect(forFrame: field.frame)
+                XCTAssertLessThanOrEqual(laidOut.width, 420, "\(field.stringValue) is wider than the column")
+                XCTAssertLessThanOrEqual(frame.maxX, panelFrame.maxX, "\(field.stringValue) runs off at \(width)")
+                XCTAssertGreaterThanOrEqual(frame.minX, panelFrame.minX, "\(field.stringValue) runs off at \(width)")
+            }
         }
+        XCTAssertEqual(screen.nameFieldForTesting.lineBreakMode, .byTruncatingTail)
+        XCTAssertEqual(screen.addressFieldForTesting.lineBreakMode, .byTruncatingMiddle)
+    }
+
+    func test_aFloatOverConnect_veilsTheConnectPanel() throws {
+        let (c, pi) = try piRunningHiddenOnConnect()
+        ask(pi)
+        let panel = try XCTUnwrap(
+            c.connectViewForTesting?.descendants(ofType: PanelHostView.self).first)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertTrue(c.floatsForTesting.isOpen, "premise: pi is over Connect")
+        XCTAssertTrue(panel.isVeiledForTesting)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertFalse(panel.isVeiledForTesting)
     }
 }

@@ -16,6 +16,8 @@
             filledField.setText("api-server")
             let focusedField = FieldBox(placeholder: "Workspace name")
             focusedField.forceFocusForGallery()
+            let hiddenField = FieldBox(placeholder: "Password", hidesText: true)
+            hiddenField.setText("correct horse")
             let focusedArea = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
             focusedArea.forceFocusForGallery()
             let area = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
@@ -30,6 +32,7 @@
                     GallerySection.Row(label: "Field placeholder", samples: [sized(field)]),
                     GallerySection.Row(label: "Field filled", samples: [sized(filledField)]),
                     GallerySection.Row(label: "Field focused", samples: [sized(focusedField)]),
+                    GallerySection.Row(label: "Field hiding its text", samples: [sized(hiddenField)]),
                     GallerySection.Row(label: "Area placeholder", samples: [sized(area)]),
                     GallerySection.Row(label: "Area filled", samples: [sized(filledArea)]),
                     GallerySection.Row(label: "Area focused", samples: [sized(focusedArea)]),

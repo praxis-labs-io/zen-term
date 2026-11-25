@@ -568,7 +568,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `link`, `quietLink` for a dismissing link beside another; an optional shortcut keycap inside),
+  `link`, `quietLink` for a dismissing link beside another; text or a symbol, never a keycap),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop, or one pinned where it would center at full height (Esc goes
@@ -587,7 +587,7 @@ New modal surfaces compose the existing primitives.
   shortcut.
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
-  `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
+  `ModalShell.submitButton` is the primary button, bound to ⌘Return. A failed submit
   or delete (a config write, git, the browser) shows in a `FormErrorLabel` above the action
   bar, never a toast.
 - **Popovers:** `ListPopover` is every anchored list (dropdowns, `BranchField`, the sidebar
@@ -666,7 +666,9 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   down and right do nothing. It has no tab, so dispatch drops any chord that is not
   `worksWithoutTab`, except ⌘T,
   which connects, ⌘W, which lands where a close of the last workspace row would (or, with no
-  workspace left, confirms and closes the window as the last pane does), and a float toggle, which opens or closes only a running
+  workspace left, confirms and closes the window as the last pane does), ⌘E (Find Selection),
+  which opens the host's edit form (with no float open) and returns to Connect when it saves or
+  cancels, or to Settings when it removes the host, and a float toggle, which opens or closes only a running
   float that is open or needs you and is silent otherwise, and a card stays open for a chord it
   would drop. App-global
   chords bypass it in `AppDelegate.route`; a palette pick
@@ -864,16 +866,23 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
   a network change is dropped and asked again. A connected host is re-resolved the same way, without a
   probe. A host reads Offline until the probe reaches it,
-  and a connected host takes its status from the connection, not the probe.
+  and a connected host takes its status from the connection, not the probe. A first login behind
+  Connect reads Connecting in every window until it ends, or once connected, until Connect says so.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
-  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its host
-  tile carries no badge.
+  destination the probe resolved from the same `ssh -G`. It runs no ssh of its own; what it shows
+  of a login comes from that login's connection. Its emblem
+  (`HostSignature`) is drawn from the ssh alias, never the display name, so renaming a host keeps it.
+  While a first login runs, the emblem rains (`HostEmblemMotion`, sampled into keyframe tracks a
+  segment at a time, so it never repeats); the answer lands no sooner than `Motion.HostConnect.minimumRain`
+  after Connect, settles into a check or ×, and the words follow once the glyph has formed. Under
+  Reduce Motion the signature holds still and cross-fades to the answer. A login closed without
+  failing (Cancel, Disconnect, a removed host) puts the signature back.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
-  first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
+  first), `ControlPersist=60` and `ConnectTimeout=30` (which overrides a host's own), as `xterm-256color` with busy tracking off (a remote shell
   sends no prompt marks). With `-t` it runs `exec env COLORTERM=… TERM_PROGRAM=…
   TERM_PROGRAM_VERSION=… "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude
   reports progress only to a ghostty it recognises, and ssh forwards none of them without the
@@ -886,7 +895,27 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   the host disconnected. The check runs before the login launches and again when the socket
   appears; a socket that refuses the connection is stale and is removed, and anything else is
   left alone. A login that ends before the socket drops the waiting surfaces and
-  closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
+  closes the workspace back to Connect, which shows it failed with a plain headline over ssh's
+  reason (`SSHFailureReason`): the last line the login's terminal showed (the line before
+  ProxyJump's closing one), read when its surface exits, since the surface is freed before the
+  connection hears the login ended. A bare `Connection closed by … port N` says nothing, so
+  Connect reads "Couldn't connect" with no reason beneath. A
+  failure while that host's Connect isn't the screen showing also toasts, since nothing else says it.
+- **A host's first login runs behind its Connect screen, which answers ssh's questions.** The
+  workspace is installed but never selected while `SSHConnection.isLoggingInBehindConnect`, so the
+  login surface starts detached; every path into it (`activate`, `reveal`, `land`, a removed
+  host's landing, the control socket) shows Connect instead, and the first connect mounts it only
+  when Connect for that host is still showing, with `MountTransition.fade` once the answer has settled
+  (`Motion.handOff`: Connect fades and shrinks as the terminal fades in above it). That login's ssh runs `zen` as `SSH_ASKPASS` with
+  `SSH_ASKPASS_REQUIRE=force` and a per-login token, and `ssh.askpass` hands each question to the
+  connection, which Connect asks in plain words in its one message line (`SSHLoginPrompt`). A new
+  host key gets Trust or Cancel and any other yes/no gets ssh's own words with Continue or Cancel,
+  never free text, since ssh re-asks forever on any other answer. Cancel (⎋) removes the workspace,
+  because a failed askpass only makes ssh ask again; ↵ answers a secret, never says yes (Trust and
+  Continue take a click or Tab), and never cancels. Connect polls the last few lines of the login's terminal while it waits,
+  since a detached surface reports no scroll, and shows the latest one the screen doesn't already
+  say as its detail line (`SSHLoginOutput`). A login
+  after a drop, or with no `zen` beside the app, prompts in its own pane as before. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
   on Connect reconnects. A host leaving the `ssh-host` lines, from Settings or a hand edit, disconnects in every

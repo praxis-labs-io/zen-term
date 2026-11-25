@@ -92,7 +92,7 @@ brand's fill and glyph colors belong to the brand, not the theme, so they stay t
 every theme. They live in `ProcessIcon`'s registry and nowhere else; no call site names
 one. Everything else comes from the system: the shape (`Radius.icon(_:)`, continuous
 corners), the size and mark box (`IconBadge.Size`), the edge (`fill(alpha:)` with `border`,
-at `Border.width`) and the sheen, a fixed alpha mask lit from the top that every chip shares.
+at `Border.width`) and the sheen (`ChipSheen`), a fixed alpha mask lit from the top that every chip shares, and an SSH host's emblem tile in a longer, lighter spread.
 A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
 step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
 program runs, so a resting shell and a worktree are never branded. A purpose tint names a
@@ -190,10 +190,15 @@ tool float's terminal host keeps the terminal background.
 A drawn shadow (one outside a see-through card) reads `FloatShadow.color(_:)` and the
 tier's `contextBlur` and `offset`.
 
+While a tool float or float pane is up, each pane under it fades toward its own background
+through `PaneVeilView`, at `ChromeTheme.paneVeil` as a layer opacity. The gaps between panes
+stay as they are. Palettes, menus and forms do not veil.
+
 ## Motion
 
 Animation goes through `Motion`. Its helpers check Reduce Motion themselves, except
-`drawerSlide`, whose callers do. Under Reduce Motion a completion runs synchronously.
+`drawerSlide`, whose callers do. Under Reduce Motion a completion runs synchronously, except
+`slideFade`'s and `handOff`'s, which still fade.
 
 | Token or helper | For |
 |---|---|
@@ -204,10 +209,12 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
 | `springScaleFade` | Modals, toasts and floats appearing and leaving |
 | `fade` | Plain opacity changes, tooltips and the link preview |
-| `crossfade` | A process chip swapping its mark when its program changes |
+| `crossfade` | A process chip swapping its mark when its program changes; with `whenReduced`, a dissolve that stands in for movement |
+| `HostConnect` | The SSH host Connect screen's choreography: the emblem's rain and answer, the words after it, and the hand-off to the terminal |
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
+| `handOff` | An SSH host's Connect screen giving way to its terminal |
 | `slideFade` | The collapsed sidebar's hover reveal, the find bar and the mode header |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
@@ -228,11 +235,13 @@ A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowVi
 
 The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; a workspace picker row's icon is plain (`ListRow.Leading.symbol`). A row's detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
-A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 
 A form or row's message line is a `FormErrorLabel`, in its destructive, warning or muted tone.
+
+A centered message that wraps is a `BalancedLabel`: its lines come out of similar width, and it never truncates.
 
 A mark on a rounded chip is an `IconBadge`: tinted by one role, or a process chip (see
 [Process chips](#process-chips)).

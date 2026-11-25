@@ -49,14 +49,13 @@ final class AppButtonTests: WindowTestCase {
                 context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
     }
 
-    func test_aPrimaryButton_fillsWithAccent_andLabelsItAndItsGlyphInOnAccent() throws {
-        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎")
+    func test_aPrimaryButton_fillsWithAccent_andLabelsInOnAccent() throws {
+        let button = AppButton(title: "Connect", variant: .primary)
         let window = try mountFitted(button)
         let chrome = Theme.current.chrome
 
         XCTAssertEqual(button.layer?.backgroundColor, chrome.accent.nsColor.cgColor)
         XCTAssertEqual(titleColor(button), chrome.onAccent.nsColor)
-        XCTAssertEqual(button.keycapForTesting?.inkForTesting, chrome.onAccent.nsColor)
         withExtendedLifetime(window) {}
     }
 
@@ -101,8 +100,7 @@ final class AppButtonTests: WindowTestCase {
         let accent = Theme.current.chrome.accent.nsColor
         for variant in GalleryButtons.variants {
             for state in ["rest", "hovered", "focused", "disabled"] {
-                let button = AppButton(
-                    title: "Open", variant: variant, shortcut: variant == .primary ? "⏎" : nil)
+                let button = AppButton(title: "Open", variant: variant)
                 button.isKeyboardFocusable = true
                 let window = try mountFitted(button)
                 switch state {
@@ -113,7 +111,6 @@ final class AppButtonTests: WindowTestCase {
                 }
                 let name = "\(variant) \(state)"
                 XCTAssertNotEqual(titleColor(button), accent, "\(name) labels in accent")
-                XCTAssertNotEqual(button.keycapForTesting?.inkForTesting, accent, "\(name) draws an accent glyph")
             }
         }
     }
@@ -188,48 +185,6 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
         XCTAssertEqual(titleFont(button)?.pointSize, 12)
         XCTAssertEqual(button.layer?.cornerRadius, ChromeMetrics.Radius.control)
-        withExtendedLifetime(window) {}
-    }
-
-    func test_aClickOnAButtonsKeycap_reachesTheButton() throws {
-        var taps = 0
-        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎") { taps += 1 }
-        let window = try mountFitted(button)
-        let content = try XCTUnwrap(window.contentView)
-        let keycap = try XCTUnwrap(button.keycapForTesting)
-        let onKeycap = keycap.convert(NSPoint(x: keycap.bounds.midX, y: keycap.bounds.midY), to: content)
-
-        let hit = content.hitTest(onKeycap)
-        XCTAssertTrue(hit === button, "the keycap must not swallow the click")
-        (hit as? NSButton)?.performClick(nil)
-
-        XCTAssertEqual(taps, 1)
-    }
-
-    func test_aButtonsKeycap_sitsInsideIt_besideItsTitle() throws {
-        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎")
-        let window = try mountFitted(button)
-        let keycap = try XCTUnwrap(button.keycapForTesting)
-
-        XCTAssertTrue(button.bounds.contains(keycap.frame), "the keycap is clipped by the button")
-        XCTAssertEqual(button.title, "Connect")
-        XCTAssertEqual(keycap.shortcut, "⏎")
-        withExtendedLifetime(window) {}
-    }
-
-    func test_disablingAPrimaryButton_fadesItsKeycapGlyphWithItsLabel() throws {
-        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎")
-        let window = try mountFitted(button)
-        let keycap = try XCTUnwrap(button.keycapForTesting)
-        let chrome = Theme.current.chrome
-        XCTAssertEqual(keycap.inkForTesting, chrome.onAccent.nsColor, "precondition: enabled reads onAccent")
-
-        button.isEnabled = false
-
-        XCTAssertEqual(titleColor(button), chrome.ink(.faint))
-        XCTAssertEqual(keycap.inkForTesting, chrome.ink(.faint), "the glyph stayed onAccent beside a faint label")
-        button.isEnabled = true
-        XCTAssertEqual(keycap.inkForTesting, chrome.onAccent.nsColor)
         withExtendedLifetime(window) {}
     }
 

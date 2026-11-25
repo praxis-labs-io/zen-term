@@ -281,6 +281,8 @@ final class TabController: NSObject {
 
     var onSurfacesReleased: (([SurfaceID]) -> Void)?
 
+    var onSurfaceExited: ((TerminalSurface) -> Void)?
+
     /// A drawer came on screen, so whatever it was asking has now been seen.
     var onSurfaceShown: ((SurfaceID) -> Void)?
 
@@ -343,6 +345,7 @@ final class TabController: NSObject {
         paneCanvas.onProgramLaunched = { [weak self] id, command in self?.onProgramLaunched?(id, command) }
         paneCanvas.onSurfacesRegistered = { [weak self] ids in self?.onSurfacesRegistered?(ids) }
         paneCanvas.onSurfacesReleased = { [weak self] ids in self?.onSurfacesReleased?(ids) }
+        paneCanvas.onSurfaceExited = { [weak self] s in self?.onSurfaceExited?(s) }
         paneCanvas.onSurfaceEvent = { [weak self] surface, event in
             self?.onSurfaceEvent?(surface, event)
         }
@@ -359,6 +362,7 @@ final class TabController: NSObject {
         paneFloats.onProgramLaunched = { [weak self] id, command in self?.onProgramLaunched?(id, command) }
         paneFloats.onSurfacesRegistered = { [weak self] ids in self?.onSurfacesRegistered?(ids) }
         paneFloats.onSurfacesReleased = { [weak self] ids in self?.onSurfacesReleased?(ids) }
+        paneFloats.onSurfaceExited = { [weak self] s in self?.onSurfaceExited?(s) }
         paneFloats.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
 
@@ -1268,6 +1272,8 @@ extension TabController: TerminalSurfaceDelegate {
         }
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onSurfaceExited?(s)
         if s === bottomDrawerSurface {
             closeDrawer(.bottom)
         } else if s === rightDrawerSurface {

@@ -4,6 +4,9 @@ import Foundation
 public enum ControlEndpoint {
     public static let environmentKey = "ZEN_CONTROL_SOCK"
 
+    /// Set only for a host login's ssh: the token `ssh.askpass` must carry, and the sign that `zen` runs as its askpass.
+    public static let askpassTokenKey = "ZEN_ASKPASS_TOKEN"
+
     public static let fileNamePrefix = "control."
     public static let fileNameSuffix = ".sock"
 

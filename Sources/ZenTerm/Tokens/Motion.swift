@@ -145,6 +145,52 @@ enum Motion {
         }
     }
 
+    // Under Reduce Motion the incoming view still fades in, shorter, over an outgoing one that holds still.
+    static func handOff(outgoing: NSView?, incoming: NSView, completion: @escaping () -> Void) {
+        typealias Timing = HostConnect
+        incoming.wantsLayer = true
+        outgoing?.wantsLayer = true
+        guard let inLayer = incoming.layer else { return completion() }
+        let reduced = isReduceMotionEnabled()
+        inLayer.opacity = 1
+        let fadeIn = CABasicAnimation(keyPath: "opacity")
+        fadeIn.fromValue = 0
+        fadeIn.toValue = 1
+        fadeIn.duration = reduced ? Timing.reducedTerminalFade : Timing.terminalFadeIn
+        fadeIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        let pop = Spring.make(keyPath: "transform")
+        pop.fromValue = NSValue(caTransform3D: centeredScale(entranceScale, in: inLayer.bounds))
+        pop.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        if !reduced {
+            inLayer.transform = CATransform3DIdentity
+            for entering in [fadeIn, pop] {
+                entering.beginTime = inLayer.convertTime(CACurrentMediaTime(), from: nil) + Timing.terminalDelay
+                entering.fillMode = .backwards
+            }
+        }
+        let outLayer = reduced ? nil : outgoing?.layer
+        let shrunk = outLayer.map { centeredScale(Timing.handOffScale, in: $0.bounds) }
+        outLayer?.opacity = 0
+        if let shrunk { outLayer?.transform = shrunk }
+        let fadeOut = CABasicAnimation(keyPath: "opacity")
+        fadeOut.fromValue = 1
+        fadeOut.toValue = 0
+        let shrink = CABasicAnimation(keyPath: "transform")
+        shrink.fromValue = NSValue(caTransform3D: CATransform3DIdentity)
+        shrink.toValue = shrunk.map { NSValue(caTransform3D: $0) }
+        for leaving in [fadeOut, shrink] {
+            leaving.duration = Timing.handOffFadeOut
+            leaving.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        }
+
+        run(completion: completion) {
+            inLayer.add(fadeIn, forKey: "motion.opacity")
+            if !reduced { inLayer.add(pop, forKey: "motion.transform") }
+            outLayer?.add(fadeOut, forKey: "motion.opacity")
+            outLayer?.add(shrink, forKey: "motion.transform")
+        }
+    }
+
     static func drawerSlide(
         panel: NSView, opening: Bool, parkOffset: CGVector,
         animate: [(constraint: NSLayoutConstraint, to: CGFloat)], in root: NSView,
@@ -246,11 +292,12 @@ enum Motion {
     }
 
     // Dissolves the layer's next change of content, so a swapped image and fill fade rather than cut.
-    static func crossfade(_ layer: CALayer) {
-        guard !isReduceMotionEnabled() else { return }
+    // A dissolve that stands in for movement asks to run under Reduce Motion too.
+    static func crossfade(_ layer: CALayer, duration: CFTimeInterval = fadeDuration, whenReduced: Bool = false) {
+        guard whenReduced || !isReduceMotionEnabled() else { return }
         let dissolve = CATransition()
         dissolve.type = .fade
-        dissolve.duration = fadeDuration
+        dissolve.duration = duration
         layer.add(dissolve, forKey: "motion.crossfade")
     }
 

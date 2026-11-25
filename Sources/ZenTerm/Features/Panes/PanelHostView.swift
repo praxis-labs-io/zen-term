@@ -12,6 +12,8 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     private let clip = NSView()
     private let content: NSView
     private let ring = RingFillView()
+    // A sibling above `clip`, not inside it: a mode strip mounts into `clip` later and would land above it.
+    private let veil = PaneVeilView()
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
     // Content that isn't a terminal paints no background of its own, so a translucent panel fills it whole.
@@ -100,6 +102,9 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         ring.contentView = content
         clip.addSubview(ring)
         clip.addSubview(content)
+        veil.translatesAutoresizingMaskIntoConstraints = false
+        veil.cornerRadius = Self.cornerRadius
+        pane.addSubview(veil)
         applyBackground()
 
         pane.translatesAutoresizingMaskIntoConstraints = false
@@ -112,6 +117,10 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
             clip.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
             clip.topAnchor.constraint(equalTo: pane.topAnchor),
             clip.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
+            veil.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            veil.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            veil.topAnchor.constraint(equalTo: pane.topAnchor),
+            veil.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
             ring.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
             ring.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
             ring.topAnchor.constraint(equalTo: clip.topAnchor),
@@ -131,6 +140,15 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         super.layout()
         ring.needsDisplay = true
     }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        veil.setRaised((window as? HostWindow)?.floatCoversPanes ?? false, animated: false)
+    }
+
+    func floatCoverDidChange(_ covered: Bool) { veil.setRaised(covered, animated: true) }
+
+    var isVeiledForTesting: Bool { veil.isRaised }
 
     var backgroundOverride: TerminalColor? {
         didSet {
@@ -185,6 +203,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         pane.layer?.cornerRadius = radius
         clip.layer?.cornerRadius = radius
         ring.cornerRadius = radius
+        veil.cornerRadius = radius
     }
 
     /// Translucent, the clip stops filling, or it repaints the terminal background behind a see-through surface.
@@ -197,6 +216,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         ring.isHidden = isSolid || fillsContent
         ring.color = translucent
         chrome.findBarFill = isSolid ? background : ring.color
+        veil.color = background
     }
 
     private func updateBorder() {

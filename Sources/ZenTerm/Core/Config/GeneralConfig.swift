@@ -114,9 +114,11 @@ struct GeneralConfig: Equatable {
 
     var sshHostAliases: [String] { sshHosts.map(\.alias) }
 
-    func displayName(of host: SSHHostID) -> String {
-        sshHosts.first { $0.alias == host.alias }?.displayName ?? host.alias
+    func sshHost(_ host: SSHHostID) -> SSHHostEntry {
+        sshHosts.first { $0.alias == host.alias } ?? SSHHostEntry(alias: host.alias)
     }
+
+    func displayName(of host: SSHHostID) -> String { sshHost(host).displayName }
 
     var terminalBehavior: TerminalBehavior {
         TerminalBehavior(

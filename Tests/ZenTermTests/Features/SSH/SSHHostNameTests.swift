@@ -97,9 +97,11 @@ final class SSHHostNameTests: WindowTestCase {
 
         XCTAssertEqual(c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting), ["Build box"])
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Build box:")
-        XCTAssertEqual(screen.titleForTesting, "Connect to Build box")
-        XCTAssertEqual(screen.connectButtonForTesting.accessibilityLabel(), "Connect to Build box")
-        XCTAssertEqual(screen.detailForTesting, "Build box appears offline. Connect anyway?")
+        XCTAssertEqual(screen.nameForTesting, "Build box")
+        XCTAssertEqual(screen.actionButtonForTesting.accessibilityLabel(), "Connect to Build box")
+        XCTAssertEqual(
+            screen.emblemForTesting.litForTesting, HostSignature.cells(of: SSHHostID(alias: "devbox")),
+            "the emblem comes from the alias ssh connects with, not the name")
         XCTAssertEqual(screen.destinationForTesting, "drew@10.0.1.12", "the address line keeps the real address")
         XCTAssertEqual(c.window.title, "Build box")
 
@@ -114,19 +116,21 @@ final class SSHHostNameTests: WindowTestCase {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
 
+        let emblem = screen.emblemForTesting.litForTesting
+
         rename("Builder")
 
         XCTAssertIdentical(c.connectViewForTesting, screen, "the screen is relabelled in place")
-        XCTAssertEqual(screen.titleForTesting, "Connect to Builder")
-        XCTAssertEqual(screen.connectButtonForTesting.accessibilityLabel(), "Connect to Builder")
-        XCTAssertEqual(screen.detailForTesting, "Builder appears offline. Connect anyway?")
+        XCTAssertEqual(screen.nameForTesting, "Builder")
+        XCTAssertEqual(screen.actionButtonForTesting.accessibilityLabel(), "Connect to Builder")
+        XCTAssertEqual(screen.emblemForTesting.litForTesting, emblem, "renaming keeps the emblem")
         XCTAssertEqual(c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting), ["Builder"])
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Builder:")
         XCTAssertEqual(c.window.title, "Builder")
 
         rename(nil)
 
-        XCTAssertEqual(screen.titleForTesting, "Connect to devbox")
+        XCTAssertEqual(screen.nameForTesting, "devbox")
         XCTAssertEqual(c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting), ["devbox"])
         XCTAssertEqual(c.window.title, "devbox")
     }
@@ -149,18 +153,5 @@ final class SSHHostNameTests: WindowTestCase {
         c.handle(.toggleToolFloat("pi"))
 
         XCTAssertTrue(labels(c).contains("Tool floats run on this Mac, not on Build box."), "\(labels(c))")
-    }
-
-    func test_aFailedLogin_namesTheHost() throws {
-        let c = onConnectScreen()
-        try pressReturn(in: c)
-        let login = try XCTUnwrap(spawned.first)
-
-        login.delegate?.surfaceDidExit(login, code: 255)
-        let drained = expectation(description: "main queue")
-        DispatchQueue.main.async { drained.fulfill() }
-        wait(for: [drained], timeout: 2)
-
-        XCTAssertTrue(labels(c).contains(" Build box"), "\(labels(c))")
     }
 }

@@ -1,3 +1,4 @@
+import ControlProtocol
 import CryptoKit
 import Foundation
 import TerminalKit
@@ -16,6 +17,9 @@ enum SSHLaunch {
     static let controlPathBudget = 86
 
     static let controlPersistSeconds = 60
+
+    // Without it, an offline host waits out the system's TCP timeout, over a minute.
+    static let connectTimeoutSeconds = 30
 
     static var socketDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -42,6 +46,7 @@ enum SSHLaunch {
             "-o", "ControlMaster=auto",
             "-o", controlPathOption(controlPath),
             "-o", "ControlPersist=\(controlPersistSeconds)",
+            "-o", "ConnectTimeout=\(connectTimeoutSeconds)",
         ]
         switch form {
         case .loginShell: return options + ["-t", "--", host.alias, loginShellCommand]
@@ -79,6 +84,22 @@ enum SSHLaunch {
 
     private static func controlPathOption(_ controlPath: URL) -> String {
         "ControlPath=\"\(controlPath.path.replacingOccurrences(of: "%", with: "%%"))\""
+    }
+
+    static let askpassKey = "SSH_ASKPASS"
+    static let askpassRequirementKey = "SSH_ASKPASS_REQUIRE"
+
+    // ssh asks askpass only when it has no tty, unless this forces it.
+    static func askpassEnvironment(program: URL, token: String) -> [String: String] {
+        [askpassKey: program.path, askpassRequirementKey: "force", ControlEndpoint.askpassTokenKey: token]
+    }
+
+    // `zen` ships beside the app binary, and `bin/run` builds it beside the dev one.
+    static func askpassProgram(beside executable: URL? = Bundle.main.executableURL) -> URL? {
+        guard let program = executable?.deletingLastPathComponent().appendingPathComponent("zen"),
+            FileManager.default.isExecutableFile(atPath: program.path)
+        else { return nil }
+        return program
     }
 
     static var workingDirectory: URL { ShellLaunch.defaultCWD }

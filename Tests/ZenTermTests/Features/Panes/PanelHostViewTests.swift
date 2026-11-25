@@ -180,4 +180,34 @@ final class PanelHostViewTests: WindowTestCase {
         panel.isZoomed = true
         XCTAssertFalse(panel.isHeaderVisibleForTesting)
     }
+
+    func test_aRaisedVeil_leavesThePaneTakingClicks() {
+        let content = NSView()
+        let panel = PanelHostView(content: content, meta: nil, onFocusRequest: {})
+        mount(panel)
+        let center = NSPoint(x: 150, y: 100)
+
+        XCTAssertTrue(panel.window?.contentView?.hitTest(center) === content, "at rest")
+
+        panel.floatCoverDidChange(true)
+
+        XCTAssertTrue(panel.isVeiledForTesting)
+        XCTAssertTrue(
+            panel.window?.contentView?.hitTest(center) === content,
+            "the veil sits frontmost, so taking the hit would kill clicks, drags and scroll in every pane")
+    }
+
+    func test_aPaneAttachedWhileAFloatCoversTheWindow_comesUpVeiled() {
+        let window = HostWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400))
+        window.floatCoversPanes = true
+        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+
+        window.contentView?.addSubview(panel)
+
+        XCTAssertTrue(panel.isVeiledForTesting, "a split or a remounted tab under a float reads the window's state")
+
+        window.floatCoversPanes = false
+
+        XCTAssertFalse(panel.isVeiledForTesting)
+    }
 }

@@ -25,6 +25,7 @@ final class PaneFloats: NSObject {
 
     var onSurfacesRegistered: (([SurfaceID]) -> Void)?
     var onSurfacesReleased: (([SurfaceID]) -> Void)?
+    var onSurfaceExited: ((TerminalSurface) -> Void)?
     var onPaneTokensReleased: (([Int]) -> Void)?
     var onLaunchedPaneExited: ((LaunchedPaneExit) -> Void)?
     var onProgramLaunched: ((SurfaceID, String) -> Void)?
@@ -151,6 +152,7 @@ extension PaneFloats: TerminalSurfaceDelegate {
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let token = entry(of: s)?.token else { return }
+        onSurfaceExited?(s)
         guard exitHold.closesOnExit(token) else { return close(token: token) }
         exitHold.recordExit(token, lastLines: s.text(lastLines: LaunchedExitHold<Int>.tailLines))
         if exitHold.hasMark(token) { return closeExited(token) }

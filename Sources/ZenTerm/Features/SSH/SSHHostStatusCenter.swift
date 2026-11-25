@@ -13,9 +13,12 @@ final class SSHHostStatusCenter {
 
     private var reachable: Set<SSHHostID> = []
     private var connected: Set<SSHHostID> = []
+    private var connecting: Set<SSHHostID> = []
     private var destinations: [SSHHostID: String] = [:]
 
+    // A login still on its Connect screen reads connecting even once its socket is up, until the screen says so.
     func status(of host: SSHHostID) -> SSHHostStatus {
+        if connecting.contains(host) { return .connecting }
         if connected.contains(host) { return .connected }
         return reachable.contains(host) ? .online : .offline
     }
@@ -26,6 +29,12 @@ final class SSHHostStatusCenter {
         }
     }
 
+    func setConnecting(_ isConnecting: Bool, host: SSHHostID) {
+        announcingChange(of: host) {
+            if isConnecting { connecting.insert(host) } else { connecting.remove(host) }
+        }
+    }
+
     func setReachable(_ isReachable: Bool, host: SSHHostID) {
         announcingChange(of: host) {
             if isReachable { reachable.insert(host) } else { reachable.remove(host) }
@@ -33,6 +42,9 @@ final class SSHHostStatusCenter {
     }
 
     func destination(of host: SSHHostID) -> String? { destinations[host] }
+
+    // A destination that only repeats the alias tells the reader nothing, so it is no address.
+    func address(of host: SSHHostID) -> String? { destination(of: host).flatMap { $0 == host.alias ? nil : $0 } }
 
     func setDestination(_ destination: String?, host: SSHHostID) {
         guard destinations[host] != destination else { return }

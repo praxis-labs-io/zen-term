@@ -44,6 +44,7 @@ struct ControlResponder {
         case .worktreeCreate: createWorktree(request, reply: reply)
         case .worktreeRemove: removeWorktree(request, reply: reply)
         case .action: reply(performAction(request))
+        case .sshAskpass: askLogin(request, hangup: hangup, reply: reply)
         }
     }
 

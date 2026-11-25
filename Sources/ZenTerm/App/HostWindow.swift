@@ -10,7 +10,14 @@ final class HostWindow: NSWindow {
     var hoverCover: NSView? {
         didSet {
             guard hoverCover !== oldValue else { return }
-            contentView?.hoverSuppressingDescendants().forEach { $0.hoverCoverDidChange() }
+            contentView?.descendants(ofType: (any HoverSuppressing).self).forEach { $0.hoverCoverDidChange() }
+        }
+    }
+
+    var floatCoversPanes = false {
+        didSet {
+            guard floatCoversPanes != oldValue else { return }
+            contentView?.descendants(ofType: PanelHostView.self).forEach { $0.floatCoverDidChange(floatCoversPanes) }
         }
     }
 

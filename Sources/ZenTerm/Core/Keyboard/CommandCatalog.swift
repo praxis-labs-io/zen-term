@@ -133,7 +133,19 @@ enum CommandCatalog {
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .dismissToast, .dismissAllToasts, .reportIssue,
         ]
-        return chords.map { onHost && $0 == .closeWorkspace ? disconnect : spec(for: $0) }
+        let onConnect = onHost && tabCount == 0
+        return chords.map {
+            switch $0 {
+            case .closeWorkspace where onHost: disconnect
+            case .searchSelection where onConnect: editHost
+            default: spec(for: $0)
+            }
+        }
+    }
+
+    // A host's Connect screen has no terminal to find in, so the chord edits the host instead.
+    private static var editHost: PaletteCommand {
+        workspace("Edit Host…", displayGlyph(for: .searchSelection), .searchSelection)
     }
 
     private static var disconnect: PaletteCommand {

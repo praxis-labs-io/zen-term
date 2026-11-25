@@ -34,12 +34,6 @@ final class IconBadge: NSView, ThemeReapplying {
         case process(ProcessIcon)
     }
 
-    // Light from above to a shade at the foot: an alpha mask, not a color, the same on every theme.
-    private static let sheenColors = [
-        NSColor(white: 1, alpha: 0.2), NSColor(white: 1, alpha: 0), NSColor(white: 0, alpha: 0.2),
-    ].map(\.cgColor)
-    private static let sheenStops: [NSNumber] = [0, 0.45, 1]
-
     private let icon = NSImageView()
     private let size: Size
     private var fill: Fill
@@ -71,9 +65,7 @@ final class IconBadge: NSView, ThemeReapplying {
         layer?.cornerRadius = ChromeMetrics.Radius.icon(size.side)
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
-        sheenLayer.locations = Self.sheenStops
-        sheenLayer.startPoint = CGPoint(x: 0.5, y: 1)
-        sheenLayer.endPoint = CGPoint(x: 0.5, y: 0)
+        ChipSheen.shape(sheenLayer, .chip)
         sheen.layer = sheenLayer
         sheen.wantsLayer = true
         sheen.frame = bounds
@@ -153,13 +145,15 @@ final class IconBadge: NSView, ThemeReapplying {
                 icon.contentTintColor = hue.nsColor
             }
             layer?.backgroundColor = fill.cgColor
-            sheenLayer.colors = Self.sheenColors
+            sheenLayer.colors = ChipSheen.colors(.chip)
         }
     }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
     var edgeForTesting: CGColor? { (layer?.borderWidth ?? 0) > 0 ? layer?.borderColor : nil }
-    var hasSheenForTesting: Bool { sheen.superview === self && sheenLayer.colors?.count == Self.sheenColors.count }
+    var hasSheenForTesting: Bool {
+        sheen.superview === self && sheenLayer.colors?.count == ChipSheen.colors(.chip).count
+    }
     var sheenLitFromTopForTesting: Bool { sheenLayer.startPoint.y > sheenLayer.endPoint.y && !sheen.isFlipped }
     var iconTintForTesting: NSColor? { icon.contentTintColor }
     var iconImageForTesting: NSImage? { icon.image }

@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import ControlProtocol
 import TabKit
 import TerminalKit
@@ -43,6 +44,7 @@ final class ControlSSHHostTests: WindowTestCase {
         controllers = []
         spawned = []
         SSHConnection.watchersOverrideForTesting = nil
+        SSHConnection.askpassProgramOverrideForTesting = nil
         SSHHostStatusCenter.shared.setConnected(false, host: host)
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
@@ -121,8 +123,8 @@ final class ControlSSHHostTests: WindowTestCase {
         ControlAddress.tab(window: c.windowID, tab: tab.raw)
     }
 
-    private func showsFailureToast(_ c: WindowController) -> Bool {
-        toastTexts(in: c).contains("Couldn't connect to")
+    private func showsFailure(_ c: WindowController) -> Bool {
+        c.connectViewForTesting?.emblemForTesting.glyphForTesting == .cross
     }
 
     private func holdingOnlyTheHost(_ c: WindowController, login: () throws -> RecordingSurface) throws
@@ -146,7 +148,7 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNotNil(c.connectViewForTesting)
     }
 
-    func test_workspaceCloseWhileConnecting_returnsToConnectWithoutAFailureToast() throws {
+    func test_workspaceCloseWhileConnecting_returnsToConnectWithoutAFailure() throws {
         let c = makeWindow()
         let login = try loggingIn(c)
 
@@ -155,7 +157,7 @@ final class ControlSSHHostTests: WindowTestCase {
 
         XCTAssertNil(c.activeConnectionForTesting)
         XCTAssertEqual(c.selectedHostForTesting, host)
-        XCTAssertFalse(showsFailureToast(c))
+        XCTAssertFalse(showsFailure(c))
     }
 
     func test_tabCloseOfTheLoginWhileConnecting_refusesNamingTheHost_thenForceAbandonsQuietly() throws {
@@ -178,7 +180,7 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNil(c.activeConnectionForTesting)
         XCTAssertEqual(c.selectedHostForTesting, host)
         XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
-        XCTAssertFalse(showsFailureToast(c))
+        XCTAssertFalse(showsFailure(c))
     }
 
     func test_paneCloseOfTheLoginInASplitTab_refuses() throws {
@@ -516,5 +518,66 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(opened.lastConfig?.command, "/usr/bin/ssh")
         XCTAssertEqual(opened.lastConfig?.backingScale, c.window.backingScaleFactor)
         XCTAssertEqual(c.activeTabIDForTesting, showing)
+    }
+
+    func test_anUnknownAskpassTokenIsNotFound() throws {
+        let c = makeWindow()
+        _ = try loggingIn(c)
+
+        let refused = try error(send(.sshAskpass, ControlArgs(token: "guess", prompt: "Password: ", sshPID: 1)))
+
+        XCTAssertEqual(refused.code, .notFound)
+    }
+
+    func test_aPasswordRelayedOverTheSocket_reachesSSH_andNeverTheLog() throws {
+        let secret = "sentinel-\(UUID().uuidString)"
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("zt-askpass-log-\(getpid())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let previousSink = Log.fileSink
+        Log.fileSink = LogFileSink(directory: directory, fileName: "test.log", maxBytes: 1 << 20, maxFiles: 2)
+        defer {
+            Log.fileSink = previousSink
+            try? FileManager.default.removeItem(at: directory)
+        }
+        SSHConnection.askpassProgramOverrideForTesting = .some(URL(fileURLWithPath: "/tmp/zen"))
+        let c = makeWindow()
+        let login = try loggingIn(c)
+        let token = try XCTUnwrap(login.lastConfig?.environment[ControlEndpoint.askpassTokenKey])
+        let path = "/tmp/zt-askpass-\(getpid()).sock"
+        let responder = self.responder
+        let server = ControlServer(path: path) { request, hangup, reply in
+            responder.respond(to: request, hangup: hangup, reply: reply)
+        }
+        server.start()
+        defer { server.stop() }
+
+        let answered = expectation(description: "askpass answered")
+        var line = ""
+        DispatchQueue.global().async {
+            defer { answered.fulfill() }
+            guard let fd = try? UnixSocket.connect(to: path) else { return }
+            defer { close(fd) }
+            let request = ControlRequest(
+                id: 1, cmd: .sshAskpass, args: ControlArgs(token: token, prompt: "devbox's password: ", sshPID: 9))
+            guard let data = try? ControlWire.line(request), UnixSocket.writeAll(data, to: fd) else { return }
+            var bytes = Data()
+            var byte: UInt8 = 0
+            while read(fd, &byte, 1) == 1, byte != 0x0A { bytes.append(byte) }
+            line = String(decoding: bytes, as: UTF8.self)
+        }
+        let connection = try XCTUnwrap(c.connectionForTesting(of: host))
+        let deadline = Date().addingTimeInterval(5)
+        while connection.question == nil, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+        XCTAssertEqual(
+            connection.question, SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false))
+        connection.answer(AskpassAnswer(secret))
+        wait(for: [answered], timeout: 5)
+
+        XCTAssertTrue(line.contains(secret), line)
+        Log.fileSink?.flush()
+        let logged = (try? String(contentsOf: directory.appendingPathComponent("test.log"), encoding: .utf8)) ?? ""
+        XCTAssertTrue(logged.contains("ssh.askpass"), "the server logs the command, so the sink was live")
+        XCTAssertFalse(logged.contains(secret))
+        XCTAssertFalse(logged.contains("devbox's password"))
     }
 }
