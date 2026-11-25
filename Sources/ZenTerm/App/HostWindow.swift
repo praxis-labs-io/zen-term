@@ -56,7 +56,10 @@ final class HostWindow: NSWindow {
         isOpaque = false
         backgroundColor = .clear
         setWindowButtonsHidden(!GeneralConfig.current.windowChrome)
-        for name in [NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification, NSWindow.didDeminiaturizeNotification] {
+        for name in [
+            NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification,
+            NSWindow.didDeminiaturizeNotification,
+        ] {
             NotificationCenter.default.addObserver(
                 self, selector: #selector(titlebarWasLaidOut), name: name, object: self)
         }
