@@ -485,6 +485,18 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertEqual(try sidebarDetail(in: c), "Connected")
     }
 
+    func test_reapplyingTheThemeMidRain_keepsOneChainOfSegments() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let (c, _) = try loggingIn()
+        let emblem = try XCTUnwrap(c.connectViewForTesting).emblemForTesting
+        let before = emblem.segmentsPlayedForTesting
+
+        emblem.reapplyTheme()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+
+        XCTAssertLessThanOrEqual(emblem.segmentsPlayedForTesting - before, 1, "a replaced segment must not chain again")
+    }
+
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {
         SSHConnection.askpassProgramOverrideForTesting = .some(nil)
         let (c, login) = try loggingIn()

@@ -4,6 +4,8 @@ extension Motion {
     // The SSH host Connect screen's choreography, from Connect through the emblem's answer to the terminal.
     enum HostConnect {
         static let minimumRain: TimeInterval = 0.7
+        static let rainSegment: TimeInterval = 2
+        static let framesPerSecond: Double = 30
         static let letGoWindow: TimeInterval = 0.85
         static let dropGap: ClosedRange<TimeInterval> = 0.055...0.195
         static let dropRise: TimeInterval = 0.2

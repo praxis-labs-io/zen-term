@@ -6,8 +6,6 @@ final class HostEmblemView: NSView, ThemeReapplying {
     private static let cellSide: CGFloat = 7
     private static let cellRadius = ChromeMetrics.Radius.icon(cellSide)
     private static let cellGap = ChromeMetrics.Spacing.s4
-    private static let framesPerSecond = 30.0
-    private static let rainSegment: TimeInterval = 2
     private static let levelKey = "emblem.level"
     private static let colorKey = "emblem.color"
 
@@ -31,6 +29,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
     private var glyph: HostEmblemGlyph?
     private var run: Run?
     private var runs = 0
+    private var segmentsPlayed = 0
 
     init(host: SSHHostID) {
         lit = HostSignature.cells(of: host)
@@ -119,6 +118,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
         let off = chrome.fill(.active).cgColor
         cells.forEach { $0.backgroundColor = off }
         if let run {
+            runs += 1
             let now = CACurrentMediaTime()
             guard run.glyph != nil else { return playRain(from: now, generation: runs) }
             let settles = run.startedAt + (run.motion.settledAt ?? 0)
@@ -150,13 +150,14 @@ final class HostEmblemView: NSView, ThemeReapplying {
 
     private func playRain(from start: CFTimeInterval, generation: Int) {
         guard let run, run.glyph == nil, generation == runs else { return }
-        let end = start + Self.rainSegment
+        segmentsPlayed += 1
+        let end = start + Motion.HostConnect.rainSegment
         play(run, from: start, to: end) { [weak self] in self?.playRain(from: end, generation: generation) }
     }
 
     private func play(_ run: Run, from start: CFTimeInterval, to end: CFTimeInterval, then next: (() -> Void)? = nil) {
         let palette = palette(for: run.glyph)
-        let steps = max(1, Int(((end - start) * Self.framesPerSecond).rounded(.up)))
+        let steps = max(1, Int(((end - start) * Motion.HostConnect.framesPerSecond).rounded(.up)))
         let times = (0...steps).map { start + (end - start) * Double($0) / Double(steps) }
         let keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
         let begin = layer?.convertTime(start, from: nil) ?? start
@@ -225,6 +226,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
     var litForTesting: [Bool] { lit }
     var glyphForTesting: HostEmblemGlyph? { glyph }
     var isRainingForTesting: Bool { run != nil && run?.glyph == nil }
+    var segmentsPlayedForTesting: Int { segmentsPlayed }
     var cellColorsForTesting: [CGColor?] {
         lights.map { $0.opacity > 0 ? $0.backgroundColor : cells.first?.backgroundColor }
     }
