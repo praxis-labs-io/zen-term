@@ -124,6 +124,19 @@ final class SSHConnection {
     // Only a first login asks through the Connect screen; a login after a drop runs in a pane already on screen.
     var asksThroughConnect: Bool { askpassProgram != nil && !hasConnected }
 
+    var isLoggingInBehindConnect: Bool { asksThroughConnect && state == .connecting && !isShutDown }
+
+    // libghostty runs ssh under login(1), which prints its own line before ssh writes anything.
+    private static let loginBanner = "Last login:"
+
+    func loginOutput(limit: Int) -> [String] {
+        guard let text = login?.surface?.text(lastLines: limit * 4) else { return [] }
+        let lines = text.split(whereSeparator: \.isNewline)
+            .map { $0.replacingOccurrences(of: "\r", with: "").trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix(Self.loginBanner) }
+        return Array(lines.suffix(limit))
+    }
+
     func answersAskpass(_ token: String) -> Bool {
         guard let askpassToken, !isShutDown, state == .connecting else { return false }
         let expected = Array(askpassToken.utf8)

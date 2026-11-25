@@ -565,7 +565,7 @@ final class ControlSSHHostTests: WindowTestCase {
             while read(fd, &byte, 1) == 1, byte != 0x0A { bytes.append(byte) }
             line = String(decoding: bytes, as: UTF8.self)
         }
-        let connection = try XCTUnwrap(c.activeConnectionForTesting)
+        let connection = try XCTUnwrap(c.connectionForTesting(of: host))
         let deadline = Date().addingTimeInterval(5)
         while connection.question == nil, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
         XCTAssertEqual(

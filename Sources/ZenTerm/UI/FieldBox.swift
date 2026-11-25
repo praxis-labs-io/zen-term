@@ -12,9 +12,13 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onBacktab: (() -> Void)?
     var onEndEditing: (() -> Void)?
     var onSubmit: (() -> Void)?
+    var onEscape: (() -> Void)?
 
     var text: String { editor?.string ?? field.stringValue }
-    func setText(_ value: String) { field.stringValue = value }
+    func setText(_ value: String) {
+        field.stringValue = value
+        editor?.string = value
+    }
 
     // Retained because `placeholderString` reads nil once `placeholderAttributedString` is set.
     private(set) var placeholder: String
@@ -119,6 +123,9 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         case #selector(NSResponder.insertBacktab(_:)):
             guard let onBacktab else { return false }
             onBacktab()
+        case #selector(NSResponder.cancelOperation(_:)):
+            guard let onEscape else { return false }
+            onEscape()
         default:
             return false
         }
