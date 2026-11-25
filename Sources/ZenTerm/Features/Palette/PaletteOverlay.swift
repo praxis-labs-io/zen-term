@@ -34,7 +34,7 @@ class SelectableRowView: ListRow, PaletteRowView {
         }
     }
 
-    init(_ content: Content, detail: String = "") {
+    init(_ content: Content) {
         super.init(content) {}
         detailLabel.font = ChromeType.font(.caption)
         detailLabel.alignment = .right
@@ -46,7 +46,7 @@ class SelectableRowView: ListRow, PaletteRowView {
         NSLayoutConstraint.activate([
             detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth), detailFloor,
         ])
-        self.detail = detail
+        detail = ""
         accessories = [detailLabel]
         applyDetailInk()
     }
@@ -66,7 +66,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     static let actionsHint = HintFooter.Hint(keys: "⌘K", label: "Actions")
     private static let returnKey = "⏎"
     private static let searchInset = ChromeMetrics.Spacing.s12
-    // NSStackView holds the search row's vertical insets at 250, so the list yields first only from below that.
+    // Below every other vertical constraint in the card, so a short window shrinks the list before anything else.
     private static let listHeightPriority = NSLayoutConstraint.Priority(
         NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
 

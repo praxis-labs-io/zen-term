@@ -365,4 +365,38 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertFalse(after.contains(original), "the picker is still offering the chord that moved")
         XCTAssertTrue(after.contains(rebound.displayGlyph), "the rebind never reached the New Workspace row")
     }
+
+    func test_keymapChange_reachesTheRepoPickersBar() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-fanout-picker-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        tempRoots.append(root)
+        try "[Alpha]\npath = ~/Dev/alpha\n".write(
+            to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+        ConfigLoader.defaultRootOverrideForTesting = root
+        addTeardownBlock { ConfigLoader.defaultRootOverrideForTesting = nil }
+        let picker = try openRepoPicker()
+        func selectAlpha() {
+            for _ in 0..<picker.numberOfRows() where picker.createTarget?.workspace.title != "Alpha" {
+                _ = picker.control(
+                    NSTextField(), textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+            }
+        }
+        func barKeys(_ label: String) -> String? {
+            picker.barHintsForTesting.first { $0.label == label }?.keys
+        }
+        selectAlpha()
+        var config = GeneralConfig.current
+        let original = try XCTUnwrap(Chord.displayed(.createWorktree, in: config.keymap)?.displayGlyph)
+        XCTAssertEqual(barKeys("New Worktree"), original, "premise: the bar names the default chord")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.rebind(.createWorktree, to: rebound)
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
+        selectAlpha()
+
+        XCTAssertEqual(barKeys("New Worktree"), rebound.displayGlyph, "the bar still names the chord that moved")
+    }
 }

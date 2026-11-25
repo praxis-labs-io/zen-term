@@ -34,6 +34,7 @@ final class HintFooter: NSView, ThemeReapplying {
             hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width + ChromeMetrics.Height.lg),
             pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
+            pairs.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: trailingInset),
             pairs.centerYAnchor.constraint(
                 equalTo: centerYAnchor, constant: ChromeMetrics.Border.width / 2),
         ])
@@ -60,6 +61,8 @@ final class HintFooter: NSView, ThemeReapplying {
         let label = NSTextField(labelWithString: hint.label)
         label.font = ChromeType.font(.caption, weight: .medium)
         label.textColor = Theme.current.chrome.ink(.muted)
+        label.lineBreakMode = .byTruncatingTail
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         labels.append(label)
         let item = NSStackView(views: [label, keycap])
         item.orientation = .horizontal

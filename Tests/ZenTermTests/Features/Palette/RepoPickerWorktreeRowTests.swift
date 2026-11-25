@@ -525,6 +525,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
         XCTAssertFalse(hintIsShown("New Worktree", in: overlay))
+        XCTAssertTrue(hintIsShown("Add Workspace", in: overlay), "Return on the add row adds, it opens nothing")
+        XCTAssertFalse(hintIsShown("Open", in: overlay))
     }
 
     func test_theReturnHint_namesWhatTheSelectedRowDoes() {

@@ -430,7 +430,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     override func returnAction(at index: Int) -> String? {
-        if case .newWorkspace = rows[index] { return "New Workspace" }
+        switch rows[index] {
+        case .newWorkspace: return "New Workspace"
+        case .add: return "Add Workspace"
+        default: break
+        }
         return openState(row: rows[index]) == .closed ? "Open" : "Switch"
     }
 
