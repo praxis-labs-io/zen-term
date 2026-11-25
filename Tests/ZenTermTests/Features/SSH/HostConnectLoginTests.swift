@@ -497,6 +497,20 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertLessThanOrEqual(emblem.segmentsPlayedForTesting - before, 1, "a replaced segment must not chain again")
     }
 
+    func test_leavingForAnotherHost_beforeTheAnswerShows_stillClearsConnecting() throws {
+        var config = GeneralConfig.current
+        config.sshHosts.append(SSHHostEntry(alias: "other"))
+        GeneralConfig.setCurrentForTesting(config)
+        let (c, _) = try loggingIn()
+        HostConnectView.after = { _, _ in }
+
+        fake.connect()
+        XCTAssertEqual(try sidebarDetail(in: c), "Connecting", "precondition: the answer has not shown")
+        c.activate(SSHHostID(alias: "other"))
+
+        XCTAssertEqual(try sidebarDetail(in: c), "Connected")
+    }
+
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {
         SSHConnection.askpassProgramOverrideForTesting = .some(nil)
         let (c, login) = try loggingIn()

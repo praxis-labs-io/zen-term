@@ -936,9 +936,9 @@ final class WindowController: NSObject {
     }
 
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
-        if let connectView, connectView.host == host {
-            if loginOutputTicker == nil { refreshConnectLogin() }
-            return connectView
+        if let connectView, connectView.host == host { return connectView }
+        if let left = connectView?.host, !workspaces.contains(where: { $0.host == left && isBehindConnect($0) }) {
+            SSHHostStatusCenter.shared.setConnecting(false, host: left)
         }
         let view = HostConnectView(
             host: host, name: GeneralConfig.current.displayName(of: host),
