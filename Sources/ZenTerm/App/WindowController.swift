@@ -1528,6 +1528,7 @@ final class WindowController: NSObject {
     private func closeHostWorkspace(_ workspace: WorkspaceController, returningTo host: SSHHostID) {
         workspaces.removeAll { $0 === workspace }
         workspace.shutdown()
+        SSHHostStatusCenter.shared.setConnecting(false, host: host)
         guard workspace === activeWorkspace else { renderAttention(); return }
         selection = .host(host)
         mount(.instant)
@@ -1565,11 +1566,13 @@ final class WindowController: NSObject {
         workspaces.append(workspace)
         installController(id: tab, in: workspace, cwd: nil, config: nil)
         guard connection.isLoggingInBehindConnect else { return activate(workspace.id, transition: .instant) }
+        SSHHostStatusCenter.shared.setConnecting(true, host: host)
         refreshConnectLogin()
         renderAttention()
     }
 
     private func loginConnected(_ workspace: WorkspaceController, on host: SSHHostID) {
+        SSHHostStatusCenter.shared.setConnecting(false, host: host)
         refreshConnectLogin()
         guard case .host(let shown) = selection, shown == host, workspaces.contains(where: { $0 === workspace })
         else { return renderAttention() }
@@ -1578,6 +1581,7 @@ final class WindowController: NSObject {
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?, reason: String?) {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) { closeTab($0) } }
+        SSHHostStatusCenter.shared.setConnecting(false, host: host)
         if let connectView, connectView.host == host { connectView.setOutcome(.failed(reason: reason)) }
         refreshConnectLogin()
     }
@@ -4932,7 +4936,10 @@ final class WindowController: NSObject {
         hostStatusObserver = nil
         floats.shutdown()
         sidebar.shutdown()
-        for workspace in workspaces { workspace.shutdown() }
+        for workspace in workspaces {
+            workspace.shutdown()
+            workspace.host.map { SSHHostStatusCenter.shared.setConnecting(false, host: $0) }
+        }
         onClosed?()
     }
 }

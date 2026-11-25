@@ -859,7 +859,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
   a network change is dropped and asked again. A connected host is re-resolved the same way, without a
   probe. A host reads Offline until the probe reaches it,
-  and a connected host takes its status from the connection, not the probe.
+  and a connected host takes its status from the connection, not the probe. A first login behind
+  Connect reads Connecting in every window until Connect shows its answer.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
   destination the probe resolved from the same `ssh -G`. It runs no ssh of its own; what it shows
   of a login comes from that login's connection. Its emblem

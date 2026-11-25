@@ -13,9 +13,12 @@ final class SSHHostStatusCenter {
 
     private var reachable: Set<SSHHostID> = []
     private var connected: Set<SSHHostID> = []
+    private var connecting: Set<SSHHostID> = []
     private var destinations: [SSHHostID: String] = [:]
 
+    // A login still on its Connect screen reads connecting even once its socket is up, until the screen says so.
     func status(of host: SSHHostID) -> SSHHostStatus {
+        if connecting.contains(host) { return .connecting }
         if connected.contains(host) { return .connected }
         return reachable.contains(host) ? .online : .offline
     }
@@ -23,6 +26,12 @@ final class SSHHostStatusCenter {
     func setConnected(_ isConnected: Bool, host: SSHHostID) {
         announcingChange(of: host) {
             if isConnected { connected.insert(host) } else { connected.remove(host) }
+        }
+    }
+
+    func setConnecting(_ isConnecting: Bool, host: SSHHostID) {
+        announcingChange(of: host) {
+            if isConnecting { connecting.insert(host) } else { connecting.remove(host) }
         }
     }
 

@@ -45,6 +45,7 @@ final class HostConnectLoginTests: WindowTestCase {
         SSHConnection.watchersOverrideForTesting = nil
         SSHConnection.askpassProgramOverrideForTesting = nil
         SSHHostStatusCenter.shared.setConnected(false, host: host)
+        SSHHostStatusCenter.shared.setConnecting(false, host: host)
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         WindowController.isPresent = originalPresence
@@ -412,6 +413,33 @@ final class HostConnectLoginTests: WindowTestCase {
         let view = try XCTUnwrap(c.connectViewForTesting, "the retry runs behind Connect too")
         XCTAssertEqual(view.statusForTesting, "Connecting…")
         XCTAssertNil(view.emblemForTesting.glyphForTesting)
+    }
+
+    private func sidebarDetail(in c: WindowController) throws -> String? {
+        try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == host.alias })
+            .detailForTesting
+    }
+
+    func test_theSidebarRowReadsConnecting_untilTheLoginConnects() throws {
+        let (c, _) = try loggingIn()
+        XCTAssertEqual(try sidebarDetail(in: c), "Connecting")
+
+        fake.connect()
+
+        XCTAssertEqual(try sidebarDetail(in: c), "Connected")
+    }
+
+    func test_theSidebarRowStopsReadingConnecting_whenTheLoginFailsOrIsCancelled() throws {
+        let (c, login) = try loggingIn()
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+        XCTAssertNotEqual(try sidebarDetail(in: c), "Connecting", "failed")
+
+        try send(keyCode: 36, "\r", in: c)
+        fake.ready?()
+        XCTAssertEqual(try sidebarDetail(in: c), "Connecting", "precondition: retrying")
+        try pressEscape(in: c)
+        XCTAssertNotEqual(try sidebarDetail(in: c), "Connecting", "cancelled")
     }
 
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {
