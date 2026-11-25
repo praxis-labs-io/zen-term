@@ -436,7 +436,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   a process run from a plain shell, or one with no agent left anywhere above it, has no row.
   Ownership passes through any open pane, so a process under a helper whose agent left still
   lists under the agent above that helper. A helper whose agent is gone lists top-level as an agent. A family sorts by its most
-  urgent member.
+  urgent member. The agent picker (⌘⇧O) shows these same items, re-read on every render while it is open, grouped
+  under each family head's place in sidebar order; ↵ is the row's jump, except it never hides a shown float.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
@@ -480,7 +481,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 | Fill Screen | `WindowController` | per window |
 | Sidebar | `SidebarController` | per window |
 | Tool floats | `ToolFloatController` | per window (Scratch per tab) |
-| Settings, palette, workspace picker | `WindowController.modal` | per window |
+| Settings, palette, workspace and agent pickers | `WindowController.modal` | per window |
 | Toasts | `ToastPresenter` | per window |
 | Close and quit confirms | `WindowController.confirmCard` | per window |
 | Terminal font size | `SessionFontSize` | per app |
@@ -573,7 +574,7 @@ New modal surfaces compose the existing primitives.
   back one step, a click outside closes the stack; a form whose inputs differ from its opening
   snapshot asks first, and its Cancel button never asks), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
-- **Palette panels provide content only.** The command palette and workspace picker subclass
+- **Palette panels provide content only.** The command palette, workspace picker and agent picker subclass
   `PaletteOverlay` and supply `numberOfRows`, `makeRow`, `rowIdentity`, `isSelectable`,
   `applyFilter`, `activate`, `returnAction`, `shortcutHints`, `hasMoreActions` and
   `searchAccessory`. Rows are `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns

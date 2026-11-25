@@ -26,7 +26,9 @@ final class SettingsKeybindsSection: SettingsSection {
         (
             "Workspaces",
             [.toggleRepoPicker, .newWorkspace, .createWorktree, .removeWorktree, .prevWorkspace, .nextWorkspace]
-                + (1...9).map { .selectWorkspace($0) } + [.renameWorkspace, .closeWorkspace, .nextWaitingAgent]
+                + (1...9).map { .selectWorkspace($0) } + [
+                    .renameWorkspace, .closeWorkspace, .nextWaitingAgent, .toggleAgentPicker,
+                ]
         ),
         (
             "Tabs",

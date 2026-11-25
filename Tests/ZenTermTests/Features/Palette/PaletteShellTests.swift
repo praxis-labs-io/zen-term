@@ -236,6 +236,11 @@ final class PaletteShellTests: WindowTestCase {
             PaletteCommand(title: "Command \($0)", shortcut: "", category: "Tabs", chord: .newTab)
         }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("zenterm-shell-\(UUID().uuidString)")
+        let agents = (1...30).map {
+            SidebarAgentItem(
+                id: SurfaceID(raw: $0), state: .idle, summary: "Agent \($0)", detail: "Work", message: nil,
+                place: SidebarAgentItem.Place(name: "Work", order: 0))
+        }
         let panels: [(name: String, overlay: PaletteOverlay)] = [
             ("palette", CommandPaletteOverlay(commands: { commands }, onRun: { _ in }, onDismiss: {})),
             (
@@ -247,6 +252,7 @@ final class PaletteShellTests: WindowTestCase {
                     },
                     onChoose: { _, _ in }, onAddWorkspace: {}, onDismiss: {})
             ),
+            ("agent picker", AgentPickerOverlay(items: agents, onFocus: { _ in }, onDismiss: {})),
             ("minimal panel", makeLongStub()),
         ]
 

@@ -91,6 +91,7 @@ enum CommandCatalog {
         case .closeWorkspace: return workspace("Close Workspace", glyph, chord)
         case .renameWorkspace: return workspace("Rename Workspace…", glyph, chord)
         case .nextWaitingAgent: return workspace("Jump to Waiting Agent", glyph, chord)
+        case .toggleAgentPicker: return workspace("Open Agent Picker", glyph, chord)
         }
     }
 
@@ -108,7 +109,7 @@ enum CommandCatalog {
         }
         if !onHost { chords += [.renameWorkspace] }
         if !onHost || tabCount > 0 { chords += [.closeWorkspace] }
-        chords += [.nextWaitingAgent]
+        chords += [.nextWaitingAgent, .toggleAgentPicker]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,

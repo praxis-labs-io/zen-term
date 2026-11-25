@@ -7,6 +7,12 @@ struct SidebarAgentItem: Equatable {
         case process
     }
 
+    // What the row's second line names: a workspace, or a tab-less float's title, in sidebar order.
+    struct Place: Hashable {
+        let name: String
+        let order: Int
+    }
+
     let id: SurfaceID
     let state: AttentionTone
     let summary: String
@@ -16,6 +22,9 @@ struct SidebarAgentItem: Equatable {
     var startedBy: String?
     var process = ProcessIcon.unknownAgent
     var canClose = false
+    var place = Place(name: "", order: Int.max)
+    // The agent's name where its chip is the robot, which cannot say which agent it is.
+    var agentLabel: String?
 }
 
 // The Agents list's own ordering, and the state a row speaks since its title never names it.
@@ -47,33 +56,20 @@ extension SidebarAgentItem {
 }
 
 final class SidebarAgentRow: SidebarJumpRow {
-    private let glyphSlot = NSView()
-    private let dot = StateDot()
-    private let spinner = Spinner()
+    private let stateGlyph = AgentStateGlyph()
     private var item: SidebarAgentItem?
     private lazy var heightPin = heightAnchor.constraint(equalToConstant: Self.height)
 
     static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
     private static let processJumpHint = "Jump to process"
-    private static let glyphSize = NSSize(width: 14, height: 16)
 
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: Self.jumpHint, onActivate: onActivate)
 
-        spinner.role = \.working
-        for glyph in [dot, spinner] {
-            glyph.translatesAutoresizingMaskIntoConstraints = false
-            glyphSlot.addSubview(glyph)
-            glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor).isActive = true
-        }
-        NSLayoutConstraint.activate([
-            heightPin,
-            glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
-            glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
-        ])
-        accessories = [glyphSlot]
-        centerOnTitleLine([dot, spinner])
+        heightPin.isActive = true
+        accessories = [stateGlyph]
+        centerOnTitleLine(stateGlyph.marks)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -93,13 +89,11 @@ final class SidebarAgentRow: SidebarJumpRow {
             Self.spokenProgram(item), item.showsState ? item.state.accessibilityName : nil, item.detail, startedBy,
         ]
         setAccessibilityValue(speaks.compactMap { $0 }.joined(separator: ", "))
-        dot.state = item.state.dot
-        spinner.isHidden = item.state != .working
-        spinner.isSpinning = item.state == .working
+        stateGlyph.show(item.state)
     }
 
     private func renderContent(_ item: SidebarAgentItem) {
-        glyphSlot.isHidden = !item.showsState
+        stateGlyph.isHidden = !item.showsState
         switch item.role {
         case .agent:
             render(
@@ -138,9 +132,9 @@ final class SidebarAgentRow: SidebarJumpRow {
 
     private(set) var rendersForTesting = 0
 
-    var dotForTesting: StateDot { dot }
+    var dotForTesting: StateDot { stateGlyph.dot }
 
-    var isSpinningForTesting: Bool { !spinner.isHidden && spinner.isSpinning }
+    var isSpinningForTesting: Bool { stateGlyph.isSpinning }
 
     var summaryTextForTesting: String { content.title }
 
@@ -151,7 +145,7 @@ final class SidebarAgentRow: SidebarJumpRow {
         return process
     }
 
-    var showsStateForTesting: Bool { !glyphSlot.isHidden }
+    var showsStateForTesting: Bool { !stateGlyph.isHidden }
 
     var tooltipForTesting: String? { tooltip?.label }
 

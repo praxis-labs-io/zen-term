@@ -217,13 +217,14 @@ final class WindowController: NSObject {
     static let slideFadeDepth: CGFloat = 8
 
     private enum ModalKind {
-        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
+        case repoPicker, commandPalette, agentPicker, workspaceForm, settings, toolFloatForm, reportIssue
         case renameTab, renameWorkspace, worktreeForm, sshHostForm
 
         var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
+            case .agentPicker: return .toggleAgentPicker
             case .settings: return .openSettings
             case .renameWorkspace: return .renameWorkspace
             case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .worktreeForm, .sshHostForm:
@@ -233,7 +234,7 @@ final class WindowController: NSObject {
 
         var isForm: Bool {
             switch self {
-            case .repoPicker, .commandPalette, .settings: return false
+            case .repoPicker, .commandPalette, .agentPicker, .settings: return false
             case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .renameWorkspace, .worktreeForm,
                 .sshHostForm:
                 return true
@@ -1584,6 +1585,19 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
+    private func toggleAgentPicker() {
+        if modal?.kind == .agentPicker { closeModal(); return }
+        let picker = AgentPickerOverlay(
+            items: agentItems(),
+            onFocus: { [weak self] surface in
+                self?.closeModal()
+                self?.jumpToAgent(surface)
+            },
+            onDismiss: { [weak self] in self?.closeModal() }
+        )
+        presentModal(picker, kind: .agentPicker)
+    }
+
     private func openAddWorkspaceForm() {
         openWorkspaceForm(editing: nil, returningTo: { [weak self] in self?.closeModal() })
     }
@@ -2883,8 +2897,8 @@ final class WindowController: NSObject {
             case .toggleSidebar:
                 toggleSidebar()
                 return
-            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
-                .newTool:
+            case .toggleRepoPicker, .toggleCommandPalette, .toggleAgentPicker, .openSettings, .toggleToolFloat,
+                .reportIssue, .newTool:
                 guard !modal.kind.isForm else { return }
                 guard activeWorkspace != nil || chord.worksWithoutTab || togglesRunningFloat(chord) else { return }
                 closingModalKind = modal.kind
@@ -2904,7 +2918,7 @@ final class WindowController: NSObject {
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
                 toastFloatBlocked()
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool,
+            case .toggleCommandPalette, .toggleRepoPicker, .toggleAgentPicker, .openSettings, .reportIssue, .newTool,
                 .renameTab, .renameWorkspace:
                 floats.close()
             case .toggleToolFloat, .newTab, .newWindow, .closeTab, .closeWindow,
@@ -3043,6 +3057,7 @@ final class WindowController: NSObject {
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
         case .nextWaitingAgent: jumpToNextWaitingAgent()
+        case .toggleAgentPicker: toggleAgentPicker()
         case .closeWorkspace:
             Log.info("close workspace", category: .workspace)
             if let activeWorkspace { requestCloseWorkspace(activeWorkspace) }
@@ -4260,6 +4275,7 @@ final class WindowController: NSObject {
         let items = agentItems()
         listedProcesses = Dictionary(uniqueKeysWithValues: items.filter { !$0.showsState }.map { ($0.id, $0.process) })
         sidebar.renderAgents(items)
+        (modal?.overlay as? AgentPickerOverlay)?.show(items)
         renderTabChips(agents: items)
     }
 
@@ -4275,11 +4291,13 @@ final class WindowController: NSObject {
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
             let name = agent.name.flatMap { $0.isEmpty ? nil : $0 }
             let process = name.map(ProcessIcon.forAgent) ?? .unknownAgent
+            let label = Self.agentLabel(name: name, title: title, process: process)
             var item = SidebarAgentItem(
                 id: id, state: state, summary: title,
-                detail: Self.agentDetail(name: name, title: title, process: process, place: place.name),
-                message: message)
+                detail: [label, place.name].compactMap { $0 }.joined(separator: " · "), message: message)
             item.process = process
+            item.place = place.listed
+            item.agentLabel = label
             let pane = panes[id]
             item.canClose = pane.map { $0.drawer == nil } ?? false
             return AgentFamilies.Member(
@@ -4295,6 +4313,7 @@ final class WindowController: NSObject {
             var item = SidebarAgentItem(
                 id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
             item.process = programIcon(of: pane.surface)
+            item.place = place.listed
             item.canClose = pane.drawer == nil
             return AgentFamilies.Member(
                 item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
@@ -4309,9 +4328,9 @@ final class WindowController: NSObject {
     private static let unnamedProcess = "process"
 
     // The generic chip cannot say which agent it is, so its name stays in words unless the title already is it.
-    private static func agentDetail(name: String?, title: String, process: ProcessIcon, place: String) -> String {
-        guard let name, process == .unknownAgent, name != title else { return place }
-        return "\(name) · \(place)"
+    private static func agentLabel(name: String?, title: String, process: ProcessIcon) -> String? {
+        guard let name, process == .unknownAgent, name != title else { return nil }
+        return name
     }
 
     private func panesBySurface() -> [SurfaceID: PaneHandle] {
@@ -4326,17 +4345,24 @@ final class WindowController: NSObject {
         return panes
     }
 
-    // Sidebar position, so rows sharing a state keep still: workspace, tab, then the surface within it.
-    private func agentPlace(_ id: SurfaceID) -> (name: String, position: [Int])? {
+    private struct AgentPlace {
+        let name: String
+        // Sidebar position, so rows sharing a state keep still: workspace, tab, then the surface within it.
+        let position: [Int]
+
+        var listed: SidebarAgentItem.Place { SidebarAgentItem.Place(name: name, order: position[0]) }
+    }
+
+    private func agentPlace(_ id: SurfaceID) -> AgentPlace? {
         if let float = floats.float(of: id) {
             let tab = float.tab.flatMap { tab in workspace(of: tab).map { (tab, $0) } }
-            guard let (tab, workspace) = tab else { return (float.spec.title, [Int.max]) }
-            return (workspace.name, place(of: tab, in: workspace) + [Int.max])
+            guard let (tab, workspace) = tab else { return AgentPlace(name: float.spec.title, position: [Int.max]) }
+            return AgentPlace(name: workspace.name, position: place(of: tab, in: workspace) + [Int.max])
         }
         for workspace in workspaces {
             for tab in workspace.tabIDs {
                 guard let index = workspace.controller(tab)?.surfaceIDs.firstIndex(of: id) else { continue }
-                return (workspace.name, place(of: tab, in: workspace) + [index])
+                return AgentPlace(name: workspace.name, position: place(of: tab, in: workspace) + [index])
             }
         }
         return nil
