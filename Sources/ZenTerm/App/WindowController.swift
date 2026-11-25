@@ -599,6 +599,7 @@ final class WindowController: NSObject {
                 if change.contains(.keymap) {
                     for host in self.panelHosts { host.reapplyKeymap() }
                     self.floats.reapplyKeymap()
+                    self.connectView?.reapplyKeymap()
                 }
                 if change.contains(.keymap) || change.contains(.floats) {
                     (self.modal?.overlay as? PaletteOverlay)?.reapplyKeymap()

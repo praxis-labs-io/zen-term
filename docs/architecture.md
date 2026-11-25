@@ -860,8 +860,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
-  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its host
-  tile carries no badge.
+  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its emblem
+  (`HostSignature`) is drawn from the ssh alias, never the display name, so renaming a host keeps it.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
