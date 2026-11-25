@@ -10,7 +10,7 @@ enum SSHFailureReason {
     static func parse(_ tail: String) -> String? {
         var lines = tail.split(whereSeparator: \.isNewline)
             .map { $0.replacingOccurrences(of: "\r", with: "").trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty && !$0.hasPrefix(SSHConnection.loginBanner) }
         if lines.last == jumpHostClosed { lines.removeLast() }
         guard let last = lines.last, last.wholeMatch(of: closedByPeer) == nil else { return nil }
         guard last.hasPrefix(sshPrefix) else { return last }

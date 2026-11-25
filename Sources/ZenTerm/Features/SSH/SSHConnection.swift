@@ -130,7 +130,7 @@ final class SSHConnection {
     var isLoggingInBehindConnect: Bool { asksThroughConnect && state == .connecting && !isShutDown }
 
     // libghostty runs ssh under login(1), which prints its own line before ssh writes anything.
-    private static let loginBanner = "Last login:"
+    static let loginBanner = "Last login:"
 
     func loginOutput(limit: Int) -> [String] {
         guard let text = login?.surface?.text(lastLines: limit * 4) else { return [] }

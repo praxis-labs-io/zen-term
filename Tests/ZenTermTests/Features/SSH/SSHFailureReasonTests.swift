@@ -52,4 +52,12 @@ final class SSHFailureReasonTests: XCTestCase {
         XCTAssertNil(SSHFailureReason.parse(""))
         XCTAssertNil(SSHFailureReason.parse("\n  \r\n"))
     }
+
+    func test_loginsOwnBanner_isNoReason() {
+        XCTAssertNil(SSHFailureReason.parse("Last login: Tue Nov 24 10:01:02 on ttys003\r\n"))
+        XCTAssertEqual(
+            SSHFailureReason.parse(
+                "devbox: Permission denied (publickey).\nLast login: Tue Nov 24 10:01:02 on ttys003"),
+            "devbox: Permission denied (publickey).")
+    }
 }
