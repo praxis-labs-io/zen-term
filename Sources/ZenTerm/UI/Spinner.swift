@@ -80,20 +80,32 @@ final class Spinner: NSView, ThemeReapplying {
         ring.addArc(
             center: CGPoint(x: Self.size / 2, y: Self.size / 2), radius: Self.ringRadius, startAngle: 0,
             endAngle: -2 * .pi, clockwise: true)
-        arc.frame = box
-        arc.path = ring
+        withoutImplicitMotion {
+            arc.frame = box
+            arc.path = ring
+        }
         applySpin()
     }
 
     func reapplyTheme() {
-        arc.strokeColor = Theme.current.chrome[keyPath: role].nsColor.cgColor
-        stillDot.state = role == \ChromeTheme.working ? .working : .live
+        withoutImplicitMotion { arc.strokeColor = Theme.current.chrome[keyPath: role].nsColor.cgColor }
+        if !stillDot.isHidden { stillDot.state = stillDotState }
+    }
+
+    private var stillDotState: StateDot.State { role == \ChromeTheme.working ? .working : .live }
+
+    private func withoutImplicitMotion(_ change: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        change()
+        CATransaction.commit()
     }
 
     private func applySpin() {
         let showsStillDot = isSpinning && Motion.isReduceMotionEnabled()
+        stillDot.state = showsStillDot ? stillDotState : nil
         stillDot.isHidden = !showsStillDot
-        arc.isHidden = showsStillDot
+        withoutImplicitMotion { arc.isHidden = showsStillDot }
         if isSpinning, !showsStillDot, arc.animation(forKey: Self.turnKey) != nil { return }
         arc.removeAnimation(forKey: Self.turnKey)
         arc.removeAnimation(forKey: Self.stretchKey)

@@ -5,6 +5,8 @@ import XCTest
 @testable import ZenTerm
 
 final class SpinnerTests: WindowTestCase {
+    private var windows: [NSWindow] = []
+
     private func mountedSpinner(role: KeyPath<ChromeTheme, TerminalColor> = \.accent) -> Spinner {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 40, height: 40), styleMask: [.borderless], backing: .buffered,
@@ -14,6 +16,8 @@ final class SpinnerTests: WindowTestCase {
         spinner.role = role
         window.contentView?.addSubview(spinner)
         spinner.frame = NSRect(x: 0, y: 0, width: 13, height: 13)
+        spinner.layoutSubtreeIfNeeded()
+        windows.append(window)
         return spinner
     }
 
@@ -35,7 +39,7 @@ final class SpinnerTests: WindowTestCase {
 
         for tick in try stepTicks(of: first) + stepTicks(of: second) {
             XCTAssertEqual(tick, tick.rounded(), accuracy: 0.001, "a step lands on a shared clock tick")
-            XCTAssertGreaterThanOrEqual(tick, firstStarted.rounded(.down), "the step starts now, not at time zero")
+            XCTAssertGreaterThanOrEqual(tick + 0.001, firstStarted.rounded(.up), "the step starts on the next tick")
         }
     }
 
@@ -75,6 +79,8 @@ final class SpinnerTests: WindowTestCase {
         spinner.isSpinning = true
 
         XCTAssertNil(spinner.stillDotStateForTesting)
+        XCTAssertNil(spinner.subviews.compactMap { ($0 as? StateDot)?.state }.first, "a hidden dot reports no state")
+        XCTAssertNotNil(spinner.arcForTesting.path, "the ring is drawn")
         XCTAssertFalse(spinner.arcForTesting.isHidden)
         XCTAssertNotNil(spinner.arcForTesting.animationKeys())
     }

@@ -619,8 +619,7 @@ New modal surfaces compose the existing primitives.
   control's own loop period (a spinner step, a progress sweep) stays local to it.
 - **Every `Spinner` steps on one shared clock.** Each starts its loop on the next tick of a
   grid shared by all of them, so a window redraws at the spinner's frame rate however many
-  spin. Spinners on their own clocks make the window redraw at the display's refresh rate,
-  which costs battery while agents work.
+  spin.
 
 ## Key handling
 
