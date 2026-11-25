@@ -261,6 +261,40 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(visible("Third", in: pile), "newer toasts fold behind it")
         XCTAssertEqual(pile.plateOpacityForTesting, [0.75, 0.45])
     }
+    func test_unfolding_resizesThePilesAncestorsInTheSamePass() {
+        let pile = ToastPile(foldsOnClickOutside: false)
+        let row = NSView()
+        row.translatesAutoresizingMaskIntoConstraints = false
+        let outer = NSView()
+        outer.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(pile)
+        outer.addSubview(row)
+        let content = NSView()
+        content.addSubview(outer)
+        window.contentView = content
+        NSLayoutConstraint.activate([
+            pile.topAnchor.constraint(equalTo: row.topAnchor),
+            pile.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            pile.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            pile.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            row.topAnchor.constraint(equalTo: outer.topAnchor),
+            row.bottomAnchor.constraint(equalTo: outer.bottomAnchor),
+            row.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
+            outer.topAnchor.constraint(equalTo: content.topAnchor),
+            outer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+        ])
+        for title in ["First", "Second", "Third"] {
+            pile.add(ToastView(content: notice(title), actions: [], armsKeys: false, showsClose: false))
+        }
+        content.layoutSubtreeIfNeeded()
+        let folded = outer.frame.height
+
+        pile.unfold()
+
+        XCTAssertGreaterThan(pile.frame.height, folded, "the unfolded list is taller than the fold")
+        XCTAssertEqual(outer.frame.height, pile.frame.height, "the pile's ancestors resize in the same pass as the pile")
+    }
 }
 
 private final class ClickCatcher: NSView {

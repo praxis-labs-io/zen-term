@@ -173,14 +173,14 @@ final class ToastPile: NSView {
         fadeToTargets(sparing: arriving)
         if let arriving { settle(arriving) }
         guard animated, !Motion.isReduceMotionEnabled() else {
-            superview?.layoutSubtreeIfNeeded()
+            (window?.contentView ?? superview)?.layoutSubtreeIfNeeded()
             return
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Motion.pageSlideDuration
             context.timingFunction = Motion.landingTiming
             context.allowsImplicitAnimation = true
-            superview?.layoutSubtreeIfNeeded()
+            (window?.contentView ?? superview)?.layoutSubtreeIfNeeded()
         }
     }
 
