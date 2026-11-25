@@ -2,7 +2,6 @@
     import AppKit
     import TerminalKit
 
-    // Every toast the app shows, built from the same factories its call sites use.
     @MainActor
     enum GalleryToasts {
         typealias Window = WindowController

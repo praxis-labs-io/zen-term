@@ -6,19 +6,18 @@ struct ToastContent: Equatable {
     let titleTail: String?
     let message: String?
     let icon: String?
-    /// Lines of `message` that are labels, drawn in the title's ink above the muted lines they name.
-    let labels: Set<String>
+    let messageLabels: Set<String>
 
     init(
         variant: ToastVariant, title: String, titleTail: String? = nil, message: String?,
-        icon: String? = nil, labels: Set<String> = []
+        icon: String? = nil, messageLabels: Set<String> = []
     ) {
         self.variant = variant
         self.title = title
         self.titleTail = titleTail
         self.message = message
         self.icon = icon
-        self.labels = labels
+        self.messageLabels = messageLabels
     }
 }
 
@@ -46,6 +45,8 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     private static let closeInset = ChromeMetrics.Spacing.s10
     private static let closeSide = ChromeMetrics.Height.sm
     private static let glyphGap = ChromeMetrics.Spacing.s10
+    // The links' padding sits in the card's inset, so their text lines up with the message's.
+    private static let linkRowInset = textInset - AppButton.horizontalPadding
     private static let glyphConfiguration = NSImage.SymbolConfiguration(
         pointSize: ChromeMetrics.Icon.md, weight: .semibold)
     private static let widestGlyph: CGFloat =
@@ -83,7 +84,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
         self.messageLabel = content.message.map { NSTextField(wrappingLabelWithString: $0) }
-        self.messageLabels = content.labels
+        self.messageLabels = content.messageLabels
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -180,7 +181,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         let row = usesLinks ? linkRow() : buttonRow()
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
-        let rowInset = usesLinks ? Self.textInset - AppButton.horizontalPadding : Self.textInset
+        let rowInset = usesLinks ? Self.linkRowInset : Self.textInset
         NSLayoutConstraint.activate([
             row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: rowInset),
             row.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.textInset),
@@ -191,7 +192,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // The links' padding sits in the card's inset, so their text lines up with the message's.
     private func linkRow() -> NSView {
         let row = NSStackView(views: actionButtons)
         row.orientation = .horizontal

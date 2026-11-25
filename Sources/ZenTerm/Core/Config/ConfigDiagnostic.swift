@@ -128,7 +128,7 @@ struct ConfigDiagnostic: Hashable {
         }
     }
 
-    /// Two lines because a long title plus its detail overruns the toast column.
+    // Two lines because a long title plus its detail overruns the toast column.
     var summary: String { "\(label)\n\(detail)" }
 
     var label: String { "\(title):" }
@@ -148,6 +148,6 @@ struct ConfigDiagnostic: Hashable {
         }
         return ToastContent(
             variant: .warning, title: "\(diagnostics.count) problems in your config",
-            message: diagnostics.map(\.summary).joined(separator: "\n\n"), labels: Set(diagnostics.map(\.label)))
+            message: diagnostics.map(\.summary).joined(separator: "\n\n"), messageLabels: Set(diagnostics.map(\.label)))
     }
 }

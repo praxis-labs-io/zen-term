@@ -91,7 +91,8 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     func test_severalProblems_areOneCompactLineEach() throws {
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [paletteOnAMenuChord, newTabUnusableBind]))
         XCTAssertEqual(content.title, "2 problems in your config")
-        XCTAssertEqual(content.labels, ["Command Palette:", "New Tab:"], "each setting's name heads its problem")
+        XCTAssertEqual(
+            content.messageLabels, ["Command Palette:", "New Tab:"], "each setting's name heads its problem")
         let toast = ToastView(content: content)
         let message = try XCTUnwrap(toast.messageForTesting)
         let ink = { (line: String) in
