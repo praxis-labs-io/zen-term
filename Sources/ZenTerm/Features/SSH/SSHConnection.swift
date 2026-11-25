@@ -160,6 +160,7 @@ final class SSHConnection {
         let question = SSHLoginQuestion(prompt: parsed, isRetry: repeats)
         self.question = question
         hangup.onHangup { [weak self] in self?.withdraw(ticket) }
+        watchers.after(TimeInterval(ControlWire.longestLoginAnswer)) { [weak self] in self?.withdraw(ticket) }
         onQuestionChange?(question)
         return true
     }

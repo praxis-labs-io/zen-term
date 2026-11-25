@@ -643,6 +643,16 @@ final class SSHConnectionAskpassTests: XCTestCase {
         XCTAssertEqual(asked.replies().map { try? $0.get().text }, ["yes"])
     }
 
+    func test_aQuestionPastTheAnswerDeadline_isWithdrawn() throws {
+        let token = try token(of: loggingIn())
+        let asked = ask("Password: ", token: token)
+
+        fake.runDelayed()
+
+        XCTAssertNil(connection.question)
+        guard case .failure? = asked.replies().first else { return XCTFail("\(asked.replies())") }
+    }
+
     func test_aHangupWithdrawsTheQuestion() throws {
         let token = try token(of: loggingIn())
         let hangup = ControlHangup()
