@@ -143,9 +143,14 @@ final class IconBadge: NSView, ThemeReapplying {
             case .artwork(let artworkFill):
                 fill = artworkFill.nsColor
                 icon.contentTintColor = nil
-            case .neutral, .catalog:
+            case .neutral:
                 fill = chrome.chipRaised.nsColor
                 icon.contentTintColor = chrome.ink(.normal)
+            case .purpose(let slot), .catalog(let slot):
+                let hue = slot.color(in: Theme.current.terminal)
+                fill = ChromeTheme.surface(
+                    tint: chrome.tint(hue, alpha: ChromeTheme.badgeTint), over: chrome.chipRaised.nsColor)
+                icon.contentTintColor = hue.nsColor
             }
             layer?.backgroundColor = fill.cgColor
             sheenLayer.colors = Self.sheenColors

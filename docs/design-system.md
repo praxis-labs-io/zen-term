@@ -95,7 +95,10 @@ corners), the size and mark box (`IconBadge.Size`), the edge (`fill(alpha:)` wit
 at `Border.width`) and the sheen, a fixed alpha mask lit from the top that every chip shares.
 A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
 step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
-program runs, so a resting shell and a worktree are never branded. Process marks are never SF
+program runs, so a resting shell and a worktree are never branded. A purpose tint names a
+palette group: a soft `tint(_:alpha:)` of an ANSI hue at `badgeTint` over `chipRaised`, behind
+the glyph in full hue (`ProcessIcon.Look.purpose`). ANSI red is never a purpose tint: it is
+`blocked`. Process marks are never SF
 Symbols, except a tool float's own icon in its palette row (`ProcessIcon.toolFloat`), which is
 an icon picker name; a generic chip's glyph is Lucide, unmodified. In a row, a chip leads it
 (`ListRow.Leading.process`, at `.small`): an Agents row and a worktree row in the sidebar.

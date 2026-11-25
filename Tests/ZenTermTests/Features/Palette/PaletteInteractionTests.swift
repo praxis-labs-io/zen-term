@@ -282,6 +282,25 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(scratch.detail, CommandCategory.tools.title)
     }
 
+    func test_commandPalette_everyChipTakesItsGroupsPurposeTint() throws {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let hues: [CommandCategory: AccentSlot] = [
+            .workspaces: .magenta, .tabs: .cyan, .panes: .yellow, .terminal: .green, .window: .blue, .tools: .green,
+        ]
+        let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
+        let shown = rows(in: overlay)
+        XCTAssertEqual(shown.count, commands.count)
+        for (row, command) in zip(shown, commands) {
+            let chip = try XCTUnwrap(row.processBadgeForTesting, command.title)
+            let expected =
+                hues[command.category].map { $0.color(in: Theme.current.terminal).nsColor }
+                ?? Theme.current.chrome.ink(.normal)
+            XCTAssertEqual(chip.iconTintForTesting, expected, "\(command.title) in \(command.category.title)")
+        }
+    }
+
     func test_commandCategory_everyChipsMarkIsBundled() {
         for category in CommandCategory.allCases {
             XCTAssertNotNil(
