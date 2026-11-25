@@ -326,7 +326,7 @@ final class TabController: NSObject {
         gutterConstraints = [
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: ChromeMetrics.windowGutter),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -ChromeMetrics.windowGutter),
-            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.topInset),
+            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.windowGutter),
         ]
         NSLayoutConstraint.activate(gutterConstraints)
         content.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
@@ -966,7 +966,7 @@ final class TabController: NSObject {
         for (index, constraint) in gutterConstraints.enumerated() {
             switch index {
             case 1: constraint.constant = -gutter
-            case 2: constraint.constant = ChromeMetrics.topInset
+            case 2: constraint.constant = ChromeMetrics.windowGutter
             default: constraint.constant = gutter
             }
         }

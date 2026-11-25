@@ -1028,7 +1028,7 @@ final class SidebarInteractionTests: WindowTestCase {
     private func makeCrowdedController() -> WindowController {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
-        for n in 2...30 { _ = controller.addWorkspaceForTesting(name: "ws \(n)", folder: root) }
+        for n in 2...40 { _ = controller.addWorkspaceForTesting(name: "ws \(n)", folder: root) }
         controller.containerForTesting.layoutSubtreeIfNeeded()
         return controller
     }

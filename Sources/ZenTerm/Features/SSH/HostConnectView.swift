@@ -140,7 +140,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         gutterConstraints = [
             panel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.windowGutter),
             panel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.windowGutter),
-            panel.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.topInset),
+            panel.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.windowGutter),
         ]
         NSLayoutConstraint.activate(gutterConstraints)
         let centered = stack.centerYAnchor.constraint(equalTo: content.centerYAnchor)
@@ -247,7 +247,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     func reapplyChromeLayout() {
         gutterConstraints[0].constant = ChromeMetrics.windowGutter
         gutterConstraints[1].constant = -ChromeMetrics.windowGutter
-        gutterConstraints[2].constant = ChromeMetrics.topInset
+        gutterConstraints[2].constant = ChromeMetrics.windowGutter
         panel.reapplyChromeLayout()
     }
 
