@@ -4940,6 +4940,7 @@ extension WindowController: NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         windowIsKey = true
+        if modal == nil, activeWorkspace == nil { connectView?.takeBackFocus() }
         syncWindowFocus()
         sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()

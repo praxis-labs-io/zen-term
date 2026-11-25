@@ -152,14 +152,19 @@ final class HostConnectView: NSView, ThemeReapplying {
     override func keyDown(with event: NSEvent) {
         if KeyboardFocus.isReturn(event) {
             if login == nil { return onConnect() }
-            if isAskingHostKey { onTrust() }
-            return
+            if isAskingHostKey { return onTrust() }
+            return submitAnswer()
         }
         guard login != nil, KeyboardFocus.key(for: event) == .escape else { return super.keyDown(with: event) }
         onCancel()
     }
 
     var focusTarget: NSView { answerBox.isHidden ? self : answerField.field }
+
+    func takeBackFocus() {
+        guard !answerBox.isHidden, !isEditingAnswer else { return }
+        window?.makeFirstResponder(answerField.field)
+    }
 
     func setLogin(_ login: Login?) {
         guard login != self.login else { return }
@@ -219,6 +224,8 @@ final class HostConnectView: NSView, ThemeReapplying {
         if case .secret(let headline) = login?.question?.prompt { return headline }
         return nil
     }
+
+    private var isEditingAnswer: Bool { (window?.firstResponder as? NSText)?.delegate === answerField.field }
 
     private var holdsFocus: Bool {
         guard let responder = window?.firstResponder as? NSView else { return false }

@@ -138,6 +138,39 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertEqual(view.statusForTesting, "Connecting…")
     }
 
+    func test_comingBackToTheWindow_putsFocusBackInTheAnswerField() throws {
+        let (c, login) = try loggingIn()
+        try ask("devbox's password: ", login: login, in: c)
+        let field = try XCTUnwrap(c.connectViewForTesting?.answerFieldForTesting)
+        c.window.makeFirstResponder(nil)
+
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: c.window))
+
+        XCTAssertTrue((c.window.firstResponder as? NSText)?.delegate === field.field, "the field takes focus back")
+    }
+
+    func test_returnOnConnectDuringALogin_submitsTheAnswer_andNeverCancels() throws {
+        let (c, login) = try loggingIn()
+        try ask("devbox's password: ", login: login, in: c)
+        try type("hunter2", in: c)
+        let view = try XCTUnwrap(c.connectViewForTesting)
+        c.window.makeFirstResponder(view)
+
+        try send(keyCode: 36, "\r", in: c)
+
+        XCTAssertNotNil(c.connectionForTesting(of: host), "Return never cancels the login")
+        XCTAssertEqual(answers(), ["hunter2"])
+    }
+
+    func test_returnOnConnectWhileConnecting_neverCancels() throws {
+        let (c, _) = try loggingIn()
+        c.window.makeFirstResponder(c.connectViewForTesting)
+
+        try send(keyCode: 36, "\r", in: c)
+
+        XCTAssertNotNil(c.connectionForTesting(of: host))
+    }
+
     func test_aRepeatedPrompt_saysTheLastAnswerDidNotWork() throws {
         let (c, login) = try loggingIn()
         try ask("devbox's password: ", login: login, in: c)
