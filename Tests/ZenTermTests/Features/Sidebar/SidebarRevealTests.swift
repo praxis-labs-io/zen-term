@@ -99,7 +99,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(card.minX, Self.gutter)
         XCTAssertEqual(card.width, SidebarView.width)
         XCTAssertEqual(card.minY, Self.gutter, "the card clears the bottom gutter")
-        XCTAssertEqual(card.maxY, container.height - ChromeMetrics.windowGutter, "the top clears the traffic lights")
+        XCTAssertEqual(card.maxY, container.height - ChromeMetrics.windowGutter, "the card clears the top gutter")
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller), paneBefore,
             "the card floats over the panes, so nothing reflows and no surface resizes")
@@ -900,7 +900,7 @@ final class SidebarRevealTests: WindowTestCase {
 
         let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
         let slide = try XCTUnwrap(
-            close.layer?.animation(forKey: "windowButton.slide") as? CABasicAnimation, "the buttons move with the card")
+            close.layer?.animation(forKey: HostWindow.slideKey) as? CABasicAnimation, "the buttons move with the card")
         let from = try XCTUnwrap((slide.fromValue as? NSValue)?.sizeValue)
         XCTAssertLessThan(from.width, -SidebarView.width, "they start parked past the window's edge, as the card does")
         settle()
@@ -917,8 +917,35 @@ final class SidebarRevealTests: WindowTestCase {
         try click(sidebar.liveToggleForTesting)
 
         let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
-        XCTAssertNotNil(close.layer?.animation(forKey: "windowButton.slide"), "they move to the docked spot")
-        XCTAssertNil(close.layer?.animation(forKey: "windowButton.fade"), "already on screen, so no fade to flash")
+        XCTAssertNotNil(close.layer?.animation(forKey: HostWindow.slideKey), "they move to the docked spot")
+        XCTAssertNil(close.layer?.animation(forKey: HostWindow.fadeKey), "already on screen, so no fade to flash")
+    }
+
+    func test_windowButtons_returnToTheHeading_afterAppKitLaysTheTitlebarOutAgain() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
+        for name in [NSWindow.didExitFullScreenNotification, NSWindow.didDeminiaturizeNotification] {
+            close.setFrameOrigin(.zero)
+            NotificationCenter.default.post(name: name, object: controller.window)
+            try assertWindowButtonsAlignWithTheHeading(controller, name.rawValue)
+        }
+    }
+
+    func test_aMoveMidSlide_dropsTheSlideInFlight() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        Motion.isReduceMotionEnabled = { false }
+        sidebar.reveal()
+        let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
+        XCTAssertNotNil(close.layer?.animation(forKey: HostWindow.slideKey), "premise: the buttons are sliding in")
+
+        sidebar.reapplyChromeLayout()
+
+        XCTAssertNil(close.layer?.animation(forKey: HostWindow.slideKey), "an instant move takes them straight there")
+        XCTAssertNil(close.layer?.animation(forKey: HostWindow.fadeKey))
     }
 
     func test_windowButtons_stayHiddenWithoutWindowChrome_andTheRowsTakeTheirStrip() throws {

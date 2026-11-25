@@ -532,12 +532,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Fill Screen** is a maximize, not native fullscreen.
 - **The window buttons are the titlebar's own, placed over a strip at the top of
   `SidebarView`** with the close button on the heading's leading edge, so no header row is
-  reserved and everything starts one window gutter from the top. Free-standing copies
-  cannot be used: AppKit draws their hover glyphs from the frame view's tracking of the
-  titlebar set. `SidebarController` moves them with the column (`moveWindowButtons`),
-  sliding and fading with docking, the hover card and collapsing, and `HostWindow` places
-  them again after a resize, a title change, a hide or an alpha change, each of which
-  makes AppKit put them back. `window-chrome = false` hides them and closes the strip.
+  reserved and everything starts one window gutter from the top. `SidebarController`
+  moves them with the column (`moveWindowButtons`), sliding and fading with docking, the
+  hover card and collapsing. AppKit puts them back on a resize, a title change, a hide, an
+  alpha change, a fullscreen exit and a deminiaturize, so `HostWindow` places them again
+  after each. `window-chrome = false` hides them and closes the strip.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
   `tabID/id` and shut down with their tab; Scratch is the only one. A host shows no user

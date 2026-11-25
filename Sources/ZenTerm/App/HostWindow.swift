@@ -27,6 +27,8 @@ final class HostWindow: NSWindow {
     private var windowButtonPlacement: WindowButtonPlacement?
     private var windowButtonsVisible = true
     private var windowButtonMove = 0
+    static let slideKey = "windowButton.slide"
+    static let fadeKey = "windowButton.fade"
     // Captured before the first placement, since AppKit exposes no default to return the buttons to.
     private var defaultWindowButtonLayout: WindowButtonLayout?
 
@@ -54,6 +56,10 @@ final class HostWindow: NSWindow {
         isOpaque = false
         backgroundColor = .clear
         setWindowButtonsHidden(!GeneralConfig.current.windowChrome)
+        for name in [NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification, NSWindow.didDeminiaturizeNotification] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(titlebarWasLaidOut), name: name, object: self)
+        }
     }
 
     // A frame saved by an older build, or on a wider screen, can sit under the minimum or off the display.
@@ -71,14 +77,13 @@ final class HostWindow: NSWindow {
         setFrame(target, display: true, animate: animate)
     }
 
-    // AppKit lays the titlebar out again on a resize, a title change, a hide or an alpha change, putting the buttons back.
-    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
-        super.setFrame(frameRect, display: flag)
+    // AppKit lays the titlebar out again on these, and on a hide or an alpha change, putting the buttons back.
+    @objc private func titlebarWasLaidOut() {
         if windowButtonPlacement != nil { layoutWindowButtons() }
     }
 
     override var title: String {
-        didSet { if windowButtonPlacement != nil { layoutWindowButtons() } }
+        didSet { titlebarWasLaidOut() }
     }
 
     override func fieldEditor(_ createFlag: Bool, for object: Any?) -> NSText? {
@@ -86,10 +91,12 @@ final class HostWindow: NSWindow {
         return chromeFieldEditor
     }
 
-    /// Moves the titlebar's buttons to `placement`, fading them in or out; hidden ones keep their spot for the next move.
     func moveWindowButtons(to placement: WindowButtonPlacement, visible: Bool, animated: Bool) {
         if defaultWindowButtonLayout == nil { defaultWindowButtonLayout = currentWindowButtonLayout() }
-        let before = windowButtons.map { $0.convert($0.bounds, to: nil).origin }
+        let before = windowButtons.map(onScreenOrigin)
+        for button in windowButtons {
+            for key in [Self.slideKey, Self.fadeKey] { button.layer?.removeAnimation(forKey: key) }
+        }
         let wasShown = windowButtons.contains { !$0.isHidden && $0.alphaValue > 0 }
         windowButtonPlacement = placement
         windowButtonsVisible = visible
@@ -105,7 +112,7 @@ final class HostWindow: NSWindow {
             return
         }
         windowButtons.forEach { $0.alphaValue = opacity }
-        layoutWindowButtons()
+        layoutWindowButtons(keepingTitlebarHeight: true)
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in
             MainActor.assumeIsolated {
@@ -120,9 +127,7 @@ final class HostWindow: NSWindow {
         CATransaction.commit()
     }
 
-    // A layer animation, since the buttons' own frame setter answers to AppKit's titlebar layout, not to an animator.
-    // Coming in, the fade waits so it lands with the slide instead of showing the buttons before the card arrives.
-    // Buttons already on screen, moving between the card and the docked column, only slide.
+    // A layer animation: the buttons' own frame setter answers to AppKit's titlebar layout, not to an animator.
     private func slide(_ button: NSButton, from start: NSPoint, fade fadingIn: Bool?) {
         button.wantsLayer = true
         guard let layer = button.layer else { return }
@@ -132,16 +137,25 @@ final class HostWindow: NSWindow {
         move.toValue = NSValue(size: .zero)
         move.duration = Motion.pageSlideDuration
         move.timingFunction = Motion.landingTiming
-        layer.add(move, forKey: "windowButton.slide")
+        layer.add(move, forKey: Self.slideKey)
         guard let fadingIn else { return }
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = fadingIn ? 0 : 1
         fade.toValue = fadingIn ? 1 : 0
         fade.duration = Motion.fadeDuration
-        fade.beginTime = CACurrentMediaTime() + (fadingIn ? Motion.pageSlideDuration - Motion.fadeDuration : 0)
+        fade.beginTime = CACurrentMediaTime() + (fadingIn ? fadeInDelay : 0)
         fade.fillMode = .backwards
         fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        layer.add(fade, forKey: "windowButton.fade")
+        layer.add(fade, forKey: Self.fadeKey)
+    }
+
+    // Coming in, the fade lands with the slide, so the buttons never show before the card arrives.
+    private var fadeInDelay: CFTimeInterval { Motion.pageSlideDuration - Motion.fadeDuration }
+
+    private func onScreenOrigin(_ button: NSButton) -> NSPoint {
+        let origin = button.convert(button.bounds, to: nil).origin
+        let inFlight = (button.layer?.presentation()?.value(forKeyPath: "transform.translation") as? NSValue)?.sizeValue
+        return NSPoint(x: origin.x + (inFlight?.width ?? 0), y: origin.y + (inFlight?.height ?? 0))
     }
 
     func reapplyWindowChrome() {
@@ -165,22 +179,21 @@ final class HostWindow: NSWindow {
         return WindowButtonLayout(titlebarHeight: titlebarContainer.frame.height, origins: origins)
     }
 
-    // The titlebar only grows to hold the buttons, since it takes the clicks over everything it covers.
-    // Mid-move it never shrinks, so a button travelling up out of a taller one is not clipped on the way.
-    private func layoutWindowButtons(animated: Bool = false) {
+    // Mid-slide the titlebar keeps its height, so a button leaving a taller one is not clipped on the way out.
+    private func layoutWindowButtons(keepingTitlebarHeight: Bool = false) {
         guard let layout = defaultWindowButtonLayout, let placement = windowButtonPlacement, let titlebarContainer,
             let closeOrigin = layout.origins[.closeButton],
             let buttonHeight = standardWindowButton(.closeButton)?.frame.height
         else { return }
         let height = max(
             layout.titlebarHeight, placement.centerFromTop + buttonHeight / 2,
-            animated ? titlebarContainer.frame.height : 0)
+            keepingTitlebarHeight ? titlebarContainer.frame.height : 0)
         titlebarContainer.frame = NSRect(
             x: titlebarContainer.frame.minX, y: frame.height - height, width: titlebarContainer.frame.width,
             height: height)
         for type in Self.windowButtonTypes {
             guard let origin = layout.origins[type], let button = standardWindowButton(type) else { continue }
-            (animated ? button.animator() : button).setFrameOrigin(
+            button.setFrameOrigin(
                 NSPoint(
                     x: placement.leading + origin.x - closeOrigin.x,
                     y: height - placement.centerFromTop - buttonHeight / 2))

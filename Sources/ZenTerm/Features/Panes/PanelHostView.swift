@@ -59,7 +59,6 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
 
     private let padding: CGFloat = ChromeMetrics.Spacing.s10
 
-    /// Concentric with the window, which sits one window-gutter out from every pane edge.
     @MainActor static var cornerRadius: CGFloat {
         max(minCornerRadius, WindowCorner.radius - ChromeMetrics.windowGutter)
     }
