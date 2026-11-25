@@ -32,12 +32,11 @@ final class BalancedLabel: NSTextField {
 
     override var intrinsicContentSize: NSSize {
         guard !stringValue.isEmpty, wrapWidth > 0 else { return .zero }
-        let width = balancedWidth()
+        let width = narrowestWidthKeepingLineCount()
         return NSSize(width: width, height: height(at: width))
     }
 
-    // The narrowest whole-point width that keeps the line count the text has at `wrapWidth`.
-    private func balancedWidth() -> CGFloat {
+    private func narrowestWidthKeepingLineCount() -> CGFloat {
         let widest = wrapWidth.rounded(.down)
         let lineCountHeight = height(at: widest)
         var fits = widest
