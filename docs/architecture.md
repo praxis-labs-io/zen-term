@@ -888,10 +888,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   the host disconnected. The check runs before the login launches and again when the socket
   appears; a socket that refuses the connection is stale and is removed, and anything else is
   left alone. A login that ends before the socket drops the waiting surfaces and
-  closes the workspace back to Connect, which shows it failed with ssh's reason: the last line
-  the login's terminal showed (the line before ProxyJump's closing one), read when its surface
-  exits, since the surface is freed before the connection hears the login ended. A bare
-  `Connection closed by … port N` says nothing, so Connect reads "Couldn't connect" instead. A
+  closes the workspace back to Connect, which shows it failed with a plain headline over ssh's
+  reason (`SSHFailureReason`): the last line the login's terminal showed (the line before
+  ProxyJump's closing one), read when its surface exits, since the surface is freed before the
+  connection hears the login ended. A bare `Connection closed by … port N` says nothing, so
+  Connect reads "Couldn't connect" with no reason beneath. A
   failure while that host's Connect isn't the screen showing also toasts, since nothing else says it.
 - **A host's first login runs behind its Connect screen, which answers ssh's questions.** The
   workspace is installed but never selected while `SSHConnection.isLoggingInBehindConnect`, so the

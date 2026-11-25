@@ -27,7 +27,6 @@ final class HostConnectView: NSView, ThemeReapplying {
     // Balanced messages read best well inside the 420 column.
     private static let messageMaxWidth: CGFloat = 360
     private static let retryMessage = "That didn't work. Try again."
-    private static let failedWithoutReason = "Couldn't connect"
 
     // A short window drops the emblem first, so the action never leaves the screen.
     private static let emblemVisibility = NSStackView.VisibilityPriority(rawValue: 500)
@@ -371,9 +370,11 @@ final class HostConnectView: NSView, ThemeReapplying {
         guard answer == answers else { return }
         isAnswerShown = true
         applyStatus()
-        Motion.slideFade(
-            statusLine, appearing: true, from: CGVector(dx: 0, dy: -ChromeMetrics.Spacing.s4),
-            duration: Motion.HostConnect.statusEntrance)
+        for line in [statusLine, detailLine] where !line.isHidden {
+            Motion.slideFade(
+                line, appearing: true, from: CGVector(dx: 0, dy: -ChromeMetrics.Spacing.s4),
+                duration: Motion.HostConnect.statusEntrance)
+        }
         if isFailed(outcome) {
             retryButton.wantsLayer = true
             retryButton.layer?.opacity = 0
@@ -404,7 +405,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         trustButton.isHidden = !isAskingYesNo
         trustButton.setTitle(isAskingConfirm ? "Continue" : "Trust")
         applyQuestion()
-        let detail = login.flatMap { SSHLoginOutput.detail(of: $0.output) }
+        let detail = login.flatMap { SSHLoginOutput.detail(of: $0.output) } ?? failureReason(outcome)
         detailLine.stringValue = detail ?? ""
         detailLine.isHidden = detail == nil
         applySpacing()
@@ -415,7 +416,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         if connecting { return "Connecting…" }
         switch outcome {
         case .connected: return SSHHostStatus.connected.word
-        case .failed(let reason): return reason ?? Self.failedWithoutReason
+        case .failed(let reason): return SSHFailureReason.headline(for: reason)
         case nil: return isOffline ? SSHHostStatus.offline.word : SSHHostStatus.online.word
         }
     }
@@ -423,6 +424,11 @@ final class HostConnectView: NSView, ThemeReapplying {
     private func applyStatusInk() {
         let chrome = Theme.current.chrome
         statusWord.textColor = isFailed(shownOutcome) ? chrome.destructive.nsColor : chrome.ink(.subtle)
+    }
+
+    private func failureReason(_ outcome: Outcome?) -> String? {
+        if case .failed(let reason) = outcome { return reason }
+        return nil
     }
 
     private func isFailed(_ outcome: Outcome?) -> Bool {

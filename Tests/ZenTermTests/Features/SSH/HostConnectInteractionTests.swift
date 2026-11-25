@@ -110,11 +110,11 @@ final class HostConnectInteractionTests: WindowTestCase {
         return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
     }
 
-    private func showsFailure(_ status: String? = nil, in c: WindowController) -> Bool {
+    private func showsFailure(_ detail: String? = nil, in c: WindowController) -> Bool {
         guard let screen = c.connectViewForTesting, screen.emblemForTesting.glyphForTesting == .cross else {
             return false
         }
-        return status.map { screen.statusForTesting == $0 } ?? true
+        return detail.map { screen.detailForTesting == $0 } ?? true
     }
 
     private func longHostWindow() -> (WindowController, SSHHostID) {

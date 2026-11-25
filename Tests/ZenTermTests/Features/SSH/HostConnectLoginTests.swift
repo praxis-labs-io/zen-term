@@ -375,6 +375,7 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertNil(view.cancelButtonForTesting)
         XCTAssertNil(c.connectionForTesting(of: host))
         XCTAssertEqual(view.statusForTesting, "Couldn't connect")
+        XCTAssertNil(view.detailForTesting, "no line from ssh, so nothing beneath")
         XCTAssertEqual(view.emblemForTesting.glyphForTesting, .cross)
         XCTAssertEqual(view.actionButtonForTesting.title, "Retry")
         XCTAssertFalse(showsToast("Couldn't connect to", in: c))
@@ -386,7 +387,7 @@ final class HostConnectLoginTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
-    func test_aLoginThatExits_showsWhatSSHSaid_inDestructiveInk() throws {
+    func test_aLoginThatExits_saysWhyPlainly_inDestructiveInk_withSSHsLineBeneath() throws {
         let (c, login) = try loggingIn()
         login.rows = ["ssh: connect to host devbox port 22: Connection refused"]
 
@@ -395,7 +396,8 @@ final class HostConnectLoginTests: WindowTestCase {
 
         let view = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertTrue(login.terminated, "precondition: the login's surface is freed before the failure lands")
-        XCTAssertEqual(view.statusForTesting, "Connect to host devbox port 22: Connection refused")
+        XCTAssertEqual(view.statusForTesting, "The host refused the connection")
+        XCTAssertEqual(view.detailForTesting, "connect to host devbox port 22: Connection refused")
         XCTAssertEqual(view.emblemForTesting.glyphForTesting, .cross)
         XCTAssertEqual(view.statusColorForTesting, Theme.current.chrome.destructive.nsColor)
     }
