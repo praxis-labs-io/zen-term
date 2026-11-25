@@ -251,6 +251,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         loginActions.orientation = .horizontal
         loginActions.spacing = ChromeMetrics.Spacing.s8
         loginActions.detachesHiddenViews = true
+        loginActions.setHuggingPriority(.required, for: .horizontal)
         [trustButton, cancelButton].forEach(loginActions.addArrangedSubview)
     }
 
