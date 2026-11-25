@@ -78,7 +78,7 @@ final class ScrollModeController {
         if holdsViewport { surface?.scroll(.bottom) }
         holdsViewport = false
         reflowArmedAt = nil
-        panel?.modeMeta = nil
+        panel?.modeDetail = nil
         panel?.setScrollCursor(nil) { nil }
         panel = nil
         surface = nil
@@ -684,7 +684,7 @@ final class ScrollModeController {
             selection.map {
                 Self.visualTitle(kind: $0.kind, rows: abs(cursor.row - $0.anchor.row) + 1)
             } ?? Self.headerTitle(lastPosition)
-        panel?.modeMeta = PanelMeta(title: title, action: .toggleScrollMode)
+        panel?.modeDetail = title
     }
 
     static func headerTitle(_ position: TerminalScrollPosition?) -> String {

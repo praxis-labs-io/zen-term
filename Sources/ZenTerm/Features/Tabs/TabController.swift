@@ -121,6 +121,14 @@ final class TabController: NSObject {
         }
     }
 
+    var onHeaderControl: ((KeyInterceptor.ReservedChord) -> Void)? {
+        didSet { paneCanvas.onHeaderControl = onHeaderControl }
+    }
+
+    var processIcon: (SurfaceID, TerminalSurface) -> ProcessIcon = { ProcessIcon.running(in: $1) } {
+        didSet { paneCanvas.processIcon = processIcon }
+    }
+
     var onPaneTokensReleased: (([Int]) -> Void)? {
         didSet {
             paneCanvas.onPaneTokensReleased = onPaneTokensReleased
@@ -298,6 +306,8 @@ final class TabController: NSObject {
 
     private let backingScale: CGFloat?
 
+    private let readsForeground: Bool
+
     init(
         initialCWD: URL?, initialCommand: PaneProgram? = nil, env: [String: String] = [:], backingScale: CGFloat? = nil,
         isToolFloatOpen: @escaping () -> Bool = { false }, readsForeground: Bool = true,
@@ -308,6 +318,7 @@ final class TabController: NSObject {
         self.startSurface = startSurface
         openedCWD = initialCWD
         self.backingScale = backingScale
+        self.readsForeground = readsForeground
         self.isToolFloatOpen = isToolFloatOpen
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
@@ -498,7 +509,7 @@ final class TabController: NSObject {
         startSurface(surface, surfaceID, drawerConfig(command: bottomDrawerCommand, token: token))
         announceLaunch(surfaceID, bottomDrawerCommand)
         bottomDrawerSurface = surface
-        let panel = makeDrawerPanel(edge: .bottom, surface: surface)
+        let panel = makeDrawerPanel(edge: .bottom, surface: surface, id: surfaceID)
         bottomDrawerPanel = panel
         return panel
     }
@@ -592,7 +603,7 @@ final class TabController: NSObject {
         startSurface(surface, surfaceID, drawerConfig(command: rightDrawerCommand, token: token))
         announceLaunch(surfaceID, rightDrawerCommand)
         rightDrawerSurface = surface
-        let panel = makeDrawerPanel(edge: .right, surface: surface)
+        let panel = makeDrawerPanel(edge: .right, surface: surface, id: surfaceID)
         rightDrawerPanel = panel
         return panel
     }
@@ -605,21 +616,37 @@ final class TabController: NSObject {
         }
     }
 
-    private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
-        let meta =
-            edge == .bottom
-            ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
-            : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
-        let zoomMeta =
-            edge == .bottom
-            ? PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom)
-            : PanelMeta(title: "Right drawer: Focus Mode", action: .toggleZoom)
+    private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface, id: SurfaceID) -> PanelHostView {
+        let header = PaneHeader(
+            content: drawerHeaderContent(surface, id: id),
+            controls: [.focusMode, .close],
+            onControl: { [weak self] control in
+                self?.focusDrawer(edge)
+                control.chord.map { self?.onHeaderControl?($0) }
+            })
         let panel = PanelHostView(
             content: surface.view,
-            meta: meta, zoomMeta: zoomMeta,
+            header: header,
             onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
         panel.translatesAutoresizingMaskIntoConstraints = false
         return panel
+    }
+
+    private func drawerHeaderContent(_ surface: TerminalSurface, id: SurfaceID) -> PaneHeader.Content {
+        PaneIdentity.header(
+            of: surface, named: nil, directory: surface.currentDirectory, readsForeground: readsForeground,
+            process: processIcon(id, surface))
+    }
+
+    func refreshHeaders() {
+        paneCanvas.refreshHeaders()
+        refreshDrawerHeader(bottomDrawerPanel, bottomDrawerSurface, bottomDrawerSurfaceID)
+        refreshDrawerHeader(rightDrawerPanel, rightDrawerSurface, rightDrawerSurfaceID)
+    }
+
+    private func refreshDrawerHeader(_ panel: PanelHostView?, _ surface: TerminalSurface?, _ id: SurfaceID?) {
+        guard let header = panel?.header, let surface, let id else { return }
+        header.content = drawerHeaderContent(surface, id: id)
     }
 
     private func focusDrawer(_ edge: DrawerEdge) {
@@ -683,6 +710,8 @@ final class TabController: NSObject {
         let showsBorder = focusBorderIsVisible && panelsShareScreen
         bottomDrawerPanel?.isFocused = showsBorder && focused == .bottomDrawer
         rightDrawerPanel?.isFocused = showsBorder && focused == .rightDrawer
+        bottomDrawerPanel?.isActive = focused == .bottomDrawer
+        rightDrawerPanel?.isActive = focused == .rightDrawer
         bottomDrawerSurface?.setFocused(renders && focused == .bottomDrawer)
         rightDrawerSurface?.setFocused(renders && focused == .rightDrawer)
     }
@@ -1250,6 +1279,8 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, titleDidChange title: String) {
         guard let id = drawerSurfaceID(of: s) else { return }
         onTitle?(id, title)
+        if s === bottomDrawerSurface { refreshDrawerHeader(bottomDrawerPanel, s, id) }
+        if s === rightDrawerSurface { refreshDrawerHeader(rightDrawerPanel, s, id) }
     }
 
     private func drawerSurfaceID(of s: TerminalSurface) -> SurfaceID? {

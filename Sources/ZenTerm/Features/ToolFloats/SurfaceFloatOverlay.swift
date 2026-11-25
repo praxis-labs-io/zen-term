@@ -11,9 +11,10 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
     private let elevation = OutsideShadowView()
     private let blur = NSVisualEffectView()
     private var dismiss = DismissGate()
+    let header: PaneHeader?
 
     private lazy var chrome = ModeChrome(
-        container: card, content: content, padding: contentInset, header: nil,
+        container: card, content: content, padding: contentInset, header: header,
         onStripsChanged: { [weak self] in self?.stripsMoved() })
 
     var backgroundOverride: TerminalColor? {
@@ -36,9 +37,11 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         heightFraction: CGFloat,
         contentInset: CGFloat,
         cornerRadius: CGFloat,
+        header: PaneHeader? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.onDismiss = onDismiss
+        self.header = header
         self.content = content
         self.contentInset = contentInset
         super.init(frame: .zero)
@@ -145,13 +148,11 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
 
     func reapplyTerminalBehavior() { applyBackground() }
 
-    func reapplyKeymap() { chrome.reapplyKeymap() }
+    func applyHeaderShown() { chrome.applyHeaderShown() }
 
-    var modeMeta: PanelMeta? {
-        didSet {
-            guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
-            chrome.setHeader(modeMeta)
-        }
+    var modeDetail: String? {
+        get { header?.modeDetail }
+        set { header?.modeDetail = newValue }
     }
 
     func setScrollCursor(
@@ -170,10 +171,7 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
 
     var findBarForTesting: FindBarView? { chrome.findBarForTesting }
     var scrollCursorForTesting: ScrollCursorView { chrome.scrollCursorForTesting }
-    var isHeaderVisibleForTesting: Bool { chrome.isHeaderVisibleForTesting }
-    var headerContentForTesting: (title: String, shortcut: String)? { chrome.headerContentForTesting }
-
-    var builtHeaderKeycapForTesting: String? { chrome.builtHeaderKeycapForTesting }
+    var shownHeaderForTesting: PaneHeader? { chrome.shownHeaderForTesting }
 
     func animateIn() {
         superview?.layoutSubtreeIfNeeded()

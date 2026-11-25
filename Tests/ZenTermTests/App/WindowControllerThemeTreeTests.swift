@@ -154,8 +154,8 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         controller.handle(.toggleCommandPalette)
         let drawer = try XCTUnwrap(
             descendants(of: root).compactMap { $0 as? PanelHostView }
-                .first { $0.builtHeaderKeycapForTesting != nil },
-            "premise: the drawer's header is mounted")
+                .first { $0.header?.controlsForTesting.contains(.splitHorizontal) == false },
+            "premise: the drawer is mounted")
         let palette = try XCTUnwrap(descendants(of: root).compactMap { $0 as? CommandPaletteOverlay }.first)
         let rootProbe = CountingProbe()
         let drawerProbe = CountingProbe()
@@ -172,7 +172,6 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         Theme.setCurrentForTesting(try makeAlternateTheme())
         post(.keymap)
 
-        XCTAssertEqual(drawer.builtHeaderKeycapForTesting, rebound.displayGlyph, "premise: the rebind landed")
         XCTAssertEqual(rootProbe.count, 0, "a keymap change walked the window")
         XCTAssertEqual(drawerProbe.count, 0, "a keymap change walked the drawer host")
         XCTAssertEqual(paletteProbe.count, 0, "a keymap change walked the open palette")

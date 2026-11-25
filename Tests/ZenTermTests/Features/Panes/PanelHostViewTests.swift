@@ -36,8 +36,8 @@ final class PanelHostViewTests: WindowTestCase {
     }
 
     func test_focus_bordersThePaneInAccentAt2pt_andBlurRestoresTheRestEdge() throws {
-        let focused = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
-        let unfocused = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        let focused = PanelHostView(content: NSView(), onFocusRequest: {})
+        let unfocused = PanelHostView(content: NSView(), onFocusRequest: {})
         mount(focused)
         mount(unfocused)
         let chrome = Theme.current.chrome
@@ -60,7 +60,7 @@ final class PanelHostViewTests: WindowTestCase {
     func test_focus_paintsNothingOutsideThePane() {
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         host.wantsLayer = true
-        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        let panel = PanelHostView(content: NSView(), onFocusRequest: {})
         panel.translatesAutoresizingMaskIntoConstraints = true
         window = NSWindow(
             contentRect: host.bounds, styleMask: [.borderless], backing: .buffered, defer: false)
@@ -80,7 +80,7 @@ final class PanelHostViewTests: WindowTestCase {
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
 
-        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        let panel = PanelHostView(content: NSView(), onFocusRequest: {})
         mount(panel)
 
         let inRing = NSPoint(x: 5, y: panel.bounds.midY)
@@ -99,7 +99,7 @@ final class PanelHostViewTests: WindowTestCase {
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
 
-        let panel = PanelHostView(content: NSView(), meta: nil, fillsContent: true, onFocusRequest: {})
+        let panel = PanelHostView(content: NSView(), fillsContent: true, onFocusRequest: {})
         mount(panel)
 
         let ring = paintedAlpha(of: panel, at: NSPoint(x: 5, y: panel.bounds.midY))
@@ -109,7 +109,7 @@ final class PanelHostViewTests: WindowTestCase {
     }
 
     func test_dialledTranslucentAfterBuild_paintsThePaddingRing() {
-        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        let panel = PanelHostView(content: NSView(), onFocusRequest: {})
         mount(panel)
 
         var config = GeneralConfig.builtIn
@@ -124,66 +124,85 @@ final class PanelHostViewTests: WindowTestCase {
         XCTAssertNil(panel.paintedBackgroundForTesting.fill, "a translucent terminal panel must stop filling its clip")
     }
 
-    func test_drawerMeta_showsHeaderImmediately() {
-        let panel = PanelHostView(
-            content: NSView(),
-            meta: PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer),
-            onFocusRequest: {})
-        mount(panel)
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "a drawer's header is always shown")
+    private func header(_ controls: [PaneHeader.Control] = [.splitHorizontal, .splitVertical, .focusMode, .close])
+        -> PaneHeader
+    {
+        PaneHeader(
+            content: PaneHeader.Content(process: .shell, name: "zsh", detail: "~"), controls: controls,
+            onControl: { _ in })
     }
 
-    func test_zoomMeta_headerHiddenUntilZoom() {
-        let panel = PanelHostView(
-            content: NSView(),
-            meta: nil, zoomMeta: PanelMeta(title: "Terminal pane: Focus Mode", action: .toggleZoom),
-            onFocusRequest: {})
+    func test_aHeader_sitsAboveTheContent() throws {
+        let content = NSView()
+        let panel = PanelHostView(content: content, header: header(), onFocusRequest: {})
         mount(panel)
-        XCTAssertFalse(panel.isHeaderVisibleForTesting, "a pane's Focus Mode header is hidden until zoom")
+
+        let shown = try XCTUnwrap(panel.shownHeaderForTesting, "a pane with a header shows it at rest")
+        XCTAssertGreaterThanOrEqual(
+            content.frame.maxY, 0, "premise: the content is laid out")
+        XCTAssertLessThanOrEqual(content.frame.maxY, shown.frame.minY, "the terminal starts below the header")
+    }
+
+    func test_paneHeadersOff_appliedLive_givesTheHeadersRoomBackToTheContent() throws {
+        let content = NSView()
+        let panel = PanelHostView(content: content, header: header(), onFocusRequest: {})
+        mount(panel)
+        let withHeader = content.frame.height
+
+        var config = GeneralConfig.builtIn
+        config.paneHeaders = false
+        GeneralConfig.setCurrentForTesting(config)
+        panel.reapplyChromeLayout()
+        panel.layoutSubtreeIfNeeded()
+
+        XCTAssertNil(panel.shownHeaderForTesting)
+        XCTAssertGreaterThan(content.frame.height, withHeader, "the header's room goes back to the terminal")
+
+        config.paneHeaders = true
+        GeneralConfig.setCurrentForTesting(config)
+        panel.reapplyChromeLayout()
+        panel.layoutSubtreeIfNeeded()
+
+        XCTAssertNotNil(panel.shownHeaderForTesting)
+        XCTAssertEqual(content.frame.height, withHeader)
+    }
+
+    func test_focusMode_lightsTheHeadersFocusModeButton() throws {
+        let panel = PanelHostView(content: NSView(), header: header(), onFocusRequest: {})
+        mount(panel)
+        let button = try XCTUnwrap(panel.header?.buttonForTesting(.focusMode))
+        XCTAssertFalse(button.isActive)
 
         panel.isZoomed = true
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "zooming a pane reveals its Focus Mode header")
+        XCTAssertTrue(button.isActive, "the button stays lit while the pane is zoomed")
 
         panel.isZoomed = false
-        XCTAssertFalse(panel.isHeaderVisibleForTesting, "unzooming hides it again")
+        XCTAssertFalse(button.isActive)
     }
 
-    func test_drawerZoom_swapsHeaderToFocusModeAndCommandF() {
-        let panel = PanelHostView(
-            content: NSView(),
-            meta: PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer),
-            zoomMeta: PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom),
-            onFocusRequest: {})
+    func test_beingWhereFocusSits_showsTheHeadersControls_evenWithoutTheHalo() throws {
+        let panel = PanelHostView(content: NSView(), header: header(), onFocusRequest: {})
         mount(panel)
+        let shown = try XCTUnwrap(panel.header)
+        XCTAssertFalse(shown.controlsShownForTesting, "premise: an unfocused pane hides its controls")
 
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "a drawer's header is always shown")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "Bottom drawer")
-        let restingShortcut = panel.headerContentForTesting?.shortcut
-        XCTAssertEqual(restingShortcut, CommandCatalog.spec(for: .toggleBottomDrawer).shortcut)
+        panel.isActive = true
 
-        panel.isZoomed = true
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "a zoomed drawer keeps its header")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "Bottom drawer: Focus Mode")
-        XCTAssertEqual(panel.headerContentForTesting?.shortcut, CommandCatalog.spec(for: .toggleZoom).shortcut)
-
-        panel.isZoomed = false
-        XCTAssertEqual(panel.headerContentForTesting?.title, "Bottom drawer")
-        XCTAssertEqual(panel.headerContentForTesting?.shortcut, restingShortcut)
+        XCTAssertFalse(panel.isFocused, "premise: a lone pane wears no halo")
+        XCTAssertTrue(shown.controlsShownForTesting)
     }
 
-    func test_noMeta_neverShowsHeader() {
-        let panel = PanelHostView(
-            content: NSView(),
-            meta: nil, onFocusRequest: {})
+    func test_noHeader_neverShowsOne() {
+        let panel = PanelHostView(content: NSView(), onFocusRequest: {})
         mount(panel)
-        XCTAssertFalse(panel.isHeaderVisibleForTesting)
+        XCTAssertNil(panel.shownHeaderForTesting)
         panel.isZoomed = true
-        XCTAssertFalse(panel.isHeaderVisibleForTesting)
+        XCTAssertNil(panel.shownHeaderForTesting)
     }
 
     func test_aRaisedVeil_leavesThePaneTakingClicks() {
         let content = NSView()
-        let panel = PanelHostView(content: content, meta: nil, onFocusRequest: {})
+        let panel = PanelHostView(content: content, onFocusRequest: {})
         mount(panel)
         let center = NSPoint(x: 150, y: 100)
 
@@ -200,7 +219,7 @@ final class PanelHostViewTests: WindowTestCase {
     func test_aPaneAttachedWhileAFloatCoversTheWindow_comesUpVeiled() {
         let window = HostWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400))
         window.floatCoversPanes = true
-        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        let panel = PanelHostView(content: NSView(), onFocusRequest: {})
 
         window.contentView?.addSubview(panel)
 

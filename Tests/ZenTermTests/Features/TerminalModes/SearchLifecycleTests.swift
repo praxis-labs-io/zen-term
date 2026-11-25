@@ -394,21 +394,18 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertFalse(host.isInstalled)
     }
 
-    func test_theHeaderIsUpBeforeCommitSoCommittingReflowsNothing() throws {
+    func test_findAddsNothingToTheHeaderAndCommittingReportsScroll() throws {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
 
         controller.handle(.toggleSearch)
 
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "the header goes up with the bar")
-        XCTAssertEqual(
-            panel.headerContentForTesting?.title, "Find",
-            "and names the phase whose keys are actually live")
+        XCTAssertNotNil(panel.shownHeaderForTesting)
+        XCTAssertNil(panel.modeDetail, "the find bar already says what is live")
 
         controller.search.commit()
 
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "still up, so the grid never changed height")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "Scroll")
+        XCTAssertEqual(panel.modeDetail, "Scroll")
     }
 
     func test_aReaderOwnedScrollModeKeepsItsHeaderWhenTheBarCloses() throws {
@@ -421,7 +418,7 @@ final class SearchLifecycleTests: WindowTestCase {
 
         XCTAssertTrue(controller.scrollMode.isActive)
         XCTAssertEqual(
-            panel.headerContentForTesting?.title, "Scroll",
+            panel.modeDetail, "Scroll",
             "stripping the indicator off a live mode would leave it running unmarked")
     }
 

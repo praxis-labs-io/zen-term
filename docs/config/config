@@ -99,6 +99,12 @@
 # In-app Settings edit: applies live.
 # window-chrome = true                # true | false
 
+# A header atop every pane, drawer and float: what runs there and where, with
+# buttons to split, enter Focus Mode, minimize a float, and close. Off = no headers;
+# every one of those actions keeps its shortcut.
+# In-app Settings edit: applies live.
+# pane-headers = true                 # true | false
+
 # Hide any of the built-in buttons in the footer toolbar (bottom-right of the tab
 # bar) or the sidebar footer. Comma-separated, any order. Hiding is visual only:
 # every hidden button's shortcut stays live. A hidden bottom-drawer, right-drawer
