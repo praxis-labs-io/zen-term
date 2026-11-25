@@ -17,7 +17,7 @@ final class PaletteShellTests: WindowTestCase {
         init(_ entries: [Entry]) {
             all = entries
             shown = entries
-            super.init(placeholder: "Search stubs", emptyText: "No stubs", rowHeight: ChromeMetrics.Height.lg) {}
+            super.init(placeholder: "Search stubs", emptyText: "No stubs") {}
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -43,9 +43,9 @@ final class PaletteShellTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func mount(_ overlay: PaletteOverlay) -> NSWindow {
+    private func mount(_ overlay: PaletteOverlay, height: CGFloat = 560) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 560), styleMask: [.borderless],
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: height), styleMask: [.borderless],
             backing: .buffered, defer: false)
         overlay.translatesAutoresizingMaskIntoConstraints = true
         window.contentView?.addSubview(overlay)
@@ -179,5 +179,90 @@ final class PaletteShellTests: WindowTestCase {
 
         overlay.searchAccessory = nil
         XCTAssertNil(second.superview)
+    }
+
+    private func makeLongStub() -> StubPalette {
+        StubPalette((1...30).map { .init(title: "Entry \($0)", action: "Run", hasMoreActions: false) })
+    }
+
+    private func cardTop(of overlay: PaletteOverlay) -> CGFloat {
+        overlay.layoutSubtreeIfNeeded()
+        return overlay.convert(overlay.card.bounds, from: overlay.card).maxY
+    }
+
+    func test_theTopStaysPut_asTheQueryEmptiesAndRefillsTheList() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let overlay = makeLongStub()
+        _ = mount(overlay, height: 700)
+        let full = cardTop(of: overlay)
+        let fullCard = overlay.convert(overlay.card.bounds, from: overlay.card)
+
+        XCTAssertEqual(fullCard.midY, overlay.bounds.midY, accuracy: 1, "at its full size the panel sits centered")
+
+        try type("Entry 1", into: overlay)
+        XCTAssertEqual(cardTop(of: overlay), full, accuracy: 0.5, "a shorter list moved the top")
+
+        try type("zzz", into: overlay)
+        XCTAssertEqual(cardTop(of: overlay), full, accuracy: 0.5, "an empty list moved the top")
+
+        try type("", into: overlay)
+        XCTAssertEqual(cardTop(of: overlay), full, accuracy: 0.5, "refilling the list moved the top")
+    }
+
+    func test_theTopFollowsAWindowResize_andClampsInAShortWindow() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let overlay = makeLongStub()
+        let window = mount(overlay, height: 700)
+        try type("zzz", into: overlay)
+        let tall = cardTop(of: overlay)
+
+        window.setContentSize(NSSize(width: 700, height: 900))
+        overlay.frame = window.contentView?.bounds ?? .zero
+        XCTAssertGreaterThan(cardTop(of: overlay), tall, "the top did not follow the taller window")
+
+        window.setContentSize(NSSize(width: 700, height: 300))
+        overlay.frame = window.contentView?.bounds ?? .zero
+        overlay.layoutSubtreeIfNeeded()
+        let card = overlay.convert(overlay.card.bounds, from: overlay.card)
+        XCTAssertLessThan(card.maxY, overlay.bounds.maxY, "the panel ran off the top of a short window")
+        XCTAssertGreaterThan(card.minY, overlay.bounds.minY, "the panel ran off the bottom of a short window")
+    }
+
+    func test_everyPanel_opensAtTheSameTop_withTheSameMaxHeight() throws {
+        Motion.isReduceMotionEnabled = { true }
+        GitRepoStatus.resetForTesting()
+        addTeardownBlock { GitRepoStatus.resetForTesting() }
+        let commands = (1...30).map {
+            PaletteCommand(title: "Command \($0)", shortcut: "", category: "Tabs", chord: .newTab)
+        }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("zenterm-shell-\(UUID().uuidString)")
+        let panels: [(name: String, overlay: PaletteOverlay)] = [
+            ("palette", CommandPaletteOverlay(commands: { commands }, onRun: { _ in }, onDismiss: {})),
+            (
+                "picker",
+                RepoPickerOverlay(
+                    entries: (1...30).map {
+                        Workspace(
+                            title: "Workspace \($0)", path: root.appendingPathComponent("w\($0)"), tabs: [], env: [:])
+                    },
+                    onChoose: { _, _ in }, onAddWorkspace: {}, onDismiss: {})
+            ),
+            ("minimal panel", makeLongStub()),
+        ]
+
+        var cards: [(name: String, frame: NSRect)] = []
+        for panel in panels {
+            _ = mount(panel.overlay, height: 760)
+            panel.overlay.layoutSubtreeIfNeeded()
+            cards.append((panel.name, panel.overlay.convert(panel.overlay.card.bounds, from: panel.overlay.card)))
+        }
+
+        let reference = try XCTUnwrap(cards.first).frame
+        for card in cards {
+            XCTAssertEqual(card.frame.maxY, reference.maxY, accuracy: 0.5, "the \(card.name) opens at another top")
+            XCTAssertEqual(
+                card.frame.height, PaletteOverlay.fullHeight, accuracy: 0.5, "the \(card.name)'s full height")
+            XCTAssertEqual(card.frame.width, reference.width, accuracy: 0.5, "the \(card.name)'s width")
+        }
     }
 }

@@ -66,6 +66,10 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     static let actionsHint = HintFooter.Hint(keys: "⌘K", label: "Actions")
     private static let returnKey = "⏎"
     private static let searchInset = ChromeMetrics.Spacing.s12
+    private static let searchRowHeight = ChromeMetrics.Height.xl
+    static let maxListHeight: CGFloat = 320
+    private static let emptyListHeight = ChromeMetrics.Height.xl
+    static let fullHeight = searchRowHeight + ChromeMetrics.Border.width + maxListHeight + HintFooter.height
     // Below every other vertical constraint in the card, so a short window shrinks the list before anything else.
     private static let listHeightPriority = NSLayoutConstraint.Priority(
         NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
@@ -79,9 +83,6 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private let scrollView: FadingScrollView
     private let emptyLabel: EmptyStateLabel
     private let footer: HintFooter
-    private let defaultRowHeight: CGFloat
-    private let maxListHeight: CGFloat
-    private let emptyListHeight: CGFloat
     private let listVerticalInset: CGFloat = ChromeMetrics.Spacing.s8
     private var listHeight: NSLayoutConstraint!
     private struct LaidOutRow {
@@ -94,18 +95,14 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private var animatesNextReload = false
 
     init(
-        placeholder: String, emptyText: String, rowHeight: CGFloat, maxListHeight: CGFloat = 320,
-        emptyListHeight: CGFloat = ChromeMetrics.Height.xl, onDismiss: @escaping () -> Void
+        placeholder: String, emptyText: String, onDismiss: @escaping () -> Void
     ) {
-        self.defaultRowHeight = rowHeight
-        self.maxListHeight = maxListHeight
-        self.emptyListHeight = emptyListHeight
         self.emptyLabel = EmptyStateLabel(emptyText)
         self.searchPlaceholder = placeholder
         self.footer = HintFooter([], trailingInset: Self.searchInset)
         let doc = FlippedView()
         self.scrollView = FadingScrollView(document: doc)
-        super.init(width: Self.width, placement: .pinnedTop, onCancel: onDismiss)
+        super.init(width: Self.width, placement: .pinnedTop(fullHeight: Self.fullHeight), onCancel: onDismiss)
 
         searchGlyph.image = IconCatalog.image("magnifyingglass", pointSize: ChromeMetrics.Icon.md, weight: .regular)
         searchGlyph.contentTintColor = Theme.current.chrome.ink(.muted)
@@ -142,12 +139,12 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         stack.alignment = .leading
         embed(stack)
 
-        listHeight = scrollView.heightAnchor.constraint(equalToConstant: maxListHeight)
+        listHeight = scrollView.heightAnchor.constraint(equalToConstant: Self.maxListHeight)
         listHeight.priority = Self.listHeightPriority
 
         NSLayoutConstraint.activate([
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            searchRow.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xl),
+            searchRow.heightAnchor.constraint(equalToConstant: Self.searchRowHeight),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footer.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -223,8 +220,6 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     /// Nil by default: reuse by position would hand one row's baked-in content to a different entry.
     func rowIdentity(at index: Int) -> AnyHashable? { nil }
 
-    func rowHeight(at index: Int) -> CGFloat { defaultRowHeight }
-
     func isSelectable(at index: Int) -> Bool { true }
 
     func returnAction(at index: Int) -> String? { nil }
@@ -258,18 +253,16 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         var arrived: [PaletteRowView] = []
         var total: CGFloat = 0
         for index in 0..<count {
-            let height = rowHeight(at: index)
             let id = rowIdentity(at: index)
             let row: LaidOutRow
             if let id, let reused = reusable.removeValue(forKey: id) {
-                reused.height.constant = height
                 rowsStack.insertArrangedSubview(reused.view, at: index)
                 row = reused
             } else {
                 let view = makeRow(at: index)
                 if animatesNextReload { arrived.append(view) }
                 rowsStack.insertArrangedSubview(view, at: index)
-                let heightConstraint = view.heightAnchor.constraint(equalToConstant: height)
+                let heightConstraint = view.heightAnchor.constraint(equalToConstant: Self.height(of: view))
                 NSLayoutConstraint.activate([
                     view.widthAnchor.constraint(equalTo: rowsStack.widthAnchor), heightConstraint,
                 ])
@@ -278,7 +271,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
             row.view.onActivate = { [weak self] in self?.activateRow(at: index) }
             (row.view as? ListRow)?.onPointerEnter = { [weak self] in self?.pointRow(at: index) }
             next.append(row)
-            total += height
+            total += row.height.constant
         }
 
         let kept = Set(next.map { ObjectIdentifier($0.view) })
@@ -288,7 +281,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         laidOutRows = next
 
         emptyLabel.isHidden = count != 0
-        setListHeight(count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight))
+        setListHeight(count == 0 ? Self.emptyListHeight : min(total + 2 * listVerticalInset, Self.maxListHeight))
         selected = defaultSelectionIndex()
         updateHighlight()
         scrollSelectedToVisible()
@@ -297,6 +290,10 @@ class PaletteOverlay: ModalShell, ModalOverlay {
             row.layer?.opacity = 0
             Motion.fade(row, to: 1)
         }
+    }
+
+    private static func height(of row: PaletteRowView) -> CGFloat {
+        row is PaletteSectionHeader ? PaletteSectionHeader.height : ChromeMetrics.Height.lg
     }
 
     private func setListHeight(_ height: CGFloat) {

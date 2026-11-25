@@ -69,7 +69,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         super.init(
             placeholder: "Search workspaces",
             emptyText: "",
-            rowHeight: ChromeMetrics.Height.lg,
             onDismiss: onDismiss)
 
         let probes = configuredPaths.union((open + elsewhere).map { $0.folder.standardizedFileURL })
@@ -262,11 +261,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
             return RowView(worktree: worktree, parent: parent)
         }
-    }
-
-    override func rowHeight(at index: Int) -> CGFloat {
-        if case .header = rows[index] { return PaletteSectionHeader.height }
-        return super.rowHeight(at: index)
     }
 
     private func openState(row: Row) -> WorkspaceOpenState {

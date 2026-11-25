@@ -1,6 +1,8 @@
 import AppKit
 
 final class HintFooter: NSView, ThemeReapplying {
+    static let height = ChromeMetrics.Border.width + ChromeMetrics.Height.lg
+
     struct Hint: Equatable {
         let keys: String
         let label: String
@@ -32,7 +34,7 @@ final class HintFooter: NSView, ThemeReapplying {
             hairline.leadingAnchor.constraint(equalTo: leadingAnchor),
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
-            heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width + ChromeMetrics.Height.lg),
+            heightAnchor.constraint(equalToConstant: Self.height),
             pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
             pairs.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: trailingInset),
             pairs.centerYAnchor.constraint(

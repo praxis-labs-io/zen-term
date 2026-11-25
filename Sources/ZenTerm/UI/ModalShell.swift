@@ -6,16 +6,19 @@ class ModalShell: NSView, ThemeReapplying {
 
     enum Placement {
         case centered
-        // A list that filters as you type grows and shrinks from the bottom, so its search field stays put.
-        case pinnedTop
+        // Where the card would center at `fullHeight`, so a list that filters grows and shrinks from the bottom only.
+        case pinnedTop(fullHeight: CGFloat)
     }
 
-    private static let pinnedTopInset = ChromeMetrics.Spacing.s32
+    private static let fillFraction: CGFloat = 0.92
 
     let card = CardView()
     private let onCancel: () -> Void
     private let onDismiss: (() -> Void)?
     private var gate = DismissGate()
+    private let placement: Placement
+    private var pinnedTop: NSLayoutConstraint?
+    private var pinnedBottom: NSLayoutConstraint?
     private(set) lazy var confirm = ConfirmSlot(over: self)
 
     var isDismissing: Bool { gate.isDismissing }
@@ -30,6 +33,7 @@ class ModalShell: NSView, ThemeReapplying {
     ) {
         self.onCancel = onCancel
         self.onDismiss = onDismiss
+        self.placement = placement
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -52,20 +56,34 @@ class ModalShell: NSView, ThemeReapplying {
 
             card.centerXAnchor.constraint(equalTo: centerXAnchor),
             cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
+            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: Self.fillFraction),
         ])
         switch placement {
         case .centered:
             NSLayoutConstraint.activate([
                 card.centerYAnchor.constraint(equalTo: centerYAnchor),
-                card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+                card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: Self.fillFraction),
             ])
         case .pinnedTop:
-            NSLayoutConstraint.activate([
-                card.topAnchor.constraint(equalTo: topAnchor, constant: Self.pinnedTopInset),
-                card.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -Self.pinnedTopInset),
-            ])
+            let top = card.topAnchor.constraint(equalTo: topAnchor)
+            let bottom = card.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor)
+            pinnedTop = top
+            pinnedBottom = bottom
+            NSLayoutConstraint.activate([top, bottom])
         }
+    }
+
+    override func layout() {
+        if case .pinnedTop(let fullHeight) = placement { placePinnedCard(fullHeight: fullHeight) }
+        super.layout()
+    }
+
+    // The margin a centered card keeps at its height cap, so a short window clamps both placements alike.
+    private func placePinnedCard(fullHeight: CGFloat) {
+        let margin = bounds.height * (1 - Self.fillFraction) / 2
+        let top = max((bounds.height - fullHeight) / 2, margin)
+        if pinnedTop?.constant != top { pinnedTop?.constant = top }
+        if pinnedBottom?.constant != -margin { pinnedBottom?.constant = -margin }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }

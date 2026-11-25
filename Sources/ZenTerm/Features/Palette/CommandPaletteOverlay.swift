@@ -6,8 +6,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case command(PaletteCommand)
     }
 
-    private static let commandHeight: CGFloat = ChromeMetrics.Height.lg
-
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
 
     /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes in its shortcut glyph when built.
@@ -27,7 +25,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         super.init(
             placeholder: "Search commands",
             emptyText: "No matching commands",
-            rowHeight: Self.commandHeight,
             onDismiss: onDismiss)
     }
 
@@ -66,11 +63,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case .header(let title): return ["header", title]
         case .command(let command): return ["command", command.title, command.shortcut]
         }
-    }
-
-    override func rowHeight(at index: Int) -> CGFloat {
-        if case .header = rows[index] { return PaletteSectionHeader.height }
-        return Self.commandHeight
     }
 
     override func isSelectable(at index: Int) -> Bool {
