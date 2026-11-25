@@ -117,8 +117,10 @@ One ladder for every control and row:
 In a transient list, hover moves the keyboard cursor, so one row is lit at a time and ↑/↓
 continue from the row the pointer chose. A persistent list shows keyboard focus as the ring,
 and hover does not move it. In every row list a row activates on mouse up, and ↑/↓ stop at
-the ends. Focus changes a border's color, never its width. The one exception is a focused
-pane, which steps up to `Border.paneFocus`. A tool float and the SSH Connect screen wear no focus border.
+the ends. Focus changes a border's color, never its width. The one exception is the focus
+halo: the focused pane or drawer steps up to `Border.paneFocus` in accent only while another pane
+or drawer shares the screen. Nothing else wears it, so a lone or zoomed pane, a float and the SSH
+Connect screen show none.
 
 ## Type
 

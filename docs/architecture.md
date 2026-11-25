@@ -646,7 +646,7 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
   screen (`HostConnectView`), one `PanelHostView` that takes ↵ and focus, and is themed like a
-  pane through the same live-apply paths, but never shows a pane's focus border. Its left edge
+  lone pane through the same live-apply paths, so it never shows the focus halo. Its left edge
   leads into the sidebar (or shows the same hint a pane does when the sidebar is hidden); up,
   down and right do nothing. It has no tab, so dispatch drops any chord that is not
   `worksWithoutTab`, except ⌘T,
