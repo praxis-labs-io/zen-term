@@ -10,6 +10,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
 
     private let lit: [Bool]
     private let cells: [CALayer]
+    private let sheen = CAGradientLayer()
     private var isDimmed = false
 
     init(host: SSHHostID) {
@@ -21,6 +22,10 @@ final class HostEmblemView: NSView, ThemeReapplying {
         layer?.cornerRadius = ChromeMetrics.Radius.icon(Self.tileSide)
         layer?.cornerCurve = .continuous
         layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.masksToBounds = true
+        sheen.frame = bounds
+        ChipSheen.shape(sheen)
+        layer?.addSublayer(sheen)
         let grid = CGFloat(HostSignature.side) * Self.cellSide + CGFloat(HostSignature.side - 1) * Self.cellGap
         let origin = (Self.tileSide - grid) / 2
         for (index, cell) in cells.enumerated() {
@@ -49,14 +54,17 @@ final class HostEmblemView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.fill(.rest).cgColor
+        layer?.backgroundColor = chrome.background.nsColor.cgColor
         layer?.borderColor = chrome.fill(alpha: ChromeTheme.border).cgColor
         let on = chrome.ink(isDimmed ? .muted : .normal).cgColor
-        let off = chrome.fill(.rest).cgColor
+        let off = chrome.fill(.active).cgColor
         for (cell, isLit) in zip(cells, lit) { cell.backgroundColor = isLit ? on : off }
     }
 
     var litForTesting: [Bool] { lit }
     var cellColorsForTesting: [CGColor?] { cells.map(\.backgroundColor) }
     var tileFillForTesting: CGColor? { layer?.backgroundColor }
+    var hasSheenUnderCellsForTesting: Bool {
+        layer?.sublayers?.first === sheen && sheen.colors?.count == ChipSheen.colors.count
+    }
 }

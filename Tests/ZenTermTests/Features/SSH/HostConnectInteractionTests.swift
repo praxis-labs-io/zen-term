@@ -1259,7 +1259,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let emblem = screen.emblemForTesting
         XCTAssertEqual(
             emblem.cellColorsForTesting,
-            emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
+            emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
     }
 
     func test_returnOnAnOfflineHost_stillConnects() throws {
@@ -1297,7 +1297,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let emblem = screen.emblemForTesting
         XCTAssertEqual(
             emblem.cellColorsForTesting,
-            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
+            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
     }
 
     func test_theEditHostHint_namesTheSearchSelectionChord_andFollowsARebind() throws {
@@ -1321,11 +1321,12 @@ final class HostConnectInteractionTests: WindowTestCase {
         let chrome = Theme.current.chrome
 
         XCTAssertEqual(emblem.litForTesting, HostSignature.cells(of: host))
-        XCTAssertEqual(emblem.tileFillForTesting, chrome.fill(.rest).cgColor)
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
+        XCTAssertTrue(emblem.hasSheenUnderCellsForTesting, "the tile carries the chips' sheen, below the dots")
         XCTAssertEqual(emblem.frame.size, NSSize(width: HostEmblemView.tileSide, height: HostEmblemView.tileSide))
         XCTAssertEqual(
             emblem.cellColorsForTesting,
-            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
+            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
     }
 
     func test_theConnectScreen_showsWhereSSHWillSignIn_fromTheProbesResolution() throws {
@@ -1370,8 +1371,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotEqual(emblem.cellColorsForTesting, before)
         XCTAssertEqual(
             emblem.cellColorsForTesting,
-            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
-        XCTAssertEqual(emblem.tileFillForTesting, chrome.fill(.rest).cgColor)
+            emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
     }
 
     func test_atTheSmallestWindow_connectStaysOnScreen_andTheEmblemGivesWay() throws {
@@ -1416,8 +1417,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotEqual(emblem.cellColorsForTesting, before)
         XCTAssertEqual(
             emblem.cellColorsForTesting,
-            emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
-        XCTAssertEqual(emblem.tileFillForTesting, chrome.fill(.rest).cgColor)
+            emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
     }
 
     func test_aLongNameAndAddress_truncateInsideTheColumn_atEveryWidth() throws {
