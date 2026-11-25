@@ -511,6 +511,17 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertEqual(try sidebarDetail(in: c), "Connected")
     }
 
+    func test_aFailureOffItsConnectScreen_stillToasts() throws {
+        let (c, login) = try loggingIn()
+        let local = try XCTUnwrap(c.workspaceIDsForTesting.first)
+        c.activateWorkspaceForTesting(local)
+
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+
+        XCTAssertTrue(showsToast("Couldn't connect to", in: c), "nothing on screen says it failed")
+    }
+
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {
         SSHConnection.askpassProgramOverrideForTesting = .some(nil)
         let (c, login) = try loggingIn()

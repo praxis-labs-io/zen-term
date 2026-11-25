@@ -1620,6 +1620,8 @@ final class WindowController: NSObject {
         SSHHostStatusCenter.shared.setConnecting(false, host: host)
         if let connectView, connectView.host == host { connectView.setOutcome(.failed(reason: reason)) }
         refreshConnectLogin()
+        let isShowingConnect = mountedCanvas === connectView && connectView?.host == host
+        if !isShowingConnect { toasts.show(Self.loginFailedToast(host: GeneralConfig.current.displayName(of: host))) }
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
