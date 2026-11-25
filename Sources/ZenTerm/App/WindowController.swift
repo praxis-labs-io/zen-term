@@ -881,7 +881,10 @@ final class WindowController: NSObject {
 
     private var lastBusyDots = (false, false, false)
 
-    deinit { titlePoll?.invalidate() }
+    deinit {
+        titlePoll?.invalidate()
+        loginOutputTicker?.invalidate()
+    }
 
     private func makeController(
         cwd: URL?, command: PaneProgram? = nil, config ws: Workspace? = nil, tab index: Int = 0,
@@ -1546,10 +1549,7 @@ final class WindowController: NSObject {
         refreshConnectLogin()
         guard case .host(let shown) = selection, shown == host, workspaces.contains(where: { $0 === workspace })
         else { return renderAttention() }
-        selection = .workspace(workspace)
-        mount(.instant)
-        if let tab = workspace.activeID { visit(tab) }
-        renderAttention()
+        activate(workspace.id, transition: .instant)
     }
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {

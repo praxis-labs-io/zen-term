@@ -223,6 +223,23 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertNotNil(c.connectionForTesting(of: host))
     }
 
+    func test_aLoginThatConnects_closesACardOpenOverConnect() throws {
+        let (c, _) = try loggingIn()
+        c.handle(.searchSelection)
+        XCTAssertTrue(shows(AddSSHHostOverlay.self, in: c), "Edit Host opens over Connect while it logs in")
+
+        fake.connect()
+
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertFalse(shows(AddSSHHostOverlay.self, in: c), "a card for Connect must not stay over the new terminal")
+    }
+
+    private func shows<View: NSView>(_ type: View.Type, in c: WindowController) -> Bool {
+        guard let content = c.window.contentView else { return false }
+        func all(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + all($0) } }
+        return all(content).contains { $0 is View && !$0.isHidden }
+    }
+
     func test_aLoginThatConnectsWhileAnotherWorkspaceShows_leavesThatWorkspaceUp() throws {
         let (c, _) = try loggingIn()
         let local = try XCTUnwrap(c.workspaceIDsForTesting.first { c.host(of: $0) == nil })
