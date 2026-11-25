@@ -133,7 +133,7 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         chrome.findBarFill = isSolid ? background : ring.color
     }
 
-    var edgeForTesting: (color: CGColor?, width: CGFloat) {
+    var borderForTesting: (color: CGColor?, width: CGFloat) {
         (card.layer?.borderColor, card.layer?.borderWidth ?? -1)
     }
 

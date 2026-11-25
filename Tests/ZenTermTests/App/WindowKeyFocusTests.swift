@@ -223,7 +223,7 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertFalse(afterClose.contains(false), "a false between two trues leaves libghostty's blink cancelled")
     }
 
-    func test_aShownFloatWearsNoFocusBorder_whileAFocusedTreePaneKeepsIts() throws {
+    func test_aShownFloatWearsTheNeutralEdge_andThePaneGetsItsBorderBackOnClose() throws {
         let c = makeWindow()
         c.handle(.splitVertical)
         c.window.contentView?.layoutSubtreeIfNeeded()
@@ -237,8 +237,8 @@ final class WindowKeyFocusTests: WindowTestCase {
         let overlay = try XCTUnwrap(c.floatsForTesting.shownOverlayForTesting)
 
         XCTAssertTrue(c.window.firstResponder === float.view, "precondition: the float holds the keyboard")
-        XCTAssertEqual(overlay.edgeForTesting.width, ChromeMetrics.Border.width)
-        XCTAssertEqual(overlay.edgeForTesting.color, FloatShadow.edge.cgColor)
+        XCTAssertEqual(overlay.borderForTesting.width, ChromeMetrics.Border.width)
+        XCTAssertEqual(overlay.borderForTesting.color, FloatShadow.edge.cgColor)
 
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
         c.window.contentView?.layoutSubtreeIfNeeded()
