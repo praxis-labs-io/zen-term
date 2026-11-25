@@ -391,7 +391,7 @@
 #   new_workspace  prev_workspace  next_workspace
 #   select_workspace_1 … select_workspace_9  close_workspace
 #   rename_workspace    (no default binding; right-click a workspace, or use the palette)
-#   next_waiting_agent
+#   next_waiting_agent  toggle_agent_picker
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
@@ -457,6 +457,7 @@
 # keybind = close_workspace=cmd+ctrl+w           # asks first if something runs, or if it is the last
 #                                                # one; on a remote host, disconnects without asking
 # keybind = next_waiting_agent=cmd+shift+a       # the agent in this window that has waited longest
+# keybind = toggle_agent_picker=cmd+shift+o      # search this window's agents and focus one
 #
 # ─── Coming from Ghostty ─────────────────────────────────────────────────────
 #

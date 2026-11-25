@@ -73,6 +73,7 @@ extension KeyInterceptor.ReservedChord {
         case .closeWorkspace: return "close_workspace"
         case .renameWorkspace: return "rename_workspace"
         case .nextWaitingAgent: return "next_waiting_agent"
+        case .toggleAgentPicker: return "toggle_agent_picker"
         }
     }
 
@@ -98,7 +99,7 @@ extension KeyInterceptor.ReservedChord {
             .copyScreenFilePath, .openScreenFile,
             .dismissToast, .dismissAllToasts,
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace,
-            .nextWaitingAgent:
+            .nextWaitingAgent, .toggleAgentPicker:
             return false
         }
     }
@@ -109,7 +110,7 @@ extension KeyInterceptor.ReservedChord {
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWindow,
             .newWindow, .reloadConfig, .checkForUpdates, .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .toggleSidebar, .focusSidebar, .dismissToast, .dismissAllToasts, .nextWaitingAgent, .fillScreen,
-            .newWorkspace:
+            .newWorkspace, .toggleAgentPicker:
             return true
         case .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .closePane, .closeTab, .newTab, .selectTab, .prevTab, .nextTab,
@@ -148,7 +149,7 @@ extension KeyInterceptor.ReservedChord {
             .openSettings,
             .dismissToast, .dismissAllToasts,
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace,
-            .nextWaitingAgent:
+            .nextWaitingAgent, .toggleAgentPicker:
             return true
         }
     }
@@ -226,6 +227,7 @@ extension KeyInterceptor.ReservedChord {
         case "close_workspace": self = .closeWorkspace
         case "rename_workspace": self = .renameWorkspace
         case "next_waiting_agent": self = .nextWaitingAgent
+        case "toggle_agent_picker": self = .toggleAgentPicker
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -257,6 +259,7 @@ extension KeyInterceptor.ReservedChord {
             .openSettings, .reloadConfig, .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .checkForUpdates, .reportIssue, .newTool,
             .newWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace, .nextWaitingAgent,
+            .toggleAgentPicker,
         ]
         let numbered: [KeyInterceptor.ReservedChord] =
             (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }
@@ -345,6 +348,7 @@ enum KeymapDefaults {
         map[Chord(command: true, control: true, key: "]")] = .nextWorkspace
         map[Chord(command: true, control: true, key: "w")] = .closeWorkspace
         map[Chord(command: true, shift: true, key: "a")] = .nextWaitingAgent
+        map[Chord(command: true, shift: true, key: "o")] = .toggleAgentPicker
 
         return map
     }()
