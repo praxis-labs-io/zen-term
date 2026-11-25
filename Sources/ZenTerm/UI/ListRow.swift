@@ -392,7 +392,7 @@ class ListRow: ControlView, ThemeReapplying {
     override func hoverDidChange() {
         if !isHovered {
             hideTooltip()
-        } else if !isHoverSuppressed {
+        } else if !isHoverSuppressed, PointerRest.pointerHasMoved {
             onPointerEnter?()
         }
         if isHoverSuppressed { hideTooltip() }

@@ -11,6 +11,7 @@ class WindowTestCase: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        PointerRest.resetForTesting()
         ClaudeCodeSetup.configRootOverrideForTesting = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-claude-\(UUID().uuidString)")
     }
@@ -21,6 +22,7 @@ class WindowTestCase: XCTestCase {
         Self.closeAllWindows()
         Motion.isReduceMotionEnabled = originalReduceMotion
         WorktreeStore.isRemovedOverrideForTesting = nil
+        PointerRest.resetForTesting()
         ClaudeCodeSetup.configRootOverrideForTesting.map { try? FileManager.default.removeItem(at: $0) }
         ClaudeCodeSetup.configRootOverrideForTesting = nil
     }
