@@ -244,6 +244,24 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(presenter.pileForTesting.isUnfolded, "neither unfolds the stack")
     }
 
+    func test_aConfirmWithNoMessage_stillOffersItsButtons() throws {
+        let presenter = presenter()
+        var cancelled = false
+        let confirm = presenter.confirm(
+            ToastContent(variant: .warning, title: "Close Tab", message: nil),
+            actions: [
+                ToastAction(title: "Cancel", kind: .cancel) { cancelled = true },
+                ToastAction(title: "Close", kind: .destructive) {},
+            ])
+        window.contentView!.layoutSubtreeIfNeeded()
+        let cancel = try XCTUnwrap(
+            descendants(of: confirm).compactMap { $0 as? AppButton }.first { $0.title == "Cancel" })
+
+        click(cancel)
+
+        XCTAssertTrue(cancelled, "a one-line confirm's buttons are mounted and clickable")
+    }
+
     func test_aConfirm_staysInFrontOfNewerToasts() throws {
         let presenter = presenter()
         presenter.show(notice("First"))

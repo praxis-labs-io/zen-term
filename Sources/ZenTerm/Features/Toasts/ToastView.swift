@@ -165,7 +165,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
             col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
             col.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s8),
         ])
-        guard !isOneLine, !actionButtons.isEmpty else {
+        guard !actionButtons.isEmpty, !(isOneLine && usesLinks) else {
             let bottomInset = isOneLine ? ChromeMetrics.Spacing.s8 : ChromeMetrics.Spacing.s12
             col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -bottomInset).isActive = true
             return
