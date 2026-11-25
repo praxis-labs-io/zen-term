@@ -76,6 +76,11 @@ that state explicitly, or a covered `IconButton` still pops its tooltip. Hide th
 harmless, a stray increment suppresses sidebar hover for the rest of the session with nothing to clear
 it. Both call sites are balanced today, and a third has to be.
 
+**A row that scrolls or re-lays out under a still pointer gets hover.** That is not the person pointing,
+so a list that moves its selection on hover fights the arrow keys for it. `ListRow` hands hover to
+`onPointerEnter` only once the pointer has moved since the last `keyDown` (`PointerRest`, fed by
+`KeyInterceptor.route`, which sees every key before a chord or mode consumes it).
+
 **AppKit drops `mouseEntered` when the pointer arrives inside the window's own resize band.** A view
 tracking the window edge therefore never arms for a pointer that came in from outside the window, which
 is exactly how a person reaches an edge. Arm on `mouseMoved` as well as on enter.
