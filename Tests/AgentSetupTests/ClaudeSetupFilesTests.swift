@@ -118,7 +118,8 @@ final class ClaudeSetupFilesTests: XCTestCase {
             lines[1],
             #"You are helper `review`, started by pane 31. When done or stuck, report with "#
                 + #"`zen pane send --pane 31 --enter "<result>"`, then stop. Put a question about your task to "#
-                + #"pane 31 the same way and `zen wait 31` for the answer, not AskUserQuestion."#)
+                + #"pane 31 the same way, not AskUserQuestion, then end your turn: the answer arrives as your "#
+                + #"next message."#)
         XCTAssertFalse(output.contains("zen tab rename"))
     }
 

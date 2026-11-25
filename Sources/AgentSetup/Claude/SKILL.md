@@ -101,13 +101,15 @@ zen pane close review           # once you have its result
 - A message inside `<zen from="34 review" reply="zen pane send --pane 34 --enter">`
   is another agent's report, not the user. Answer with the envelope's reply
   command. ZenTerm also sends you one when a helper stops, blocks, works again after a block, or exits. Read the helper's actual result before you
-  summarize it.
+  summarize it. That notice and your `zen wait` on the helper answer for the
+  same stop, so act on it once.
 - Never answer another agent's permission prompt or login, with
   `zen pane send`, `zen pane keys` or anything else. Tell the user. ZenTerm
   refuses both into an agent waiting on the user, except a helper's question
   from its parent.
-- A helper's question about the task you gave it is yours to answer. Read it
-  with `zen pane read`, then answer with `zen pane send --pane <helper> --enter`,
+- A helper's question about the task you gave it is yours to answer. It
+  arrives with a `stopped` notice, because the helper ends its turn to ask:
+  the helper is not finished. Read the question with `zen pane read`, then answer with `zen pane send --pane <helper> --enter`,
   or `zen pane keys` to pick an option. A question that decides product
   behavior, spends the user's money or reaches outside the scope you gave it
   goes to the user.
@@ -119,18 +121,19 @@ zen pane close review           # once you have its result
   `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
   `--enter` the report is pasted but never submitted.
 - As a helper, put a question about your task to your parent the same way,
-  then `zen wait <parent>` for its answer. Do not use AskUserQuestion: the
-  parent set the task and answers first.
+  then end your turn: the answer arrives as your next message. Do not use
+  AskUserQuestion: the parent set the task and answers first.
 
 ## Waiting
 
 - Run every `zen wait`, and every `zen pane run --wait`, in your shell tool's
   background mode. You are notified when it answers, and stay free to answer
-  the user and do other work meanwhile. Read its result then.
+  the user and do other work meanwhile. Pass `--timeout 600`, so it answers
+  with its result instead of every 90 seconds. Read its result then.
 - Never sleep or poll. Use `zen wait <pane>`, `zen wait <pane> --output "<text>"`
   or `zen wait --children any|all`.
-- `zen wait` answers within 90 seconds by default. `timeout` is a check-in, not
-  a failure: wait again, in the background.
+- `zen wait` answers within 90 seconds by default, and 600 at most. `timeout`
+  is a check-in, not a failure: wait again, in the background.
 - Read a pane's state from `zen pane get` or `zen list` (`busy`, and `agent`
   with `state` and `status`), never from its screen.
 
@@ -172,11 +175,12 @@ zen worktree remove my-branch
 
 ## Preferences
 
-- A wait is the only command for your shell tool's background mode. Never run
-  anything else there, or with `&` or `nohup`: servers, watchers, builds and
-  helpers go in panes with `zen pane run`. Claude counts a background shell it
-  doesn't recognize as a server as work it is waiting on, so your session reads
-  as working until it exits, and a wait exits when it answers.
+- `zen wait` and `zen pane run --wait` are the only commands for your shell
+  tool's background mode. Never run anything else there, or with `&` or
+  `nohup`: servers, watchers, builds and helpers go in panes with
+  `zen pane run`. Claude counts a background shell it doesn't recognize as a
+  server as work it is waiting on, so your session reads as working until it
+  exits. A wait is work you are waiting on, so that reading is correct.
 - For worktree work, use `zen worktree` instead of `git worktree` or
   EnterWorktree, so the worktree gets the workspace's files and the user can
   open it from the workspace picker. Pass `--open` only when asked to open it.
