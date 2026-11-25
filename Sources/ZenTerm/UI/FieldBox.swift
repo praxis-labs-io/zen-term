@@ -142,7 +142,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         return range.location == (textView.string as NSString).length && range.length == 0
     }
 
-    // Editing notifications don't fire reliably under keyboard navigation, so focus comes from responder transitions.
+    // Reports focus from responder transitions, since editing notifications don't fire under keyboard navigation.
     private protocol FocusReporting: AnyObject {
         var onGainedFocus: (() -> Void)? { get set }
     }

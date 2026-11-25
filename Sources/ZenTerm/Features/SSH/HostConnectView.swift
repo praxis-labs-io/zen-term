@@ -162,7 +162,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         onCancel()
     }
 
-    // ssh waiting on an answer puts focus in its field.
     var focusTarget: NSView { answerBox.isHidden ? self : answerField.field }
 
     func setLogin(_ login: Login?) {
