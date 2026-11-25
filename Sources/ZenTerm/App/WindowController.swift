@@ -932,7 +932,10 @@ final class WindowController: NSObject {
     }
 
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
-        if let connectView, connectView.host == host { return connectView }
+        if let connectView, connectView.host == host {
+            if loginOutputTicker == nil { refreshConnectLogin() }
+            return connectView
+        }
         let view = HostConnectView(
             host: host, name: GeneralConfig.current.displayName(of: host),
             status: SSHHostStatusCenter.shared.status(of: host),
@@ -971,7 +974,12 @@ final class WindowController: NSObject {
         guard loginOutputTicker == nil else { return }
         let ticker = Timer(timeInterval: PaneWait.checkInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.mountedCanvas === self.connectView else { return }
+                guard let self else { return }
+                guard self.mountedCanvas === self.connectView else {
+                    self.loginOutputTicker?.invalidate()
+                    self.loginOutputTicker = nil
+                    return
+                }
                 self.refreshConnectLogin()
             }
         }
@@ -1095,6 +1103,11 @@ final class WindowController: NSObject {
     }
 
     private func closeFloatForTabChange() { floats.close() }
+
+    private var isConnectFrontmost: Bool {
+        modal == nil && confirmCard == nil && !floats.isOpen && !sidebar.hasFocus && activeWorkspace == nil
+            && mountedCanvas === connectView
+    }
 
     private func focusActive() {
         if floats.isOpen {
@@ -4940,7 +4953,7 @@ extension WindowController: NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         windowIsKey = true
-        if modal == nil, activeWorkspace == nil { connectView?.takeBackFocus() }
+        if isConnectFrontmost { connectView?.takeBackFocus() }
         syncWindowFocus()
         sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()

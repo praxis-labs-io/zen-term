@@ -149,6 +149,20 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertTrue((c.window.firstResponder as? NSText)?.delegate === field.field, "the field takes focus back")
     }
 
+    func test_comingBackToTheWindow_leavesFocusInTheSidebar() throws {
+        let (c, login) = try loggingIn()
+        try ask("devbox's password: ", login: login, in: c)
+        let field = try XCTUnwrap(c.connectViewForTesting?.answerFieldForTesting)
+        c.handle(.focusSidebar)
+        let focused = c.window.firstResponder
+
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: c.window))
+
+        XCTAssertFalse(
+            (c.window.firstResponder as? NSText)?.delegate === field.field, "keystrokes meant for the sidebar")
+        XCTAssertTrue(c.window.firstResponder === focused)
+    }
+
     func test_returnOnConnectDuringALogin_submitsTheAnswer_andNeverCancels() throws {
         let (c, login) = try loggingIn()
         try ask("devbox's password: ", login: login, in: c)
