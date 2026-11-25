@@ -714,7 +714,10 @@ and Backspace, so deleting it ends the draft; text it cannot count, or a key tha
 leaves the length unknown, which only Return or a clearing key ends, or Escape when only Up, Down or Tab started it. A key while the surface's view has marked text (an input
 method composing) leaves the length unknown and is never a submit, and a Return after a typed `\`,
 past keys that only move the cursor, is Claude Code's newline, not a submit. Each surface has one ordered queue that the draft's
-release and the blocked recheck both drain, so a newer message never passes a held one. The
+release and the blocked recheck both drain, so a newer message never passes a held one. When the
+message's agent has a draft stash (`AgentRules.draftStash`, Claude Code's Ctrl-S) and the draft sat
+`PaneDrafts.draftWait` with no key, the queue delivers over it: `ControlResponder.paste` presses the
+stash, pastes and submits, and the agent restores the draft on that submit. The
 person's Return drains it through `PaneDrafts.after`, after the key reached the surface. A message
 the queue drops (its pane closed, or its agent blocked 10 minutes from when the queue could deliver)
 goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)

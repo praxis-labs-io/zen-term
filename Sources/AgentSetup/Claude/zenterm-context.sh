@@ -39,7 +39,7 @@ case "$ZEN_PANE" in
         who="pane $ZEN_PANE"
         [ -n "$name" ] && who="\`$name\`"
         helper="
-You are helper $who, started by pane $parent. When done or stuck, report with \`zen pane send --pane $parent --enter \"<result>\"\`, then stop. Put a question about your task to pane $parent the same way, not AskUserQuestion, then end your turn: the answer arrives as your next message."
+You are helper $who, started by pane $parent. When done or stuck, report with \`zen pane send --pane $parent --enter \"<result>\"\`, then stop. Put a question about your task to pane $parent the same way, not AskUserQuestion, then end your turn: the answer arrives as your next message. A send that prints \`{\"queued\":true}\` arrives on its own once the user sends or clears their text, or, in Claude Code, stops typing for 60 seconds; don't send it again."
         ;;
     esac
     ;;

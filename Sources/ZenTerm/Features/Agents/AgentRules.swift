@@ -12,6 +12,11 @@ enum AgentRules {
         return AgentRoster.knownAgents.first { name.contains($0) }
     }
 
+    // Claude Code's chat:stash sets the prompt's text aside, and its next submit puts it back.
+    static func draftStash(for agentName: String?) -> Chord? {
+        key(for: agentName) == "claude" ? Chord(control: true, key: "s") : nil
+    }
+
     static func agentName(matching title: String) -> String? {
         identifiers.first { $0.match.matches(title) }?.name
     }

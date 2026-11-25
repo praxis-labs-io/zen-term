@@ -265,12 +265,28 @@ final class ControlHelperNoteTests: WindowTestCase {
         try type(into: parent, in: c)
 
         report(.done, from: helper)
-        clock.advance(3600)
+        clock.advance(PaneDrafts.draftWait - 1)
         XCTAssertEqual(parent.inputs, [], "the person has an unsent draft in the parent")
         try sendDraft(in: c)
 
         let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
+    }
+
+    func test_aNoteSetsAsideAParentsDraftLeftAMinute() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        try type(into: parent, in: c)
+
+        report(.done, from: helper)
+        clock.advance(PaneDrafts.draftWait)
+
+        let stash = try XCTUnwrap(TerminalKey(chord: Chord(control: true, key: "s")))
+        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, [.press(stash)] + (try note(read, from: helper)))
     }
 
     func test_aParentThatRunsNoAgentHearsNothing() throws {

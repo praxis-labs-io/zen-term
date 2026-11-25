@@ -7,19 +7,23 @@ extension ControlResponder {
         let isBlocked = { [self] in
             parentPlace(of: note).map { Self.refusal(.paste, into: $0, from: nil, force: nil) != nil } ?? false
         }
-        let deliver = { [self] in
+        let deliver = { [self] (overDraft: Bool) in
             guard let place = parentPlace(of: note), place.window.runsAgent(place.pane),
                 place.pane.surface.isStarted, note.outlivesHelper || locate(pane: note.helper) != nil,
                 !isStale(note)
             else { return }
-            paste(note.text, from: note.helper, into: place, enter: true)
+            paste(note.text, from: note.helper, into: place, enter: true, overDraft: overDraft)
         }
         let drop = { (reason: String) in
             Log.warning("Dropped pane \(note.helper)'s note to pane \(note.parent): \(reason).", category: .control)
         }
+        let setsDraftAside = { [self] in
+            parentPlace(of: note).map { $0.window.draftStash(of: $0.pane) != nil } ?? false
+        }
         paneDrafts.queue(
-            parent.pane.surfaceID, PaneDrafts.Message(isTask: false, isBlocked: isBlocked, deliver: deliver, drop: drop)
-        )
+            parent.pane.surfaceID,
+            PaneDrafts.Message(
+                isTask: false, setsDraftAside: setsDraftAside, isBlocked: isBlocked, deliver: deliver, drop: drop))
     }
 
     private func isStale(_ note: HelperNote) -> Bool {

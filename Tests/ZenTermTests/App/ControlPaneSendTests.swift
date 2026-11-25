@@ -103,9 +103,10 @@ final class ControlPaneSendTests: WindowTestCase {
         try XCTUnwrap(surface.lastConfig?.environment["ZEN_PANE"].flatMap(Int.init))
     }
 
-    private func report(_ state: TerminalProgramStatus.State, from surface: RecordingSurface) {
-        surface.delegate?.surface(
-            surface, programStatusDidChange: TerminalProgramStatus(state: state, app: "claude-code"))
+    private func report(
+        _ state: TerminalProgramStatus.State, from surface: RecordingSurface, app: String = "claude-code"
+    ) {
+        surface.delegate?.surface(surface, programStatusDidChange: TerminalProgramStatus(state: state, app: app))
         let drained = expectation(description: "main queue")
         DispatchQueue.main.async { drained.fulfill() }
         wait(for: [drained], timeout: 2)
@@ -161,7 +162,7 @@ final class ControlPaneSendTests: WindowTestCase {
     func test_aSendIntoADraftWaitsForThePersonsReturn_thenArrivesOnItsOwn() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)
-        report(.idle, from: agent)
+        report(.idle, from: agent, app: "aider")
         try focus(agent, in: c)
         try sendKeys(typing: "fix the", to: c)
 
@@ -176,6 +177,80 @@ final class ControlPaneSendTests: WindowTestCase {
         clock.advance(0)
 
         XCTAssertEqual(agent.inputs, [.paste("review x.swift"), .submit])
+    }
+
+    private var stash: RecordingSurface.Input {
+        get throws { .press(try XCTUnwrap(TerminalKey(chord: Chord(control: true, key: "s")))) }
+    }
+
+    func test_aSendIntoAClaudeDraftArrivesAMinuteAfterTheLastKey_withTheDraftSetAside() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "fix the", to: c)
+
+        XCTAssertTrue(isQueued(send("review x.swift", to: try token(of: agent), enter: true)))
+        clock.advance(PaneDrafts.draftWait - 1)
+        XCTAssertEqual(agent.inputs, [])
+        clock.advance(1)
+
+        XCTAssertEqual(agent.inputs, [try stash, .paste("review x.swift"), .submit])
+    }
+
+    func test_aKeyInTheDraftRestartsTheMinute() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "fix", to: c)
+        XCTAssertTrue(isQueued(send("go", to: try token(of: agent), enter: true)))
+
+        clock.advance(PaneDrafts.draftWait - 1)
+        try sendKeys(typing: " it", to: c)
+        clock.advance(PaneDrafts.draftWait - 1)
+        XCTAssertEqual(agent.inputs, [], "the key started the minute over")
+        clock.advance(1)
+
+        XCTAssertEqual(agent.inputs, [try stash, .paste("go"), .submit])
+    }
+
+    func test_theDraftOutlivesADelivery_soTheNextSendSetsItAsideToo_andItsReturnStillSendsIt() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "mine", to: c)
+        XCTAssertTrue(isQueued(send("first", to: try token(of: agent), enter: true)))
+        XCTAssertTrue(isQueued(send("second", to: try token(of: agent), enter: true)))
+
+        clock.advance(PaneDrafts.draftWait)
+        XCTAssertEqual(agent.inputs, [try stash, .paste("first"), .submit], "one at a time over a draft")
+        clock.advance(PaneDrafts.draftRestorePause)
+        let both: [RecordingSurface.Input] = [try stash, .paste("first"), .submit, try stash, .paste("second"), .submit]
+        XCTAssertEqual(agent.inputs, both)
+
+        XCTAssertTrue(isQueued(send("third", to: try token(of: agent), enter: true)))
+        let all = both + [try stash, .paste("third"), .submit]
+        XCTAssertEqual(agent.inputs, all, "the draft is back, so it is set aside again")
+
+        try sendKeys([.returnKey], to: c)
+        clock.advance(0)
+        XCTAssertFalse(isQueued(send("fourth", to: try token(of: agent), enter: true)))
+        XCTAssertEqual(agent.inputs, all + [.paste("fourth"), .submit], "the person's Return sent their draft")
+    }
+
+    func test_aSendWithoutEnterNeverLandsInAClaudeDraft() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        try sendKeys(typing: "mine", to: c)
+        XCTAssertTrue(isQueued(send("partial", to: try token(of: agent))))
+
+        clock.advance(3600)
+
+        XCTAssertEqual(agent.inputs, [])
     }
 
     func test_keysThatLandInAConfirmCardStartNoDraft() throws {

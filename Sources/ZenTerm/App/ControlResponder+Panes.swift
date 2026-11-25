@@ -157,20 +157,32 @@ extension ControlResponder {
                 wait?.cancel()
                 reply(.failure(ControlError(.failed, "The send queued for pane \(token) was dropped: \(reason).")))
             }
+            let setsDraftAside = { [self] in
+                guard request.args.enter == true, request.args.text?.isEmpty == false,
+                    case .success(let place) = pane(.token(token), for: request) else {
+                    return false
+                }
+                return place.window.draftStash(of: place.pane) != nil
+            }
             paneDrafts.queue(
                 place.pane.surfaceID,
                 PaneDrafts.Message(
                     isTask: request.args.enter == true && Self.startsTurn(request.args.text ?? ""),
+                    setsDraftAside: setsDraftAside,
                     isBlocked: isBlocked,
-                    deliver: { [self] in
-                        if case .failure(let error) = deliver(to: token, for: request) { drop(error.message) }
+                    deliver: { [self] overDraft in
+                        if case .failure(let error) = deliver(to: token, for: request, overDraft: overDraft) {
+                            drop(error.message)
+                        }
                     },
                     drop: drop))
         }
     }
 
     // The pane is found again because a queued message can outlast it, and its agent can block meanwhile.
-    private func deliver(to token: Int, for request: ControlRequest) -> Result<PanePlace, ControlError> {
+    private func deliver(
+        to token: Int, for request: ControlRequest, overDraft: Bool = false
+    ) -> Result<PanePlace, ControlError> {
         let found = pane(.token(token), for: request).flatMap { place -> Result<PanePlace, ControlError> in
             guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
             if let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) {
@@ -181,7 +193,7 @@ extension ControlResponder {
         guard case .success(let place) = found else { return found }
         let text = request.args.text ?? ""
         let enter = request.args.enter == true
-        paste(text, from: request.caller?.pane, into: place, enter: enter)
+        paste(text, from: request.caller?.pane, into: place, enter: enter, overDraft: overDraft)
         noteDelivery(from: request.caller?.pane, to: place, submitted: enter && !text.isEmpty)
         if enter, Self.startsTurn(text) { place.window.noteTaskSubmitted(to: place.pane) }
         return found
@@ -233,8 +245,9 @@ extension ControlResponder {
                 + "Nothing was \(delivery.verbs.done). Pass --force to \(delivery.verbs.to) anyway.")
     }
 
-    func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool) {
+    func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool, overDraft: Bool = false) {
         let surface = place.pane.surface
+        if overDraft, let stash = place.window.draftStash(of: place.pane) { surface.press(stash) }
         if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
         if enter { surface.submit() }
         paneWaits.sent(to: place.pane.surfaceID)

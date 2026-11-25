@@ -2340,6 +2340,10 @@ final class WindowController: NSObject {
 
     func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
 
+    func draftStash(of pane: PaneHandle) -> TerminalKey? {
+        AgentRules.draftStash(for: liveAgent(pane.surfaceID)?.name).flatMap(TerminalKey.init(chord:))
+    }
+
     func listing(of pane: PaneHandle, in tab: TabID) -> ListResult.Pane {
         let workspace = workspace(of: tab)
         return listing(

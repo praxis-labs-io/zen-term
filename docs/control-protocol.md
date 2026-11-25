@@ -326,6 +326,10 @@ Into a pane that runs an agent:
   confirms an input method's text, or that follows a typed `\` with only cursor moves between, does not send it. Queued sends
   arrive in order, each on its own, right after the person's Return, or 2 seconds after the key
   that cleared it. A send within 2 seconds of any other key into the pane is queued the same way.
+  Into Claude Code, a send with `enter` and text also arrives once 60 seconds pass with no key into
+  the pane: Ctrl-S sets the person's text aside, the send is pasted and submitted, and Claude Code
+  puts the text back. Each later queued send follows 2 seconds after the one before. Into any other
+  agent the send waits until the person sends or clears their text.
   Keys or a paste into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued
   send whose agent is `blocked` when its turn comes waits until it is not, and is dropped once the
   agent stays blocked 10 minutes from when the person sent or cleared their text. A queued send that
