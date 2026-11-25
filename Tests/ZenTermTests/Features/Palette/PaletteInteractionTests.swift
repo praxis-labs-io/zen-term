@@ -301,6 +301,21 @@ final class PaletteInteractionTests: WindowTestCase {
         }
     }
 
+    func test_commandPalette_everyHeaderButTheFirst_leavesAGapAboveIt() {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        type("close", into: overlay)
+        type("", into: overlay)
+        window.layoutIfNeeded()
+
+        let headers = overlay.rowViews.enumerated().filter { $0.element is PaletteSectionHeader }
+        XCTAssertGreaterThan(headers.count, 1)
+        for (index, header) in headers {
+            let gap = index == 0 ? 0 : PaletteSectionHeader.sectionGap
+            XCTAssertEqual(header.frame.height, PaletteSectionHeader.height + gap, accuracy: 0.5, "header at \(index)")
+        }
+    }
+
     func test_commandCategory_everyChipsMarkIsBundled() {
         for category in CommandCategory.allCases {
             XCTAssertNotNil(
