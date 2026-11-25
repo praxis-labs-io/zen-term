@@ -5,7 +5,7 @@ struct ConfirmPrompt {
         case checklist([ConfirmCardChecklist.Item])
     }
 
-    // A close is answered with Return as it always was; a delete cannot be undone, so Return there answers nothing.
+    // A close is answered with Return; a delete cannot be undone, so Return there answers nothing.
     enum Start {
         case onConfirm
         case unfocused

@@ -551,13 +551,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast never takes the keyboard.** Its buttons answer clicks only;
   `dismiss_toast` and `dismiss_all_toasts` exist for the keyboard.
-- **Every toast and card shares one stack** (`ToastPile`), folded so one card shows: a pending
-  confirm ahead of anything newer, otherwise the newest. A click unfolds it into a list; a click
-  outside, Show Less, or one card left folds it. Countdowns hold while it is unfolded and restart
-  a whole duration when it folds.
+- **Every toast and card shares one stack** (`ToastPile`), folded so the newest card shows. A
+  click unfolds it into a list; a click outside, Show Less, or one card left folds it. Countdowns
+  hold while it is unfolded and restart a whole duration when it folds.
 - **A toast that offers an action stays until it is answered.** Only an attention or completion
-  card under `auto` counts down with its actions. A non-modal card's actions are text links and
-  it never takes focus; a confirm keeps its buttons, because it owns Return and Esc.
+  card under `auto` counts down with its actions. A toast's actions are text links and it never
+  takes focus.
 - **A toast's copy and actions come from a static factory on its owner** (`WindowController+Toasts`
   for the window's), never a literal at the call site. `GalleryToasts` builds the Component
   Gallery's toast sections from the same factories, so a new toast adds itself there too.
