@@ -69,6 +69,9 @@ final class PaneHeader: ControlView, ThemeReapplying {
         didSet { buttons[.focusMode]?.isActive = isZoomed }
     }
 
+    // The name's capitals center on the chip, which a label's line box, descent and all, would not.
+    private static var nameFont: NSFont { ChromeType.font(.small, weight: .medium) }
+
     private let controls: [Control]
     private let onControl: (Control) -> Void
     private let chip: IconBadge
@@ -129,8 +132,9 @@ final class PaneHeader: ControlView, ThemeReapplying {
             chip.leadingAnchor.constraint(equalTo: leadingAnchor),
             chip.centerYAnchor.constraint(equalTo: centerYAnchor),
             nameField.leadingAnchor.constraint(equalTo: chip.trailingAnchor, constant: gap),
-            nameField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            detailField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            nameField.firstBaselineAnchor.constraint(
+                equalTo: chip.centerYAnchor, constant: Self.nameFont.capHeight / 2),
+            detailField.firstBaselineAnchor.constraint(equalTo: nameField.firstBaselineAnchor),
             detailField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
             nameField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
             controlStack.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -178,7 +182,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
         nameField.attributedStringValue = NSAttributedString(
             string: content.name,
             attributes: [
-                .font: ChromeType.font(.small, weight: .medium),
+                .font: Self.nameFont,
                 .foregroundColor: chrome.ink(isActive ? .normal : .subtle),
                 .paragraphStyle: truncating,
             ])
