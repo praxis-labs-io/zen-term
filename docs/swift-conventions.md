@@ -187,6 +187,9 @@ its window stops being key and paints the system's appearance-driven gray, with 
 `ChromeTextView` is TextKit 1, whose layout manager swaps that fill in `fillBackgroundRectArray`, and
 it must `setFill()` the replacement before calling super, which fills with the current color, not
 `color`. `HostWindow` vends one as the field editor for every `NSTextField`, selectable labels included.
+An `NSSecureTextField` keeps AppKit's own `NSSecureTextView` instead. While it edits, that editor is the
+window's first responder but not the field's `currentEditor()`, and the field's `stringValue` stays stale,
+so read focus and text from the first responder whose delegate is the field, as `FieldBox` does.
 
 ## Layers and shadows
 
