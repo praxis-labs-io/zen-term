@@ -674,23 +674,20 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(
             float.focusRenders[tookResponder...].contains(false),
             "a same-turn blur between two focuses leaves libghostty's blink timer stopped")
-        XCTAssertEqual(controller.floatsForTesting.shownOverlayForTesting?.isFocusBorderVisible, true)
     }
 
-    func test_clickingAnOpenFloat_fromTheSidebar_givesItBackItsEdgeAndCursor() throws {
+    func test_clickingAnOpenFloat_fromTheSidebar_givesItBackItsCursor() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
         let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
-        let overlay = try XCTUnwrap(controller.floatsForTesting.shownOverlayForTesting)
         controller.sidebarForTesting.focusActiveRow()
-        XCTAssertFalse(overlay.isFocusBorderVisible, "precondition: the sidebar took the float's edge")
+        XCTAssertEqual(float.focusRenders.last, false, "precondition: the sidebar took the float's cursor")
 
         controller.window.makeFirstResponder(float.view)
         float.delegate?.surfaceWantsFocus(float)
 
         XCTAssertFalse(controller.sidebarForTesting.hasFocus)
-        XCTAssertTrue(overlay.isFocusBorderVisible)
         XCTAssertEqual(float.focusRenders.last, true)
     }
 

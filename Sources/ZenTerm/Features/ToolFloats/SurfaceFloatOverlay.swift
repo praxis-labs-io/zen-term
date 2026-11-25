@@ -50,7 +50,7 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.applyTerminalHost(to: card, cornerRadius: cornerRadius, focusBorder: true)
+        CardChrome.applyTerminalHost(to: card, cornerRadius: cornerRadius)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
@@ -133,14 +133,12 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         chrome.findBarFill = isSolid ? background : ring.color
     }
 
-    var isFocusBorderVisible = true {
-        didSet {
-            if oldValue != isFocusBorderVisible { CardChrome.reapplyEdge(to: card, focusBorder: isFocusBorderVisible) }
-        }
+    var borderForTesting: (color: CGColor?, width: CGFloat) {
+        (card.layer?.borderColor, card.layer?.borderWidth ?? -1)
     }
 
     func reapplyTheme() {
-        CardChrome.reapplyEdge(to: card, focusBorder: isFocusBorderVisible)
+        CardChrome.reapplyEdge(to: card)
         elevation.color = FloatShadow.color(.float)
         applyBackground()
     }

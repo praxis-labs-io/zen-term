@@ -14,8 +14,7 @@
             GallerySection(
                 title: "CardChrome",
                 rows: [
-                    GallerySection.Row(label: "Plain edge", samples: [card(focusBorder: false)]),
-                    GallerySection.Row(label: "Focus border", samples: [card(focusBorder: true)]),
+                    GallerySection.Row(label: "Edge and shadow", samples: [card()])
                 ])
         }
 
@@ -92,10 +91,10 @@
 
         private static let sampleSize = NSSize(width: 220, height: 80)
 
-        private static func card(focusBorder: Bool) -> NSView {
+        private static func card() -> NSView {
             let card = CardView()
             card.translatesAutoresizingMaskIntoConstraints = false
-            CardChrome.apply(to: card, focusBorder: focusBorder)
+            CardChrome.apply(to: card)
             NSLayoutConstraint.activate([
                 card.widthAnchor.constraint(equalToConstant: Self.sampleSize.width),
                 card.heightAnchor.constraint(equalToConstant: Self.sampleSize.height),
