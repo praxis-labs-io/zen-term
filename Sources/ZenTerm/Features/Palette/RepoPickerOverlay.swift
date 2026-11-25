@@ -692,7 +692,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.statusPath = statusPath
             super.init(
                 Content(
-                    title: label, note: state?.rawValue, leading: .process(style.icon), ink: style.ink,
+                    title: label, titleSuffix: state?.rawValue, leading: .process(style.icon), ink: style.ink,
                     nesting: style.isChild ? .indented : .none))
 
             churnLabel.alignment = .right

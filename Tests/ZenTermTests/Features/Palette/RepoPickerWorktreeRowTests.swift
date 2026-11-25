@@ -191,6 +191,33 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         }
     }
 
+    func test_theState_followsTheLabel_whileTheBranchStaysTrailing() throws {
+        let repo = path("alpha")
+        let tree = worktree(repo, "one")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)], openState: { $0 == tree.path ? .here : .closed })
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+        overlay.layoutSubtreeIfNeeded()
+
+        let row = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
+        XCTAssertEqual(row.state, .open)
+        let title = try XCTUnwrap(label(in: row, saying: RepoPickerOverlay.RowView.typeRail))
+        let state = try XCTUnwrap(label(in: row, saying: "Open"))
+        let branch = try XCTUnwrap(label(in: row, saying: "one"))
+        let titleFrame = title.convert(title.bounds, to: row)
+        let stateFrame = state.convert(state.bounds, to: row)
+        let branchFrame = branch.convert(branch.bounds, to: row)
+        XCTAssertGreaterThanOrEqual(stateFrame.minX, titleFrame.maxX, "the state follows the label")
+        XCTAssertLessThanOrEqual(stateFrame.minX - titleFrame.maxX, ChromeMetrics.Spacing.s6, "and sits just after it")
+        XCTAssertEqual(state.textColor, Theme.current.chrome.ink(.muted))
+        XCTAssertGreaterThan(
+            branchFrame.minX, stateFrame.maxX + ChromeMetrics.Spacing.s16, "the branch is not beside it")
+        XCTAssertEqual(
+            branchFrame.maxX, row.bounds.maxX - ChromeMetrics.Spacing.controlInset, accuracy: ChromeMetrics.Spacing.s4,
+            "the branch stays at the trailing edge")
+    }
+
     func test_branchSitsInTheSameColumnOnAWorkspaceAndAWorktree() throws {
         let repo = path("alpha")
         GitRepoStatus.resetForTesting()
@@ -1100,8 +1127,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     }
 
     private func rightColumn(of row: NSView) -> String? {
-        descendants(of: row).compactMap { $0 as? NSTextField }
-            .map(\.stringValue).filter { !$0.isEmpty }.dropFirst().first
+        guard let detail = (row as? SelectableRowView)?.detail, !detail.isEmpty else { return nil }
+        return detail
     }
 
     private func listing(_ repo: URL, _ branches: String...) -> WorktreeListing {

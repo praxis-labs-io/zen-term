@@ -224,7 +224,7 @@ A control's hover and eased fill come from `ControlView`, or from `ControlState`
 cannot subclass it (`AppButton`). A control never keeps its own tracking area. A control on that base
 takes keyboard focus and its ring from it too.
 
-A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
+A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`). A word about the row's state rides right after its title in muted caption ink (`ListRow.Content.titleSuffix`: the picker's Current, Open, Other window); a `note` sits at the trailing edge.
 
 The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, a search field with a trailing slot. A command palette row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; a workspace picker row's icon is plain (`ListRow.Leading.symbol`). A row's detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
