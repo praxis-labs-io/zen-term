@@ -129,6 +129,11 @@ meant to scroll; get edge padding from the row content's own insets.
 one resize stale. Tests miss it because `layoutSubtreeIfNeeded()` flushes the whole subtree. Use
 `postsFrameChangedNotifications` and `NSView.frameDidChangeNotification` on the view itself.
 
+**Constraints swapped from a frame change apply one layout pass late.** The pass that set the frame
+has already sized the ancestors, so a reflow keyed off the new width leaves the view's height one resize
+stale. Set `needsUpdateConstraints` there and swap the constraints in `updateConstraints()`, as
+`GallerySamples` does.
+
 **`layout()` cannot read a descendant's frame at all.** Anything deeper than direct subviews still
 holds the previous pass's frame. Read it at draw time and have `layout()` only set
 `needsDisplay = true`, as `PanelHostView`'s padding ring does.
