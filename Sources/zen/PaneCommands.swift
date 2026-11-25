@@ -182,8 +182,9 @@ struct PaneCommands: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Paste text into a pane. Control characters arrive as spaces.",
             discussion:
-                "Into an agent whose person has unsent text at its prompt, it is queued until they send it, "
-                + "and prints {\"queued\":true}. It refuses while the agent waits on the user.")
+                "Into an agent whose person has unsent text at its prompt, it is queued until they send or clear "
+                + "it, or, in Claude Code, stop typing for 60 seconds, and prints {\"queued\":true}. "
+                + "It refuses while the agent waits on the user.")
 
         @OptionGroup var connection: ConnectionOptions
 

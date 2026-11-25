@@ -2,7 +2,7 @@ import AppKit
 
 // What a key the person typed into a pane does to the text sitting unsent at its prompt.
 enum DraftEdit: Equatable {
-    case add(String), addUnknown, removeOne, removeUnknown, move, submit, clear, none
+    case add(String), addUnknown, removeOne, removeUnknown, move, submit, clear, stash, none
 
     private static let returnKeys: Set<UInt16> = [36, 76]
     private static let backspaceKey: UInt16 = 51

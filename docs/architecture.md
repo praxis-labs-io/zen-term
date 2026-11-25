@@ -712,13 +712,17 @@ working, holds back its `stopped` note, and keeps `PaneWait` from answering its 
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent queues in `PaneDrafts`, also app-wide, while the person has unsent text at its prompt.
 `WindowController.keyReachedFocus` feeds it each key the chrome did not claim from
-`KeyInterceptor`, the path that also answers an agent by typing, classed by `DraftEdit`, and
+`KeyInterceptor` whose window's first responder is inside the surface's view, the path that also answers an agent by typing, classed by `DraftEdit`, and
 `WindowController.paste` feeds it a paste. `PaneDrafts` counts the draft's length from typed text
 and Backspace, so deleting it ends the draft; text it cannot count, or a key that moves the cursor,
-leaves the length unknown, which only Return or a clearing key ends. A key while the surface's view has marked text (an input
+leaves the length unknown, which only Return or a clearing key ends. In an agent with a draft stash, the person's own stash chord ends a draft, or starts one of unknown length at an empty prompt, since it brings the stash back. A key while the surface's view has marked text (an input
 method composing) leaves the length unknown and is never a submit, and a Return after a typed `\`,
 past keys that only move the cursor, is Claude Code's newline, not a submit. Each surface has one ordered queue that the draft's
-release and the blocked recheck both drain, so a newer message never passes a held one. The
+release and the blocked recheck both drain, so a newer message never passes a held one. When the
+message's agent has a draft stash (`AgentRules.draftStash`, Claude Code's Ctrl-S) and the draft sat
+`PaneDrafts.draftWait` with no key, the queue delivers over it: `ControlResponder.paste` presses the
+stash, pastes and submits, and the agent restores the draft on that submit, so the queue releases
+nothing more for `PaneDrafts.draftRestorePause`. The
 person's Return drains it through `PaneDrafts.after`, after the key reached the surface. A message
 the queue drops (its pane closed, or its agent blocked 10 minutes from when the queue could deliver)
 goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)

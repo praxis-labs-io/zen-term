@@ -168,8 +168,9 @@ zen worktree remove my-branch
   agent never reads it. Into an agent that waits on the user it
   refuses; that wait is the user's to answer.
 - While the user has unsent text in an agent's prompt, `zen pane send` prints
-  `{"queued":true}`: the message arrives on its own after the user sends
-  theirs. Don't send it again.
+  `{"queued":true}`: the message arrives on its own once the user sends or
+  clears it, or, in Claude Code, stops typing for 60 seconds. Don't send it
+  again.
 - Exit codes: 0 ok, 1 ZenTerm answered with an error, 2 usage, 3 no ZenTerm
   reachable.
 

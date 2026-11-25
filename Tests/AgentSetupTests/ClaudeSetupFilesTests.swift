@@ -119,7 +119,8 @@ final class ClaudeSetupFilesTests: XCTestCase {
             #"You are helper `review`, started by pane 31. When done or stuck, report with "#
                 + #"`zen pane send --pane 31 --enter "<result>"`, then stop. Put a question about your task to "#
                 + #"pane 31 the same way, not AskUserQuestion, then end your turn: the answer arrives as your "#
-                + #"next message."#)
+                + #"next message. A send that prints `{"queued":true}` arrives on its own once the user sends or "#
+                + #"clears their text, or, in Claude Code, stops typing for 60 seconds; don't send it again."#)
         XCTAssertFalse(output.contains("zen tab rename"))
     }
 
