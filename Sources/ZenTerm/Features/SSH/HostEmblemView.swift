@@ -24,7 +24,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
         layer?.borderWidth = ChromeMetrics.Border.width
         layer?.masksToBounds = true
         sheen.frame = bounds
-        ChipSheen.shape(sheen)
+        ChipSheen.shape(sheen, .tile)
         layer?.addSublayer(sheen)
         let grid = CGFloat(HostSignature.side) * Self.cellSide + CGFloat(HostSignature.side - 1) * Self.cellGap
         let origin = (Self.tileSide - grid) / 2
@@ -65,6 +65,6 @@ final class HostEmblemView: NSView, ThemeReapplying {
     var cellColorsForTesting: [CGColor?] { cells.map(\.backgroundColor) }
     var tileFillForTesting: CGColor? { layer?.backgroundColor }
     var hasSheenUnderCellsForTesting: Bool {
-        layer?.sublayers?.first === sheen && sheen.colors?.count == ChipSheen.colors.count
+        layer?.sublayers?.first === sheen && sheen.colors?.count == ChipSheen.colors(.tile).count
     }
 }

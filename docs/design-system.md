@@ -92,7 +92,7 @@ brand's fill and glyph colors belong to the brand, not the theme, so they stay t
 every theme. They live in `ProcessIcon`'s registry and nowhere else; no call site names
 one. Everything else comes from the system: the shape (`Radius.icon(_:)`, continuous
 corners), the size and mark box (`IconBadge.Size`), the edge (`fill(alpha:)` with `border`,
-at `Border.width`) and the sheen (`ChipSheen`), a fixed alpha mask lit from the top that every chip shares, as does an SSH host's emblem tile.
+at `Border.width`) and the sheen (`ChipSheen`), a fixed alpha mask lit from the top that every chip shares, and an SSH host's emblem tile in a longer, lighter spread.
 A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
 step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
 program runs, so a resting shell and a worktree are never branded. A purpose tint names a

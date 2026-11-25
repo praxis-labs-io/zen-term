@@ -65,7 +65,7 @@ final class IconBadge: NSView, ThemeReapplying {
         layer?.cornerRadius = ChromeMetrics.Radius.icon(size.side)
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
-        ChipSheen.shape(sheenLayer)
+        ChipSheen.shape(sheenLayer, .chip)
         sheen.layer = sheenLayer
         sheen.wantsLayer = true
         sheen.frame = bounds
@@ -145,13 +145,15 @@ final class IconBadge: NSView, ThemeReapplying {
                 icon.contentTintColor = hue.nsColor
             }
             layer?.backgroundColor = fill.cgColor
-            sheenLayer.colors = ChipSheen.colors
+            sheenLayer.colors = ChipSheen.colors(.chip)
         }
     }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
     var edgeForTesting: CGColor? { (layer?.borderWidth ?? 0) > 0 ? layer?.borderColor : nil }
-    var hasSheenForTesting: Bool { sheen.superview === self && sheenLayer.colors?.count == ChipSheen.colors.count }
+    var hasSheenForTesting: Bool {
+        sheen.superview === self && sheenLayer.colors?.count == ChipSheen.colors(.chip).count
+    }
     var sheenLitFromTopForTesting: Bool { sheenLayer.startPoint.y > sheenLayer.endPoint.y && !sheen.isFlipped }
     var iconTintForTesting: NSColor? { icon.contentTintColor }
     var iconImageForTesting: NSImage? { icon.image }
