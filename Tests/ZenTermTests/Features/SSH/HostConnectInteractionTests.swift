@@ -1241,7 +1241,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(screen.onlineDotForTesting.colorForTesting, Theme.current.chrome.positive.nsColor.cgColor)
         XCTAssertEqual(screen.actionButtonForTesting.title, "Connect")
         XCTAssertNotNil(screen.actionButtonForTesting.window)
-        XCTAssertEqual(screen.hintsForTesting.first, HintFooter.Hint(keys: "⏎", label: "Connect"))
     }
 
     func test_anOfflineHost_readsOffline_withNoDot_aDimmedEmblem_andAQuietConnectAnyway() throws {
@@ -1255,7 +1254,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(button.title, "Connect Anyway")
         XCTAssertNotNil(button.window, "the quiet button is the one on screen")
         XCTAssertNil(button.layer?.backgroundColor.flatMap { $0.alpha > 0 ? $0 : nil }, "not the accent fill")
-        XCTAssertEqual(screen.hintsForTesting.first, HintFooter.Hint(keys: "⏎", label: "Connect Anyway"))
         let emblem = screen.emblemForTesting
         XCTAssertEqual(
             emblem.cellColorsForTesting,
@@ -1300,18 +1298,12 @@ final class HostConnectInteractionTests: WindowTestCase {
             emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.active).cgColor, emblem))
     }
 
-    func test_theEditHostHint_namesTheSearchSelectionChord_andFollowsARebind() throws {
+    func test_theConnectScreen_showsNoKeyHints() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        XCTAssertEqual(screen.hintsForTesting.last, HintFooter.Hint(keys: "⌘E", label: "Edit Host"))
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
 
-        var config = GeneralConfig.current
-        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.rebind(.searchSelection, to: rebound)
-        GeneralConfig.setCurrentForTesting(config)
-        postConfigChange(.keymap)
-
-        XCTAssertEqual(screen.hintsForTesting.last, HintFooter.Hint(keys: rebound.displayGlyph, label: "Edit Host"))
+        XCTAssertTrue(descendants(screen).allSatisfy { !($0 is HintFooter) })
     }
 
     func test_theEmblem_isTheAliasSignature_onTheChipTile() throws {

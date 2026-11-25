@@ -8,7 +8,6 @@ final class HostConnectView: NSView, ThemeReapplying {
     private static let addressToStatus = ChromeMetrics.Spacing.s12
     private static let statusToButton = ChromeMetrics.Spacing.s24
     private static let contentMaxWidth: CGFloat = 420
-    private static let returnKey = "⏎"
 
     // A short window drops the emblem first, so the action never leaves the screen.
     private static let emblemVisibility = NSStackView.VisibilityPriority(rawValue: 500)
@@ -25,7 +24,6 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let statusLine = NSStackView()
     private let connectButton: AppButton
     private let connectAnywayButton: AppButton
-    private let hints = HintFooter([], placement: .centered)
     private let stack = NSStackView()
     private let panel: PanelHostView
     private let content = NSView()
@@ -80,7 +78,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         stack.setClippingResistancePriority(.defaultLow, for: .horizontal)
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
-        content.addSubview(hints)
         panel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(panel)
         gutterConstraints = [
@@ -96,15 +93,12 @@ final class HostConnectView: NSView, ThemeReapplying {
             stack.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             centered,
             stack.topAnchor.constraint(greaterThanOrEqualTo: content.topAnchor, constant: Self.edgeSpacing),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: hints.topAnchor, constant: -Self.edgeSpacing),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -Self.edgeSpacing),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: Self.edgeSpacing),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -Self.edgeSpacing),
             stack.widthAnchor.constraint(lessThanOrEqualToConstant: Self.contentMaxWidth),
             nameLine.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
             addressLine.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
-            hints.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            hints.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            hints.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         setDestination(destination)
         applyStatus()
@@ -144,8 +138,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         statusWord.textColor = chrome.ink(.subtle)
     }
 
-    func reapplyKeymap() { applyHints() }
-
     func reapplyChromeLayout() {
         gutterConstraints[0].constant = ChromeMetrics.windowGutter
         gutterConstraints[1].constant = -ChromeMetrics.windowGutter
@@ -169,14 +161,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         emblem.setDimmed(isOffline)
         connectButton.isHidden = isOffline
         connectAnywayButton.isHidden = !isOffline
-        applyHints()
-    }
-
-    private func applyHints() {
-        let connect = HintFooter.Hint(keys: Self.returnKey, label: isOffline ? "Connect Anyway" : "Connect")
-        let editKeys = CommandCatalog.spec(for: .searchSelection).shortcut
-        let edit = editKeys.isEmpty ? [] : [HintFooter.Hint(keys: editKeys, label: "Edit Host")]
-        hints.setHints([connect] + edit)
     }
 
     var nameForTesting: String { nameLine.stringValue }
@@ -190,5 +174,4 @@ final class HostConnectView: NSView, ThemeReapplying {
     var detachedForTesting: [NSView] { stack.detachedViews }
     var panelForTesting: PanelHostView { panel }
     var actionButtonForTesting: AppButton { isOffline ? connectAnywayButton : connectButton }
-    var hintsForTesting: [HintFooter.Hint] { hints.hints }
 }

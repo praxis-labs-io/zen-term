@@ -238,7 +238,7 @@ A mark on a rounded chip is an `IconBadge`: tinted by one role, or a process chi
 [Process chips](#process-chips)).
 
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
-`HintFooter` in its place: right aligned under a hairline, each hint its Title Case label then its key. A full-pane screen with no card (an SSH host's Connect screen) centers it with no rule, and its buttons carry no keycap. The shared hairline rule is `Divider`, and the shared muted "nothing here"
+`HintFooter` in its place: right aligned, each hint its Title Case label then its key. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.
 
 ## Extending the system
