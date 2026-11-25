@@ -14,7 +14,6 @@ final class HostWindow: NSWindow {
         }
     }
 
-    // Pushed to the panes in the window; a pane attached later reads it in `viewDidMoveToWindow`.
     var floatCoversPanes = false {
         didSet {
             guard floatCoversPanes != oldValue else { return }

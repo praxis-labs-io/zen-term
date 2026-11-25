@@ -1356,7 +1356,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let (c, pi) = try piRunningHiddenOnConnect()
         ask(pi)
         let panel = try XCTUnwrap(
-            c.connectViewForTesting.map { descendants(of: $0).compactMap { $0 as? PanelHostView } }?.first)
+            c.connectViewForTesting?.descendants(ofType: PanelHostView.self).first)
 
         c.handle(.toggleToolFloat("pi"))
 

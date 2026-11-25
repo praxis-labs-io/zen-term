@@ -284,8 +284,7 @@ final class WindowControllerToolFloatTests: WindowTestCase {
     }
 
     private func panelHosts(_ c: WindowController) -> [PanelHostView] {
-        guard let content = c.window.contentView else { return [] }
-        return descendants(of: content).compactMap { $0 as? PanelHostView }
+        c.window.contentView?.descendants(ofType: PanelHostView.self) ?? []
     }
 
     func test_aToolFloat_veilsEveryPaneAndDrawer_andClosingItClearsThem() {
