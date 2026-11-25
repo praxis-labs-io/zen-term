@@ -19,7 +19,8 @@ enum SSHLoginPrompt: Equatable {
         for line in prompt.split(whereSeparator: \.isNewline) {
             guard let mark = line.range(of: " key fingerprint is") else { continue }
             let type = line[..<mark.lowerBound].split(separator: " ").last.map(String.init)
-            let value = line[mark.upperBound...].drop { $0 == ":" || $0 == " " }
+            var value = line[mark.upperBound...].drop { $0 == ":" || $0 == " " }
+            if value.hasSuffix(".") { value = value.dropLast() }
             guard !value.isEmpty else { continue }
             return [type, String(value)].compactMap { $0 }.joined(separator: " ")
         }

@@ -26,6 +26,14 @@ final class SSHLoginPromptTests: XCTestCase {
             .hostKey(fingerprint: "ED25519 SHA256:Ddh6AiyxUdOZKfIK9rti77ebCzauHfX8qDY3SrKKNkw"))
     }
 
+    func test_olderSSHsTrailingPeriodIsNotPartOfTheFingerprint() {
+        XCTAssertEqual(
+            SSHLoginPrompt.parse(
+                "ECDSA key fingerprint is SHA256:Ddh6AiyxUdOZ.\nAre you sure you want to continue connecting "
+                    + "(yes/no/[fingerprint])? "),
+            .hostKey(fingerprint: "ECDSA SHA256:Ddh6AiyxUdOZ"))
+    }
+
     func test_theHostKeyAgainPromptsAndTheIPMismatchAreHostKeys() {
         XCTAssertEqual(
             SSHLoginPrompt.parse("Please type 'yes', 'no' or the fingerprint: "), .hostKey(fingerprint: nil))
