@@ -888,10 +888,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   host's landing, the control socket) shows Connect instead, and the first connect mounts it only
   when Connect for that host is still showing. That login's ssh runs `zen` as `SSH_ASKPASS` with
   `SSH_ASKPASS_REQUIRE=force` and a per-login token, and `ssh.askpass` hands each question to the
-  connection, which Connect asks in plain words in its one message line (`SSHLoginPrompt`). Host
-  key questions get Trust or Cancel, never free text, since ssh re-asks forever on any other answer.
-  Cancel (⎋) removes the workspace, because a failed askpass only makes ssh ask again; ↵ answers or
-  trusts and never cancels. Connect polls the last few lines of the login's terminal while it waits,
+  connection, which Connect asks in plain words in its one message line (`SSHLoginPrompt`). A new
+  host key gets Trust or Cancel and any other yes/no gets ssh's own words with Continue or Cancel,
+  never free text, since ssh re-asks forever on any other answer. Cancel (⎋) removes the workspace,
+  because a failed askpass only makes ssh ask again; ↵ answers a secret, never says yes (Trust and
+  Continue take a click or Tab), and never cancels. Connect polls the last few lines of the login's terminal while it waits,
   since a detached surface reports no scroll, and shows the latest one the screen doesn't already
   say as its detail line (`SSHLoginOutput`). A login
   after a drop, or with no `zen` beside the app, prompts in its own pane as before. Closing a host's last pane, tab or workspace returns
