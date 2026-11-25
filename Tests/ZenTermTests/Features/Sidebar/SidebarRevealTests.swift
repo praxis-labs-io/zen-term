@@ -99,7 +99,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(card.minX, Self.gutter)
         XCTAssertEqual(card.width, SidebarView.width)
         XCTAssertEqual(card.minY, Self.gutter, "the card clears the bottom gutter")
-        XCTAssertEqual(card.maxY, container.height - ChromeMetrics.topInset, "the top clears the traffic lights")
+        XCTAssertEqual(card.maxY, container.height - ChromeMetrics.windowGutter, "the card clears the top gutter")
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller), paneBefore,
             "the card floats over the panes, so nothing reflows and no surface resizes")
@@ -332,7 +332,7 @@ final class SidebarRevealTests: WindowTestCase {
         let container = controller.containerForTesting.bounds
         XCTAssertEqual(card.minX, Self.gutter * 2, "leading")
         XCTAssertEqual(card.minY, Self.gutter * 2, "bottom")
-        XCTAssertEqual(container.maxY - card.maxY, ChromeMetrics.topInset, "top")
+        XCTAssertEqual(container.maxY - card.maxY, ChromeMetrics.windowGutter, "top")
     }
 
     func test_aHoldThatFiresMidCollapse_isRefused_soTheSlideKeepsTheColumn() throws {
@@ -802,5 +802,176 @@ final class SidebarRevealTests: WindowTestCase {
         _ = sidebar.edgeReveal.clickForTesting(click)
 
         XCTAssertTrue(sidebar.isRevealed, "clicking a row must not dismiss the card under the pointer")
+    }
+
+    private func windowButtonsHidden(_ controller: WindowController) -> [Bool] {
+        [.closeButton, .miniaturizeButton, .zoomButton].map {
+            controller.window.standardWindowButton($0)?.isHidden ?? true
+        }
+    }
+
+    private func assertWindowButtonsAlignWithTheHeading(
+        _ controller: WindowController, _ context: String, line: UInt = #line
+    ) throws {
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        let rows = controller.sidebarForTesting.view
+        let heading = try XCTUnwrap(
+            descendants(of: rows).compactMap { $0 as? NSTextField }.first { $0.stringValue == "Workspaces" })
+        let headingSuperview = try XCTUnwrap(heading.superview)
+        let headingFrame = headingSuperview.convert(heading.alignmentRect(forFrame: heading.frame), to: nil)
+        let rowsFrame = rows.convert(rows.bounds, to: nil)
+        let buttons = try [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].map {
+            let button = try XCTUnwrap(controller.window.standardWindowButton($0))
+            return button.convert(button.bounds, to: nil)
+        }
+        XCTAssertEqual(buttons[0].minX, headingFrame.minX, accuracy: 0.5, "\(context): leading edge", line: line)
+        for button in buttons {
+            XCTAssertEqual(
+                button.midY, rowsFrame.maxY - SidebarView.windowButtonStripHeight / 2, accuracy: 0.5,
+                "\(context): centered in the strip above the heading", line: line)
+        }
+        for (left, right) in zip(buttons, buttons.dropFirst()) {
+            XCTAssertGreaterThan(right.minX, left.maxX, "\(context): the buttons sit apart", line: line)
+        }
+    }
+
+    func test_windowButtons_alignWithTheHeading_dockedRevealedAndThroughAResize() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let sidebar = controller.sidebarForTesting
+        try assertWindowButtonsAlignWithTheHeading(controller, "docked")
+
+        try click(sidebar.liveToggleForTesting)
+        sidebar.reveal()
+        settle()
+        try assertWindowButtonsAlignWithTheHeading(controller, "revealed")
+
+        var frame = controller.window.frame
+        frame.size.width += 40
+        frame.size.height += 40
+        controller.window.setFrame(frame, display: true)
+        try assertWindowButtonsAlignWithTheHeading(controller, "revealed, resized")
+
+        try click(sidebar.liveToggleForTesting)
+        XCTAssertTrue(sidebar.isDocked)
+        try assertWindowButtonsAlignWithTheHeading(controller, "docked from the card")
+    }
+
+    func test_windowButtons_showDocked_hideCollapsed_andArriveWithTheRevealedCard() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let sidebar = controller.sidebarForTesting
+        XCTAssertEqual(windowButtonsHidden(controller), [false, false, false], "docked")
+
+        try click(sidebar.liveToggleForTesting)
+        XCTAssertEqual(windowButtonsHidden(controller), [true, true, true], "collapsed")
+
+        sidebar.reveal()
+        XCTAssertEqual(windowButtonsHidden(controller), [false, false, false], "they arrive with the card")
+        settle()
+
+        sidebar.hideReveal()
+        settle()
+        XCTAssertEqual(windowButtonsHidden(controller), [true, true, true], "the card leaving takes them along")
+    }
+
+    func test_windowButtons_travelWithTheDockingSlide_fromItsStart() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        Motion.isReduceMotionEnabled = { false }
+
+        try click(sidebar.liveToggleForTesting)
+        XCTAssertEqual(windowButtonsHidden(controller), [false, false, false], "on screen as the slide starts")
+
+        settle()
+        try assertWindowButtonsAlignWithTheHeading(controller, "landed")
+    }
+
+    func test_windowButtons_slideInWithTheRevealedCard_fromPastTheWindowsEdge() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        Motion.isReduceMotionEnabled = { false }
+
+        sidebar.reveal()
+
+        let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
+        let slide = try XCTUnwrap(
+            close.layer?.animation(forKey: HostWindow.slideKey) as? CABasicAnimation, "the buttons move with the card")
+        let from = try XCTUnwrap((slide.fromValue as? NSValue)?.sizeValue)
+        XCTAssertLessThan(from.width, -SidebarView.width, "they start parked past the window's edge, as the card does")
+        settle()
+        try assertWindowButtonsAlignWithTheHeading(controller, "landed")
+    }
+
+    func test_dockingTheRevealedCard_slidesTheButtons_withoutFadingThemOut() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.reveal()
+        settle()
+        Motion.isReduceMotionEnabled = { false }
+
+        try click(sidebar.liveToggleForTesting)
+
+        let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
+        XCTAssertNotNil(close.layer?.animation(forKey: HostWindow.slideKey), "they move to the docked spot")
+        XCTAssertNil(close.layer?.animation(forKey: HostWindow.fadeKey), "already on screen, so no fade to flash")
+    }
+
+    func test_windowButtons_returnToTheHeading_afterAppKitLaysTheTitlebarOutAgain() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
+        for name in [NSWindow.didExitFullScreenNotification, NSWindow.didDeminiaturizeNotification] {
+            close.setFrameOrigin(.zero)
+            NotificationCenter.default.post(name: name, object: controller.window)
+            try assertWindowButtonsAlignWithTheHeading(controller, name.rawValue)
+        }
+    }
+
+    func test_aMoveMidSlide_dropsTheSlideInFlight() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        Motion.isReduceMotionEnabled = { false }
+        sidebar.reveal()
+        let close = try XCTUnwrap(controller.window.standardWindowButton(.closeButton))
+        XCTAssertNotNil(close.layer?.animation(forKey: HostWindow.slideKey), "premise: the buttons are sliding in")
+
+        sidebar.reapplyChromeLayout()
+
+        XCTAssertNil(close.layer?.animation(forKey: HostWindow.slideKey), "an instant move takes them straight there")
+        XCTAssertNil(close.layer?.animation(forKey: HostWindow.fadeKey))
+    }
+
+    func test_windowButtons_stayHiddenWithoutWindowChrome_andTheRowsTakeTheirStrip() throws {
+        var config = GeneralConfig.current
+        config.windowChrome = false
+        GeneralConfig.setCurrentForTesting(config)
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+        XCTAssertEqual(windowButtonsHidden(controller), [true, true, true])
+        let rows = controller.sidebarForTesting.view
+        let heading = try XCTUnwrap(
+            descendants(of: rows).compactMap { $0 as? NSTextField }.first { $0.stringValue == "Workspaces" })
+        let headingSuperview = try XCTUnwrap(heading.superview)
+        XCTAssertLessThan(
+            rows.convert(rows.bounds, to: nil).maxY - headingSuperview.convert(heading.frame, to: nil).maxY,
+            SidebarView.windowButtonStripHeight, "no empty strip left above the heading")
+    }
+
+    func test_thePanes_startOneGutterFromTheTop_underWindowChrome() throws {
+        let controller = try makeCollapsedController()
+        let height = controller.containerForTesting.bounds.height
+        let tile = frame(of: try pane(in: controller), in: controller)
+        XCTAssertEqual(height - tile.maxY, Self.gutter, "no header row reserved for the window buttons")
     }
 }

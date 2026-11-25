@@ -34,11 +34,14 @@ final class SidebarView: NSView, ThemeReapplying {
     static let padding: CGFloat = ChromeMetrics.Spacing.s8
     private static let captionHeight: CGFloat = ChromeMetrics.Height.control
     private static let captionInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    static let captionLeading = padding + captionInset
+    static let windowButtonStripHeight: CGFloat = ChromeMetrics.Height.control
     private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
     private static let newWorktreeSize = NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs)
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
     private static let contentBottomGap: CGFloat = ChromeMetrics.Spacing.s8
 
+    private var scrollTop: NSLayoutConstraint?
     private let caption = SectionCaption("Workspaces")
     private let addButton: IconButton
     private let rowStack = NSStackView()
@@ -97,6 +100,7 @@ final class SidebarView: NSView, ThemeReapplying {
             self?.setHoverCovered(isOpen, exempting: isOpen ? self?.rowMenu.anchor : nil)
         }
         installScroll()
+        reapplyWindowButtonStrip()
         for view in [caption, addButton, rowStack] { content.addSubview(view) }
         installHosts()
         installAgents()
@@ -104,7 +108,7 @@ final class SidebarView: NSView, ThemeReapplying {
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
             caption.leadingAnchor.constraint(
-                equalTo: content.leadingAnchor, constant: Self.padding + Self.captionInset),
+                equalTo: content.leadingAnchor, constant: Self.captionLeading),
             caption.centerYAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight / 2),
             addButton.trailingAnchor.constraint(
                 equalTo: content.trailingAnchor, constant: -(Self.padding + Self.addInset)),
@@ -131,8 +135,10 @@ final class SidebarView: NSView, ThemeReapplying {
         clip.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(refreshRowHover), name: NSView.boundsDidChangeNotification, object: clip)
+        let scrollTop = scroll.topAnchor.constraint(equalTo: topAnchor)
+        self.scrollTop = scrollTop
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scrollTop,
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
             content.topAnchor.constraint(equalTo: clip.topAnchor),
@@ -549,6 +555,11 @@ final class SidebarView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         rowMenu.close()
+    }
+
+    // The window's buttons sit over this strip, above the scroll area, so the rows scroll beneath them.
+    func reapplyWindowButtonStrip() {
+        scrollTop?.constant = GeneralConfig.current.windowChrome ? Self.windowButtonStripHeight : 0
     }
 
     var addButtonForTesting: IconButton { addButton }

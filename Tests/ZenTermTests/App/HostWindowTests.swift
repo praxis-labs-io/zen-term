@@ -40,11 +40,16 @@ final class HostWindowTests: WindowTestCase {
         XCTAssertEqual(buttonsHidden(window), [true, true, true])
     }
 
-    func test_setWindowChromeVisible_togglesLive() {
+    func test_aLiveWindowChromeChange_showsAndHidesTheButtons() {
         let window = makeWindow(windowChrome: false)
-        window.setWindowChromeVisible(true)
+        var config = GeneralConfig.builtIn
+        config.windowChrome = true
+        GeneralConfig.setCurrentForTesting(config)
+        window.reapplyWindowChrome()
         XCTAssertEqual(buttonsHidden(window), [false, false, false])
-        window.setWindowChromeVisible(false)
+        config.windowChrome = false
+        GeneralConfig.setCurrentForTesting(config)
+        window.reapplyWindowChrome()
         XCTAssertEqual(buttonsHidden(window), [true, true, true])
     }
 }

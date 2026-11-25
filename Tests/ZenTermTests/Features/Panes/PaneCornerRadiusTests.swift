@@ -28,26 +28,18 @@ final class PaneCornerRadiusTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
     }
 
-    func test_radius_keepsItsOwnValueWhenWindowChromeHoldsThePanesClear() {
-        apply(gutter: 0, windowChrome: true)
-        XCTAssertEqual(
-            PanelHostView.cornerRadius, 12,
-            "window chrome keeps the top corners 28pt clear of the window, so nothing is concentric")
+    func test_radius_isConcentricWithTheWindow_withOrWithoutWindowChrome() {
+        for windowChrome in [true, false] {
+            apply(gutter: 0, windowChrome: windowChrome)
+            XCTAssertEqual(
+                PanelHostView.cornerRadius, WindowCorner.radius, accuracy: 0.01,
+                "flush to the window edge, the pane must follow the window's corner")
 
-        apply(gutter: 64, windowChrome: true)
-        XCTAssertEqual(PanelHostView.cornerRadius, 12, "the radius must not track the gutter under window chrome")
-    }
-
-    func test_radius_isConcentricWithTheWindowWithoutWindowChrome() {
-        apply(gutter: 0, windowChrome: false)
-        XCTAssertEqual(
-            PanelHostView.cornerRadius, WindowCorner.radius, accuracy: 0.01,
-            "flush to the window edge, the pane must follow the window's corner")
-
-        apply(gutter: 64, windowChrome: false)
-        XCTAssertEqual(
-            PanelHostView.cornerRadius, 6, accuracy: 0.01,
-            "far from the window corner the radius floors instead of going square")
+            apply(gutter: 64, windowChrome: windowChrome)
+            XCTAssertEqual(
+                PanelHostView.cornerRadius, 6, accuracy: 0.01,
+                "far from the window corner the radius floors instead of going square")
+        }
     }
 
     func test_liveGutterChange_reroundsAnOpenDrawer() throws {

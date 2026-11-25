@@ -48,7 +48,7 @@ final class WindowController: NSObject {
         return presenter
     }
 
-    private static var toastTopInset: CGFloat { ChromeMetrics.topInset + 12 }
+    private static var toastTopInset: CGFloat { ChromeMetrics.windowGutter + 12 }
     private static var toastTrailingInset: CGFloat { ChromeMetrics.windowGutter + 12 }
 
     func showToast(_ content: ToastContent) { toasts.show(content) }
@@ -510,6 +510,9 @@ final class WindowController: NSObject {
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
         sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
+        sidebar.onMoveWindowButtons = { [weak self] in
+            self?.window.moveWindowButtons(to: $0, visible: $1, animated: $2)
+        }
         sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
         sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
@@ -563,7 +566,7 @@ final class WindowController: NSObject {
                         .cgColor
                 }
                 if change.contains(.chromeLayout) {
-                    self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
+                    self.window.reapplyWindowChrome()
                     self.sidebar.reapplyChromeLayout()
                     self.dockTrailing?.constant = -ChromeMetrics.windowGutter
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
@@ -1192,7 +1195,7 @@ final class WindowController: NSObject {
             leading: floatArea.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
             trailing: floatArea.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
             top: floatArea.topAnchor.constraint(
-                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
+                equalTo: container.topAnchor, constant: ChromeMetrics.windowGutter),
             bottom: floatArea.bottomAnchor.constraint(
                 equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
@@ -1210,7 +1213,7 @@ final class WindowController: NSObject {
             trailing: overlay.trailingAnchor.constraint(
                 equalTo: container.trailingAnchor, constant: -gutter),
             top: overlay.topAnchor.constraint(
-                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
+                equalTo: container.topAnchor, constant: ChromeMetrics.windowGutter),
             bottom: overlay.bottomAnchor.constraint(
                 equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
@@ -1223,7 +1226,7 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         floatGutter.leading.constant = gutter
         floatGutter.trailing.constant = -gutter
-        floatGutter.top.constant = ChromeMetrics.topInset
+        floatGutter.top.constant = ChromeMetrics.windowGutter
         floatGutter.bottom.constant = -ChromeMetrics.footerGap
     }
 
@@ -1232,7 +1235,7 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         modalGutter.leading.constant = gutter
         modalGutter.trailing.constant = -gutter
-        modalGutter.top.constant = ChromeMetrics.topInset
+        modalGutter.top.constant = ChromeMetrics.windowGutter
         modalGutter.bottom.constant = -ChromeMetrics.footerGap
     }
 

@@ -155,7 +155,7 @@ final class ModalZOrderTests: WindowTestCase {
             "and the form itself is gone")
     }
 
-    func test_theCardsTop_clearsTheWindowButtonsLikeTheTileDoes() throws {
+    func test_theCardsTop_startsWhereTheTileDoes() throws {
         let c = makeWindow()
         let card = try openCard(in: c)
         c.window.contentView?.layoutSubtreeIfNeeded()
@@ -166,9 +166,6 @@ final class ModalZOrderTests: WindowTestCase {
             card.convert(card.bounds, to: content).minY,
             tile.convert(tile.bounds, to: content).minY, accuracy: 1,
             "the card starts where the tile starts, not at the bare gutter")
-        XCTAssertGreaterThan(
-            ChromeMetrics.topInset, GeneralConfig.current.windowGutter,
-            "premise: window-chrome is on, so the tile's top is inset past the buttons")
     }
 
     func test_reportIssue_isRefusedWhileAConfirmIsWaiting() throws {

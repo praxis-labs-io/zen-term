@@ -163,7 +163,7 @@ needs fixing, not a new step.
 | `Border.paneFocus` | A focused pane |
 | `Icon.xs`, `.sm`, `.md`, `.xl` | SF Symbol point sizes |
 
-`panelGap`, `windowGutter`, `topInset` and `footerGap` are window layout, set from config,
+`panelGap`, `windowGutter` and `footerGap` are window layout, set from config,
 not design tokens.
 
 A `Width`, `Size`, `Side`, `Thickness`, `Length` or `Diameter` name is for a true shape
