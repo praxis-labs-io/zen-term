@@ -90,8 +90,7 @@ class ModalShell: NSView, ThemeReapplying {
 
     static func submitButton(title: String) -> AppButton {
         AppButton(
-            title: title, variant: .primary, shortcut: submitChord.displayGlyph,
-            keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+            title: title, variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
     }
 
     func embed(_ content: NSView) {

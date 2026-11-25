@@ -253,7 +253,7 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
         XCTAssertEqual(sink.submitCount, 1)
     }
 
-    func test_everyFormsPrimaryButton_showsTheSubmitKeycap() throws {
+    func test_everyFormsPrimaryButton_ownsTheSubmitChord() throws {
         let sink = Sink()
         let primaries: [(NSView, String)] = [
             (try makeReportIssue(sink), "Open on GitHub"),
@@ -263,7 +263,9 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
             (try makeWorkspace(sink), "Add Workspace"),
         ]
         for (form, title) in primaries {
-            XCTAssertEqual(try button(title, in: form).keycapForTesting?.shortcut, "⌘⏎", title)
+            let primary = try button(title, in: form)
+            XCTAssertEqual(primary.keyEquivalent, "\r", title)
+            XCTAssertEqual(primary.keyEquivalentModifierMask, .command, title)
             XCTAssertTrue(try XCTUnwrap(form as? ModalOverlay).owns(ModalShell.submitChord), title)
         }
     }

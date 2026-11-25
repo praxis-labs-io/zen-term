@@ -25,7 +25,6 @@
                 rows.append(GallerySection.Row(label: title(for: variant), samples: states(of: variant)))
             }
             rows.append(GallerySection.Row(label: "Symbol only", samples: symbolButtons()))
-            rows.append(GallerySection.Row(label: "With shortcut", samples: shortcutButtons()))
             return GallerySection(title: "AppButton", rows: rows)
         }
 
@@ -43,21 +42,6 @@
             let rest = variants.map { AppButton(variant: $0, symbol: "plus") }
             let hover = hovered(AppButton(variant: .muted, symbol: "plus"))
             return rest + [hover]
-        }
-
-        private static func shortcutButtons() -> [NSView] {
-            let disabled = AppButton(title: "Disabled", variant: .primary, shortcut: "⏎")
-            disabled.isEnabled = false
-            let focused = AppButton(title: "Focused", variant: .primary, shortcut: "⏎")
-            focused.forceFocusForGallery()
-            return [
-                AppButton(title: "Connect", variant: .primary, shortcut: "⏎"),
-                hovered(AppButton(title: "Hover", variant: .primary, shortcut: "⏎")),
-                focused,
-                AppButton(title: "Cancel", variant: .secondary, shortcut: "esc"),
-                AppButton(title: "Open", variant: .muted, shortcut: "⌘O"),
-                disabled,
-            ]
         }
 
         private static func hovered(_ button: AppButton) -> AppButton {
@@ -108,9 +92,6 @@
                 rows: [
                     GallerySection.Row(label: "Chip", samples: [KeycapView(shortcut: shortcut, style: .chip)]),
                     GallerySection.Row(label: "Plain", samples: [KeycapView(shortcut: shortcut, style: .plain)]),
-                    GallerySection.Row(
-                        label: "Glyph faint",
-                        samples: [KeycapView(shortcut: shortcut, style: .glyph { $0.ink(.faint) })]),
                 ])
         }
     }

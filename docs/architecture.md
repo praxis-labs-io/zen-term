@@ -568,7 +568,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `link`, `quietLink` for a dismissing link beside another; an optional shortcut keycap inside),
+  `link`, `quietLink` for a dismissing link beside another; text or a symbol, never a keycap),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
   title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop, or one pinned where it would center at full height (Esc goes
@@ -587,7 +587,7 @@ New modal surfaces compose the existing primitives.
   shortcut.
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
-  `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
+  `ModalShell.submitButton` is the primary button, bound to ⌘Return. A failed submit
   or delete (a config write, git, the browser) shows in a `FormErrorLabel` above the action
   bar, never a toast.
 - **Popovers:** `ListPopover` is every anchored list (dropdowns, `BranchField`, the sidebar

@@ -81,11 +81,6 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(submitted, [SSHHostEntry(alias: "deploy@10.0.0.5")])
     }
 
-    func test_theAddButton_showsTheSubmitKeycap() throws {
-        let add = try XCTUnwrap(button("Add", in: mount()))
-        XCTAssertEqual(add.keycapForTesting?.shortcut, "⌘⏎")
-    }
-
     func test_aTypedName_isSubmittedTrimmed() {
         let overlay = mount()
         field(in: overlay).setText("deploy@10.0.0.5")
