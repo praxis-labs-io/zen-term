@@ -261,6 +261,7 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(visible("Third", in: pile), "newer toasts fold behind it")
         XCTAssertEqual(pile.plateOpacityForTesting, [0.75, 0.45])
     }
+
     func test_unfolding_resizesThePilesAncestorsInTheSamePass() {
         let pile = ToastPile(foldsOnClickOutside: false)
         let row = NSView()

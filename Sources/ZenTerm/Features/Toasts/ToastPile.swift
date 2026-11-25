@@ -165,7 +165,7 @@ final class ToastPile: NSView {
     }
 
     private func relayout(animated: Bool, arriving: NSView? = nil) {
-        superview?.layoutSubtreeIfNeeded()
+        (window?.contentView ?? superview)?.layoutSubtreeIfNeeded()
         NSLayoutConstraint.deactivate(arrangement)
         arrangement = isUnfolded ? listArrangement() : foldedArrangement()
         NSLayoutConstraint.activate(arrangement)
