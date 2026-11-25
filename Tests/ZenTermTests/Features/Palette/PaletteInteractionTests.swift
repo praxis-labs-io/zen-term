@@ -257,7 +257,7 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(Set(details(in: overlay).values), [""], "a header already names the category")
     }
 
-    func test_commandPalette_everyRowLeadsWithItsCommandsSymbol() {
+    func test_commandPalette_everyRowLeadsWithItsCommandsChip() {
         let overlay = catalogPalette()
         mount(overlay)
         let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
@@ -265,28 +265,27 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(shown.count, commands.count)
         for (row, command) in zip(shown, commands) {
             XCTAssertEqual(row.title, command.title)
-            XCTAssertEqual(row.content.leading, .symbol(command.symbol), command.title)
+            XCTAssertEqual(row.content.leading, .process(command.icon), command.title)
         }
     }
 
-    func test_commandPalette_aToolFloatRowLeadsWithItsOwnIcon_andNamesTools() throws {
+    func test_commandPalette_aToolFloatsChipDrawsItsConfiguredIcon() throws {
         let overlay = catalogPalette()
         let window = mount(overlay)
         window.layoutIfNeeded()
         let scratch = try XCTUnwrap(rows(in: overlay).first { $0.title == ToolFloat.scratch.title })
-        XCTAssertEqual(scratch.content.leading, .symbol(ToolFloat.scratch.icon))
-        XCTAssertNotEqual(ToolFloat.scratch.icon, CommandCategory.tools.symbol)
+        let chip = try XCTUnwrap(scratch.processBadgeForTesting, "a float row leads with a chip")
 
+        XCTAssertEqual(chip.process?.mark, ToolFloat.scratch.icon)
+        XCTAssertNotNil(chip.iconImageForTesting, "the chip draws nothing for the float's icon")
         type("scratch", into: overlay)
-        let filtered = try XCTUnwrap(rows(in: overlay).first { $0.title == ToolFloat.scratch.title })
-        XCTAssertEqual(filtered.content.leading, .symbol(ToolFloat.scratch.icon))
-        XCTAssertEqual(filtered.detail, CommandCategory.tools.title)
+        XCTAssertEqual(scratch.detail, CommandCategory.tools.title)
     }
 
-    func test_commandCategory_everySymbolResolves() {
+    func test_commandCategory_everyChipsMarkIsBundled() {
         for category in CommandCategory.allCases {
             XCTAssertNotNil(
-                IconCatalog.image(category.symbol), "\(category.title)'s symbol draws nothing")
+                category.icon.image, "\(category.title)'s mark \(category.icon.mark) is not in the bundle")
         }
     }
 

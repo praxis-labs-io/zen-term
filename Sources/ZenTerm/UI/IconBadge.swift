@@ -143,7 +143,7 @@ final class IconBadge: NSView, ThemeReapplying {
             case .artwork(let artworkFill):
                 fill = artworkFill.nsColor
                 icon.contentTintColor = nil
-            case .neutral:
+            case .neutral, .catalog:
                 fill = chrome.chipRaised.nsColor
                 icon.contentTintColor = chrome.ink(.normal)
             }

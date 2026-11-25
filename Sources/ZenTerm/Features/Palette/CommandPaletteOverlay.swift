@@ -64,7 +64,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
         switch rows[index] {
         case .header(let title): return ["header", title]
         case .command(let command):
-            return ["command", command.title, command.shortcut, command.category.title, command.symbol]
+            return ["command", command.title, command.shortcut, command.category.title, command.icon.mark]
         }
     }
 
@@ -132,7 +132,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
             category = command.category
             super.init(
                 Content(
-                    title: command.title, leading: .symbol(command.symbol),
+                    title: command.title, leading: .process(command.icon),
                     trailing: command.shortcut.isEmpty ? nil : .keycap(command.shortcut)))
         }
 

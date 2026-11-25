@@ -5,10 +5,9 @@ struct PaletteCommand {
     let shortcut: String
     let category: CommandCategory
     let chord: KeyInterceptor.ReservedChord
-    // A tool float leads with the icon its owner picked, not its category's.
-    var icon: String?
+    var floatIcon: ProcessIcon?
 
-    var symbol: String { icon ?? category.symbol }
+    var icon: ProcessIcon { floatIcon ?? category.icon }
 }
 
 enum CommandCatalog {
@@ -45,7 +44,9 @@ enum CommandCatalog {
         case .toggleRightDrawer: return tab("Toggle Right Drawer", glyph, chord)
         case .toggleToolFloat(let id):
             let float = ToolFloatCatalog.byID(id)
-            return .init(title: float?.title ?? id, shortcut: glyph, category: .tools, chord: chord, icon: float?.icon)
+            return .init(
+                title: float?.title ?? id, shortcut: glyph, category: .tools, chord: chord,
+                floatIcon: float.map(ProcessIcon.toolFloat))
         case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
         case .newWorkspace: return workspace("New Workspace", glyph, chord)
         case .openSettings: return app("Settings…", glyph, chord)

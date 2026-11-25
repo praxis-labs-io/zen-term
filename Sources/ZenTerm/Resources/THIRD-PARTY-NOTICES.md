@@ -3022,7 +3022,7 @@ SOFTWARE.
 
 The ZenTerm app icon is Lucide's `origami` mark, drawn from its SVG path data in `icon/make-icon.swift`. `origami.svg` also ships in the app's resource bundle. Reproduced whole, including the Feather portion Lucide carries. The `origami` mark is not in Lucide's list of Feather-derived icons, so only the ISC terms apply to it.
 
-The generic process chips draw Lucide glyphs that ship in the resource bundle: `binary.svg`, `bot.svg`, `columns-2.svg`, `database.svg`, `file-text.svg`, `flask-conical.svg`, `folder.svg`, `gauge.svg`, `git-branch.svg`, `hammer.svg`, `hourglass.svg`, `key-round.svg`, `package.svg`, `scroll-text.svg`, `search.svg`, `send.svg`, `server.svg`, `terminal.svg` and `text-cursor-input.svg`. Of these, `database`, `search`, `server` and `terminal` are in the Feather-derived list below, so the MIT terms apply to them as well.
+The generic process chips and the command palette's category chips draw Lucide glyphs that ship in the resource bundle: `app-window.svg`, `binary.svg`, `bot.svg`, `columns-2.svg`, `database.svg`, `file-text.svg`, `flask-conical.svg`, `folder.svg`, `gauge.svg`, `git-branch.svg`, `hammer.svg`, `hourglass.svg`, `key-round.svg`, `package.svg`, `panel-top.svg`, `scroll-text.svg`, `search.svg`, `send.svg`, `server.svg`, `settings.svg`, `terminal.svg` and `text-cursor-input.svg`. Of these, `database`, `search`, `server` and `terminal` are in the Feather-derived list below, so the MIT terms apply to them as well.
 
 ```text
 ISC License

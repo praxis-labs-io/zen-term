@@ -13,15 +13,15 @@ enum CommandCategory: CaseIterable {
         }
     }
 
-    var symbol: String {
+    var icon: ProcessIcon {
         switch self {
-        case .workspaces: return "folder"
-        case .tabs: return "rectangle.on.rectangle"
-        case .panes: return "rectangle.split.2x1"
-        case .terminal: return "terminal"
-        case .window: return "macwindow"
-        case .tools: return "wrench.and.screwdriver"
-        case .app: return "gearshape"
+        case .workspaces: return .workspace
+        case .tabs: return .tab
+        case .panes: return .pane
+        case .terminal: return .terminal
+        case .window: return .window
+        case .tools: return .tool
+        case .app: return .app
         }
     }
 }

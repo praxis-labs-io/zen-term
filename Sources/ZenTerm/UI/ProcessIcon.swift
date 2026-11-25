@@ -7,6 +7,8 @@ struct ProcessIcon: Equatable {
         case brand(fill: TerminalColor, glyph: TerminalColor)
         case artwork(fill: TerminalColor)
         case neutral
+        // The one look that may draw an SF Symbol: a tool float's own icon picker name.
+        case catalog
     }
 
     let name: String
@@ -16,14 +18,29 @@ struct ProcessIcon: Equatable {
     let scale: CGFloat
 
     var image: NSImage? {
-        if case .artwork = look { return BrandMark.artwork(mark) }
-        return BrandMark.image(mark)
+        switch look {
+        case .artwork: return BrandMark.artwork(mark)
+        case .catalog: return IconCatalog.image(mark, weight: .regular)
+        case .brand, .neutral: return BrandMark.image(mark)
+        }
     }
 
     static let shell = neutral("Shell", "terminal")
     static let unknown = neutral("Program", "binary")
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
+
+    static let workspace = neutral("Workspace", "folder")
+    static let tab = neutral("Tab", "panel-top")
+    static let pane = neutral("Pane", "columns-2")
+    static let terminal = neutral("Terminal", "terminal")
+    static let window = neutral("Window", "app-window")
+    static let tool = neutral("Tool", "hammer")
+    static let app = neutral("App", "settings")
+
+    static func toolFloat(_ float: ToolFloat) -> ProcessIcon {
+        ProcessIcon(name: float.title, mark: float.icon, look: .catalog, scale: 1)
+    }
 
     static func forProgram(_ program: String?) -> ProcessIcon {
         guard let program = program?.lowercased(), !program.isEmpty else { return shell }
