@@ -59,11 +59,12 @@ final class CommandPaletteOverlay: PaletteOverlay {
         }
     }
 
-    /// Includes the shortcut and category: a user float's title can collide with a built-in command's.
+    /// Includes shortcut, category and icon: a user float's title can collide with a built-in command's.
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .header(let title): return ["header", title]
-        case .command(let command): return ["command", command.title, command.shortcut, command.category.title]
+        case .command(let command):
+            return ["command", command.title, command.shortcut, command.category.title, command.symbol]
         }
     }
 
@@ -131,7 +132,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
             category = command.category
             super.init(
                 Content(
-                    title: command.title, leading: .symbol(command.category.symbol),
+                    title: command.title, leading: .symbol(command.symbol),
                     trailing: command.shortcut.isEmpty ? nil : .keycap(command.shortcut)))
         }
 

@@ -257,7 +257,7 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(Set(details(in: overlay).values), [""], "a header already names the category")
     }
 
-    func test_commandPalette_everyRowLeadsWithItsCategorySymbol() {
+    func test_commandPalette_everyRowLeadsWithItsCommandsSymbol() {
         let overlay = catalogPalette()
         mount(overlay)
         let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
@@ -265,8 +265,22 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(shown.count, commands.count)
         for (row, command) in zip(shown, commands) {
             XCTAssertEqual(row.title, command.title)
-            XCTAssertEqual(row.content.leading, .symbol(command.category.symbol), command.title)
+            XCTAssertEqual(row.content.leading, .symbol(command.symbol), command.title)
         }
+    }
+
+    func test_commandPalette_aToolFloatRowLeadsWithItsOwnIcon_andNamesTools() throws {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let scratch = try XCTUnwrap(rows(in: overlay).first { $0.title == ToolFloat.scratch.title })
+        XCTAssertEqual(scratch.content.leading, .symbol(ToolFloat.scratch.icon))
+        XCTAssertNotEqual(ToolFloat.scratch.icon, CommandCategory.tools.symbol)
+
+        type("scratch", into: overlay)
+        let filtered = try XCTUnwrap(rows(in: overlay).first { $0.title == ToolFloat.scratch.title })
+        XCTAssertEqual(filtered.content.leading, .symbol(ToolFloat.scratch.icon))
+        XCTAssertEqual(filtered.detail, CommandCategory.tools.title)
     }
 
     func test_commandCategory_everySymbolResolves() {
