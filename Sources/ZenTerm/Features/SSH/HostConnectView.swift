@@ -8,7 +8,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         var output: [String]
     }
 
-    static let outputLineCount = 3
+    static let outputLinesRead = 6
     private static let edgeSpacing = ChromeMetrics.Spacing.s12
     private static let emblemToName = ChromeMetrics.Spacing.s24
     private static let nameToAddress = ChromeMetrics.Spacing.s6
@@ -17,8 +17,10 @@ final class HostConnectView: NSView, ThemeReapplying {
     private static let contentMaxWidth: CGFloat = 420
     private static let promptToAnswer = ChromeMetrics.Spacing.s8
     private static let answerToRetry = ChromeMetrics.Spacing.s6
-    private static let actionsToOutput = ChromeMetrics.Spacing.s24
+    private static let textToText = ChromeMetrics.Spacing.s6
     private static let answerWidth: CGFloat = 260
+    // Balanced messages read best well inside the 420 column.
+    private static let messageMaxWidth: CGFloat = 360
     private static let retryMessage = "That didn't work. Try again."
 
     // A short window drops the emblem first, so the action never leaves the screen.
@@ -36,20 +38,20 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let nameLine = NSTextField(labelWithString: "")
     private let addressLine = NSTextField(labelWithString: "")
     private let onlineDot = StateDot(.online)
-    private let statusWord = NSTextField(labelWithString: "")
+    private let statusWord = BalancedLabel(font: ChromeType.font(.small), wrapWidth: HostConnectView.messageMaxWidth)
     private let statusLine = NSStackView()
     private let connectButton: AppButton
     private let connectAnywayButton: AppButton
-    private let promptLabel = NSTextField(wrappingLabelWithString: "")
-    private let fingerprintLine = NSTextField(labelWithString: "")
+    private let fingerprintLine = BalancedLabel(
+        font: ChromeType.font(.small, face: .mono), wrapWidth: HostConnectView.messageMaxWidth)
+    private let detailLine = BalancedLabel(
+        font: ChromeType.font(.small, face: .mono), wrapWidth: HostConnectView.messageMaxWidth)
     private let answerField = FieldBox(placeholder: "", hidesText: true)
-    private let retryLine = FormErrorLabel(maximumLines: 1)
+    private let retryLine = FormErrorLabel()
     private let answerBox = NSStackView()
     private let trustButton: AppButton
     private let cancelButton: AppButton
     private let loginActions = NSStackView()
-    private let outputLines = (0..<HostConnectView.outputLineCount).map { _ in NSTextField(labelWithString: "") }
-    private let output = NSStackView()
     private let stack = NSStackView()
     private let panel: PanelHostView
     private let content = NSView()
@@ -68,7 +70,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         self.onAnswer = onAnswer
         self.onTrust = onTrust
         trustButton = AppButton(title: "Trust", variant: .primary, onTap: onTrust)
-        cancelButton = AppButton(title: "Cancel", variant: .secondary, onTap: onCancel)
+        cancelButton = AppButton(title: "Cancel", variant: .muted, onTap: onCancel)
         emblem = HostEmblemView(host: host)
         connectButton = AppButton(
             title: "Connect", variant: .primary, onTap: onConnect)
@@ -88,8 +90,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         addressLine.lineBreakMode = .byTruncatingMiddle
         addressLine.maximumNumberOfLines = 1
         addressLine.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        statusWord.font = ChromeType.font(.small)
-        statusWord.alignment = .center
         statusLine.orientation = .horizontal
         statusLine.alignment = .centerY
         statusLine.spacing = ChromeMetrics.Spacing.s8
@@ -98,8 +98,8 @@ final class HostConnectView: NSView, ThemeReapplying {
         configureLoginViews()
 
         [
-            emblem, nameLine, addressLine, statusLine, promptLabel, fingerprintLine, answerBox, connectButton,
-            connectAnywayButton, loginActions, output,
+            emblem, nameLine, addressLine, statusLine, fingerprintLine, detailLine, answerBox, connectButton,
+            connectAnywayButton, loginActions,
         ].forEach(stack.addArrangedSubview)
         stack.orientation = .vertical
         stack.alignment = .centerX
@@ -107,16 +107,15 @@ final class HostConnectView: NSView, ThemeReapplying {
         stack.setCustomSpacing(Self.emblemToName, after: emblem)
         stack.setCustomSpacing(Self.nameToAddress, after: nameLine)
         stack.setCustomSpacing(Self.addressToStatus, after: addressLine)
-        stack.setCustomSpacing(Self.statusToButton, after: statusLine)
-        stack.setCustomSpacing(Self.promptToAnswer, after: promptLabel)
-        stack.setCustomSpacing(Self.statusToButton, after: fingerprintLine)
         stack.setCustomSpacing(Self.statusToButton, after: answerBox)
-        stack.setCustomSpacing(Self.actionsToOutput, after: loginActions)
         stack.setVisibilityPriority(Self.emblemVisibility, for: emblem)
         stack.setClippingResistancePriority(.defaultLow, for: .vertical)
         stack.setClippingResistancePriority(.defaultLow, for: .horizontal)
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
+        content.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(contentFrameChanged), name: NSView.frameDidChangeNotification, object: content)
         panel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(panel)
         gutterConstraints = [
@@ -138,10 +137,8 @@ final class HostConnectView: NSView, ThemeReapplying {
             stack.widthAnchor.constraint(lessThanOrEqualToConstant: Self.contentMaxWidth),
             nameLine.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
             addressLine.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
-            promptLabel.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
-            fingerprintLine.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
+            statusLine.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
             answerField.widthAnchor.constraint(equalToConstant: Self.answerWidth),
-            output.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
         ])
         setDestination(destination)
         applyStatus()
@@ -196,9 +193,8 @@ final class HostConnectView: NSView, ThemeReapplying {
         applyName()
         addressLine.textColor = chrome.ink(.muted)
         statusWord.textColor = chrome.ink(.subtle)
-        promptLabel.textColor = chrome.ink(.subtle)
         fingerprintLine.textColor = chrome.ink(.muted)
-        for line in outputLines { line.textColor = chrome.ink(.muted) }
+        detailLine.textColor = chrome.ink(.faint)
         retryLine.reapplyTheme()
         answerField.reapplyTheme()
     }
@@ -219,8 +215,8 @@ final class HostConnectView: NSView, ThemeReapplying {
         return false
     }
 
-    private var secretLabel: String? {
-        if case .secret(let label) = login?.question?.prompt { return label }
+    private var secretHeadline: String? {
+        if case .secret(let headline) = login?.question?.prompt { return headline }
         return nil
     }
 
@@ -229,15 +225,15 @@ final class HostConnectView: NSView, ThemeReapplying {
         return responder === self || responder.isDescendant(of: self)
     }
 
+    @objc private func contentFrameChanged() {
+        let wrapWidth = min(Self.messageMaxWidth, content.bounds.width - 2 * Self.edgeSpacing)
+        for label in [statusWord, fingerprintLine, detailLine] { label.wrapWidth = max(wrapWidth, 0) }
+        retryLine.preferredMaxLayoutWidth = min(Self.answerWidth, max(wrapWidth, 0))
+    }
+
     private func configureLoginViews() {
-        promptLabel.font = ChromeType.font(.small)
-        promptLabel.alignment = .center
-        promptLabel.preferredMaxLayoutWidth = Self.contentMaxWidth
-        promptLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        fingerprintLine.font = ChromeType.font(.small, face: .mono)
-        fingerprintLine.alignment = .center
-        fingerprintLine.lineBreakMode = .byTruncatingMiddle
-        fingerprintLine.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        retryLine.alignment = .center
+        retryLine.preferredMaxLayoutWidth = Self.answerWidth
         answerField.onEnter = { [weak self] in self?.submitAnswer() }
         answerField.onEscape = { [weak self] in self?.onCancel() }
         answerBox.orientation = .vertical
@@ -249,25 +245,23 @@ final class HostConnectView: NSView, ThemeReapplying {
         loginActions.spacing = ChromeMetrics.Spacing.s8
         loginActions.detachesHiddenViews = true
         [trustButton, cancelButton].forEach(loginActions.addArrangedSubview)
-        output.orientation = .vertical
-        output.alignment = .centerX
-        output.spacing = 0
-        output.detachesHiddenViews = true
-        for line in outputLines {
-            line.font = ChromeType.font(.small, face: .mono)
-            line.alignment = .center
-            line.lineBreakMode = .byTruncatingTail
-            line.maximumNumberOfLines = 1
-            line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            output.addArrangedSubview(line)
-        }
     }
 
     private func submitAnswer() {
-        guard secretLabel != nil else { return }
+        guard secretHeadline != nil else { return }
         let answer = AskpassAnswer(answerField.text)
         answerField.setText("")
         onAnswer(answer)
+    }
+
+    private func applySpacing() {
+        let texts: [NSView] = [statusLine, fingerprintLine, detailLine]
+        let shown = stack.arrangedSubviews.filter { !$0.isHidden }
+        for (view, next) in zip(shown, shown.dropFirst()) where texts.contains(view) {
+            let gap =
+                texts.contains(next) ? Self.textToText : next === answerBox ? Self.promptToAnswer : Self.statusToButton
+            stack.setCustomSpacing(gap, after: view)
+        }
     }
 
     private func applyName() {
@@ -279,8 +273,8 @@ final class HostConnectView: NSView, ThemeReapplying {
     private func applyStatus() {
         let connecting = login != nil
         statusWord.stringValue =
-            connecting ? "Connecting…" : isOffline ? SSHHostStatus.offline.word : SSHHostStatus.online.word
-        statusLine.isHidden = login?.question != nil
+            login?.question?.prompt.headline
+            ?? (connecting ? "Connecting…" : isOffline ? SSHHostStatus.offline.word : SSHHostStatus.online.word)
         onlineDot.isHidden = isOffline || connecting
         emblem.setDimmed(isOffline && !connecting)
         connectButton.isHidden = isOffline || connecting
@@ -288,25 +282,21 @@ final class HostConnectView: NSView, ThemeReapplying {
         loginActions.isHidden = !connecting
         trustButton.isHidden = !isAskingHostKey
         applyQuestion()
-        let lines = login?.output ?? []
-        for (index, line) in outputLines.enumerated() {
-            line.stringValue = index < lines.count ? lines[index] : ""
-            line.isHidden = index >= lines.count
-        }
-        output.isHidden = lines.isEmpty
+        let detail = login.flatMap { SSHLoginOutput.detail(of: $0.output) }
+        detailLine.stringValue = detail ?? ""
+        detailLine.isHidden = detail == nil
+        applySpacing()
     }
 
     private func applyQuestion() {
         let fingerprint: String?
-        if case .hostKey(let value) = login?.question?.prompt { fingerprint = value } else { fingerprint = nil }
-        promptLabel.stringValue = secretLabel ?? (isAskingHostKey ? "New host key" : "")
-        promptLabel.isHidden = login?.question == nil
-        fingerprintLine.stringValue = fingerprint ?? ""
+        if case .hostKey(_, let value?) = login?.question?.prompt { fingerprint = value } else { fingerprint = nil }
+        fingerprintLine.stringValue = fingerprint.map(SSHLoginPrompt.fingerprintLines) ?? ""
         fingerprintLine.isHidden = fingerprint == nil
-        answerBox.isHidden = secretLabel == nil
-        answerField.field.setAccessibilityLabel(secretLabel)
-        if secretLabel != nil, login?.question?.isRetry == true {
-            retryLine.show(Self.retryMessage)
+        answerBox.isHidden = secretHeadline == nil
+        answerField.field.setAccessibilityLabel(secretHeadline)
+        if secretHeadline != nil, login?.question?.isRetry == true {
+            retryLine.show(SSHLoginOutput.saysDenied(login?.output ?? []) ? SSHLoginOutput.denied : Self.retryMessage)
         } else {
             retryLine.clear()
         }
@@ -323,11 +313,12 @@ final class HostConnectView: NSView, ThemeReapplying {
     var detachedForTesting: [NSView] { stack.detachedViews }
     var panelForTesting: PanelHostView { panel }
     var actionButtonForTesting: AppButton { isOffline ? connectAnywayButton : connectButton }
-    var promptForTesting: String? { promptLabel.isHidden ? nil : promptLabel.stringValue }
+    var promptForTesting: String? { login?.question == nil ? nil : statusWord.stringValue }
+    var messageLabelForTesting: BalancedLabel { statusWord }
     var fingerprintForTesting: String? { fingerprintLine.isHidden ? nil : fingerprintLine.stringValue }
     var answerFieldForTesting: FieldBox? { answerBox.isHidden ? nil : answerField }
     var retryForTesting: String? { retryLine.isHidden ? nil : retryLine.stringValue }
     var trustButtonForTesting: AppButton? { trustButton.isHidden || loginActions.isHidden ? nil : trustButton }
     var cancelButtonForTesting: AppButton? { loginActions.isHidden ? nil : cancelButton }
-    var outputForTesting: [String] { output.isHidden ? [] : outputLines.filter { !$0.isHidden }.map(\.stringValue) }
+    var detailForTesting: String? { detailLine.isHidden ? nil : detailLine.stringValue }
 }

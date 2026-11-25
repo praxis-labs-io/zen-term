@@ -126,7 +126,7 @@ final class HostConnectLoginTests: WindowTestCase {
         try ask("devbox's password: ", login: login, in: c)
         let view = try XCTUnwrap(c.connectViewForTesting)
 
-        XCTAssertEqual(view.promptForTesting, "devbox's password")
+        XCTAssertEqual(view.promptForTesting, "Enter your password")
         let field = try XCTUnwrap(view.answerFieldForTesting)
         XCTAssertTrue(field.field.cell is NSSecureTextFieldCell)
         XCTAssertTrue((c.window.firstResponder as? NSText)?.delegate === field.field, "the field takes focus")
@@ -158,8 +158,8 @@ final class HostConnectLoginTests: WindowTestCase {
             "ED25519 key fingerprint is: SHA256:abc123\nAre you sure (yes/no/[fingerprint])? ", login: login, in: c)
         let view = try XCTUnwrap(c.connectViewForTesting)
 
-        XCTAssertEqual(view.promptForTesting, "New host key")
-        XCTAssertEqual(view.fingerprintForTesting, "ED25519 SHA256:abc123")
+        XCTAssertEqual(view.promptForTesting, "New ED25519 host key")
+        XCTAssertEqual(view.fingerprintForTesting, "SHA256:\nabc123")
         XCTAssertNil(view.answerFieldForTesting, "a host key has no free-text answer")
         try XCTUnwrap(view.trustButtonForTesting).performClick(nil)
 
@@ -263,20 +263,51 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, local)
     }
 
-    func test_whatSSHWritesShowsBelowTheFlow_withoutTheLoginBanner() throws {
+    func test_sshsLatestLineShowsAsTheDetail_withoutTheLoginBannerOrWhatTheScreenAlreadySays() throws {
         let (c, login) = try loggingIn()
-        let expected = ["Confirm user presence for key ED25519 SHA256:x", "Permission denied, please try again."]
+        let expected = "Confirm user presence for key ED25519 SHA256:x"
         login.rows = [
             "Last login: Wed Nov 25 01:41:47 on ttys015", "Confirm user presence for key ED25519 SHA256:x\r",
             "", "Permission denied, please try again.",
+            "Warning: Permanently added 'devbox' (ED25519) to the list of known hosts.",
         ]
 
         let deadline = Date().addingTimeInterval(2)
-        while c.connectViewForTesting?.outputForTesting != expected, Date() < deadline {
+        while c.connectViewForTesting?.detailForTesting != expected, Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         }
 
-        XCTAssertEqual(c.connectViewForTesting?.outputForTesting, expected, "the screen follows the login's terminal")
+        XCTAssertEqual(c.connectViewForTesting?.detailForTesting, expected, "the screen follows the login's terminal")
+    }
+
+    func test_aRepeatedPrompt_takesSSHsOwnDenial_asTheRetryNote() throws {
+        let (c, login) = try loggingIn()
+        try ask("devbox's password: ", login: login, in: c)
+        try type("wrong", in: c)
+        try send(keyCode: 36, "\r", in: c)
+        login.rows = ["Permission denied, please try again."]
+        let connection = try XCTUnwrap(c.connectionForTesting(of: host))
+        XCTAssertEqual(connection.loginOutput(limit: HostConnectView.outputLinesRead), login.rows)
+
+        try ask("devbox's password: ", login: login, in: c)
+
+        let view = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertEqual(view.retryForTesting, "Permission denied, please try again.")
+        XCTAssertNil(view.detailForTesting, "said once, as the retry note")
+    }
+
+    func test_aLongPrompt_wrapsIntoBalancedLines_andIsNeverTruncated() throws {
+        let (c, login) = try loggingIn()
+        let prompt =
+            "(me@devbox) Enter the six digit code from the authenticator app on your phone to finish signing in"
+
+        try ask(prompt, login: login, in: c)
+
+        let message = try XCTUnwrap(c.connectViewForTesting).messageLabelForTesting
+        XCTAssertEqual(message.stringValue, String(prompt.dropFirst("(me@devbox) ".count)))
+        XCTAssertEqual(message.lineBreakMode, .byWordWrapping)
+        XCTAssertGreaterThan(message.lineCountForTesting, 1)
+        XCTAssertLessThan(message.frame.width, 360, "balanced lines sit narrower than the message width")
     }
 
     func test_aFailedLogin_returnsConnectToReady_withTheFailureToast() throws {

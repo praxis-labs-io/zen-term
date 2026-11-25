@@ -961,7 +961,7 @@ final class WindowController: NSObject {
         connectView.setLogin(
             connection.map {
                 HostConnectView.Login(
-                    question: $0.question, output: $0.loginOutput(limit: HostConnectView.outputLineCount))
+                    question: $0.question, output: $0.loginOutput(limit: HostConnectView.outputLinesRead))
             })
         guard connection != nil else {
             loginOutputTicker?.invalidate()

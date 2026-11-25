@@ -569,7 +569,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let deadline = Date().addingTimeInterval(5)
         while connection.question == nil, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
         XCTAssertEqual(
-            connection.question, SSHLoginQuestion(prompt: .secret(label: "devbox's password"), isRetry: false))
+            connection.question, SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false))
         connection.answer(AskpassAnswer(secret))
         wait(for: [answered], timeout: 5)
 

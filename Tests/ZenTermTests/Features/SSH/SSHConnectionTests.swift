@@ -621,7 +621,7 @@ final class SSHConnectionAskpassTests: XCTestCase {
         let token = try token(of: loggingIn())
         let first = ask("devbox's password: ", token: token)
         XCTAssertEqual(
-            connection.question, SSHLoginQuestion(prompt: .secret(label: "devbox's password"), isRetry: false))
+            connection.question, SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false))
 
         connection.answer(AskpassAnswer("wrong"))
         connection.answer(AskpassAnswer("again"))
@@ -661,6 +661,7 @@ final class SSHConnectionAskpassTests: XCTestCase {
         hangup.hangUp()
 
         XCTAssertNil(connection.question)
-        XCTAssertEqual(questions, [SSHLoginQuestion(prompt: .secret(label: "Password"), isRetry: false), nil])
+        XCTAssertEqual(
+            questions, [SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false), nil])
     }
 }
