@@ -1,14 +1,13 @@
 import AppKit
 
 // Rows scrolling or re-laying out under a still pointer get hover too, and that is not the person pointing.
-@MainActor
 enum PointerRest {
     static var pointerLocation: () -> NSPoint = { NSEvent.mouseLocation }
     private static var restingAt: NSPoint?
 
     static func keyboardDidTakeOver() { restingAt = pointerLocation() }
 
-    static var pointerHasMoved: Bool {
+    static func claimPointerMove() -> Bool {
         guard let restingAt else { return true }
         guard pointerLocation() != restingAt else { return false }
         Self.restingAt = nil

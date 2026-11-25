@@ -41,14 +41,19 @@ final class ArrowKeysOverRestingPointerTests: WindowTestCase {
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
     }
 
-    private func pressDown(in window: NSWindow) throws {
-        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+    private func press(_ key: TypedKey, in window: NSWindow) throws {
+        if let passed = KeyInterceptor().route(try key.event(in: window)) { window.sendEvent(passed) }
+    }
+
+    private func pressPaletteChord(in window: NSWindow) throws {
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, characters: down,
-                charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125))
-        window.sendEvent(event)
+                with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: "k",
+                charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40))
+        let interceptor = KeyInterceptor()
+        interceptor.setKeymap([try XCTUnwrap(Chord(event: event)): .toggleCommandPalette])
+        XCTAssertNil(interceptor.route(event), "the chord has to be consumed before the window sees it")
     }
 
     private func selection(_ rows: [SelectableRowView]) -> [Bool] { rows.map(\.isSelected) }
@@ -58,7 +63,7 @@ final class ArrowKeysOverRestingPointerTests: WindowTestCase {
         rows[1].mouseEntered(with: try pointerEvent(.mouseEntered, in: window))
         XCTAssertEqual(selection(rows), [false, true, false], "the pointer's row takes the selection")
 
-        try pressDown(in: window)
+        try press(.arrowDown, in: window)
         XCTAssertEqual(selection(rows), [false, false, true], "the arrow moves one row")
 
         rows[1].mouseExited(with: try pointerEvent(.mouseExited, in: window))
@@ -70,11 +75,19 @@ final class ArrowKeysOverRestingPointerTests: WindowTestCase {
     func test_thePointerTakesTheSelectionAgain_onceItMovesAfterAnArrowPress() throws {
         let (window, rows) = try mountPalette()
         rows[1].mouseEntered(with: try pointerEvent(.mouseEntered, in: window))
-        try pressDown(in: window)
+        try press(.arrowDown, in: window)
         rows[1].mouseExited(with: try pointerEvent(.mouseExited, in: window))
 
         pointer.y += 30
         rows[0].mouseEntered(with: try pointerEvent(.mouseEntered, in: window))
         XCTAssertEqual(selection(rows), [true, false, false], "a moved pointer points again")
+    }
+
+    func test_aConsumedChord_keepsARowThatOpensUnderAStillPointerFromTakingTheSelection() throws {
+        try pressPaletteChord(in: NSWindow())
+        let (window, rows) = try mountPalette()
+
+        rows[2].mouseEntered(with: try pointerEvent(.mouseEntered, in: window))
+        XCTAssertEqual(selection(rows), [true, false, false], "the palette opens on its first row")
     }
 }

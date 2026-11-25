@@ -90,6 +90,7 @@ final class KeyInterceptor {
     }
 
     func route(_ event: NSEvent) -> NSEvent? {
+        if event.type == .keyDown { PointerRest.keyboardDidTakeOver() }
         if let captureHandler {
             captureHandler(event)
             return nil

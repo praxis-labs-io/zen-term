@@ -48,11 +48,6 @@ final class HostWindow: NSWindow {
         setFrame(target, display: true, animate: animate)
     }
 
-    override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown { PointerRest.keyboardDidTakeOver() }
-        super.sendEvent(event)
-    }
-
     override func fieldEditor(_ createFlag: Bool, for object: Any?) -> NSText? {
         guard object is NSTextField else { return super.fieldEditor(createFlag, for: object) }
         return chromeFieldEditor
