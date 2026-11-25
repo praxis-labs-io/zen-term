@@ -1015,8 +1015,9 @@ final class HostConnectInteractionTests: WindowTestCase {
         }
     }
 
-    private func showsFocus(_ c: WindowController) throws -> Bool {
-        try XCTUnwrap(c.connectViewForTesting).panelForTesting.borderForTesting.width == ChromeMetrics.Border.paneFocus
+    private func showsFocusHalo(_ c: WindowController) throws -> Bool {
+        let border = try XCTUnwrap(c.connectViewForTesting).panelForTesting.borderForTesting
+        return border.width != ChromeMetrics.Border.width || border.color == Theme.current.chrome.accent.nsColor.cgColor
     }
 
     private func postConfigChange(_ change: ConfigChange) {
@@ -1025,28 +1026,57 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
     }
 
-    func test_connect_isFocusedAndBordered_likeAPane() throws {
+    func test_connect_holdsTheKeyboard_withNoFocusHalo() throws {
         let c = onConnectScreen()
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
-        XCTAssertTrue(try showsFocus(c))
+        XCTAssertFalse(try showsFocusHalo(c))
     }
 
-    func test_connectsFocusBorder_followsTheWindowsKeyState() throws {
+    func test_theConnectScreen_showsNoFocusHalo_inAnyState_whileTheLoginPaneKeepsIts() throws {
+        let c = onConnectScreen()
+        XCTAssertEqual(SSHHostStatusCenter.shared.status(of: host), .offline)
+        XCTAssertFalse(try showsFocusHalo(c), "offline")
+
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        drainMainQueue()
+        XCTAssertEqual(SSHHostStatusCenter.shared.status(of: host), .online)
+        XCTAssertFalse(try showsFocusHalo(c), "online")
+
+        let (_, login) = try connect(c)
+        c.handle(.splitVertical)
+        let pane = try XCTUnwrap(c.focusedPanelForTesting, "connecting shows terminal panes")
+        XCTAssertEqual(
+            pane.borderForTesting.width, ChromeMetrics.Border.paneFocus, "a pane beside the login keeps its halo")
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+        XCTAssertTrue(failureToastNames("devbox", in: c), "precondition: the login failed")
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertFalse(try showsFocusHalo(c), "failed")
+
+        let (_, relogin) = try connect(c)
+        fake.connect()
+        fake.exited?()
+        relogin.delegate?.surfaceDidExit(relogin, code: 255)
+        drainMainQueue()
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting, "precondition: the drop returned to Connect")
+        XCTAssertFalse(try showsFocusHalo(c), "dropped")
+    }
+
+    func test_connect_keepsTheKeyboardAcrossTheWindowsKeyState_withNoHalo() throws {
         let c = onConnectScreen()
 
         c.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
-        XCTAssertFalse(try showsFocus(c))
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
-        XCTAssertTrue(try showsFocus(c))
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertFalse(try showsFocusHalo(c))
     }
 
-    func test_clickingConnect_fromTheSidebar_takesFocusAndTheFocusBorderBack() throws {
+    func test_clickingConnect_fromTheSidebar_takesFocusBack() throws {
         let c = onConnectScreen()
         c.handle(.focusSidebar)
-        XCTAssertFalse(try showsFocus(c), "precondition: the sidebar holds focus")
+        XCTAssertTrue(c.sidebarForTesting.hasFocus, "precondition: the sidebar holds focus")
         let panel = try XCTUnwrap(c.connectViewForTesting).panelForTesting
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
@@ -1057,20 +1087,22 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(c.sidebarForTesting.hasFocus)
-        XCTAssertTrue(try showsFocus(c))
+        XCTAssertFalse(try showsFocusHalo(c))
     }
 
-    func test_aRevealedFloatingSidebar_takesConnectsFocusBorder() throws {
+    func test_aRevealedFloatingSidebar_leavesConnectWithNoHalo() throws {
         let c = onConnectScreen()
         c.window.setContentSize(c.window.contentMinSize)
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
 
         c.handle(.toggleSidebar)
         XCTAssertTrue(c.sidebarForTesting.isRevealed, "precondition: too narrow to dock, so it floats")
-        XCTAssertFalse(try showsFocus(c))
+        XCTAssertFalse(try showsFocusHalo(c))
         c.handle(.toggleSidebar)
 
-        XCTAssertTrue(try showsFocus(c))
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertFalse(c.sidebarForTesting.hasFocus)
+        XCTAssertFalse(try showsFocusHalo(c))
     }
 
     func test_connect_paintsTheTerminalBackground_andFollowsATranslucentOne() throws {
@@ -1099,26 +1131,25 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(button.layer?.backgroundColor)
     }
 
-    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheFocusBorder() throws {
+    func test_leftFromConnect_movesToTheSidebar_andRightComesBack() throws {
         let c = onConnectScreen()
 
         c.handle(.navLeft)
         XCTAssertTrue(c.sidebarForTesting.hasFocus, "Connect's left edge leads into the sidebar, as a pane's does")
-        XCTAssertFalse(try showsFocus(c))
         c.handle(.navRight)
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
-        XCTAssertTrue(try showsFocus(c))
+        XCTAssertFalse(try showsFocusHalo(c))
     }
 
-    func test_focusSidebarFromConnect_dropsTheFocusBorder_andRightBringsItBack() throws {
+    func test_focusSidebarFromConnect_andRightComesBack() throws {
         let c = onConnectScreen()
 
         c.handle(.focusSidebar)
-        XCTAssertFalse(try showsFocus(c))
+        XCTAssertTrue(c.sidebarForTesting.hasFocus)
         c.handle(.navRight)
 
-        XCTAssertTrue(try showsFocus(c))
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
 
     func test_upDownAndRightOnConnect_doNothing() throws {
