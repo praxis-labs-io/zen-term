@@ -30,14 +30,23 @@ final class HintFooter: NSView, ThemeReapplying {
         func reapplyTheme() { label.textColor = Theme.current.chrome.ink(.muted) }
     }
 
+    enum Placement {
+        case trailingUnderRule
+        case centered
+    }
+
     private let hairline = NSView()
     private let pairs = NSStackView()
     private(set) var hints: [Hint] = []
 
-    init(_ hints: [Hint], trailingInset: CGFloat = ChromeMetrics.Spacing.modalInsets.right) {
+    init(
+        _ hints: [Hint], placement: Placement = .trailingUnderRule,
+        trailingInset: CGFloat = ChromeMetrics.Spacing.modalInsets.right
+    ) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
+        hairline.isHidden = placement == .centered
         hairline.wantsLayer = true
         hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
         hairline.translatesAutoresizingMaskIntoConstraints = false
@@ -56,10 +65,13 @@ final class HintFooter: NSView, ThemeReapplying {
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
             heightAnchor.constraint(equalToConstant: Self.height),
-            pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
+            pairs.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -trailingInset),
             pairs.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: trailingInset),
             pairs.centerYAnchor.constraint(
                 equalTo: centerYAnchor, constant: ChromeMetrics.Border.width / 2),
+            placement == .centered
+                ? pairs.centerXAnchor.constraint(equalTo: centerXAnchor)
+                : pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
         ])
     }
 

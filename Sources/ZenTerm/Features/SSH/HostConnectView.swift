@@ -25,7 +25,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let statusLine = NSStackView()
     private let connectButton: AppButton
     private let connectAnywayButton: AppButton
-    private let hints = HintFooter([])
+    private let hints = HintFooter([], placement: .centered)
     private let stack = NSStackView()
     private let panel: PanelHostView
     private let content = NSView()
@@ -41,9 +41,9 @@ final class HostConnectView: NSView, ThemeReapplying {
         self.onConnect = onConnect
         emblem = HostEmblemView(host: host)
         connectButton = AppButton(
-            title: "Connect", variant: .primary, shortcut: Self.returnKey, onTap: onConnect)
+            title: "Connect", variant: .primary, onTap: onConnect)
         connectAnywayButton = AppButton(
-            title: "Connect Anyway", variant: .secondary, shortcut: Self.returnKey, onTap: onConnect)
+            title: "Connect Anyway", variant: .secondary, onTap: onConnect)
         panel = PanelHostView(content: content, meta: nil, fillsContent: true, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -59,11 +59,12 @@ final class HostConnectView: NSView, ThemeReapplying {
         addressLine.maximumNumberOfLines = 1
         addressLine.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         statusWord.font = ChromeType.font(.small)
+        statusWord.alignment = .center
         statusLine.orientation = .horizontal
         statusLine.alignment = .centerY
         statusLine.spacing = ChromeMetrics.Spacing.s8
         statusLine.detachesHiddenViews = true
-        [onlineDot, statusWord].forEach(statusLine.addArrangedSubview)
+        [onlineDot, statusWord].forEach { statusLine.addView($0, in: .center) }
 
         [emblem, nameLine, addressLine, statusLine, connectButton, connectAnywayButton]
             .forEach(stack.addArrangedSubview)

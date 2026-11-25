@@ -1146,7 +1146,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(button.title, "Connect")
 
         XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
-        XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
+        XCTAssertNil(button.keycapForTesting, "the hint row names ↵, so the button carries no keycap")
 
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
@@ -1321,7 +1321,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let chrome = Theme.current.chrome
 
         XCTAssertEqual(emblem.litForTesting, HostSignature.cells(of: host))
-        XCTAssertEqual(emblem.tileFillForTesting, chrome.chipRaised.nsColor.cgColor)
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.fill(.rest).cgColor)
         XCTAssertEqual(emblem.frame.size, NSSize(width: HostEmblemView.tileSide, height: HostEmblemView.tileSide))
         XCTAssertEqual(
             emblem.cellColorsForTesting,
@@ -1371,7 +1371,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(
             emblem.cellColorsForTesting,
             emblemColors(lit: chrome.ink(.normal).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
-        XCTAssertEqual(emblem.tileFillForTesting, chrome.chipRaised.nsColor.cgColor)
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.fill(.rest).cgColor)
     }
 
     func test_atTheSmallestWindow_connectStaysOnScreen_andTheEmblemGivesWay() throws {
@@ -1417,7 +1417,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(
             emblem.cellColorsForTesting,
             emblemColors(lit: chrome.ink(.muted).cgColor, unlit: chrome.fill(.rest).cgColor, emblem))
-        XCTAssertEqual(emblem.tileFillForTesting, chrome.chipRaised.nsColor.cgColor)
+        XCTAssertEqual(emblem.tileFillForTesting, chrome.fill(.rest).cgColor)
     }
 
     func test_aLongNameAndAddress_truncateInsideTheColumn_atEveryWidth() throws {

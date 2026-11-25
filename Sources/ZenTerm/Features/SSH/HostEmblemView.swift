@@ -49,7 +49,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.chipRaised.nsColor.cgColor
+        layer?.backgroundColor = chrome.fill(.rest).cgColor
         layer?.borderColor = chrome.fill(alpha: ChromeTheme.border).cgColor
         let on = chrome.ink(isDimmed ? .muted : .normal).cgColor
         let off = chrome.fill(.rest).cgColor
