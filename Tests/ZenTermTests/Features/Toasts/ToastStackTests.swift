@@ -50,9 +50,13 @@ final class ToastStackTests: WindowTestCase {
             context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
     }
 
+    // The release is queued first: a button's tracking loop pulls it from the queue inside the press.
     private func click(at point: NSPoint) {
+        NSApp.postEvent(mouse(.leftMouseUp, at: point), atStart: false)
         NSApp.sendEvent(mouse(.leftMouseDown, at: point))
-        NSApp.sendEvent(mouse(.leftMouseUp, at: point))
+        if let release = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true) {
+            NSApp.sendEvent(release)
+        }
     }
 
     private func click(_ view: NSView) {
