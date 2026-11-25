@@ -9,6 +9,15 @@ final class SSHLoginPromptTests: XCTestCase {
             .secret(headline: "Enter the passphrase for id_ed25519_zenlab"))
     }
 
+    func test_aKeyPathSSHCutShort_namesNoFolderAsTheKey() {
+        let cut = "/private/tmp/" + String(repeating: "d", count: 75) + "/scratchpad/"
+
+        XCTAssertEqual(cut.utf8.count, 100)
+        XCTAssertEqual(
+            SSHLoginPrompt.parse("Enter passphrase for key '\(cut)': "),
+            .secret(headline: "Enter your key's passphrase"))
+    }
+
     func test_aPassword_isAskedPlainly() {
         XCTAssertEqual(
             SSHLoginPrompt.parse("me@[127.0.0.1]:22622's password: "), .secret(headline: "Enter your password"))

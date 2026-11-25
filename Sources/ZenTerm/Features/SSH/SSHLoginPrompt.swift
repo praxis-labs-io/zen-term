@@ -10,6 +10,8 @@ enum SSHLoginPrompt: Equatable {
         "Please type 'yes' or 'no'",
     ]
     private static let passphrase = #"^Enter passphrase for key '(.+)':?$"#
+    // ssh prints at most this many bytes of the key's path, so a path that reaches it may end mid-folder.
+    private static let keyPathLimit = 100
     private static let password = #"^\S+'s password:?$"#
     private static let barePassword = #"^Password:?$"#
     private static let serverPromptPrefix = #"^\([^()\s]+@[^()\s]+\) "#
@@ -52,8 +54,9 @@ enum SSHLoginPrompt: Equatable {
     private static func headline(of prompt: String) -> String {
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if let match = text.range(of: passphrase, options: .regularExpression) {
-            let quoted = text[match].drop { $0 != "'" }.dropFirst().prefix { $0 != "'" }
-            return "Enter the passphrase for \(URL(fileURLWithPath: String(quoted)).lastPathComponent)"
+            let path = String(text[match].drop { $0 != "'" }.dropFirst().prefix { $0 != "'" })
+            guard path.utf8.count < keyPathLimit else { return "Enter your key's passphrase" }
+            return "Enter the passphrase for \(URL(fileURLWithPath: path).lastPathComponent)"
         }
         if text.range(of: password, options: .regularExpression) != nil { return "Enter your password" }
         let asked = text.replacingOccurrences(of: serverPromptPrefix, with: "", options: .regularExpression)
