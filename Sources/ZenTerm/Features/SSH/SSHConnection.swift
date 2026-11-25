@@ -161,7 +161,7 @@ final class SSHConnection {
         self.question = question
         hangup.onHangup { [weak self] in self?.withdraw(ticket) }
         watchers.after(TimeInterval(ControlWire.longestLoginAnswer)) { [weak self] in self?.withdraw(ticket) }
-        onQuestionChange?(question)
+        if pendingAnswer?.ticket == ticket { onQuestionChange?(question) }
         return true
     }
 

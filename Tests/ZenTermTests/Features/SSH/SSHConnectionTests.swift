@@ -665,4 +665,15 @@ final class SSHConnectionAskpassTests: XCTestCase {
         XCTAssertEqual(
             questions, [SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false), nil])
     }
+
+    func test_aQuestionWhoseAskerAlreadyHungUp_isNeverAnnouncedAfterItsWithdrawal() throws {
+        let token = try token(of: loggingIn())
+        let hangup = ControlHangup()
+        hangup.hangUp()
+
+        _ = ask("Password: ", token: token, hangup: hangup)
+
+        XCTAssertNil(connection.question)
+        XCTAssertEqual(questions.last, .some(nil), "the last word is that nothing is asked")
+    }
 }
