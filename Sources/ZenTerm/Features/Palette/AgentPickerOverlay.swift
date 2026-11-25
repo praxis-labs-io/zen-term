@@ -134,7 +134,7 @@ final class AgentPickerOverlay: PaletteOverlay {
         init(_ item: SidebarAgentItem) {
             self.item = item
             super.init(Self.content(item))
-            accessories = [detailLabel, stateGlyph]
+            accessories = [stateGlyph]
             centerOnTitleLine(stateGlyph.marks)
             apply(item)
         }
@@ -149,7 +149,6 @@ final class AgentPickerOverlay: PaletteOverlay {
         }
 
         private func apply(_ item: SidebarAgentItem) {
-            detail = item.agentLabel ?? ""
             stateGlyph.isHidden = !item.showsState
             stateGlyph.show(item.state)
             setAccessibilityLabel(item.message.map { "\(item.summary), \($0)" } ?? item.summary)
@@ -159,10 +158,12 @@ final class AgentPickerOverlay: PaletteOverlay {
 
         private static func content(_ item: SidebarAgentItem) -> Content {
             switch item.role {
-            case .agent: return Content(title: item.summary, leading: .process(item.process))
+            case .agent:
+                return Content(title: item.summary, titleSuffix: item.agentLabel, leading: .process(item.process))
             case .helper, .process:
                 return Content(
-                    title: item.summary, leading: .process(item.process), ink: .subtle, nesting: .underTitle)
+                    title: item.summary, titleSuffix: item.agentLabel, leading: .process(item.process), ink: .subtle,
+                    nesting: .underTitle)
             }
         }
 

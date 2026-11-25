@@ -582,6 +582,9 @@ New modal surfaces compose the existing primitives.
   `searchAccessory`. Rows are `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns
   width, max height, row height, position, the search field, the bar and the empty state, and no
   panel overrides them, so every panel opens at the same spot and size.
+  A row's qualifier (the picker's Current, Open or Other window, an agent's name) goes right after
+  its title in `ListRow.Content.titleSuffix`; the trailing column holds only branch, category and
+  shortcut.
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
   `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit
