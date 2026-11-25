@@ -42,8 +42,10 @@ struct ProcessIcon: Equatable {
     // Floats are terminals too, so the Tools group shares the Terminal hue.
     private static let toolTint = AccentSlot.green
 
-    static func toolFloat(_ float: ToolFloat) -> ProcessIcon {
-        ProcessIcon(name: float.title, mark: float.icon, look: .catalog(toolTint), scale: 1)
+    // Nil for an icon name nothing draws, such as a typo in config, so the row falls back to its group's chip.
+    static func toolFloat(_ float: ToolFloat) -> ProcessIcon? {
+        let icon = ProcessIcon(name: float.title, mark: float.icon, look: .catalog(toolTint), scale: 1)
+        return icon.image == nil ? nil : icon
     }
 
     private static func purpose(_ name: String, _ mark: String, _ hue: AccentSlot) -> ProcessIcon {

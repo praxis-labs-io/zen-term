@@ -316,6 +316,18 @@ final class PaletteInteractionTests: WindowTestCase {
         }
     }
 
+    func test_aToolFloatWhoseIconDrawsNothing_fallsBackToTheToolsChip() {
+        let typo = ToolFloat(
+            id: "typo", order: 1, title: "Typo", icon: "hammer.fil", command: "", dir: nil, widthFraction: 0.5,
+            heightFraction: 0.5, requiresGitRepo: false, persist: .ephemeral, toggle: Chord(command: true, key: "y"))
+        XCTAssertNil(ProcessIcon.toolFloat(typo))
+        XCTAssertNotNil(ProcessIcon.toolFloat(.scratch))
+        let command = PaletteCommand(
+            title: typo.title, shortcut: "", category: .tools, chord: .toggleToolFloat(typo.id),
+            floatIcon: ProcessIcon.toolFloat(typo))
+        XCTAssertEqual(command.icon, CommandCategory.tools.icon)
+    }
+
     func test_commandCategory_everyChipsMarkIsBundled() {
         for category in CommandCategory.allCases {
             XCTAssertNotNil(

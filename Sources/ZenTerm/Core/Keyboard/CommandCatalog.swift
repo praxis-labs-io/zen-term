@@ -46,7 +46,7 @@ enum CommandCatalog {
             let float = ToolFloatCatalog.byID(id)
             return .init(
                 title: float?.title ?? id, shortcut: glyph, category: .tools, chord: chord,
-                floatIcon: float.map(ProcessIcon.toolFloat))
+                floatIcon: float.flatMap(ProcessIcon.toolFloat))
         case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
         case .newWorkspace: return workspace("New Workspace", glyph, chord)
         case .openSettings: return app("Settings…", glyph, chord)
