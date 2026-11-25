@@ -112,8 +112,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         onConnect()
     }
 
-    func setFocusBorderVisible(_ visible: Bool) { panel.isFocused = visible }
-
     func setStatus(_ status: SSHHostStatus) {
         guard status != self.status else { return }
         self.status = status

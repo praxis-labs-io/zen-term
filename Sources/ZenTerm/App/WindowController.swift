@@ -1077,7 +1077,6 @@ final class WindowController: NSObject {
     private func syncWindowFocus() {
         let holdsKeyFocus = windowIsKey && !sidebar.hasFocus
         activeController?.setFocusBorderVisible(holdsKeyFocus && !sidebar.isRevealed)
-        connectView?.setFocusBorderVisible(activeWorkspace == nil && holdsKeyFocus && !sidebar.isRevealed)
         for controller in allTabControllers {
             controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }
