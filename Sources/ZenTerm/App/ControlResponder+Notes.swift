@@ -18,7 +18,8 @@ extension ControlResponder {
             Log.warning("Dropped pane \(note.helper)'s note to pane \(note.parent): \(reason).", category: .control)
         }
         let setsDraftAside = { [self] in
-            parentPlace(of: note).map { $0.window.draftStash(of: $0.pane) != nil } ?? false
+            guard !note.text.isEmpty else { return false }
+            return parentPlace(of: note).map { $0.window.draftStash(of: $0.pane) != nil } ?? false
         }
         paneDrafts.queue(
             parent.pane.surfaceID,

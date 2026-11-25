@@ -158,8 +158,9 @@ extension ControlResponder {
                 reply(.failure(ControlError(.failed, "The send queued for pane \(token) was dropped: \(reason).")))
             }
             let setsDraftAside = { [self] in
-                guard request.args.enter == true, request.args.text?.isEmpty == false,
-                    case .success(let place) = pane(.token(token), for: request) else {
+                guard request.args.enter == true, let text = request.args.text, Self.startsTurn(text),
+                    case .success(let place) = pane(.token(token), for: request)
+                else {
                     return false
                 }
                 return place.window.draftStash(of: place.pane) != nil

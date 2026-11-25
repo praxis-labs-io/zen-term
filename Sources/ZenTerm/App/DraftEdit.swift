@@ -2,10 +2,9 @@ import AppKit
 
 // What a key the person typed into a pane does to the text sitting unsent at its prompt.
 enum DraftEdit: Equatable {
-    case add(String), addUnknown, recall, removeOne, removeUnknown, move, submit, clear, dismiss, none
+    case add(String), addUnknown, removeOne, removeUnknown, move, submit, clear, stash, none
 
     private static let returnKeys: Set<UInt16> = [36, 76]
-    private static let escapeKey: UInt16 = 53
     private static let backspaceKey: UInt16 = 51
     private static let forwardDeleteKey: UInt16 = 117
     // Up, Down and Tab recall or complete text at an agent's prompt.
@@ -20,15 +19,7 @@ enum DraftEdit: Equatable {
     // While an input method composes, a key edits its marked text, and only it knows what reaches the prompt.
     init(_ event: NSEvent, composing: Bool) {
         let edit = DraftEdit(event)
-        guard composing else {
-            self = edit
-            return
-        }
-        switch edit {
-        case .none, .clear: self = edit
-        case .dismiss: self = .none
-        default: self = .addUnknown
-        }
+        self = composing && edit != .none && edit != .clear ? .addUnknown : edit
     }
 
     private init(_ event: NSEvent) {
@@ -36,9 +27,7 @@ enum DraftEdit: Equatable {
         if Self.returnKeys.contains(event.keyCode) {
             self = modifiers.isEmpty ? .submit : .add("\n")
         } else if Self.recallingKeys.contains(event.keyCode) {
-            self = modifiers.isEmpty ? .recall : .none
-        } else if event.keyCode == Self.escapeKey {
-            self = modifiers.isEmpty ? .dismiss : .none
+            self = modifiers.isEmpty ? .addUnknown : .none
         } else if Self.movingKeys.contains(event.keyCode) {
             self = .move
         } else if event.keyCode == Self.backspaceKey {

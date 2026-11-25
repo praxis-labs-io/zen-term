@@ -4042,9 +4042,15 @@ final class WindowController: NSObject {
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
     func keyReachedFocus(_ event: NSEvent) {
         guard !search.isEditing, let surface = presentFocusedSurface, takesKeys(surface) else { return }
-        let edit = answersPrompt(surface) ? .none : DraftEdit(event, composing: isComposing(surface))
-        paneDrafts.typed(edit, into: surface)
+        paneDrafts.typed(draftEdit(event, into: surface), into: surface)
         answerTypedAgent()
+    }
+
+    private func draftEdit(_ event: NSEvent, into surface: SurfaceID) -> DraftEdit {
+        if answersPrompt(surface) { return .none }
+        let stash = AgentRules.draftStash(for: liveAgent(surface)?.name)
+        if stash != nil, Chord(event: event) == stash { return .stash }
+        return DraftEdit(event, composing: isComposing(surface))
     }
 
     // A key the chrome passed on can still land in a card, field or button of the window instead of the pane.
