@@ -199,10 +199,15 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertEqual(answers(), ["yes"])
     }
 
-    func test_returnOnAHostKey_trustsIt() throws {
+    func test_returnOnAHostKey_trustsNothing_untilTabReachesTrust() throws {
         let (c, login) = try loggingIn()
         try ask("Are you sure you want to continue connecting (yes/no/[fingerprint])? ", login: login, in: c)
 
+        try send(keyCode: 36, "\r", in: c)
+        XCTAssertEqual(answers(), [], "a habitual Return must not accept an unread key")
+
+        try send(keyCode: 48, "\t", in: c)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.trustButtonForTesting)
         try send(keyCode: 36, "\r", in: c)
 
         XCTAssertEqual(answers(), ["yes"])

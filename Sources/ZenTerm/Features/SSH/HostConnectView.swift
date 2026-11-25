@@ -149,11 +149,16 @@ final class HostConnectView: NSView, ThemeReapplying {
 
     override var acceptsFirstResponder: Bool { true }
 
+    // Return never trusts a host key: a second Return by habit would skip reading its fingerprint.
     override func keyDown(with event: NSEvent) {
         if KeyboardFocus.isReturn(event) {
             if login == nil { return onConnect() }
-            if isAskingHostKey { return onTrust() }
+            if isAskingHostKey { return }
             return submitAnswer()
+        }
+        if isAskingHostKey, case .tab = KeyboardFocus.key(for: event) {
+            window?.makeFirstResponder(trustButton)
+            return
         }
         guard login != nil, KeyboardFocus.key(for: event) == .escape else { return super.keyDown(with: event) }
         onCancel()
@@ -253,6 +258,15 @@ final class HostConnectView: NSView, ThemeReapplying {
         loginActions.detachesHiddenViews = true
         loginActions.setHuggingPriority(.required, for: .horizontal)
         [trustButton, cancelButton].forEach(loginActions.addArrangedSubview)
+        trustButton.isKeyboardFocusable = true
+        cancelButton.isKeyboardFocusable = true
+        for (button, other) in [(trustButton, cancelButton), (cancelButton, trustButton)] {
+            button.onTab = { [weak self, weak other] in
+                guard let other, !other.isHidden else { return }
+                self?.window?.makeFirstResponder(other)
+            }
+            button.onBacktab = button.onTab
+        }
     }
 
     private func submitAnswer() {
