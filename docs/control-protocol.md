@@ -318,9 +318,10 @@ Into a pane that runs an agent:
   refused, since a question about the task is the parent's to answer; a `permission` or `auth`
   block refuses the parent too. A `working` agent takes the text into its running turn.
 - While the person has unsent text at its prompt, the send is queued and answers
-  `{"queued":true}` at once. Text is unsent from the first typed character, Up or Down arrow, Tab or paste
-  into the pane until Return sends it, Ctrl-C or Ctrl-U clears it, or Backspace deletes the last of
-  what was typed, with no time limit. Once the pane holds text the app could not count (recalled,
+  `{"queued":true}` at once. Only keys and pastes that reach the pane's terminal count, not ones a
+  card, field or button of the window takes. Text is unsent from the first typed character, Up or Down arrow, Tab or paste
+  into the pane until Return sends it, Ctrl-C or Ctrl-U clears it, Backspace deletes the last of
+  what was typed, or Escape follows only Up, Down or Tab. Once the pane holds text the app could not count (recalled,
   completed or pasted text, a word or line deleted, or the cursor moved), Backspace never ends it. A Return that
   confirms an input method's text, or that follows a typed `\` with only cursor moves between, does not send it. Queued sends
   arrive in order, each on its own, right after the person's Return, or 2 seconds after the key

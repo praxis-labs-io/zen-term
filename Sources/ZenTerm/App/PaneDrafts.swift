@@ -13,6 +13,7 @@ final class PaneDrafts {
     private struct Draft {
         var length: Int?
         var endsInBackslash = false
+        var onlyRecalled = false
     }
 
     // So a message does not land in the prompt just as the person starts typing into it.
@@ -40,6 +41,14 @@ final class PaneDrafts {
                 endsInBackslash: text.hasSuffix("\\"))
         case .addUnknown:
             drafts[surface] = Draft(length: nil)
+        case .recall:
+            if drafts[surface] == nil {
+                drafts[surface] = Draft(length: nil, onlyRecalled: true)
+            } else {
+                drafts[surface]?.length = nil
+            }
+        case .dismiss:
+            if drafts[surface]?.onlyRecalled == true { endDraft(surface) }
         case .move:
             drafts[surface]?.length = nil
         case .removeOne:

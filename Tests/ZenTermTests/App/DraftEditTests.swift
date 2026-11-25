@@ -40,16 +40,17 @@ final class DraftEditTests: XCTestCase {
         XCTAssertEqual(try key("\u{8}", bare: "h", flags: .control, keyCode: 4), .removeUnknown)
     }
 
-    func test_controlCAndControlUClear_butEscapeDoesNot() throws {
+    func test_controlCAndControlUClear_andEscapeDismisses() throws {
         XCTAssertEqual(try key("\u{3}", bare: "c", flags: .control, keyCode: 8), .clear)
         XCTAssertEqual(try key("\u{15}", bare: "u", flags: .control, keyCode: 32), .clear)
-        XCTAssertEqual(try key("\u{1b}", keyCode: 53), .none)
+        XCTAssertEqual(try key("\u{1b}", keyCode: 53), .dismiss)
+        XCTAssertEqual(try key("\u{1b}", flags: .option, keyCode: 53), .none)
     }
 
-    func test_upDownAndTabAddUnknownText_sinceTheyRecallOrCompleteIt() throws {
-        XCTAssertEqual(try key("\u{F700}", flags: [.function, .numericPad], keyCode: 126), .addUnknown)
-        XCTAssertEqual(try key("\u{F701}", flags: [.function, .numericPad], keyCode: 125), .addUnknown)
-        XCTAssertEqual(try key("\t", keyCode: 48), .addUnknown)
+    func test_upDownAndTabRecall_sinceTheyRecallOrCompleteText() throws {
+        XCTAssertEqual(try key("\u{F700}", flags: [.function, .numericPad], keyCode: 126), .recall)
+        XCTAssertEqual(try key("\u{F701}", flags: [.function, .numericPad], keyCode: 125), .recall)
+        XCTAssertEqual(try key("\t", keyCode: 48), .recall)
     }
 
     func test_sideArrowsHomeEndAndControlAOrEMove_withOrWithoutAModifier() throws {

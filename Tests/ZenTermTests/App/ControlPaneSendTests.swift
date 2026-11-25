@@ -178,6 +178,38 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(agent.inputs, [.paste("review x.swift"), .submit])
     }
 
+    func test_keysThatLandInAConfirmCardStartNoDraft() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+        agent.isBusy = true
+        try pressChord("w", .command, keyCode: 13, in: c)
+        XCTAssertTrue(c.isConfirmOpen, "precondition: closing a busy pane asks first")
+        XCTAssertFalse(c.window.firstResponder === agent.view, "precondition: the card holds the keys")
+
+        try sendKeys([.tab, .character("x")], to: c)
+
+        XCTAssertFalse(isQueued(send("go", to: try token(of: agent), enter: true)))
+        XCTAssertEqual(agent.inputs, [.paste("go"), .submit])
+    }
+
+    func test_escapeEndsADraftThatOnlyUpDownOrTabStarted() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.idle, from: agent)
+        try focus(agent, in: c)
+
+        var delivered: [RecordingSurface.Input] = []
+        for key: TypedKey in [.arrowUp, .arrowDown, .tab] {
+            try sendKeys([key, .escape], to: c)
+            XCTAssertTrue(isQueued(send("go", to: try token(of: agent))), "the quiet pause still holds it")
+            clock.advance(PaneDrafts.quiet)
+            delivered.append(.paste("go"))
+            XCTAssertEqual(agent.inputs, delivered, "\(key) then Escape left a draft")
+        }
+    }
+
     func test_heldSendsArriveInOrder_andTheNextSendAfterReturnArrivesAtOnce() throws {
         let c = makeWindow()
         let agent = try XCTUnwrap(spawned.first)

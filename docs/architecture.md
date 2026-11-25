@@ -708,10 +708,10 @@ working, holds back its `stopped` note, and keeps `PaneWait` from answering its 
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent queues in `PaneDrafts`, also app-wide, while the person has unsent text at its prompt.
 `WindowController.keyReachedFocus` feeds it each key the chrome did not claim from
-`KeyInterceptor`, the path that also answers an agent by typing, classed by `DraftEdit`, and
+`KeyInterceptor` whose window's first responder is inside the surface's view, the path that also answers an agent by typing, classed by `DraftEdit`, and
 `WindowController.paste` feeds it a paste. `PaneDrafts` counts the draft's length from typed text
 and Backspace, so deleting it ends the draft; text it cannot count, or a key that moves the cursor,
-leaves the length unknown, which only Return or a clearing key ends. A key while the surface's view has marked text (an input
+leaves the length unknown, which only Return or a clearing key ends, or Escape when only Up, Down or Tab started it. A key while the surface's view has marked text (an input
 method composing) leaves the length unknown and is never a submit, and a Return after a typed `\`,
 past keys that only move the cursor, is Claude Code's newline, not a submit. Each surface has one ordered queue that the draft's
 release and the blocked recheck both drain, so a newer message never passes a held one. The
