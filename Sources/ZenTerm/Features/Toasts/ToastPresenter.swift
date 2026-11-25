@@ -65,8 +65,8 @@ final class ToastPresenter {
         armAutoDismiss(toast)
     }
 
-    private func add(_ toast: ToastView, holdsChoice: Bool = false) {
-        pile.add(toast, holdsChoice: holdsChoice)
+    private func add(_ toast: ToastView) {
+        pile.add(toast)
         if pile.isShowing(toast) { toast.animateIn() }
     }
 
@@ -112,17 +112,9 @@ final class ToastPresenter {
         autoDismiss: Bool = false
     ) -> ToastView {
         dispatchPrecondition(condition: .onQueue(.main))
-        let toast = ToastView(
-            content: content, actions: actions, armsKeys: false, showsClose: showsClose)
+        let toast = ToastView(content: content, actions: actions, showsClose: showsClose)
         add(toast)
         if autoDismiss { armAutoDismiss(toast) }
-        return toast
-    }
-
-    @discardableResult
-    func confirm(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
-        let toast = ToastView(content: content, actions: actions)
-        add(toast, holdsChoice: true)
         return toast
     }
 

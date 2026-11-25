@@ -32,6 +32,13 @@ class WindowTestCase: XCTestCase {
             .flatMap { Self.descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
     }
 
+    @MainActor
+    func confirmTexts(in c: WindowController) -> [String] {
+        guard let content = c.window.contentView else { return [] }
+        return Self.descendants(of: content).compactMap { $0 as? ConfirmCard }
+            .flatMap { Self.descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+    }
+
     private static func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }

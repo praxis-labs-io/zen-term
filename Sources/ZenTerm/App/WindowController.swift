@@ -41,7 +41,7 @@ final class WindowController: NSObject {
     private var toasts: ToastPresenter {
         if let builtToasts { return builtToasts }
         let presenter = ToastPresenter(
-            host: container, below: modal?.overlay, topInset: Self.toastTopInset,
+            host: container, below: modal?.overlay ?? confirmCard, topInset: Self.toastTopInset,
             trailingInset: Self.toastTrailingInset, dismissAfter: GeneralConfig.current.toastDuration,
             isPresent: { [weak self] in self.map { Self.isPresent($0.window) } ?? true })
         builtToasts = presenter
@@ -334,10 +334,10 @@ final class WindowController: NSObject {
 
     var isModalOverlayOpen: Bool { modal != nil }
 
-    private var confirmToast: ToastView?
+    private var confirmCard: ConfirmCard?
     private var confirmOnCancel: (() -> Void)?
     private var confirmTab: TabID?
-    var isConfirmOpen: Bool { confirmToast != nil }
+    var isConfirmOpen: Bool { confirmCard != nil }
 
     // Polled because shells report cwd without OSC 7, so a `cd` sends no event.
     private var titlePoll: Timer?
@@ -1433,8 +1433,7 @@ final class WindowController: NSObject {
         Log.info("connect screen closed", category: .workspace)
         guard workspaces.isEmpty else { return land(at: order.navigableWorkspaces.count) }
         presentConfirm(
-            Self.closeConfirmToast(.lastPane(running: windowIsRunning), naming: runningNamesInWindow()),
-            confirmLabel: Self.closeConfirmLabel
+            CloseWarning.prompt(closing: .lastPane(running: windowIsRunning), naming: runningNamesInWindow())
         ) { [weak self] in self?.window.close() }
     }
 
@@ -1717,13 +1716,13 @@ final class WindowController: NSObject {
                 guard FileManager.default.fileExists(atPath: url.path) else { return nil }
                 return PathDisplay.isDirectory(url) ? entry + "/" : entry
             }
-            let items = WorktreeRemovalMessage.items(
+            let prompt = WorktreeRemovalMessage.prompt(
                 for: worktree, state: WorktreeStore.state(worktree), carried: carried, closes: closes)
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.modal?.overlay === picker,
                     !self.worktreeRemovals.isRemoving(worktree.path)
                 else { return }
-                self.confirmRemoveWorktree(picker, worktree, from: parent, items: items)
+                self.confirmRemoveWorktree(picker, worktree, from: parent, prompt: prompt)
             }
         }
     }
@@ -1740,14 +1739,12 @@ final class WindowController: NSObject {
         requestCloseWorkspace(id: id)
     }
 
-    // A card, not the toast confirm, because this deletes a folder and cannot be undone.
     private func confirmRemoveWorktree(
-        _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
-        items: [ConfirmCardChecklist.Item]
+        _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace, prompt: ConfirmPrompt
     ) {
         let name = worktree.name
         let card = ConfirmCard(
-            title: "Remove Worktree", items: items, confirmLabel: "Remove",
+            prompt,
             onCancel: { [weak picker] in picker?.dismissConfirm() },
             onConfirm: { [weak self, weak picker] in
                 picker?.dismissConfirm()
@@ -2051,7 +2048,7 @@ final class WindowController: NSObject {
             mode: mode,
             removal: edited.map { alias in
                 AddSSHHostOverlay.Removal(
-                    consequence: { [weak self] in self?.removalConsequence(of: alias) },
+                    session: { [weak self] in self?.removalSession(of: alias) },
                     perform: { [weak self] in self?.removeSSHHost(alias) })
             },
             onSubmit: { [weak self] host in
@@ -2081,14 +2078,9 @@ final class WindowController: NSObject {
         return nil
     }
 
-    private func removalConsequence(of alias: String) -> String? {
+    private func removalSession(of alias: String) -> SSHConnection.State? {
         let id = SSHHostID(alias: alias)
-        let state = hostSessionInAnyWindow.map { $0(id) } ?? session(of: id)
-        switch state {
-        case .connected: return "disconnect it and stop everything running in it"
-        case .connecting: return "stop connecting to it and close its tabs"
-        case .failed, nil: return nil
-        }
+        return hostSessionInAnyWindow.map { $0(id) } ?? session(of: id)
     }
 
     private func removeSSHHost(_ alias: String) -> String? {
@@ -2212,8 +2204,8 @@ final class WindowController: NSObject {
 
     // Ends modes first, or a mode swallows the Return and Esc that answer the confirm.
     func presentConfirm(
-        _ content: ToastContent, confirmLabel: String,
-        answering tab: TabID? = nil, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
+        _ prompt: ConfirmPrompt, answering tab: TabID? = nil, onConfirm: @escaping () -> Void,
+        onCancel: (() -> Void)? = nil
     ) {
         cancelConfirm()
         // After the card closes, not before: closing it is what hands focus back to the row it was opened from.
@@ -2222,32 +2214,38 @@ final class WindowController: NSObject {
         if sidebar.hasFocus { focusReturn = sidebar.focusedStop ?? focusReturn }
         confirmOnCancel = onCancel
         confirmTab = tab
-        let actions = Self.confirmActions(
-            confirmLabel: confirmLabel, cancel: { [weak self] in self?.cancelConfirm() },
-            confirm: { [weak self] in
-                guard self?.confirmToast != nil else { return }
+        let card = ConfirmCard(
+            prompt, onCancel: { [weak self] in self?.cancelConfirm() },
+            onConfirm: { [weak self] in
+                guard self?.confirmCard != nil else { return }
                 self?.tearDownConfirm()
                 onConfirm()
             })
-        let toast = toasts.confirm(content, actions: actions)
-        confirmToast = toast
-        window.makeFirstResponder(toast)
+        confirmCard = card
+        presentWindowModal(card)
+        sidebar.setHoverCovered(true)
+        window.hoverCover = card
+        card.focusInitialResponder()
+        card.animateIn()
         renderDock()
     }
 
     private func cancelConfirm() {
-        guard confirmToast != nil else { return }
+        guard confirmCard != nil else { return }
         let onCancel = confirmOnCancel
         tearDownConfirm()
         onCancel?()
     }
 
     private func tearDownConfirm() {
-        guard let toast = confirmToast else { return }
-        confirmToast = nil
+        guard let card = confirmCard else { return }
+        confirmCard = nil
         confirmOnCancel = nil
         confirmTab = nil
-        toasts.dismiss(toast)
+        window.hoverCover = nil
+        sidebar.setHoverCovered(false)
+        if modal == nil { modalGutter = nil }
+        card.animateOut { card.removeFromSuperview() }
         returnFocusAfterOverlay()
         sidebar.edgeReveal.recheck()
         renderDock()
@@ -3133,8 +3131,7 @@ final class WindowController: NSObject {
         tabCount: Int, windowCount: Int, onQuit: @escaping () -> Void, onCancel: @escaping () -> Void
     ) {
         presentConfirm(
-            Self.quitConfirmToast(tabCount: tabCount, windowCount: windowCount), confirmLabel: Self.quitConfirmLabel,
-            onConfirm: onQuit, onCancel: onCancel)
+            CloseWarning.quit(tabCount: tabCount, windowCount: windowCount), onConfirm: onQuit, onCancel: onCancel)
     }
 
     private func requestClosePane() {
@@ -3145,9 +3142,9 @@ final class WindowController: NSObject {
         }
         if active.isDrawerFocused {
             guard active.focusedDrawerIsBusy else { active.closeFocusedDrawer(); return }
-            presentConfirm(
-                Self.closeConfirmToast(.drawer, naming: []), confirmLabel: Self.closeConfirmLabel
-            ) { [weak self] in self?.activeController?.closeFocusedDrawer() }
+            presentConfirm(CloseWarning.prompt(closing: .drawer, naming: [])) { [weak self] in
+                self?.activeController?.closeFocusedDrawer()
+            }
             return
         }
 
@@ -3199,8 +3196,8 @@ final class WindowController: NSObject {
             ? runningNamesInWindow() + children.names(outside: self)
             : (lastPane ? hiddenRunningNames(inTab: tab) : []) + children.names
         presentConfirm(
-            Self.closeConfirmToast(subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: Self.closeConfirmLabel, answering: tab, onConfirm: close)
+            CloseWarning.prompt(closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            answering: tab, onConfirm: close)
     }
 
     private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
@@ -3220,9 +3217,7 @@ final class WindowController: NSObject {
         guard let host = workspace.host else { return }
         let subject = CloseWarning.Subject.login(
             host: GeneralConfig.current.displayName(of: host), closing: target)
-        presentConfirm(
-            Self.closeConfirmToast(subject, naming: []), confirmLabel: Self.closeConfirmLabel
-        ) { [weak self, weak workspace] in
+        presentConfirm(CloseWarning.prompt(closing: subject, naming: [])) { [weak self, weak workspace] in
             guard let self, let workspace, self.workspaces.contains(where: { $0 === workspace }) else { return }
             self.abandonLogin(of: workspace)
         }
@@ -3263,8 +3258,8 @@ final class WindowController: NSObject {
             closesWindow
             ? runningNamesInWindow() + children.names(outside: self) : hiddenRunningNames(inTab: id) + children.names
         presentConfirm(
-            Self.closeConfirmToast(subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: Self.closeConfirmLabel, answering: id
+            CloseWarning.prompt(closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            answering: id
         ) { [weak self] in self?.closeTab(id) }
     }
 
@@ -3292,8 +3287,7 @@ final class WindowController: NSObject {
             ? runningNamesInWindow() + children.names(outside: self)
             : runningTabNames(in: workspace) + children.names
         presentConfirm(
-            Self.closeConfirmToast(subject, naming: names, closingOtherWindows: children.otherWindows.count),
-            confirmLabel: Self.closeConfirmLabel
+            CloseWarning.prompt(closing: subject, naming: names, closingOtherWindows: children.otherWindows.count)
         ) { [weak self] in self?.closeTabs(of: workspace) { self?.closeTab($0) } }
     }
 
@@ -3320,9 +3314,9 @@ final class WindowController: NSObject {
             return
         }
         presentConfirm(
-            Self.closeConfirmToast(
-                .window, naming: runningNamesInWindow() + children.names(outside: self),
-                closingOtherWindows: children.otherWindows.count), confirmLabel: Self.closeConfirmLabel
+            CloseWarning.prompt(
+                closing: .window, naming: runningNamesInWindow() + children.names(outside: self),
+                closingOtherWindows: children.otherWindows.count)
         ) { [weak self] in self?.window.close() }
     }
 

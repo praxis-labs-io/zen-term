@@ -454,7 +454,9 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         c.openWorkspaceForTesting(alpha())
         let showing = c.activeWorkspaceIDForTesting
-        c.presentConfirm(ToastContent(variant: .warning, title: "Close Tab", message: ""), confirmLabel: "Close") {}
+        c.presentConfirm(
+            ConfirmPrompt(title: "Close Tab", body: .message(""), confirmLabel: "Close")
+        ) {}
 
         _ = try result(send(.workspaceClose, ControlArgs(workspace: startFolderName)), as: NoPayload.self)
 

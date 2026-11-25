@@ -481,7 +481,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 | Sidebar | `SidebarController` | per window |
 | Tool floats | `ToolFloatController` | per window (Scratch per tab) |
 | Settings, palette, workspace picker | `WindowController.modal` | per window |
-| Toasts, confirms | `ToastPresenter` | per window |
+| Toasts | `ToastPresenter` | per window |
+| Close and quit confirms | `WindowController.confirmCard` | per window |
 | Terminal font size | `SessionFontSize` | per app |
 
 - **Drawers are tiled.** Sizes are multiplier constraints at `.defaultHigh`. A drawer
@@ -548,16 +549,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   A tab's close confirmation names a running one that is hidden.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
-- **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
-  `keyDown`). A confirm refuses Space. A non-modal sticky card claims no keys;
+- **A toast never takes the keyboard.** Its buttons answer clicks only;
   `dismiss_toast` and `dismiss_all_toasts` exist for the keyboard.
-- **Every toast and card shares one stack** (`ToastPile`), folded so one card shows: a pending
-  confirm ahead of anything newer, otherwise the newest. A click unfolds it into a list; a click
-  outside, Show Less, or one card left folds it. Countdowns hold while it is unfolded and restart
-  a whole duration when it folds.
+- **Every toast and card shares one stack** (`ToastPile`), folded so the newest card shows. A
+  click unfolds it into a list; a click outside, Show Less, or one card left folds it. Countdowns
+  hold while it is unfolded and restart a whole duration when it folds.
 - **A toast that offers an action stays until it is answered.** Only an attention or completion
-  card under `auto` counts down with its actions. A non-modal card's actions are text links and
-  it never takes focus; a confirm keeps its buttons, because it owns Return and Esc.
+  card under `auto` counts down with its actions. A toast's actions are text links and it never
+  takes focus.
 - **A toast's copy and actions come from a static factory on its owner** (`WindowController+Toasts`
   for the window's), never a literal at the call site. `GalleryToasts` builds the Component
   Gallery's toast sections from the same factories, so a new toast adds itself there too.
@@ -589,12 +588,14 @@ New modal surfaces compose the existing primitives.
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. A card with a single field (rename) submits on Return. Every card is fully
   operable without a mouse.
-- **A confirm is a `ConfirmCard` when the action deletes or rewrites something on disk**
-  (files or config), and a toast confirm when it only ends running processes (closing a
-  pane, tab, workspace, window or drawer, the Connect screen, abandoning a login, quit). A
-  card opens through the `ConfirmSlot` every `ModalShell` owns; Cancel hands focus back to what held it before the
-  card opened. A card opens on Cancel, and Space never activates a `destructive` `AppButton`:
-  only Return or a click confirms.
+- **Every confirm is a `ConfirmCard`**, its copy a `ConfirmPrompt` from one factory per
+  confirm, which the dev gallery renders too. A close or quit (`CloseWarning`) opens through
+  `WindowController.presentConfirm`, in the modal slot, and dies with the tab it answers. A
+  delete, removal or discard opens over its form through the `ConfirmSlot` every `ModalShell`
+  owns; Cancel hands focus back to what held it before. A close or quit starts on its confirm
+  button, so Return answers it; anything that cannot be undone starts with no button focused
+  (`ConfirmPrompt.Start.unfocused`): Return does nothing and Tab reaches the buttons. Esc
+  cancels both, and Space never activates a `destructive` `AppButton`.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
   a field's `resignFirstResponder` never fires because the field editor is the responder.
 - **Scrolling lists** use a flipped document (`FlippedView`) plus `SlimScroller`, and no

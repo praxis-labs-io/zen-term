@@ -7,7 +7,7 @@
         typealias Window = WindowController
 
         static func sections() -> [GallerySection] {
-            [notices(), stickyCards(), attentionCards(), confirms(), fontSize()]
+            [notices(), stickyCards(), attentionCards(), fontSize()]
         }
 
         private static func notices() -> GallerySection {
@@ -153,38 +153,6 @@
                 ])
         }
 
-        private static func confirms() -> GallerySection {
-            let subjects: [(String, CloseWarning.Subject, [String], Int)] = [
-                ("Pane", .pane, ["vim"], 0),
-                ("Drawer", .drawer, [], 0),
-                ("Tab", .tab, ["npm run dev", "claude"], 0),
-                ("Workspace", .workspace("zen-term"), [], 1),
-                ("Last pane", .lastPane(running: true), [], 0),
-                ("Window", .window, ["claude"], 2),
-                ("Login", .login(host: "devbox", closing: .tab), [], 0),
-            ]
-            let actions = Window.confirmActions(confirmLabel: Window.closeConfirmLabel, cancel: {}, confirm: {})
-            var rows = subjects.map { label, subject, names, others in
-                GallerySection.Row(
-                    label: label,
-                    samples: [
-                        ToastView(
-                            content: Window.closeConfirmToast(subject, naming: names, closingOtherWindows: others),
-                            actions: actions)
-                    ])
-            }
-            rows.append(
-                GallerySection.Row(
-                    label: "Quit",
-                    samples: [
-                        ToastView(
-                            content: Window.quitConfirmToast(tabCount: 3, windowCount: 2),
-                            actions: Window.confirmActions(
-                                confirmLabel: Window.quitConfirmLabel, cancel: {}, confirm: {}))
-                    ]))
-            return GallerySection(title: "Toasts: confirms", rows: rows)
-        }
-
         private static func fontSize() -> GallerySection {
             GallerySection(
                 title: "FontSizeCard",
@@ -200,7 +168,7 @@
         private static func sticky(
             _ content: ToastContent, _ actions: [ToastAction], showsClose: Bool = false
         ) -> ToastView {
-            ToastView(content: content, actions: actions, armsKeys: false, showsClose: showsClose)
+            ToastView(content: content, actions: actions, showsClose: showsClose)
         }
     }
 #endif

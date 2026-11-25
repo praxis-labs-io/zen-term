@@ -175,8 +175,8 @@ final class ModalZOrderTests: WindowTestCase {
         let c = makeWindow()
         var confirmed = 0
         c.presentConfirm(
-            ToastContent(variant: .warning, title: "Close 2 panes", message: "This closes both."),
-            confirmLabel: "Close", onConfirm: { confirmed += 1 })
+            ConfirmPrompt(title: "Close 2 panes", body: .message("This closes both."), confirmLabel: "Close"),
+            onConfirm: { confirmed += 1 })
 
         c.openReportIssue()
 

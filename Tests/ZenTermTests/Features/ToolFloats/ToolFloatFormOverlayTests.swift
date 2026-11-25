@@ -408,7 +408,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertTrue(window!.firstResponder === picker, "Esc leaves focus on the field")
     }
 
-    func test_editForm_delete_asksFirst_withFocusOnCancel_andOnlyConfirmingDeletes() throws {
+    func test_editForm_delete_asksFirst_withNoButtonFocused_andOnlyConfirmingDeletes() throws {
         let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
 
         try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
@@ -417,7 +417,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let texts = descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
         XCTAssertTrue(texts.contains("Delete dev"), "\(texts)")
         XCTAssertTrue(texts.contains("Deleting dev removes its command and shortcut."), "\(texts)")
-        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
+        XCTAssertTrue(window?.firstResponder === card)
         XCTAssertEqual(sink.deleted, 0)
 
         try XCTUnwrap(button(in: card, title: "Delete")).onTap()

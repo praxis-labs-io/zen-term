@@ -175,39 +175,4 @@ extension WindowController {
             ToastAction(title: "Switch", kind: .primary, shortcut: shortcut, run: open),
         ]
     }
-
-    static func confirmActions(
-        confirmLabel: String, cancel: @escaping () -> Void, confirm: @escaping () -> Void
-    ) -> [ToastAction] {
-        [
-            ToastAction(title: "Cancel", kind: .cancel, run: cancel),
-            ToastAction(title: confirmLabel, kind: .destructive, run: confirm),
-        ]
-    }
-
-    static let closeConfirmLabel = "Close"
-
-    static func closeConfirmToast(
-        _ subject: CloseWarning.Subject, naming names: [String], closingOtherWindows others: Int = 0
-    ) -> ToastContent {
-        ToastContent(
-            variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names, closingOtherWindows: others))
-    }
-
-    static let quitConfirmLabel = "Quit"
-
-    static func quitConfirmToast(tabCount: Int, windowCount: Int) -> ToastContent {
-        let message: String
-        if windowCount > 1 {
-            message =
-                "Quitting will close \(tabCount) tabs in \(windowCount) windows "
-                + "and stop everything running in them."
-        } else if tabCount == 1 {
-            message = "Quitting will close your tab and stop everything running in it."
-        } else {
-            message = "Quitting will close all \(tabCount) tabs and stop everything running in them."
-        }
-        return ToastContent(variant: .warning, title: "Quit ZenTerm", message: message)
-    }
 }

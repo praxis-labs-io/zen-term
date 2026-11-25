@@ -209,8 +209,8 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertTrue(c.isConfirmOpen, "a busy scratch must not be closed out from under the user")
         XCTAssertFalse(surface.terminated, "and nothing dies before the answer")
         XCTAssertTrue(
-            toastTexts(in: c).contains { $0.contains("Close Tab") },
-            "the confirm names the real effect: \(toastTexts(in: c))")
+            confirmTexts(in: c).contains { $0.contains("Close Tab") },
+            "the confirm names the real effect: \(confirmTexts(in: c))")
     }
 
     func test_theDockDotsScratchOnlyInTheTabItIsRunningIn() {

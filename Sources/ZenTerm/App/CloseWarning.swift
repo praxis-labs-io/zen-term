@@ -40,6 +40,29 @@ enum CloseWarning {
         }
     }
 
+    static func prompt(closing subject: Subject, naming names: [String], closingOtherWindows others: Int = 0)
+        -> ConfirmPrompt
+    {
+        ConfirmPrompt(
+            title: subject.title,
+            body: .message(message(closing: subject, naming: names, closingOtherWindows: others)),
+            confirmLabel: "Close", start: .onConfirm)
+    }
+
+    static func quit(tabCount: Int, windowCount: Int) -> ConfirmPrompt {
+        let message: String
+        if windowCount > 1 {
+            message =
+                "Quitting will close \(tabCount) tabs in \(windowCount) windows "
+                + "and stop everything running in them."
+        } else if tabCount == 1 {
+            message = "Quitting will close your tab and stop everything running in it."
+        } else {
+            message = "Quitting will close all \(tabCount) tabs and stop everything running in them."
+        }
+        return ConfirmPrompt(title: "Quit ZenTerm", body: .message(message), confirmLabel: "Quit", start: .onConfirm)
+    }
+
     static func message(closing subject: Subject, naming names: [String], closingOtherWindows others: Int = 0)
         -> String
     {

@@ -11,7 +11,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     private var submitFailure: String?
     private var removed = 0
     private var removalFailure: String?
-    private var removalConsequence: String?
+    private var removalSession: SSHConnection.State?
 
     override func tearDownWithError() throws {
         window = nil
@@ -29,7 +29,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
             mode: mode,
             removal: removable
                 ? AddSSHHostOverlay.Removal(
-                    consequence: { [weak self] in self?.removalConsequence },
+                    session: { [weak self] in self?.removalSession },
                     perform: { [weak self] in
                         self?.removed += 1
                         return self?.removalFailure
@@ -262,7 +262,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertLessThan(remove.frame.minX, cancel.frame.minX)
     }
 
-    func test_remove_ofAnIdleHost_stillAsks_withFocusOnCancel() throws {
+    func test_remove_ofAnIdleHost_stillAsks_withNoButtonFocused() throws {
         let overlay = mount(devbox, removable: true)
 
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
@@ -271,7 +271,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let texts = descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
         XCTAssertTrue(
             texts.contains("Removing Build box takes it off your remote hosts. Your SSH config stays."), "\(texts)")
-        XCTAssertTrue(isFocused(button("Cancel", in: card)))
+        XCTAssertTrue(window?.firstResponder === card)
         XCTAssertEqual(removed, 0)
 
         try XCTUnwrap(button("Remove", in: card)).onTap()
@@ -300,7 +300,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     }
 
     func test_remove_ofAnOpenHost_asksFirst_andOnlyConfirmingRemoves() throws {
-        removalConsequence = "disconnect it and stop everything running in it"
+        removalSession = .connected
         let overlay = mount(devbox, removable: true)
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
 
@@ -316,16 +316,16 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(removed, 1)
     }
 
-    func test_returnWithTheWarningUp_answersTheWarning_notTheForm() throws {
+    func test_returnWithTheWarningUp_answersNothing() throws {
         let overlay = mount(devbox, removable: true)
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
 
         deliver(returnKey())
 
-        XCTAssertEqual(submitted, [])
-        XCTAssertEqual(removed, 0)
+        XCTAssertEqual(submitted, [], "Return never reaches the form under the warning")
+        XCTAssertEqual(removed, 0, "nor removes: no button is focused yet")
         XCTAssertEqual(cancelled, 0)
-        XCTAssertTrue(isFocused(button("Remove", in: overlay)), "Return on Cancel closed the warning")
+        XCTAssertNotNil(descendants(of: overlay).first { $0 is ConfirmCard }, "the warning is still waiting")
     }
 
     func test_returnOnTheWarningsRemove_removes() throws {
@@ -346,7 +346,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     }
 
     func test_cancellingTheWarning_removesNothing_andFocusReturnsToRemove() throws {
-        removalConsequence = "stop connecting to it and close its tabs"
+        removalSession = .connecting
         let overlay = mount(devbox, removable: true)
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
         let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
@@ -358,7 +358,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     }
 
     func test_aFailedConfirmedRemove_canBeRetriedWhileTheCardLeaves() throws {
-        removalConsequence = "disconnect it and stop everything running in it"
+        removalSession = .connected
         removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
         let overlay = mount(devbox, removable: true)
         let remove = try XCTUnwrap(button("Remove", in: overlay))
@@ -375,7 +375,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     }
 
     func test_commandReturnWithTheRemoveWarningUp_doesNotSave() throws {
-        removalConsequence = "disconnect it and stop everything running in it"
+        removalSession = .connected
         let overlay = mount(devbox, removable: true)
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
         XCTAssertNotNil(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
@@ -467,7 +467,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     }
 
     func test_escape_withTheRemoveWarningUp_closesTheWarningAndLeavesTheForm() throws {
-        removalConsequence = "disconnect it and stop everything running in it"
+        removalSession = .connected
         let overlay = mount(devbox, removable: true)
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
         XCTAssertTrue(overlay.isShowingOverlaidCard)

@@ -387,10 +387,15 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         let name = editingFloat.title
         confirm.present(
             ConfirmCard(
-                title: "Delete \(name)", message: "Deleting \(name) removes its command and shortcut.",
-                confirmLabel: "Delete",
+                Self.deletePrompt(named: name),
                 onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.deleteButton) } },
                 onConfirm: { [weak self] in self?.confirm.dismiss { self?.performDelete() } }))
+    }
+
+    static func deletePrompt(named name: String) -> ConfirmPrompt {
+        ConfirmPrompt(
+            title: "Delete \(name)", body: .message("Deleting \(name) removes its command and shortcut."),
+            confirmLabel: "Delete")
     }
 
     private func performDelete() {

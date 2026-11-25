@@ -5,7 +5,6 @@ final class ToastPile: NSView {
     var onUnfoldChange: ((Bool) -> Void)?
     private(set) var isUnfolded = false
     private(set) var cards: [NSView] = []
-    private var choices: Set<ObjectIdentifier> = []
     private var leaving: Set<ObjectIdentifier> = []
     private let plates = (0..<ToastPile.plateOpacity.count).map { _ in Plate() }
     private let showLess = AppButton(title: "Show Less", variant: .secondary)
@@ -48,10 +47,7 @@ final class ToastPile: NSView {
 
     private var settled: [NSView] { cards.filter { !leaving.contains(ObjectIdentifier($0)) } }
 
-    var front: NSView? {
-        let shown = settled
-        return shown.last { choices.contains(ObjectIdentifier($0)) } ?? shown.last
-    }
+    var front: NSView? { settled.last }
 
     // Front first, then newest to oldest: the order the unfolded list reads in.
     private var ordered: [NSView] {
@@ -59,10 +55,8 @@ final class ToastPile: NSView {
         return [front] + settled.reversed().filter { $0 !== front }
     }
 
-    // `holdsChoice` keeps the card in front of anything newer, so a pending choice is never folded away.
-    func add(_ card: NSView, holdsChoice: Bool = false) {
+    func add(_ card: NSView) {
         cards.append(card)
-        if holdsChoice { choices.insert(ObjectIdentifier(card)) }
         card.wantsLayer = true
         addSubview(card, positioned: .below, relativeTo: showLess)
         NSLayoutConstraint.activate([
@@ -93,7 +87,6 @@ final class ToastPile: NSView {
     func remove(_ card: NSView) {
         let id = ObjectIdentifier(card)
         cards.removeAll { $0 === card }
-        choices.remove(id)
         leaving.remove(id)
         card.removeFromSuperview()
         relayout(animated: true)

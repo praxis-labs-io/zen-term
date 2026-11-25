@@ -26,11 +26,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     var onDismissed: (() -> Void)?
     private(set) var isDismissing = false
     private let hasActions: Bool
-    // A non-modal toast must never take first responder, or it steals terminal input.
-    private let gatesFocus: Bool
-    private let confirmAction: (() -> Void)?
-    // Not what the dismiss chords run: on a keybind-conflict card it is Revert, which rewrites the config.
-    private let cancelAction: (() -> Void)?
     private let variant: ToastVariant
     private let glyph = NSImageView()
     private let titleLabel: NSTextField
@@ -73,13 +68,9 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     private var shortcutSlots: [ShortcutSlot] = []
 
     init(
-        content: ToastContent, actions: [ToastAction], armsKeys: Bool = true,
-        showsClose: Bool = false
+        content: ToastContent, actions: [ToastAction], showsClose: Bool = false
     ) {
         self.hasActions = !actions.isEmpty
-        self.gatesFocus = armsKeys && !actions.isEmpty
-        self.confirmAction = actions.first { $0.kind != .cancel }?.run
-        self.cancelAction = actions.first { $0.kind == .cancel }?.run
         self.variant = content.variant
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
@@ -129,14 +120,8 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         header.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.closeSide).isActive = true
 
         let isOneLine = messageLabel == nil
-        let usesLinks = !gatesFocus
-        if !actions.isEmpty {
-            actionButtons =
-                usesLinks
-                ? Self.primaryLast(actions).map { Self.link(for: $0, alone: actions.count == 1) }
-                : actions.map(Self.button(for:))
-        }
-        if isOneLine, usesLinks {
+        actionButtons = Self.primaryLast(actions).map { Self.link(for: $0, alone: actions.count == 1) }
+        if isOneLine {
             actionButtons.forEach(header.addArrangedSubview)
         }
 
@@ -173,17 +158,16 @@ final class ToastView: ShadowCardView, ThemeReapplying {
             col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
             col.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s8),
         ])
-        guard !actionButtons.isEmpty, !(isOneLine && usesLinks) else {
+        guard !actionButtons.isEmpty, !isOneLine else {
             let bottomInset = isOneLine ? ChromeMetrics.Spacing.s8 : ChromeMetrics.Spacing.s12
             col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -bottomInset).isActive = true
             return
         }
-        let row = usesLinks ? linkRow() : buttonRow()
+        let row = linkRow()
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
-        let rowInset = usesLinks ? Self.linkRowInset : Self.textInset
         NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: rowInset),
+            row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.linkRowInset),
             row.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.textInset),
             row.topAnchor.constraint(equalTo: col.bottomAnchor, constant: ChromeMetrics.Spacing.s4),
             row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s8),
@@ -200,34 +184,14 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         return row
     }
 
-    private func buttonRow() -> NSView {
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let row = NSStackView(views: actionButtons + [spacer])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = ChromeMetrics.Spacing.s6
-        return row
-    }
-
     // The answer a toast asks for sits last in ink; every other action recedes before it.
     private static func primaryLast(_ actions: [ToastAction]) -> [ToastAction] {
         actions.filter { $0.kind != .primary } + actions.filter { $0.kind == .primary }
     }
 
+    // Click-only: a toast never takes a key from the terminal.
     private static func link(for action: ToastAction, alone: Bool) -> AppButton {
         let variant: AppButton.Variant = alone || action.kind == .primary ? .link : .quietLink
-        return AppButton(title: action.title, variant: variant, onTap: action.run)
-    }
-
-    // Click-only: a `keyEquivalent` answers only when the traversal reaches the button, so the card owns Return and Esc.
-    private static func button(for action: ToastAction) -> AppButton {
-        let variant: AppButton.Variant
-        switch action.kind {
-        case .primary: variant = .primary
-        case .destructive: variant = .destructive
-        case .cancel: variant = .secondary
-        }
         return AppButton(title: action.title, variant: variant, onTap: action.run)
     }
 
@@ -253,33 +217,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
             group.insertArrangedSubview(cap, at: slot)
             keycap = cap
         }
-    }
-
-    override var acceptsFirstResponder: Bool { gatesFocus }
-
-    // Both entry points: this misses bare keys under some focused hosts, and `keyDown` needs first responder.
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if answer(event) { return true }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if !answer(event) { super.keyDown(with: event) }
-    }
-
-    // Bare keys only, or an unbound ⌥⏎ would quit the app.
-    private func answer(_ event: NSEvent) -> Bool {
-        guard gatesFocus, !isDismissing, KeyboardFocus.isUnmodified(event) else { return false }
-        if KeyboardFocus.isReturn(event) {
-            confirmAction?()
-            return confirmAction != nil
-        }
-        if KeyboardFocus.key(for: event) == .delete {
-            cancelAction?()
-            return cancelAction != nil
-        }
-        guard let cancelAction else { return false }
-        return ModalEscape.handle(event, in: window, dismissing: isDismissing, close: cancelAction)
     }
 
     override func mouseDown(with event: NSEvent) {

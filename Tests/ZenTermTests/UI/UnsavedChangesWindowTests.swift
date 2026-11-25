@@ -162,7 +162,7 @@ final class UnsavedChangesWindowTests: WindowTestCase {
             let card = try XCTUnwrap(confirmCard(in: form), "changed asks, \(exit)", file: file, line: line)
             XCTAssertEqual(sink.cancelled + sink.dismissed, 0, "the form stays open, \(exit)", file: file, line: line)
             XCTAssertIdentical(
-                form.window?.firstResponder, button("Keep editing", in: card), "focus starts on Keep editing",
+                form.window?.firstResponder, card, "no button starts focused: discarding cannot be undone",
                 file: file, line: line)
 
             try leave(form, by: .escape)

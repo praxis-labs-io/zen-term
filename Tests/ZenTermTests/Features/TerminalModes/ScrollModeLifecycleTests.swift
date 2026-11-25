@@ -995,8 +995,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.scrollMode.isActive)
 
         controller.presentConfirm(
-            ToastContent(variant: .destructive, title: "Close Pane", message: "Running work will stop."),
-            confirmLabel: "Close", onConfirm: {})
+            ConfirmPrompt(title: "Close Pane", body: .message("Running work will stop."), confirmLabel: "Close"),
+            onConfirm: {})
 
         XCTAssertFalse(controller.scrollMode.isActive)
         XCTAssertFalse(host.isInstalled)

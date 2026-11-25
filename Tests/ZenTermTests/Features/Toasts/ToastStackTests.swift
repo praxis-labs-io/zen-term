@@ -244,42 +244,6 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(presenter.pileForTesting.isUnfolded, "neither unfolds the stack")
     }
 
-    func test_aConfirmWithNoMessage_stillOffersItsButtons() throws {
-        let presenter = presenter()
-        var cancelled = false
-        let confirm = presenter.confirm(
-            ToastContent(variant: .warning, title: "Close Tab", message: nil),
-            actions: [
-                ToastAction(title: "Cancel", kind: .cancel) { cancelled = true },
-                ToastAction(title: "Close", kind: .destructive) {},
-            ])
-        window.contentView!.layoutSubtreeIfNeeded()
-        let cancel = try XCTUnwrap(
-            descendants(of: confirm).compactMap { $0 as? AppButton }.first { $0.title == "Cancel" })
-
-        click(cancel)
-
-        XCTAssertTrue(cancelled, "a one-line confirm's buttons are mounted and clickable")
-    }
-
-    func test_aConfirm_staysInFrontOfNewerToasts() throws {
-        let presenter = presenter()
-        presenter.show(notice("First"))
-        let confirm = presenter.confirm(
-            ToastContent(variant: .destructive, title: "Close Pane", message: "It's still running."),
-            actions: [
-                ToastAction(title: "Cancel", kind: .cancel) {}, ToastAction(title: "Close", kind: .destructive) {},
-            ])
-        presenter.show(notice("Second"))
-        presenter.show(notice("Third"))
-        let pile = presenter.pileForTesting
-
-        XCTAssertFalse(pile.isUnfolded)
-        XCTAssertEqual(pile.opacityForTesting(confirm), 1, "a pending choice is never folded away")
-        XCTAssertFalse(visible("Third", in: pile), "newer toasts fold behind it")
-        XCTAssertEqual(pile.plateOpacityForTesting, [0.75, 0.45])
-    }
-
     func test_unfolding_resizesThePilesAncestorsInTheSamePass() {
         let pile = ToastPile(foldsOnClickOutside: false)
         let row = NSView()
@@ -304,7 +268,7 @@ final class ToastStackTests: WindowTestCase {
             outer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
         ])
         for title in ["First", "Second", "Third"] {
-            pile.add(ToastView(content: notice(title), actions: [], armsKeys: false, showsClose: false))
+            pile.add(ToastView(content: notice(title), actions: [], showsClose: false))
         }
         content.layoutSubtreeIfNeeded()
         let folded = outer.frame.height

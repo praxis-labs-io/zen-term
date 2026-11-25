@@ -123,7 +123,7 @@
         private static func toast(
             _ content: ToastContent, actions: [ToastAction] = [], showsClose: Bool = false
         ) -> ToastView {
-            ToastView(content: content, actions: actions, armsKeys: false, showsClose: showsClose)
+            ToastView(content: content, actions: actions, showsClose: showsClose)
         }
 
         private static func hoverCards() -> GallerySection {

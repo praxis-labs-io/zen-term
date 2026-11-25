@@ -588,8 +588,8 @@ final class ControlPaneRunTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen, "a running child closes without asking")
         XCTAssertTrue(
-            toastTexts(in: c).contains("Closing this pane will stop the process running in it, including review."),
-            "\(toastTexts(in: c))")
+            confirmTexts(in: c).contains("Closing this pane will stop the process running in it, including review."),
+            "\(confirmTexts(in: c))")
         XCTAssertTrue(isOpen(family.child, in: c))
 
         try pressClose(c)
@@ -811,9 +811,9 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(refusal.details?.panes.map(\.token), [try token(of: drawer)])
         c.handle(.closePane)
         XCTAssertTrue(
-            toastTexts(in: c).contains(
+            confirmTexts(in: c).contains(
                 "Closing this pane will stop the process running in it, including the bottom drawer."),
-            "\(toastTexts(in: c))")
+            "\(confirmTexts(in: c))")
     }
 
     func test_removingAWorktreeCountsARunningChildItStartedElsewhere() throws {

@@ -44,7 +44,7 @@ final class ToastKeyboardTests: WindowTestCase {
     }
 
     private static let characters: [UInt16: String] = [
-        36: "\r", 76: "\u{3}", 49: " ", 51: "\u{7f}", 53: "\u{1b}",
+        36: "\r", 49: " ", 51: "\u{7f}", 53: "\u{1b}",
     ]
 
     private func keyEvent(_ keyCode: UInt16, flags: NSEvent.ModifierFlags = []) -> NSEvent {
@@ -55,16 +55,8 @@ final class ToastKeyboardTests: WindowTestCase {
             keyCode: keyCode)!
     }
 
-    private func press(_ keyCode: UInt16, flags: NSEvent.ModifierFlags = [], in c: WindowController) {
-        let event = keyEvent(keyCode, flags: flags)
-        guard let content = c.window.contentView else { return }
-        if content.performKeyEquivalent(with: event) { return }
-        (c.window.firstResponder as? NSView)?.keyDown(with: event)
-    }
-
     private enum Key {
         static let returnKey: UInt16 = 36
-        static let keypadEnter: UInt16 = 76
         static let space: UInt16 = 49
         static let delete: UInt16 = 51
         static let escape: UInt16 = 53
@@ -77,120 +69,11 @@ final class ToastKeyboardTests: WindowTestCase {
         }
     }
 
-    @discardableResult
-    private func openConfirm(
-        in c: WindowController, onConfirm: @escaping () -> Void = {},
-        onCancel: @escaping () -> Void = {}
-    ) -> WindowController {
+    private func openConfirm(in c: WindowController) {
         c.presentConfirm(
-            ToastContent(variant: .warning, title: "Close Tab", message: "This stops everything running in it."),
-            confirmLabel: "Close", onConfirm: onConfirm, onCancel: onCancel)
-        return c
-    }
-
-    func test_return_confirms() {
-        let c = makeController()
-        var confirmed = 0
-        openConfirm(in: c, onConfirm: { confirmed += 1 })
-
-        press(Key.returnKey, in: c)
-
-        XCTAssertEqual(confirmed, 1, "Return has to answer the confirm")
-        XCTAssertFalse(c.isConfirmOpen, "and take the card down")
-    }
-
-    func test_return_withCapsLockOn_stillConfirms() {
-        let c = makeController()
-        var confirmed = 0
-        openConfirm(in: c, onConfirm: { confirmed += 1 })
-
-        press(Key.returnKey, flags: .capsLock, in: c)
-
-        XCTAssertEqual(confirmed, 1, "Caps Lock is not a modifier the confirm may refuse")
-    }
-
-    func test_keypadEnter_confirms() {
-        let c = makeController()
-        var confirmed = 0
-        openConfirm(in: c, onConfirm: { confirmed += 1 })
-
-        press(Key.keypadEnter, flags: [.numericPad, .function], in: c)
-
-        XCTAssertEqual(confirmed, 1)
-    }
-
-    func test_delete_cancels() {
-        let c = makeController()
-        var confirmed = 0
-        var cancelled = 0
-        openConfirm(in: c, onConfirm: { confirmed += 1 }, onCancel: { cancelled += 1 })
-
-        press(Key.delete, in: c)
-
-        XCTAssertEqual(cancelled, 1, "Delete has to cancel")
-        XCTAssertEqual(confirmed, 0, "and must never confirm")
-        XCTAssertFalse(c.isConfirmOpen)
-    }
-
-    func test_escape_cancels() {
-        let c = makeController()
-        var cancelled = 0
-        openConfirm(in: c, onCancel: { cancelled += 1 })
-
-        press(Key.escape, in: c)
-
-        XCTAssertEqual(cancelled, 1)
-        XCTAssertFalse(c.isConfirmOpen)
-    }
-
-    func test_modifiedReturn_doesNotConfirm() {
-        for flags: NSEvent.ModifierFlags in [.option, .command, .control, [.command, .shift]] {
-            let c = makeController()
-            var confirmed = 0
-            openConfirm(in: c, onConfirm: { confirmed += 1 })
-
-            press(Key.returnKey, flags: flags, in: c)
-
-            XCTAssertEqual(confirmed, 0, "a modified Return must not answer (\(flags.rawValue))")
-            XCTAssertTrue(c.isConfirmOpen)
-            c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
-        }
-    }
-
-    func test_modifiedDeleteAndEscape_doNotCancel() {
-        let c = makeController()
-        var cancelled = 0
-        openConfirm(in: c, onCancel: { cancelled += 1 })
-
-        press(Key.delete, flags: .command, in: c)
-        press(Key.escape, flags: .option, in: c)
-
-        XCTAssertEqual(cancelled, 0, "a modified Delete or Esc is not the card's key")
-        XCTAssertTrue(c.isConfirmOpen)
-    }
-
-    func test_space_doesNotConfirm() {
-        let c = makeController()
-        var confirmed = 0
-        var cancelled = 0
-        openConfirm(in: c, onConfirm: { confirmed += 1 }, onCancel: { cancelled += 1 })
-
-        press(Key.space, in: c)
-
-        XCTAssertEqual(confirmed, 0, "a Space meant for the buffer must not quit the app")
-        XCTAssertEqual(cancelled, 0)
-        XCTAssertTrue(c.isConfirmOpen, "and the card is still waiting")
-    }
-
-    func test_heldReturn_confirmsOnce() {
-        let c = makeController()
-        var confirmed = 0
-        openConfirm(in: c, onConfirm: { confirmed += 1 })
-
-        press(Key.returnKey, in: c)
-        press(Key.returnKey, in: c)
-
-        XCTAssertEqual(confirmed, 1)
+            ConfirmPrompt(
+                title: "Close Tab", body: .message("This stops everything running in it."), confirmLabel: "Close"),
+            onConfirm: {})
     }
 
     func test_stickyToast_answersNoKey() throws {
@@ -270,7 +153,6 @@ final class ToastKeyboardTests: WindowTestCase {
         settle()
 
         XCTAssertTrue(c.isConfirmOpen, "the confirm is still waiting to be answered")
-        XCTAssertEqual(toastViews(in: c).count, 1)
     }
 
     func test_dismissChords_workWhileAToolFloatIsOpen() {
