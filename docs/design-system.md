@@ -101,7 +101,8 @@ the glyph in full hue (`ProcessIcon.Look.purpose`). ANSI red is never a purpose 
 `blocked`. Process marks are never SF
 Symbols, except a tool float's own icon in its palette row (`ProcessIcon.toolFloat`), which is
 an icon picker name; a generic chip's glyph is Lucide, unmodified. In a row, a chip leads it
-(`ListRow.Leading.process`, at `.small`): an Agents row and a worktree row in the sidebar.
+(`ListRow.Leading.process`, at `.small`): an Agents row, a worktree row in the sidebar, and a
+palette row.
 
 ## State
 
@@ -223,9 +224,9 @@ A control's hover and eased fill come from `ControlView`, or from `ControlState`
 cannot subclass it (`AppButton`). A control never keeps its own tracking area. A control on that base
 takes keyboard focus and its ring from it too.
 
-A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
+A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`). A word about the row's state rides right after its title in muted caption ink (`ListRow.Content.titleSuffix`: the picker's Current, Open, Other window); a `note` sits at the trailing edge.
 
-The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, a search field with a trailing slot. A command palette row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; a workspace picker row's icon is plain (`ListRow.Leading.symbol`). A row's detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
+The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; a workspace picker row's icon is plain (`ListRow.Leading.symbol`). A row's detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 

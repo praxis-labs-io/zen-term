@@ -285,4 +285,26 @@ final class AgentPickerTests: WindowTestCase {
         XCTAssertTrue(row.isSpinningForTesting, "the picker follows the sidebar's state")
         XCTAssertEqual(picker.selected, selectedBefore)
     }
+
+    func test_anAgentsName_sitsRightAfterItsTitle_notInTheTrailingColumn() throws {
+        var item = SidebarAgentItem(
+            id: SurfaceID(raw: 1), state: .working, summary: "Fix the login bug", detail: "zen-term", message: nil)
+        item.agentLabel = "Codex"
+        let row = AgentPickerOverlay.AgentRowView(item)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: PaletteOverlay.width, height: ChromeMetrics.Height.lg),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = row
+        row.layoutSubtreeIfNeeded()
+
+        let fields = descendants(of: row).compactMap { $0 as? NSTextField }
+        let title = try XCTUnwrap(fields.first { $0.stringValue == "Fix the login bug" })
+        let name = try XCTUnwrap(fields.first { $0.stringValue == "Codex" }, "the agent's name is not shown")
+        let titleFrame = title.convert(title.bounds, to: row)
+        let nameFrame = name.convert(name.bounds, to: row)
+        XCTAssertGreaterThanOrEqual(nameFrame.minX, titleFrame.maxX, "the name follows the title")
+        XCTAssertLessThanOrEqual(nameFrame.minX - titleFrame.maxX, ChromeMetrics.Spacing.s6, "and sits just after it")
+        XCTAssertEqual(name.textColor, Theme.current.chrome.ink(.muted))
+        XCTAssertEqual(row.detail, "", "the trailing column holds no qualifier")
+    }
 }

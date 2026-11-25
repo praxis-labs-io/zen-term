@@ -81,6 +81,11 @@
                         label: "Icon and note",
                         samples: [row(ListRow.Content(title: "main", note: "Note", leading: .symbol("arrow.branch")))]),
                     GallerySection.Row(
+                        label: "Title suffix",
+                        samples: [
+                            row(ListRow.Content(title: "zen-term", titleSuffix: "Current", leading: .symbol("folder")))
+                        ]),
+                    GallerySection.Row(
                         label: "Swatch",
                         samples: [
                             row(ListRow.Content(title: "Accent", leading: .swatch(Theme.current.chrome.accent.nsColor)))

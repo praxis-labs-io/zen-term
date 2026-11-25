@@ -161,34 +161,27 @@ final class NewWorkspaceTests: WindowTestCase {
             "a workspace without a config entry never counts as the configured one being open")
     }
 
-    func test_thePickersFirstRow_showsCmdCtrlT_andClickingItOpensAWorkspaceAtHome() throws {
-        inheritingCWD()
+    func test_theBar_namesTheNewWorkspaceChord_typingOrNot() throws {
         let c = makeWindow()
-        spawned.forEach { $0.currentDirectory = root }
         let picker = try openPicker(in: c)
-        c.window.layoutIfNeeded()
-        let row = try XCTUnwrap(picker.rowViews.first as? RepoPickerOverlay.ActionRowView)
-        XCTAssertEqual(row.title, "New Workspace")
-        XCTAssertEqual(descendants(of: row).compactMap { ($0 as? KeycapView)?.shortcut }, ["⌘⌃T"])
+        let new = HintFooter.Hint(keys: "⌘⌃T", label: RepoPickerOverlay.newHintLabel)
 
-        click(row)
+        XCTAssertNil(newWorkspaceRowIfListed(of: picker), "an empty query lists no New Workspace row")
+        XCTAssertTrue(picker.barHintsForTesting.contains(new), "the bar names the chord with nothing typed")
 
-        XCTAssertEqual(c.workspaceNamesForTesting, [try XCTUnwrap(PathDisplay.folderName(root)), PathDisplay.homeName])
-        XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
-        XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
-        XCTAssertNil(pickerIn(c), "the picker closes")
+        try type("api", into: picker, in: c)
+
+        XCTAssertTrue(picker.barHintsForTesting.contains(new), "and while a query is typed")
     }
 
-    private func click(_ row: SelectableRowView) {
-        let inside = CGPoint(x: row.bounds.midX, y: row.bounds.midY)
-        func event(_ type: NSEvent.EventType) -> NSEvent {
-            NSEvent.mouseEvent(
-                with: type, location: row.convert(inside, to: nil), modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
-                pressure: 1)!
-        }
-        row.mouseDown(with: event(.leftMouseDown))
-        row.mouseUp(with: event(.leftMouseUp))
+    func test_withNewWorkspaceUnbound_theBarNamesNoChord() throws {
+        var config = GeneralConfig.current
+        config.keymap = config.keymap.filter { $0.value != .newWorkspace }
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+
+        XCTAssertFalse(picker.barHintsForTesting.contains { $0.label == RepoPickerOverlay.newHintLabel })
     }
 
     func test_cmdCtrlT_withThePickerOpen_opensAWorkspace_andClosesThePicker() throws {
@@ -224,6 +217,11 @@ final class NewWorkspaceTests: WindowTestCase {
         try XCTUnwrap(picker.rowViews.first as? RepoPickerOverlay.ActionRowView)
     }
 
+    private func newWorkspaceRowIfListed(of picker: RepoPickerOverlay) -> RepoPickerOverlay.ActionRowView? {
+        picker.rowViews.compactMap { $0 as? RepoPickerOverlay.ActionRowView }
+            .first { $0.title.hasPrefix("New Workspace") }
+    }
+
     func test_aQueryThatMatchesNothing_namesTheNewWorkspace_trimmed() throws {
         let c = makeWindow()
         let picker = try openPicker(in: c)
@@ -237,16 +235,17 @@ final class NewWorkspaceTests: WindowTestCase {
         XCTAssertNil(pickerIn(c), "the picker closes")
     }
 
-    func test_theRowTitle_followsTheQuery_backToPlainWhenEmptied() throws {
+    func test_theRow_followsTheQuery_andLeavesWithIt() throws {
         let c = makeWindow()
         let picker = try openPicker(in: c)
 
         try type("api", into: picker, in: c)
+        XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace “api”")
+
         try type("", into: picker, in: c)
 
-        XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace")
-        try command(#selector(NSResponder.insertNewline(_:)), in: picker)
-        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName, PathDisplay.homeName])
+        XCTAssertNil(newWorkspaceRowIfListed(of: picker))
+        XCTAssertEqual(c.workspaceNamesForTesting, [PathDisplay.homeName], "nothing was made")
     }
 
     func test_arrowingToNewWorkspacePastAMatch_stillNamesItTheQuery() throws {

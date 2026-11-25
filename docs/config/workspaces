@@ -17,9 +17,9 @@
 # The section header is the title: it's shown in the picker and names the workspace in the
 # sidebar, so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
 #
-# Order: the picker's Configured section lists workspaces in the order their sections
-# appear here, so to put one first, move its whole `[Title]` block up. (Above it, Open and
-# Open elsewhere list what is already running, in the order the sidebar holds them.) ⌥↑/⌥↓ on a row in Settings → Workspaces
+# Order: the picker lists closed workspaces in the order their sections appear here, so
+# to put one first, move its whole `[Title]` block up. (Above them, what is already
+# running is listed in the order the sidebar holds it.) ⌥↑/⌥↓ on a row in Settings → Workspaces
 # does the same edit for you. A comment sitting directly on a header moves with it; a
 # comment with a blank line under it stays where it is, so a banner at the top of the
 # file keeps its place.

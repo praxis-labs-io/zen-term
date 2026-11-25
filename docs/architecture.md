@@ -228,15 +228,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `isWorkspaceOpenInAnotherWindow` and `revealWorkspaceInAnotherWindow`, which `AppDelegate`
   folds over its windows, skipping the asking one. A `WindowController` never raises its own
   window, so the ordering stays in `AppDelegate`.
-- **The ⌘P picker groups into Open, Open elsewhere and Configured**, and a workspace is
-  listed once, in the strongest section that claims it. Open is this window's
-  `WorkspaceOrder`, ghosts included and unselectable; Open elsewhere is what the other
-  windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
-  elsewhere is listed too; Configured is what the workspaces file holds that no window has
-  open. A worktree sits below its parent in whichever section the worktree itself belongs
-  to, so a parent listed above is redrawn muted in Configured to hold the worktrees that
-  are not open. Placement reads those lists, never `openState`, so nothing falls out of every
-  section. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted
+- **The ⌘P picker is one list of groups, with no headings.** This window's `WorkspaceOrder`
+  groups come first, then the groups the other windows report through
+  `openWorkspacesElsewhere` (so an unconfigured workspace running elsewhere is listed too),
+  then the configured workspaces no window has open, in config order, then Add Workspace….
+  A group is its lead, its open worktrees, and the lead's unopened worktrees, so a workspace
+  is listed once. A ghost lead is a selectable row that opens its configured entry, unless that
+  entry is already listed, when it stays a label. A row's
+  state (Current, Open, Other window) reads this window's active workspace, which
+  `WindowController` passes in. Placement reads those lists, never `openState`, so nothing
+  falls out of the list. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted
   per window and two windows can hold a workspace at one folder. That is a second pair of
   closures beside the folder-identity two above, not a replacement: folder identity
   deliberately ignores unconfigured workspaces and the enumeration does not.
@@ -577,10 +578,13 @@ New modal surfaces compose the existing primitives.
 - **Palette panels provide content only.** The command palette, workspace picker and agent picker subclass
   `PaletteOverlay` and supply `numberOfRows`, `makeRow`, `rowIdentity`, `isSelectable`,
   `applyFilter`, `activate`, `returnAction`, `shortcutHints`, `hasMoreActions`, `emptyText(for:)`
-  (the empty state's words for the current query, the init's text by default) and
-  `searchAccessory`. Rows are `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns
-  width, max height, row height, position, the search field, the bar and the empty state, and no
-  panel overrides them, so every panel opens at the same spot and size.
+  (the empty state's words for the current query, the init's text by default). Rows are
+  `SelectableRowView`, headers `PaletteSectionHeader`. The shell owns width, max height, row
+  height, position, the search field, the bar and the empty state, and no panel overrides them, so
+  every panel opens at the same spot and size.
+  A row's qualifier (the picker's Current, Open or Other window, an agent's name) goes right after
+  its title in `ListRow.Content.titleSuffix`; the trailing column holds only branch, category and
+  shortcut.
 - **Forms share one scaffold.** `FormValidation` collects each field's message through
   `LabeledField.setMessage` and focuses the first invalid field on submit.
   `ModalShell.submitButton` is the primary button: ⌘Return and its keycap. A failed submit

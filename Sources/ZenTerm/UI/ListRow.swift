@@ -25,6 +25,7 @@ class ListRow: ControlView, ThemeReapplying {
         var subtitle: String?
         var subtitleTruncation: NSLineBreakMode
         var note: String?
+        var titleSuffix: String?
         var leading: Leading?
         var trailing: Trailing?
         var ink: ChromeTheme.InkLevel
@@ -35,7 +36,7 @@ class ListRow: ControlView, ThemeReapplying {
 
         init(
             title: String, subtitle: String? = nil, subtitleTruncation: NSLineBreakMode = .byTruncatingTail,
-            note: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
+            note: String? = nil, titleSuffix: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
             ink: ChromeTheme.InkLevel = .normal, nesting: Nesting = .none, leadingOnTitleLine: Bool = false,
             trimsSubtitleDescent: Bool = false
         ) {
@@ -43,6 +44,7 @@ class ListRow: ControlView, ThemeReapplying {
             self.subtitle = subtitle
             self.subtitleTruncation = subtitleTruncation
             self.note = note
+            self.titleSuffix = titleSuffix
             self.leading = leading
             self.trailing = trailing
             self.ink = ink
@@ -240,7 +242,8 @@ class ListRow: ControlView, ThemeReapplying {
         title.textColor = chrome.ink(content.ink)
         title.lineBreakMode = .byTruncatingTail
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        guard let subtitle = content.subtitle else { return title }
+        let head = content.titleSuffix.map { Self.suffixed(title, with: $0, chrome) } ?? title
+        guard let subtitle = content.subtitle else { return head }
 
         let line = NSTextField(labelWithString: subtitle)
         subtitleLine = line
@@ -249,7 +252,7 @@ class ListRow: ControlView, ThemeReapplying {
         line.lineBreakMode = content.subtitleTruncation
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let lines = NSStackView(views: [
-            glyph.map { Self.titleLine(leading: $0, title: title) } ?? title,
+            glyph.map { Self.titleLine(leading: $0, title: head) } ?? head,
             glyph.map { Self.indented(line, past: $0) } ?? line,
         ])
         lines.orientation = .vertical
@@ -279,7 +282,22 @@ class ListRow: ControlView, ThemeReapplying {
         }
     }
 
-    private static func titleLine(leading glyph: NSView, title: NSTextField) -> NSView {
+    private static func suffixed(_ title: NSTextField, with suffix: String, _ chrome: ChromeTheme) -> NSView {
+        let label = NSTextField(labelWithString: suffix)
+        label.font = ChromeType.font(.caption)
+        label.textColor = chrome.ink(.muted)
+        label.setContentHuggingPriority(.required, for: .horizontal)
+        label.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        let line = NSStackView(views: [title, label])
+        line.orientation = .horizontal
+        line.alignment = .firstBaseline
+        line.spacing = titleLineGap
+        line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        line.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return line
+    }
+
+    private static func titleLine(leading glyph: NSView, title: NSView) -> NSView {
         let line = NSStackView(views: [glyph, title])
         line.orientation = .horizontal
         line.alignment = .centerY
