@@ -124,11 +124,13 @@ zen pane close review           # once you have its result
 
 ## Waiting
 
+- Run every `zen wait`, and every `zen pane run --wait`, in your shell tool's
+  background mode. You are notified when it answers, and stay free to answer
+  the user and do other work meanwhile. Read its result then.
 - Never sleep or poll. Use `zen wait <pane>`, `zen wait <pane> --output "<text>"`
   or `zen wait --children any|all`.
-- `zen wait` answers within 90 seconds by default, under the shell tool's
-  2-minute limit. `timeout` is a check-in, not a failure: wait again. A longer
-  `--timeout` needs the shell tool's own timeout raised to match.
+- `zen wait` answers within 90 seconds by default. `timeout` is a check-in, not
+  a failure: wait again, in the background.
 - Read a pane's state from `zen pane get` or `zen list` (`busy`, and `agent`
   with `state` and `status`), never from its screen.
 
@@ -170,10 +172,11 @@ zen worktree remove my-branch
 
 ## Preferences
 
-- Never run a command in your shell tool's background mode, or with `&` or
-  `nohup`. Claude counts a background shell it doesn't recognize as a server as
-  work it is waiting on, so your session reads as working until it exits. Use
-  `zen pane run` and `zen wait`.
+- A wait is the only command for your shell tool's background mode. Never run
+  anything else there, or with `&` or `nohup`: servers, watchers, builds and
+  helpers go in panes with `zen pane run`. Claude counts a background shell it
+  doesn't recognize as a server as work it is waiting on, so your session reads
+  as working until it exits, and a wait exits when it answers.
 - For worktree work, use `zen worktree` instead of `git worktree` or
   EnterWorktree, so the worktree gets the workspace's files and the user can
   open it from the workspace picker. Pass `--open` only when asked to open it.
