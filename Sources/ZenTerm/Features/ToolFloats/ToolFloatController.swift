@@ -43,6 +43,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var onProgramLaunched: ((SurfaceID, String) -> Void)?
 
     var onSurfaceReleased: ((SurfaceID) -> Void)?
+    var onSurfaceExited: ((TerminalSurface) -> Void)?
 
     /// A float is seen when it is shown, not when it takes first responder: showing is the only moment it is looked at.
     var onShown: ((SurfaceID) -> Void)?
@@ -485,6 +486,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
+        onSurfaceExited?(s)
         if let active = activeFloat, s === active.surface {
             activeFloat = nil
             removeEntry(forSurface: s)

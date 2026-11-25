@@ -193,7 +193,8 @@ tier's `contextBlur` and `offset`.
 ## Motion
 
 Animation goes through `Motion`. Its helpers check Reduce Motion themselves, except
-`drawerSlide`, whose callers do. Under Reduce Motion a completion runs synchronously.
+`drawerSlide`, whose callers do. Under Reduce Motion a completion runs synchronously, except
+`slideFade`'s and `handOff`'s, which still fade.
 
 | Token or helper | For |
 |---|---|
@@ -204,10 +205,12 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
 | `springScaleFade` | Modals, toasts and floats appearing and leaving |
 | `fade` | Plain opacity changes, tooltips and the link preview |
-| `crossfade` | A process chip swapping its mark when its program changes |
+| `crossfade` | A process chip swapping its mark when its program changes; with `whenReduced`, a dissolve that stands in for movement |
+| `HostConnect` | The SSH host Connect screen's choreography: the emblem's rain and answer, the words after it, and the hand-off to the terminal |
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
+| `handOff` | An SSH host's Connect screen giving way to its terminal |
 | `slideFade` | The collapsed sidebar's hover reveal, the find bar and the mode header |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |

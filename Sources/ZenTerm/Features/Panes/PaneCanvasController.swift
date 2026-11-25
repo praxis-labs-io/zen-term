@@ -72,6 +72,8 @@ final class PaneCanvasController: NSObject {
 
     var onSurfacesReleased: (([SurfaceID]) -> Void)?
 
+    var onSurfaceExited: ((TerminalSurface) -> Void)?
+
     var onZoomEnded: (() -> Void)?
 
     var onSurfaceStartFailed: ((_ retry: @escaping () -> Void, _ close: @escaping () -> Void) -> Void)?
@@ -617,6 +619,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
+        onSurfaceExited?(s)
         guard exitHold.closesOnExit(id), tokenByLeaf[id] != nil else { return closePane(id) }
         exitHold.recordExit(id, lastLines: s.text(lastLines: LaunchedExitHold<PaneID>.tailLines))
         if exitHold.hasMark(id) { return closeExited(id) }

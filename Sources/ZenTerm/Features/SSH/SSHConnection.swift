@@ -24,6 +24,7 @@ final class SSHConnection {
     // A socket that answers no check would otherwise re-fire its watch at once and spin `ssh -O check`.
     static let recheckDelay: TimeInterval = 1
     static let checksBeforeGivingUp = 3
+    private static let exitTailLines = 12
 
     typealias AskpassReply = (Result<AskpassAnswer, ControlError>) -> Void
 
@@ -49,7 +50,7 @@ final class SSHConnection {
     let controlPath: URL
     private(set) var state: State = .connecting
     var onConnectedChange: ((Bool) -> Void)?
-    var onLoginFailed: (() -> Void)?
+    var onLoginFailed: ((_ reason: String?) -> Void)?
     var onQuestionChange: ((SSHLoginQuestion?) -> Void)?
     private(set) var question: SSHLoginQuestion?
 
@@ -69,6 +70,7 @@ final class SSHConnection {
     private var pendingAnswer: PendingAnswer?
     private var lastAnswered: Asked?
     private var questionsAsked = 0
+    private var loginExitTail: String?
 
     #if DEBUG
         static var watchersOverrideForTesting: Watchers?
@@ -106,6 +108,7 @@ final class SSHConnection {
             return
         }
         login = entry
+        loginExitTail = nil
         isLoginLaunched = false
         guard form == nil else { return resolveMasterBeforeLogin() }
         watchers.resolveLaunch(host) { [weak self] form in self?.resolvedLaunch(form) }
@@ -127,7 +130,7 @@ final class SSHConnection {
     var isLoggingInBehindConnect: Bool { asksThroughConnect && state == .connecting && !isShutDown }
 
     // libghostty runs ssh under login(1), which prints its own line before ssh writes anything.
-    private static let loginBanner = "Last login:"
+    static let loginBanner = "Last login:"
 
     func loginOutput(limit: Int) -> [String] {
         guard let text = login?.surface?.text(lastLines: limit * 4) else { return [] }
@@ -197,6 +200,12 @@ final class SSHConnection {
         return login?.id == id
     }
 
+    // Read at exit, since the surface is freed before `release` reports it.
+    func surfaceExited(_ surface: TerminalSurface) {
+        guard state == .connecting, !isShutDown, let login, login.surface === surface else { return }
+        loginExitTail = surface.text(lastLines: Self.exitTailLines)
+    }
+
     func release(_ ids: [SurfaceID]) {
         waiting.removeAll { ids.contains($0.id) }
         guard state == .connecting, let login, ids.contains(login.id) else { return }
@@ -211,7 +220,9 @@ final class SSHConnection {
         stopAsking()
         stopWatching?()
         stopWatching = nil
-        onLoginFailed?()
+        let tail = loginExitTail
+        loginExitTail = nil
+        onLoginFailed?(tail.flatMap(SSHFailureReason.parse))
     }
 
     func shutdown() {

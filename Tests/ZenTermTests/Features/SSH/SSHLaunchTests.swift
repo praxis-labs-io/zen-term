@@ -29,6 +29,7 @@ final class SSHLaunchTests: XCTestCase {
                 "-o", "ControlMaster=auto",
                 "-o", "ControlPath=\"/Users/me/Library/Application Support/ZenTerm/ssh/1-abcdef12\"",
                 "-o", "ControlPersist=60",
+                "-o", "ConnectTimeout=30",
                 "--", "devbox",
             ])
         XCTAssertFalse(args.contains("-v"))

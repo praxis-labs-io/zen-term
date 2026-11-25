@@ -163,6 +163,9 @@ final class WindowController: NSObject {
         controller.onSurfaceRegistered = { [weak self] surface, tab in
             self?.attention.register(surface, tab: tab)
         }
+        controller.onSurfaceExited = { [weak self] surface in
+            self?.workspaces.forEach { $0.connection?.surfaceExited(surface) }
+        }
         controller.onSurfaceReleased = { [weak self] surface in
             self?.workspace(holding: surface)?.connection?.release([surface])
             self?.attention.release(surface)
@@ -922,6 +925,7 @@ final class WindowController: NSObject {
     enum MountTransition {
         case instant
         case slide(from: SlideEdge)
+        case fade
     }
 
     private var selectedCanvas: NSView? {
@@ -936,6 +940,9 @@ final class WindowController: NSObject {
             if loginOutputTicker == nil { refreshConnectLogin() }
             return connectView
         }
+        if let left = connectView?.host, !workspaces.contains(where: { $0.host == left && isBehindConnect($0) }) {
+            SSHHostStatusCenter.shared.setConnecting(false, host: left)
+        }
         let view = HostConnectView(
             host: host, name: GeneralConfig.current.displayName(of: host),
             status: SSHHostStatusCenter.shared.status(of: host),
@@ -945,6 +952,10 @@ final class WindowController: NSObject {
             onAnswer: { [weak self] in self?.loginBehindConnect(of: host)?.answer($0) },
             onTrust: { [weak self] in self?.loginBehindConnect(of: host)?.trustHostKey() },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
+        view.onAnswerShown = { outcome in
+            if outcome == .connected { SSHHostStatusCenter.shared.setConnecting(false, host: host) }
+        }
+        view.onHandOff = { [weak self] in self?.handOff(to: host) }
         connectView = view
         refreshConnectLogin()
         return view
@@ -1003,12 +1014,15 @@ final class WindowController: NSObject {
         refreshConnectLogin()
     }
 
-    private func mount(_ transition: MountTransition) {
-        guard let canvas = selectedCanvas else { return unmountCanvas() }
+    private func mount(_ transition: MountTransition, then finished: @escaping () -> Void = {}) {
+        guard let canvas = selectedCanvas else {
+            unmountCanvas()
+            return finished()
+        }
         guard mountedCanvas !== canvas else {
             restoreFocusToActive()
             renderDock()
-            return
+            return finished()
         }
         let outgoing = mountedCanvas
         pinCanvas(canvas)
@@ -1022,12 +1036,20 @@ final class WindowController: NSObject {
         switch transition {
         case .instant:
             outgoing?.removeFromSuperview()
+            finished()
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
             beginCanvasSlide(from: edge)
             Motion.slideSwap(incoming: canvas, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
                 self?.detachIfInactive(outgoing)
                 self?.endCanvasSlide()
+                finished()
+            }
+        case .fade:
+            container.layoutSubtreeIfNeeded()
+            Motion.handOff(outgoing: outgoing, incoming: canvas) { [weak self] in
+                self?.detachIfInactive(outgoing)
+                finished()
             }
         }
     }
@@ -1279,17 +1301,22 @@ final class WindowController: NSObject {
     }
 
     /// Swaps the whole canvas. An inactive workspace is detached and retained, the same as an inactive tab.
-    private func activate(_ id: WorkspaceID, transition: MountTransition? = nil) {
+    private func activate(
+        _ id: WorkspaceID, transition: MountTransition? = nil, then finished: @escaping () -> Void = {}
+    ) {
         guard let workspace = workspaces.first(where: { $0.id == id }), workspace !== activeWorkspace
-        else { return }
-        if isBehindConnect(workspace), let host = workspace.host { return activate(host) }
+        else { return finished() }
+        if isBehindConnect(workspace), let host = workspace.host {
+            activate(host)
+            return finished()
+        }
         Log.info("workspace switched", category: .tabs)
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
         let transition = transition ?? workspaceSlide(from: activeWorkspace?.id, to: id)
         selection = .workspace(workspace)
-        mount(transition)
+        mount(transition, then: finished)
         if let tab = workspace.activeID { visit(tab) }
         renderAttention()
     }
@@ -1496,6 +1523,10 @@ final class WindowController: NSObject {
     private func closeConnectScreen() {
         Log.info("connect screen closed", category: .workspace)
         guard !workspaces.allSatisfy(isBehindConnect) else {
+            let closing = selection.host
+            if workspaces.contains(where: { isBehindConnect($0) && $0.host != closing }) {
+                return landOnLoginBehindConnect(otherThan: closing)
+            }
             return presentConfirm(
                 CloseWarning.prompt(closing: .lastPane(running: windowIsRunning), naming: runningNamesInWindow())
             ) { [weak self] in self?.window.close() }
@@ -1503,8 +1534,8 @@ final class WindowController: NSObject {
         land(at: order.navigableWorkspaces.count)
     }
 
-    private func landOnLoginBehindConnect() {
-        guard let host = workspaces.first(where: isBehindConnect)?.host else { return }
+    private func landOnLoginBehindConnect(otherThan closing: SSHHostID? = nil) {
+        guard let host = workspaces.first(where: { isBehindConnect($0) && $0.host != closing })?.host else { return }
         selection = .host(host)
         mount(.instant)
         renderAttention()
@@ -1523,8 +1554,12 @@ final class WindowController: NSObject {
     }
 
     private func closeHostWorkspace(_ workspace: WorkspaceController, returningTo host: SSHHostID) {
+        if workspace.connection?.state != .failed, let connectView, connectView.host == host {
+            connectView.abandonLogin()
+        }
         workspaces.removeAll { $0 === workspace }
         workspace.shutdown()
+        SSHHostStatusCenter.shared.setConnecting(false, host: host)
         guard workspace === activeWorkspace else { renderAttention(); return }
         selection = .host(host)
         mount(.instant)
@@ -1545,6 +1580,7 @@ final class WindowController: NSObject {
     private func connect(_ host: SSHHostID) {
         guard selection.host == host, activeWorkspace == nil, !revealOpenHost(host), !holdsHost(host) else { return }
         Log.info("ssh host connecting", category: .workspace)
+        connectView?.setOutcome(nil)
         let connection = SSHConnection(host: host)
         let tab = mintTabID()
         let workspace = WorkspaceController(
@@ -1554,28 +1590,46 @@ final class WindowController: NSObject {
             SSHHostStatusCenter.shared.setConnected(connected, host: host)
             if connected, let workspace { self?.loginConnected(workspace, on: host) }
         }
-        connection.onLoginFailed = { [weak self, weak workspace] in
-            DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
+        connection.onLoginFailed = { [weak self, weak workspace] reason in
+            DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace, reason: reason) }
         }
         connection.onQuestionChange = { [weak self] _ in self?.refreshConnectLogin() }
         workspaces.append(workspace)
         installController(id: tab, in: workspace, cwd: nil, config: nil)
         guard connection.isLoggingInBehindConnect else { return activate(workspace.id, transition: .instant) }
+        SSHHostStatusCenter.shared.setConnecting(true, host: host)
         refreshConnectLogin()
         renderAttention()
     }
 
+    // Connect shows the answer first and hands off once it has settled; a host left meanwhile stays in the background.
     private func loginConnected(_ workspace: WorkspaceController, on host: SSHHostID) {
+        if case .host(let shown) = selection, shown == host, let connectView, connectView.host == host {
+            connectView.setOutcome(.connected)
+        } else {
+            SSHHostStatusCenter.shared.setConnecting(false, host: host)
+            if let connectView, connectView.host == host { connectView.abandonLogin() }
+        }
         refreshConnectLogin()
-        guard case .host(let shown) = selection, shown == host, workspaces.contains(where: { $0 === workspace })
-        else { return renderAttention() }
-        activate(workspace.id, transition: .instant)
+        renderAttention()
     }
 
-    private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
+    // The outcome clears only once Connect has faded, or the fade would show Ready.
+    private func handOff(to host: SSHHostID) {
+        let screen = connectView?.host == host ? connectView : nil
+        guard case .host(let shown) = selection, shown == host,
+            let workspace = workspaces.first(where: { $0.host == host && !isBehindConnect($0) })
+        else { return screen?.setOutcome(nil) ?? () }
+        activate(workspace.id, transition: .fade) { screen?.setOutcome(nil) }
+    }
+
+    private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?, reason: String?) {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) { closeTab($0) } }
+        SSHHostStatusCenter.shared.setConnecting(false, host: host)
+        if let connectView, connectView.host == host { connectView.setOutcome(.failed(reason: reason)) }
         refreshConnectLogin()
-        toasts.show(Self.loginFailedToast(host: GeneralConfig.current.displayName(of: host)))
+        let isShowingConnect = mountedCanvas === connectView && connectView?.host == host
+        if !isShowingConnect { toasts.show(Self.loginFailedToast(host: GeneralConfig.current.displayName(of: host))) }
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
@@ -3069,7 +3123,9 @@ final class WindowController: NSObject {
             case .navUp: return navigate(.up)
             case .navDown: return navigate(.down)
             case .closePane: return closeConnectScreen()
-            case .searchSelection where !floats.isOpen: return editHostFromConnectScreen(host)
+            case .searchSelection where !floats.isOpen:
+                guard connectView?.isHandingOff != true else { return }
+                return editHostFromConnectScreen(host)
             default: break
             }
         }
@@ -3572,6 +3628,7 @@ final class WindowController: NSObject {
         c.onSurfacesRegistered = { [weak self] ids in
             ids.forEach { self?.attention.register($0, tab: id) }
         }
+        c.onSurfaceExited = { [weak self] surface in self?.workspace(of: id)?.connection?.surfaceExited(surface) }
         c.onSurfacesReleased = { [weak self] ids in
             ids.forEach { self?.floats.hidePane($0) }
             self?.paneWaits.panesClosed(ids)
@@ -4945,7 +5002,10 @@ final class WindowController: NSObject {
         hostStatusObserver = nil
         floats.shutdown()
         sidebar.shutdown()
-        for workspace in workspaces { workspace.shutdown() }
+        for workspace in workspaces {
+            workspace.shutdown()
+            workspace.host.map { SSHHostStatusCenter.shared.setConnecting(false, host: $0) }
+        }
         onClosed?()
     }
 }

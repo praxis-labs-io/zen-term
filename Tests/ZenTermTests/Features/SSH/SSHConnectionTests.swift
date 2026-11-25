@@ -10,6 +10,7 @@ final class SSHConnectionTests: XCTestCase {
     private var connection: SSHConnection!
     private var connectedChanges: [Bool] = []
     private var loginFailures = 0
+    private var failureReasons: [String?] = []
 
     override func setUp() {
         super.setUp()
@@ -18,7 +19,10 @@ final class SSHConnectionTests: XCTestCase {
         connection = SSHConnection(
             host: host, controlPath: URL(fileURLWithPath: "/tmp/zt/1-ab"), watchers: fake.watchers)
         connection.onConnectedChange = { [weak self] in self?.connectedChanges.append($0) }
-        connection.onLoginFailed = { [weak self] in self?.loginFailures += 1 }
+        connection.onLoginFailed = { [weak self] reason in
+            self?.loginFailures += 1
+            self?.failureReasons.append(reason)
+        }
     }
 
     private func surface(_ raw: Int) -> (RecordingSurface, SurfaceID) { (RecordingSurface(), SurfaceID(raw: raw)) }
@@ -506,6 +510,43 @@ final class SSHConnectionTests: XCTestCase {
         FileManager.default.createFile(atPath: path.path, contents: nil)
 
         wait(for: [appeared], timeout: 2)
+    }
+
+    func test_aLoginThatExits_failsWithTheReasonItsTerminalShowedAtExit() {
+        let (login, id) = surface(1)
+        connection.start(login, id: id, env: [:])
+        fake.ready?()
+        login.rows = ["Last login: Tue", "devbox: Permission denied (publickey)."]
+
+        connection.surfaceExited(login)
+        login.terminate()
+        connection.release([id])
+
+        XCTAssertEqual(failureReasons, ["devbox: Permission denied (publickey)."])
+    }
+
+    func test_aLoginReleasedWithoutExiting_failsWithNoReason() {
+        let (login, id) = surface(1)
+        connection.start(login, id: id, env: [:])
+        fake.ready?()
+        login.rows = ["devbox: Permission denied (publickey)."]
+
+        connection.release([id])
+
+        XCTAssertEqual(failureReasons, [nil])
+    }
+
+    func test_anotherSurfaceExiting_leavesNoReasonForTheLogin() {
+        let (login, id) = surface(1)
+        let (other, _) = surface(2)
+        connection.start(login, id: id, env: [:])
+        fake.ready?()
+        other.rows = ["ssh: connect to host devbox port 22: Connection refused"]
+
+        connection.surfaceExited(other)
+        connection.release([id])
+
+        XCTAssertEqual(failureReasons, [nil])
     }
 }
 

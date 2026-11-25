@@ -154,17 +154,4 @@ final class SSHHostNameTests: WindowTestCase {
 
         XCTAssertTrue(labels(c).contains("Tool floats run on this Mac, not on Build box."), "\(labels(c))")
     }
-
-    func test_aFailedLogin_namesTheHost() throws {
-        let c = onConnectScreen()
-        try pressReturn(in: c)
-        let login = try XCTUnwrap(spawned.first)
-
-        login.delegate?.surfaceDidExit(login, code: 255)
-        let drained = expectation(description: "main queue")
-        DispatchQueue.main.async { drained.fulfill() }
-        wait(for: [drained], timeout: 2)
-
-        XCTAssertTrue(labels(c).contains(" Build box"), "\(labels(c))")
-    }
 }

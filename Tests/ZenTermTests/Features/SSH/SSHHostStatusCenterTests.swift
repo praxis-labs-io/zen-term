@@ -75,4 +75,18 @@ final class SSHHostStatusCenterTests: XCTestCase {
         center.setReachable(false, host: devbox)
         XCTAssertEqual(posts, 2, "the probe cannot move a connected host")
     }
+
+    func test_aHostConnectingBehindItsScreen_readsConnecting_evenOnceItsSocketIsUp() {
+        let center = SSHHostStatusCenter()
+        center.setReachable(true, host: devbox)
+        center.setConnecting(true, host: devbox)
+        XCTAssertEqual(center.status(of: devbox), .connecting)
+
+        center.setConnected(true, host: devbox)
+        XCTAssertEqual(center.status(of: devbox), .connecting)
+
+        center.setConnecting(false, host: devbox)
+        XCTAssertEqual(center.status(of: devbox), .connected)
+        XCTAssertFalse(SSHHostStatus.connecting.isNavigable)
+    }
 }

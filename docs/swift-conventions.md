@@ -225,8 +225,9 @@ re-running on the next turn because `backingScaleFactor` is not updated when it 
 the arriving canvas landed under the opaque outgoing one and the animation ran invisibly. Order the
 pair explicitly and assert the subview index.
 
-**Under Reduce Motion a `Motion` completion runs synchronously.** A caller whose remaining work sits
-after the call (`installController` calls `mount` then `c.start()`) sees completion work run first.
+**Under Reduce Motion a `Motion` completion runs synchronously**, except where a fade stands in for
+movement (`slideFade`, `handOff`). A caller whose remaining work sits
+after the call sees completion work run first.
 A call that may or may not animate should report which, and let the caller sequence it.
 
 ## Config read once, then frozen

@@ -123,8 +123,8 @@ final class ControlSSHHostTests: WindowTestCase {
         ControlAddress.tab(window: c.windowID, tab: tab.raw)
     }
 
-    private func showsFailureToast(_ c: WindowController) -> Bool {
-        toastTexts(in: c).contains("Couldn't connect to")
+    private func showsFailure(_ c: WindowController) -> Bool {
+        c.connectViewForTesting?.emblemForTesting.glyphForTesting == .cross
     }
 
     private func holdingOnlyTheHost(_ c: WindowController, login: () throws -> RecordingSurface) throws
@@ -148,7 +148,7 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNotNil(c.connectViewForTesting)
     }
 
-    func test_workspaceCloseWhileConnecting_returnsToConnectWithoutAFailureToast() throws {
+    func test_workspaceCloseWhileConnecting_returnsToConnectWithoutAFailure() throws {
         let c = makeWindow()
         let login = try loggingIn(c)
 
@@ -157,7 +157,7 @@ final class ControlSSHHostTests: WindowTestCase {
 
         XCTAssertNil(c.activeConnectionForTesting)
         XCTAssertEqual(c.selectedHostForTesting, host)
-        XCTAssertFalse(showsFailureToast(c))
+        XCTAssertFalse(showsFailure(c))
     }
 
     func test_tabCloseOfTheLoginWhileConnecting_refusesNamingTheHost_thenForceAbandonsQuietly() throws {
@@ -180,7 +180,7 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNil(c.activeConnectionForTesting)
         XCTAssertEqual(c.selectedHostForTesting, host)
         XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
-        XCTAssertFalse(showsFailureToast(c))
+        XCTAssertFalse(showsFailure(c))
     }
 
     func test_paneCloseOfTheLoginInASplitTab_refuses() throws {
