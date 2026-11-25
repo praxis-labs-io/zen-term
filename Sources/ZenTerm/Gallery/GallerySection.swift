@@ -38,7 +38,6 @@
 
         private static func line(_ row: Row) -> NSView {
             let caption = SectionCaption(row.label)
-            caption.translatesAutoresizingMaskIntoConstraints = false
             let samples = GallerySamples(row.samples)
 
             let line = NSView()
@@ -49,6 +48,7 @@
                 caption.leadingAnchor.constraint(equalTo: line.leadingAnchor),
                 caption.widthAnchor.constraint(equalToConstant: labelWidth),
                 caption.centerYAnchor.constraint(equalTo: samples.firstLine.centerYAnchor),
+                samples.firstLine.heightAnchor.constraint(greaterThanOrEqualTo: caption.heightAnchor),
                 samples.leadingAnchor.constraint(equalTo: caption.trailingAnchor),
                 samples.trailingAnchor.constraint(equalTo: line.trailingAnchor),
                 samples.topAnchor.constraint(equalTo: line.topAnchor),
