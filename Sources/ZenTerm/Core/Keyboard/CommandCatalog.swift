@@ -56,30 +56,30 @@ enum CommandCatalog {
         case .increaseFontSize: return app("Increase Font Size", glyph, chord)
         case .decreaseFontSize: return app("Decrease Font Size", glyph, chord)
         case .resetFontSize: return app("Reset Font Size", glyph, chord)
-        case .toggleScrollMode: return pane("Scroll Mode", glyph, chord)
-        case .toggleSearch: return pane("Find in Scrollback", glyph, chord)
-        case .scrollToTop: return pane("Scroll to Top", glyph, chord)
-        case .scrollToBottom: return pane("Scroll to Bottom", glyph, chord)
-        case .scrollPageUp: return pane("Scroll Page Up", glyph, chord)
-        case .scrollPageDown: return pane("Scroll Page Down", glyph, chord)
-        case .searchSelection: return pane("Find Selection", glyph, chord)
-        case .clearScreen: return pane("Clear Screen", glyph, chord)
-        case .scrollToSelection: return pane("Scroll to Selection", glyph, chord)
-        case .jumpToPreviousPrompt: return pane("Jump to Previous Prompt", glyph, chord)
-        case .jumpToNextPrompt: return pane("Jump to Next Prompt", glyph, chord)
-        case .pasteSelection: return pane("Paste Selection", glyph, chord)
-        case .writeScreenFile: return pane("Write Screen to File", glyph, chord)
-        case .copyScreenFilePath: return pane("Write Screen to File, Copy Path", glyph, chord)
-        case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
+        case .toggleScrollMode: return terminal("Scroll Mode", glyph, chord)
+        case .toggleSearch: return terminal("Find in Scrollback", glyph, chord)
+        case .scrollToTop: return terminal("Scroll to Top", glyph, chord)
+        case .scrollToBottom: return terminal("Scroll to Bottom", glyph, chord)
+        case .scrollPageUp: return terminal("Scroll Page Up", glyph, chord)
+        case .scrollPageDown: return terminal("Scroll Page Down", glyph, chord)
+        case .searchSelection: return terminal("Find Selection", glyph, chord)
+        case .clearScreen: return terminal("Clear Screen", glyph, chord)
+        case .scrollToSelection: return terminal("Scroll to Selection", glyph, chord)
+        case .jumpToPreviousPrompt: return terminal("Jump to Previous Prompt", glyph, chord)
+        case .jumpToNextPrompt: return terminal("Jump to Next Prompt", glyph, chord)
+        case .pasteSelection: return terminal("Paste Selection", glyph, chord)
+        case .writeScreenFile: return terminal("Write Screen to File", glyph, chord)
+        case .copyScreenFilePath: return terminal("Write Screen to File, Copy Path", glyph, chord)
+        case .openScreenFile: return terminal("Write Screen to File and Open", glyph, chord)
         case .dismissToast: return app("Dismiss Notice", glyph, chord)
         case .dismissAllToasts: return app("Dismiss All Notices", glyph, chord)
         case .newWindow: return window("New Window", glyph, chord)
-        case .selectAll: return pane("Select All", glyph, chord)
+        case .selectAll: return terminal("Select All", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
-        case .findNext: return pane("Find Next", glyph, chord)
+        case .findNext: return terminal("Find Next", glyph, chord)
         case .createWorktree: return workspace("New Worktree…", glyph, chord)
         case .removeWorktree: return workspace("Remove Worktree…", glyph, chord)
-        case .findPrevious: return pane("Find Previous", glyph, chord)
+        case .findPrevious: return terminal("Find Previous", glyph, chord)
         case .selectWorkspace(let n): return workspace("Select Workspace \(n)", glyph, chord)
         case .prevWorkspace: return workspace("Previous Workspace", glyph, chord)
         case .nextWorkspace: return workspace("Next Workspace", glyph, chord)
@@ -115,12 +115,14 @@ enum CommandCatalog {
             .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
-            .toggleZoom, .toggleScrollMode, .toggleSearch, .searchSelection,
+            .toggleZoom, .closePane,
+        ]
+        chords += [
+            .toggleScrollMode, .toggleSearch, .searchSelection,
             .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
             .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
             .clearScreen, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
-            .closePane,
         ]
         chords += [.closeWindow, .fillScreen, .toggleSidebar, .focusSidebar]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
@@ -141,6 +143,11 @@ enum CommandCatalog {
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: .panes, chord: chord)
+    }
+    private static func terminal(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: .terminal, chord: chord)
     }
     private static func tab(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord

@@ -63,12 +63,12 @@ final class CommandCatalogTests: XCTestCase {
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Focus Previous Pane", "Focus Next Pane",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
-                "Focus Mode", "Scroll Mode", "Find in Scrollback", "Find Selection",
+                "Focus Mode", "Close Pane",
+                "Scroll Mode", "Find in Scrollback", "Find Selection",
                 "Scroll Page Up", "Scroll Page Down", "Scroll to Top", "Scroll to Bottom",
                 "Jump to Previous Prompt", "Jump to Next Prompt", "Scroll to Selection",
                 "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
-                "Close Pane",
                 "Close Window", "Fill Screen", "Toggle Sidebar", "Focus Sidebar",
                 "New Tool Float…",
                 "Settings…", "Reload Config", "Check for Updates",
@@ -101,7 +101,7 @@ final class CommandCatalogTests: XCTestCase {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")
             seen.append(category)
         }
-        XCTAssertEqual(seen, ["Workspaces", "Tabs", "Panes", "Window", "Tools", "App"])
+        XCTAssertEqual(seen, ["Workspaces", "Tabs", "Panes", "Terminal", "Window", "Tools", "App"])
     }
 
     func test_selectTab_expandsPerTab() {

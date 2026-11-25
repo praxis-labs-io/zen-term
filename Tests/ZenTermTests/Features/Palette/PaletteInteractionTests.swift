@@ -302,7 +302,7 @@ final class PaletteInteractionTests: WindowTestCase {
         let commands = [
             PaletteCommand(title: "Open Settings", shortcut: "⌘,", category: .app, chord: .openSettings),
             PaletteCommand(
-                title: "Write Screen to File and Open", shortcut: "", category: .panes, chord: .openScreenFile),
+                title: "Write Screen to File and Open", shortcut: "", category: .terminal, chord: .openScreenFile),
         ]
         let overlay = CommandPaletteOverlay(
             commands: { commands },
