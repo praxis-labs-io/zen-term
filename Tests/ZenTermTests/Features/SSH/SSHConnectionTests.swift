@@ -595,7 +595,8 @@ final class SSHConnectionAskpassTests: XCTestCase {
     func test_onlyTheLoginsTokenAsks_andOnlyWhileItLogsIn() throws {
         let token = try token(of: loggingIn())
 
-        XCTAssertFalse(ask("Password: ", token: "f" + token.dropFirst()).asked)
+        let otherFirst = token.first == "f" ? "0" : "f"
+        XCTAssertFalse(ask("Password: ", token: otherFirst + token.dropFirst()).asked)
         XCTAssertFalse(ask("Password: ", token: String(token.dropLast())).asked)
         XCTAssertTrue(ask("Password: ", token: token).asked)
         fake.connect()
