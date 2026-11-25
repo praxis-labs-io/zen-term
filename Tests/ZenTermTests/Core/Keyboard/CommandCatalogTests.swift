@@ -38,6 +38,15 @@ final class CommandCatalogTests: XCTestCase {
         }
     }
 
+    func test_aHostsConnectScreen_listsEditHost_inPlaceOfFindSelection() {
+        let connect = CommandCatalog.commands(tabCount: 0, workspaceCount: 0, onHost: true)
+        let terminal = CommandCatalog.commands(tabCount: 1, workspaceCount: 1, onHost: true)
+
+        XCTAssertEqual(connect.first { $0.chord == .searchSelection }?.title, "Edit Host…")
+        XCTAssertEqual(
+            terminal.first { $0.chord == .searchSelection }?.title, CommandCatalog.spec(for: .searchSelection).title)
+    }
+
     func test_aHostsConnectScreen_listsNeitherDisconnectNorCloseWorkspace() {
         let titles = CommandCatalog.commands(tabCount: 0, workspaceCount: 0, onHost: true).map(\.title)
 

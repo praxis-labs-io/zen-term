@@ -2054,7 +2054,6 @@ final class WindowController: NSObject {
     }
 
     private func editHostFromConnectScreen(_ host: SSHHostID) {
-        pendingModal = nil
         let address = SSHHostStatusCenter.shared.address(of: host)
         openSSHHostForm(.edit(GeneralConfig.current.sshHost(host), address: address), from: .connectScreen)
     }

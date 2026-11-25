@@ -5,7 +5,7 @@ enum ChipSheen {
     // An emblem's tile is several chips tall, where the chip's short ramps read as a band, so its ramps run longer and lighter.
     enum Spread { case chip, tile }
 
-    // An alpha mask, not a color, the same on every theme. The tile's halves fade to their own clear, since its longer ramp from white to black would lighten through grey.
+    // The tile's halves each fade to their own clear: one ramp from white to black lightens through grey.
     static func colors(_ spread: Spread) -> [CGColor] {
         let alphas: [(white: CGFloat, alpha: CGFloat)] =
             switch spread {

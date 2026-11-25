@@ -3,9 +3,8 @@ import AppKit
 // The Connect screen's host emblem: the host's signature as a dot matrix on a rounded tile.
 final class HostEmblemView: NSView, ThemeReapplying {
     static let tileSide: CGFloat = 84
-    // swiftlint:disable:next untokened_radius
-    private static let cellRadius: CGFloat = 2
     private static let cellSide: CGFloat = 7
+    private static let cellRadius = ChromeMetrics.Radius.icon(cellSide)
     private static let cellGap = ChromeMetrics.Spacing.s4
 
     private let lit: [Bool]
