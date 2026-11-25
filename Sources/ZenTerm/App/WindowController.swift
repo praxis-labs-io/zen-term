@@ -3115,7 +3115,9 @@ final class WindowController: NSObject {
             case .navUp: return navigate(.up)
             case .navDown: return navigate(.down)
             case .closePane: return closeConnectScreen()
-            case .searchSelection where !floats.isOpen: return editHostFromConnectScreen(host)
+            case .searchSelection where !floats.isOpen:
+                guard connectView?.isHandingOff != true else { return }
+                return editHostFromConnectScreen(host)
             default: break
             }
         }

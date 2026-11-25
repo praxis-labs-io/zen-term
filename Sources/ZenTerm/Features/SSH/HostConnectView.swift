@@ -39,6 +39,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let onTrust: () -> Void
     private var login: Login?
     private var outcome: Outcome?
+    var isHandingOff: Bool { outcome == .connected }
     private var isAnswerShown = false
     private var rainStartedAt: CFTimeInterval?
     private var answers = 0
