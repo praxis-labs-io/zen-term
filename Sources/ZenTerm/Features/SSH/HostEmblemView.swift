@@ -11,6 +11,7 @@ final class HostEmblemView: NSView, ThemeReapplying {
     private let cells: [CALayer]
     private let sheen = CAGradientLayer()
     private var isDimmed = false
+    private var glyph: HostEmblemGlyph?
 
     init(host: SSHHostID) {
         lit = HostSignature.cells(of: host)
@@ -51,16 +52,30 @@ final class HostEmblemView: NSView, ThemeReapplying {
         reapplyTheme()
     }
 
+    func show(_ glyph: HostEmblemGlyph?) {
+        guard glyph != self.glyph else { return }
+        self.glyph = glyph
+        reapplyTheme()
+    }
+
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = chrome.background.nsColor.cgColor
         layer?.borderColor = chrome.fill(alpha: ChromeTheme.border).cgColor
-        let on = chrome.ink(isDimmed ? .muted : .normal).cgColor
+        let on = glyph.map { Self.color(of: $0, in: chrome) } ?? chrome.ink(isDimmed ? .muted : .normal).cgColor
         let off = chrome.fill(.active).cgColor
-        for (cell, isLit) in zip(cells, lit) { cell.backgroundColor = isLit ? on : off }
+        for (cell, isLit) in zip(cells, glyph?.cells ?? lit) { cell.backgroundColor = isLit ? on : off }
+    }
+
+    private static func color(of glyph: HostEmblemGlyph, in chrome: ChromeTheme) -> CGColor {
+        switch glyph {
+        case .check: return chrome.positive.nsColor.cgColor
+        case .cross: return chrome.destructive.nsColor.cgColor
+        }
     }
 
     var litForTesting: [Bool] { lit }
+    var glyphForTesting: HostEmblemGlyph? { glyph }
     var cellColorsForTesting: [CGColor?] { cells.map(\.backgroundColor) }
     var tileFillForTesting: CGColor? { layer?.backgroundColor }
     var hasSheenUnderCellsForTesting: Bool {

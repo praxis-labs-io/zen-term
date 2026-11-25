@@ -110,8 +110,11 @@ final class HostConnectInteractionTests: WindowTestCase {
         return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
     }
 
-    private func failureToastNames(_ host: String, in c: WindowController) -> Bool {
-        showsToast("Couldn't connect to", in: c) && showsToast(" \(host)", in: c)
+    private func showsFailure(_ status: String? = nil, in c: WindowController) -> Bool {
+        guard let screen = c.connectViewForTesting, screen.emblemForTesting.glyphForTesting == .cross else {
+            return false
+        }
+        return status.map { screen.statusForTesting == $0 } ?? true
     }
 
     private func longHostWindow() -> (WindowController, SSHHostID) {
@@ -418,7 +421,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.tabOrderForTesting.count, 1)
     }
 
-    func test_aLoginThatEndsBeforeConnecting_returnsToConnect_andWarns() throws {
+    func test_aLoginThatEndsBeforeConnecting_returnsToConnect_andShowsItFailed() throws {
         let (c, login) = try connected()
         c.handle(.splitVertical)
         let waiting = try XCTUnwrap(spawned.last)
@@ -428,7 +431,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertTrue(failureToastNames("devbox", in: c))
+        XCTAssertTrue(showsFailure(in: c))
     }
 
     func test_reselectingAConnectedHost_landsOnItsWorkspace() throws {
@@ -492,11 +495,12 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(
             connection.isAwaitingLogin(on: c.floatsForTesting.surfaceID(ToolFloat.scratch.id)),
             "after a drop, Scratch is the surface that logs in again")
+        scratch.rows = ["devbox: Permission denied (publickey)."]
         scratch.delegate?.surfaceDidExit(scratch, code: 255)
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(failureToastNames("devbox", in: c))
+        XCTAssertTrue(showsFailure("devbox: Permission denied (publickey).", in: c))
     }
 
     func test_aConnectedHost_hidesYourToolFloatButtons_andALocalWorkspaceShowsThem() throws {
@@ -705,38 +709,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox:")
     }
 
-    func test_theConnectFailure_keepsItsTitleWhole_andTruncatesALongHostInTheMiddle() throws {
-        let (c, long) = longHostWindow()
-        spawned = []
-        c.handle(.newTab)
-        fake.ready?()
-        let login = try XCTUnwrap(spawned.first)
-
-        login.delegate?.surfaceDidExit(login, code: 255)
-        drainMainQueue()
-        c.window.contentView?.layoutSubtreeIfNeeded()
-
-        let toast = try XCTUnwrap(cards(in: c).first)
-        let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
-        let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.alias)" })
-        let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't connect to" })
-        XCTAssertGreaterThan(
-            lead.intrinsicContentSize.width + tail.intrinsicContentSize.width, toast.frame.width - 60,
-            "precondition: the two do not fit")
-        XCTAssertGreaterThanOrEqual(lead.frame.width, lead.intrinsicContentSize.width, "the title was cut")
-        XCTAssertLessThan(tail.frame.width, tail.intrinsicContentSize.width, "the host name should give way")
-        XCTAssertEqual(tail.lineBreakMode, NSLineBreakMode.byTruncatingMiddle)
-        XCTAssertLessThanOrEqual(tail.convert(tail.bounds, to: toast).maxX, toast.bounds.width)
-    }
-
-    func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillWarns() throws {
+    func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillShowsItFailed() throws {
         let (c, login) = try connected()
 
         login.delegate?.surfaceDidExit(login, code: 255)
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(failureToastNames("devbox", in: c))
+        XCTAssertTrue(showsFailure(in: c))
     }
 
     func test_closingTheLoginWhileConnecting_asksFirst_andChangesNothingUntilAnswered() throws {
@@ -762,7 +742,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.activeConnectionForTesting?.state, .connecting)
     }
 
-    func test_confirmingTheLoginClose_returnsToConnect_withoutAFailureToast() throws {
+    func test_confirmingTheLoginClose_returnsToConnect_withoutAFailure() throws {
         let (c, login) = try connected()
         c.handle(.splitVertical)
         let waiting = try XCTUnwrap(spawned.last)
@@ -776,7 +756,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertTrue(login.terminated)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertFalse(failureToastNames("devbox", in: c), "the user closed it; nothing failed")
+        XCTAssertFalse(showsFailure(in: c), "the user closed it; nothing failed")
     }
 
     func test_closingAWaitingPaneWhileConnecting_doesNotAsk() throws {
@@ -950,7 +930,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         fake.connect()
 
         XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
-        XCTAssertFalse(failureToastNames("devbox", in: c), "the user closed it", file: file, line: line)
+        XCTAssertFalse(showsFailure(in: c), "the user closed it", file: file, line: line)
         XCTAssertEqual(waiting?.startCount ?? 0, 0, "waiting panes never start", file: file, line: line)
     }
 
@@ -989,7 +969,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.isConfirmOpen, "Disconnect says what it does, so it never asks")
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertFalse(failureToastNames("devbox", in: c), "the user ended it")
+        XCTAssertFalse(showsFailure(in: c), "the user ended it")
         XCTAssertEqual(waiting.startCount, 0)
     }
 
@@ -1070,7 +1050,7 @@ final class HostConnectInteractionTests: WindowTestCase {
             pane.borderForTesting.width, ChromeMetrics.Border.paneFocus, "a pane beside the login keeps its halo")
         login.delegate?.surfaceDidExit(login, code: 255)
         drainMainQueue()
-        XCTAssertTrue(failureToastNames("devbox", in: c), "precondition: the login failed")
+        XCTAssertTrue(showsFailure(in: c), "precondition: the login failed")
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(try showsFocusHalo(c), "failed")
 

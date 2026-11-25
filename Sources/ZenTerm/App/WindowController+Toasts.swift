@@ -27,10 +27,6 @@ extension WindowController {
         ToastContent(variant: .info, title: "New worktree", message: refusal.message)
     }
 
-    static func loginFailedToast(host: String) -> ToastContent {
-        ToastContent(variant: .warning, title: "Couldn't connect to", titleTail: " \(host)", message: nil)
-    }
-
     static func floatsStayLocalToast(host: String) -> ToastContent {
         ToastContent(
             variant: .info, title: "Tool floats", message: "Tool floats run on this Mac, not on \(host).")

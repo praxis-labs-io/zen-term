@@ -861,7 +861,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
-  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its emblem
+  destination the probe resolved from the same `ssh -G`. It runs no ssh of its own; what it shows
+  of a login comes from that login's connection. Its emblem
   (`HostSignature`) is drawn from the ssh alias, never the display name, so renaming a host keeps it.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
@@ -881,7 +882,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   the host disconnected. The check runs before the login launches and again when the socket
   appears; a socket that refuses the connection is stale and is removed, and anything else is
   left alone. A login that ends before the socket drops the waiting surfaces and
-  closes the workspace back to Connect.
+  closes the workspace back to Connect, which shows it failed with ssh's reason: the last line
+  the login's terminal showed (the line before ProxyJump's closing one), read when its surface
+  exits, since the surface is freed before the connection hears the login ended. A bare
+  `Connection closed by … port N` says nothing, so Connect reads "Couldn't connect" instead.
 - **A host's first login runs behind its Connect screen, which answers ssh's questions.** The
   workspace is installed but never selected while `SSHConnection.isLoggingInBehindConnect`, so the
   login surface starts detached; every path into it (`activate`, `reveal`, `land`, a removed

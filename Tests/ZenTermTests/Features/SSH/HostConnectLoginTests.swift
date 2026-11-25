@@ -239,7 +239,7 @@ final class HostConnectLoginTests: WindowTestCase {
         let view = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertNil(view.cancelButtonForTesting)
         XCTAssertNotEqual(view.statusForTesting, "Connecting…")
-        XCTAssertFalse(showsToast("Couldn't connect", in: c), "a cancel is not a failure")
+        XCTAssertNotEqual(view.emblemForTesting.glyphForTesting, .cross, "a cancel is not a failure")
     }
 
     func test_escapeOnConnectWhileConnecting_endsTheLogin() throws {
@@ -362,7 +362,7 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertLessThan(message.frame.width, 360, "balanced lines sit narrower than the message width")
     }
 
-    func test_aFailedLogin_returnsConnectToReady_withTheFailureToast() throws {
+    func test_aFailedLoginWithNoReason_saysItCouldNotConnect_andOffersRetry_withoutAToast() throws {
         let (c, _) = try loggingIn()
 
         fake.unwatchable?()
@@ -373,7 +373,45 @@ final class HostConnectLoginTests: WindowTestCase {
         let view = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertNil(view.cancelButtonForTesting)
         XCTAssertNil(c.connectionForTesting(of: host))
-        XCTAssertTrue(showsToast("Couldn't connect", in: c))
+        XCTAssertEqual(view.statusForTesting, "Couldn't connect")
+        XCTAssertEqual(view.emblemForTesting.glyphForTesting, .cross)
+        XCTAssertEqual(view.actionButtonForTesting.title, "Retry")
+        XCTAssertFalse(showsToast("Couldn't connect to", in: c))
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    func test_aLoginThatExits_showsWhatSSHSaid_inDestructiveInk() throws {
+        let (c, login) = try loggingIn()
+        login.rows = ["ssh: connect to host devbox port 22: Connection refused"]
+
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+
+        let view = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertTrue(login.terminated, "precondition: the login's surface is freed before the failure lands")
+        XCTAssertEqual(view.statusForTesting, "Connect to host devbox port 22: Connection refused")
+        XCTAssertEqual(view.emblemForTesting.glyphForTesting, .cross)
+        XCTAssertEqual(view.statusColorForTesting, Theme.current.chrome.destructive.nsColor)
+    }
+
+    func test_returnOnAFailure_retries_withOneNewLogin() throws {
+        let (c, login) = try loggingIn()
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+        spawned = []
+
+        try send(keyCode: 36, "\r", in: c)
+        fake.ready?()
+
+        XCTAssertEqual(spawned.count, 1)
+        let view = try XCTUnwrap(c.connectViewForTesting, "the retry runs behind Connect too")
+        XCTAssertEqual(view.statusForTesting, "Connecting…")
+        XCTAssertNil(view.emblemForTesting.glyphForTesting)
     }
 
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {

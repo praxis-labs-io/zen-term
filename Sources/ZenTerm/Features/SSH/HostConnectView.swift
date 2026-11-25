@@ -8,6 +8,11 @@ final class HostConnectView: NSView, ThemeReapplying {
         var output: [String]
     }
 
+    enum Outcome: Equatable {
+        case connected
+        case failed(reason: String?)
+    }
+
     static let outputLinesRead = 6
     private static let edgeSpacing = ChromeMetrics.Spacing.s12
     private static let emblemToName = ChromeMetrics.Spacing.s24
@@ -22,6 +27,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     // Balanced messages read best well inside the 420 column.
     private static let messageMaxWidth: CGFloat = 360
     private static let retryMessage = "That didn't work. Try again."
+    private static let failedWithoutReason = "Couldn't connect"
 
     // A short window drops the emblem first, so the action never leaves the screen.
     private static let emblemVisibility = NSStackView.VisibilityPriority(rawValue: 500)
@@ -33,6 +39,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let onAnswer: (AskpassAnswer) -> Void
     private let onTrust: () -> Void
     private var login: Login?
+    private var outcome: Outcome?
     private var status: SSHHostStatus
     private let emblem: HostEmblemView
     private let nameLine = NSTextField(labelWithString: "")
@@ -42,6 +49,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     private let statusLine = NSStackView()
     private let connectButton: AppButton
     private let connectAnywayButton: AppButton
+    private let retryButton: AppButton
     private let fingerprintLine = BalancedLabel(
         font: ChromeType.font(.small, face: .mono), wrapWidth: HostConnectView.messageMaxWidth)
     private let detailLine = BalancedLabel(
@@ -76,6 +84,7 @@ final class HostConnectView: NSView, ThemeReapplying {
             title: "Connect", variant: .primary, onTap: onConnect)
         connectAnywayButton = AppButton(
             title: "Connect Anyway", variant: .muted, onTap: onConnect)
+        retryButton = AppButton(title: "Retry", variant: .primary, onTap: onConnect)
         panel = PanelHostView(content: content, meta: nil, fillsContent: true, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -99,7 +108,7 @@ final class HostConnectView: NSView, ThemeReapplying {
 
         [
             emblem, nameLine, addressLine, statusLine, fingerprintLine, detailLine, answerBox, connectButton,
-            connectAnywayButton, loginActions,
+            connectAnywayButton, retryButton, loginActions,
         ].forEach(stack.addArrangedSubview)
         stack.orientation = .vertical
         stack.alignment = .centerX
@@ -152,7 +161,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     // Return never answers yes: a second Return by habit would skip reading the key or the warning.
     override func keyDown(with event: NSEvent) {
         if KeyboardFocus.isReturn(event) {
-            if login == nil { return onConnect() }
+            if login == nil, outcome != .connected { return onConnect() }
             if isAskingYesNo { return }
             return submitAnswer()
         }
@@ -181,6 +190,12 @@ final class HostConnectView: NSView, ThemeReapplying {
         if heldFocus, asked { window?.makeFirstResponder(focusTarget) }
     }
 
+    func setOutcome(_ outcome: Outcome?) {
+        guard outcome != self.outcome else { return }
+        self.outcome = outcome
+        applyStatus()
+    }
+
     func setStatus(_ status: SSHHostStatus) {
         guard status != self.status else { return }
         self.status = status
@@ -202,7 +217,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         let chrome = Theme.current.chrome
         applyName()
         addressLine.textColor = chrome.ink(.muted)
-        statusWord.textColor = chrome.ink(.subtle)
+        applyStatusInk()
         fingerprintLine.textColor = chrome.ink(.muted)
         detailLine.textColor = chrome.ink(.faint)
         retryLine.reapplyTheme()
@@ -296,18 +311,25 @@ final class HostConnectView: NSView, ThemeReapplying {
     private func applyName() {
         nameLine.stringValue = name
         nameLine.textColor = Theme.current.chrome.ink(.normal)
-        for button in [connectButton, connectAnywayButton] { button.setAccessibilityLabel("Connect to \(name)") }
+        for button in [connectButton, connectAnywayButton, retryButton] {
+            button.setAccessibilityLabel("Connect to \(name)")
+        }
     }
+
+    private var shownOutcome: Outcome? { login == nil ? outcome : nil }
 
     private func applyStatus() {
         let connecting = login != nil
+        let outcome = shownOutcome
+        let settled = connecting || outcome != nil
         statusWord.stringValue =
-            login?.question?.prompt.headline
-            ?? (connecting ? "Connecting…" : isOffline ? SSHHostStatus.offline.word : SSHHostStatus.online.word)
-        onlineDot.isHidden = isOffline || connecting
-        emblem.setDimmed(isOffline && !connecting)
-        connectButton.isHidden = isOffline || connecting
-        connectAnywayButton.isHidden = !isOffline || connecting
+            login?.question?.prompt.headline ?? statusText(connecting: connecting, outcome: outcome)
+        onlineDot.isHidden = isOffline || settled
+        emblem.setDimmed(isOffline && !settled)
+        emblem.show(outcome.map(Self.glyph))
+        connectButton.isHidden = isOffline || settled
+        connectAnywayButton.isHidden = !isOffline || settled
+        retryButton.isHidden = !isFailed(outcome)
         loginActions.isHidden = !connecting
         trustButton.isHidden = !isAskingYesNo
         trustButton.setTitle(isAskingConfirm ? "Continue" : "Trust")
@@ -316,6 +338,30 @@ final class HostConnectView: NSView, ThemeReapplying {
         detailLine.stringValue = detail ?? ""
         detailLine.isHidden = detail == nil
         applySpacing()
+        applyStatusInk()
+    }
+
+    private func statusText(connecting: Bool, outcome: Outcome?) -> String {
+        if connecting { return "Connecting…" }
+        switch outcome {
+        case .connected: return SSHHostStatus.connected.word
+        case .failed(let reason): return reason ?? Self.failedWithoutReason
+        case nil: return isOffline ? SSHHostStatus.offline.word : SSHHostStatus.online.word
+        }
+    }
+
+    private func applyStatusInk() {
+        let chrome = Theme.current.chrome
+        statusWord.textColor = isFailed(shownOutcome) ? chrome.destructive.nsColor : chrome.ink(.subtle)
+    }
+
+    private func isFailed(_ outcome: Outcome?) -> Bool {
+        if case .failed = outcome { return true }
+        return false
+    }
+
+    private static func glyph(for outcome: Outcome) -> HostEmblemGlyph {
+        outcome == .connected ? .check : .cross
     }
 
     private func applyQuestion() {
@@ -342,7 +388,10 @@ final class HostConnectView: NSView, ThemeReapplying {
     var emblemForTesting: HostEmblemView { emblem }
     var detachedForTesting: [NSView] { stack.detachedViews }
     var panelForTesting: PanelHostView { panel }
-    var actionButtonForTesting: AppButton { isOffline ? connectAnywayButton : connectButton }
+    var actionButtonForTesting: AppButton {
+        isFailed(shownOutcome) ? retryButton : isOffline ? connectAnywayButton : connectButton
+    }
+    var statusColorForTesting: NSColor? { statusWord.textColor }
     var promptForTesting: String? { login?.question == nil ? nil : statusWord.stringValue }
     var messageLabelForTesting: BalancedLabel { statusWord }
     var fingerprintForTesting: String? { fingerprintLine.isHidden ? nil : fingerprintLine.stringValue }

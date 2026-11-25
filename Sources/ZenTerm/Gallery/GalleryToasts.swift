@@ -32,10 +32,7 @@
                 ),
                 (
                     "Remote host",
-                    [
-                        Window.loginFailedToast(host: "devbox"),
-                        Window.floatsStayLocalToast(host: "devbox"),
-                    ]
+                    [Window.floatsStayLocalToast(host: "devbox")]
                 ),
                 (
                     "Worktrees",

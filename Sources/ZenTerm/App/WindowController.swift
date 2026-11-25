@@ -163,6 +163,9 @@ final class WindowController: NSObject {
         controller.onSurfaceRegistered = { [weak self] surface, tab in
             self?.attention.register(surface, tab: tab)
         }
+        controller.onSurfaceExited = { [weak self] surface in
+            self?.workspaces.forEach { $0.connection?.surfaceExited(surface) }
+        }
         controller.onSurfaceReleased = { [weak self] surface in
             self?.workspace(holding: surface)?.connection?.release([surface])
             self?.attention.release(surface)
@@ -1545,6 +1548,7 @@ final class WindowController: NSObject {
     private func connect(_ host: SSHHostID) {
         guard selection.host == host, activeWorkspace == nil, !revealOpenHost(host), !holdsHost(host) else { return }
         Log.info("ssh host connecting", category: .workspace)
+        connectView?.setOutcome(nil)
         let connection = SSHConnection(host: host)
         let tab = mintTabID()
         let workspace = WorkspaceController(
@@ -1554,8 +1558,8 @@ final class WindowController: NSObject {
             SSHHostStatusCenter.shared.setConnected(connected, host: host)
             if connected, let workspace { self?.loginConnected(workspace, on: host) }
         }
-        connection.onLoginFailed = { [weak self, weak workspace] in
-            DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
+        connection.onLoginFailed = { [weak self, weak workspace] reason in
+            DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace, reason: reason) }
         }
         connection.onQuestionChange = { [weak self] _ in self?.refreshConnectLogin() }
         workspaces.append(workspace)
@@ -1572,10 +1576,10 @@ final class WindowController: NSObject {
         activate(workspace.id, transition: .instant)
     }
 
-    private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
+    private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?, reason: String?) {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) { closeTab($0) } }
+        if let connectView, connectView.host == host { connectView.setOutcome(.failed(reason: reason)) }
         refreshConnectLogin()
-        toasts.show(Self.loginFailedToast(host: GeneralConfig.current.displayName(of: host)))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
@@ -3568,6 +3572,7 @@ final class WindowController: NSObject {
         c.onSurfacesRegistered = { [weak self] ids in
             ids.forEach { self?.attention.register($0, tab: id) }
         }
+        c.onSurfaceExited = { [weak self] surface in self?.workspace(of: id)?.connection?.surfaceExited(surface) }
         c.onSurfacesReleased = { [weak self] ids in
             ids.forEach { self?.floats.hidePane($0) }
             self?.paneWaits.panesClosed(ids)
