@@ -228,15 +228,15 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `isWorkspaceOpenInAnotherWindow` and `revealWorkspaceInAnotherWindow`, which `AppDelegate`
   folds over its windows, skipping the asking one. A `WindowController` never raises its own
   window, so the ordering stays in `AppDelegate`.
-- **The ⌘P picker groups into Open, Open elsewhere and Configured**, and a workspace is
-  listed once, in the strongest section that claims it. Open is this window's
-  `WorkspaceOrder`, ghosts included and unselectable; Open elsewhere is what the other
-  windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
-  elsewhere is listed too; Configured is what the workspaces file holds that no window has
-  open. A worktree sits below its parent in whichever section the worktree itself belongs
-  to, so a parent listed above is redrawn muted in Configured to hold the worktrees that
-  are not open. Placement reads those lists, never `openState`, so nothing falls out of every
-  section. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted
+- **The ⌘P picker is one list of groups, with no headings.** This window's `WorkspaceOrder`
+  groups come first, then the groups the other windows report through
+  `openWorkspacesElsewhere` (so an unconfigured workspace running elsewhere is listed too),
+  then the configured workspaces no window has open, in config order, then Add Workspace….
+  A group is its lead, its open worktrees, and the lead's unopened worktrees, so a workspace
+  is listed once. A ghost lead is a selectable row that opens its configured entry. A row's
+  state (Current, Open, Other window) reads this window's active workspace, which
+  `WindowController` passes in. Placement reads those lists, never `openState`, so nothing
+  falls out of the list. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted
   per window and two windows can hold a workspace at one folder. That is a second pair of
   closures beside the folder-identity two above, not a replacement: folder identity
   deliberately ignores unconfigured workspaces and the enumeration does not.

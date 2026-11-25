@@ -8,9 +8,30 @@ final class HintFooter: NSView, ThemeReapplying {
         let label: String
     }
 
+    final class Item: NSStackView, ThemeReapplying {
+        private let label: NSTextField
+
+        init(_ hint: Hint) {
+            label = NSTextField(labelWithString: hint.label)
+            label.font = ChromeType.font(.caption, weight: .medium)
+            label.lineBreakMode = .byTruncatingTail
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            super.init(frame: .zero)
+            addArrangedSubview(label)
+            addArrangedSubview(KeycapView(shortcut: hint.keys))
+            orientation = .horizontal
+            spacing = ChromeMetrics.Spacing.s6
+            alignment = .centerY
+            reapplyTheme()
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        func reapplyTheme() { label.textColor = Theme.current.chrome.ink(.muted) }
+    }
+
     private let hairline = NSView()
     private let pairs = NSStackView()
-    private var labels: [NSTextField] = []
     private(set) var hints: [Hint] = []
 
     init(_ hints: [Hint], trailingInset: CGFloat = ChromeMetrics.Spacing.modalInsets.right) {
@@ -48,28 +69,12 @@ final class HintFooter: NSView, ThemeReapplying {
         guard hints != self.hints else { return }
         self.hints = hints
         pairs.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        labels = []
-        hints.forEach { pairs.addArrangedSubview(makeItem($0)) }
+        hints.forEach { pairs.addArrangedSubview(Item($0)) }
     }
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        labels.forEach { $0.textColor = chrome.ink(.muted) }
-    }
-
-    private func makeItem(_ hint: Hint) -> NSView {
-        let keycap = KeycapView(shortcut: hint.keys)
-        let label = NSTextField(labelWithString: hint.label)
-        label.font = ChromeType.font(.caption, weight: .medium)
-        label.textColor = Theme.current.chrome.ink(.muted)
-        label.lineBreakMode = .byTruncatingTail
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        labels.append(label)
-        let item = NSStackView(views: [label, keycap])
-        item.orientation = .horizontal
-        item.spacing = ChromeMetrics.Spacing.s6
-        item.alignment = .centerY
-        return item
+        pairs.arrangedSubviews.forEach { ($0 as? Item)?.reapplyTheme() }
     }
 }

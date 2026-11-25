@@ -108,13 +108,12 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         return try XCTUnwrap(pickers(in: c).first)
     }
 
-    private func moveDown(in picker: RepoPickerOverlay) {
+    private func move(_ selector: Selector, in picker: RepoPickerOverlay) {
         guard
             let field = descendants(of: picker).compactMap({ $0 as? NSTextField })
                 .first(where: { ($0.delegate as? PaletteOverlay) === picker })
         else { return XCTFail("the picker has no search field to arrow in") }
-        _ = picker.control(
-            field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+        _ = picker.control(field, textView: NSTextView(), doCommandBy: selector)
     }
 
     private func rowIndex(_ name: String, in picker: RepoPickerOverlay) -> Int? {
@@ -131,7 +130,10 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         guard let index = rowIndex(name, in: picker) else {
             return XCTFail("the picker has no row for \(name)")
         }
-        for _ in 0..<picker.rowViews.count where picker.selected != index { moveDown(in: picker) }
+        for _ in 0..<picker.rowViews.count { move(#selector(NSResponder.moveUp(_:)), in: picker) }
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
+            move(#selector(NSResponder.moveDown(_:)), in: picker)
+        }
         XCTAssertEqual(picker.selected, index, "the arrows never reached \(name)")
     }
 
@@ -141,15 +143,18 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         return picker
     }
 
-    // The section a row is listed under, which is what the "open" and "open elsewhere" markers used to say.
-    private func section(at index: Int, in picker: RepoPickerOverlay) -> String? {
-        picker.rowViews[..<index].reversed()
-            .compactMap { ($0 as? PaletteSectionHeader)?.title }.first
+    private func state(at index: Int, in picker: RepoPickerOverlay) -> RepoPickerOverlay.State? {
+        (picker.rowViews[index] as? RepoPickerOverlay.RowView)?.state
     }
 
-    private func section(of name: String, in picker: RepoPickerOverlay) -> String? {
+    private func state(of name: String, in picker: RepoPickerOverlay) -> RepoPickerOverlay.State? {
         guard let index = rowIndex(name, in: picker) else { return nil }
-        return section(at: index, in: picker)
+        return state(at: index, in: picker)
+    }
+
+    private func detailText(of name: String, in picker: RepoPickerOverlay) -> [String] {
+        guard let index = rowIndex(name, in: picker) else { return [] }
+        return descendants(of: picker.rowViews[index]).compactMap { ($0 as? NSTextField)?.stringValue }
     }
 
     private func pressReturn(in picker: RepoPickerOverlay) {
@@ -189,12 +194,14 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         XCTAssertTrue(pickers(in: one).isEmpty, "the picker closes")
     }
 
-    func test_aWorkspaceOpenInAnotherWindow_isListedUnderOpenElsewhere() throws {
+    func test_aWorkspaceOpenInAnotherWindow_readsOtherWindow() throws {
         try seedWorkspaces(twoWorkspaces)
         let (one, two) = makeWindows()
         pressReturn(in: try openPicker(in: two, on: "Alpha"))
 
-        XCTAssertEqual(section(of: "Alpha", in: try openPicker(in: one)), "Open elsewhere")
+        let picker = try openPicker(in: one)
+        XCTAssertEqual(state(of: "Alpha", in: picker), .otherWindow)
+        XCTAssertTrue(detailText(of: "Alpha", in: picker).contains("Other window"), "the row says so")
     }
 
     func test_renamingAWorkspace_updatesAnOpenPickerInTheOtherWindow() throws {
@@ -202,32 +209,45 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         let (one, two) = makeWindows()
         pressReturn(in: try openPicker(in: two, on: "Alpha"))
         let picker = try openPicker(in: one)
-        XCTAssertEqual(section(of: "Alpha", in: picker), "Open elsewhere")
+        XCTAssertEqual(state(of: "Alpha", in: picker), .otherWindow)
 
         XCTAssertTrue(two.renameWorkspace(two.activeWorkspaceIDForTesting, to: "api"))
 
-        XCTAssertEqual(section(of: "api", in: picker), "Open elsewhere", "the open picker shows the new name")
+        XCTAssertEqual(state(of: "api", in: picker), .otherWindow, "the open picker shows the new name")
         XCTAssertNil(
             picker.rowViews.compactMap { $0 as? RepoPickerOverlay.RowView }
                 .first { $0.running?.name == "Alpha" }, "and no longer the old one")
     }
 
-    func test_aWorkspaceOpenInThisWindow_isListedUnderOpen() throws {
+    func test_onlyTheActiveWorkspace_readsCurrent_andTheOtherOpenOnesReadOpen() throws {
         try seedWorkspaces(twoWorkspaces)
         let (one, _) = makeWindows()
         pressReturn(in: try openPicker(in: one, on: "Alpha"))
 
-        XCTAssertEqual(section(of: "Alpha", in: try openPicker(in: one)), "Open")
+        let showingAlpha = try openPicker(in: one)
+        XCTAssertEqual(state(of: "Alpha", in: showingAlpha), .current)
+        XCTAssertEqual(state(of: startFolderName, in: showingAlpha), .open)
+        XCTAssertEqual(
+            showingAlpha.rowViews[showingAlpha.selected].accessibilityLabel(), startFolderName,
+            "the picker starts on the first open row that is not the one showing")
+        pressReturn(in: showingAlpha)
+        waitUntil(pickers(in: one).isEmpty, "Return on an open row to switch and close the picker")
+
+        let showingStart = try openPicker(in: one)
+        XCTAssertEqual(state(of: "Alpha", in: showingStart), .open)
+        XCTAssertEqual(state(of: startFolderName, in: showingStart), .current)
     }
 
-    func test_aWorkspaceOpenNowhere_isListedUnderConfigured() throws {
+    func test_aWorkspaceOpenNowhere_readsNoState() throws {
         try seedWorkspaces(twoWorkspaces)
         let (one, _) = makeWindows()
+        let picker = try openPicker(in: one)
 
-        XCTAssertEqual(section(of: "Alpha", in: try openPicker(in: one)), "Configured")
+        XCTAssertNotNil(rowIndex("Alpha", in: picker))
+        XCTAssertNil(state(of: "Alpha", in: picker))
     }
 
-    func test_anUnconfiguredWorkspaceOpenElsewhere_isListedUnderOpenElsewhere() throws {
+    func test_anUnconfiguredWorkspaceOpenElsewhere_readsOtherWindow_andReturnRaisesIt() throws {
         try seedWorkspaces(twoWorkspaces)
         let (one, two) = makeWindows()
         let held = two.activeWorkspaceIDForTesting
@@ -242,7 +262,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         }
 
         XCTAssertEqual(
-            section(at: index, in: picker), "Open elsewhere",
+            state(at: index, in: picker), .otherWindow,
             "the other window's unconfigured workspace has no config entry to be found through")
 
         picker.activateRow(at: index)

@@ -118,7 +118,10 @@ final class RepoPickerPresentationTests: WindowTestCase {
         guard let index = rowIndex(name, in: picker) else {
             return XCTFail("the picker has no row for \(name)")
         }
-        for _ in 0..<picker.rowViews.count where picker.selected != index { moveDown(in: picker) }
+        for _ in 0..<picker.rowViews.count { move(#selector(NSResponder.moveUp(_:)), in: picker) }
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
+            move(#selector(NSResponder.moveDown(_:)), in: picker)
+        }
         XCTAssertEqual(picker.selected, index, "the arrows never reached \(name)")
     }
 
@@ -128,11 +131,10 @@ final class RepoPickerPresentationTests: WindowTestCase {
         return picker
     }
 
-    private func moveDown(in picker: RepoPickerOverlay) {
+    private func move(_ selector: Selector, in picker: RepoPickerOverlay) {
         let field = descendants(of: picker).compactMap { $0 as? NSTextField }
             .first { ($0.delegate as? PaletteOverlay) === picker }!
-        _ = picker.control(
-            field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+        _ = picker.control(field, textView: NSTextView(), doCommandBy: selector)
     }
 
     private func pressEscapeThroughTheResponder(in c: WindowController) {
@@ -432,8 +434,8 @@ final class RepoPickerPresentationTests: WindowTestCase {
         waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(pickers(in: c).first)
         XCTAssertEqual(
-            workspaceRows(in: picker).count, 5,
-            "the two action rows, the open workspace and a row per configured one, all present when the card first appears"
+            workspaceRows(in: picker).count, 4,
+            "the open workspace, a row per configured one and Add Workspace…, all present when the card first appears"
         )
     }
 
@@ -586,5 +588,25 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha: feature/one"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree)
+    }
+
+    func test_returnOnTheClosedParentOfAnOpenWorktree_opensTheParent() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let alpha = URL(fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        var picker = try openPicker(in: c)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        selectRow("feature/one", in: picker)
+        pressReturn(in: picker)
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha: feature/one"], "Alpha itself is closed")
+
+        picker = try openPicker(in: c)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        selectRow("Alpha", in: picker)
+        pressReturn(in: picker)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha: feature/one", "Alpha"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last, "and switches to it")
+        XCTAssertTrue(pickers(in: c).isEmpty, "the picker closes")
     }
 }

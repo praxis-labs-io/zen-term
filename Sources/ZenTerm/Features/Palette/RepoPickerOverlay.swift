@@ -5,19 +5,19 @@ import TerminalKit
 final class RepoPickerOverlay: PaletteOverlay {
     private enum Row {
         case newWorkspace
-        case header(String)
         case open(RunningWorkspace)
         case elsewhere(RunningWorkspace)
-        case mutedParent(Workspace)
+        // The closed parent of an open worktree; nil when no configured workspace sits at its folder.
+        case closedParent(RunningWorkspace, entry: Workspace?)
         case add
         case workspace(Workspace)
         case worktree(Worktree, parent: Workspace)
     }
 
-    private enum Section {
-        static let open = "Open"
-        static let elsewhere = "Open elsewhere"
-        static let configured = "Configured"
+    enum State: String {
+        case current = "Current"
+        case open = "Open"
+        case otherWindow = "Other window"
     }
 
     private let onChoose: (Workspace, WorktreeOrigin?) -> Void
@@ -30,6 +30,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let entries: [Workspace]
     private var open: [RunningWorkspace]
     private var elsewhere: [RunningWorkspace]
+    private var current: WorkspaceID?
     private var listings: [URL: WorktreeListing] = [:]
 
     /// Cancelled per picker, not queue-wide: another window's picker shares the queue.
@@ -43,7 +44,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     init(
         entries: [Workspace], open: [RunningWorkspace] = [], elsewhere: [RunningWorkspace] = [],
-        removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
+        current: WorkspaceID? = nil, removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void,
         onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
@@ -54,12 +55,14 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.entries = entries
         self.open = open
         self.elsewhere = elsewhere
+        self.current = current
         self.removals = removals
         self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
         self.churnProbed = []
-        self.rows = Self.sections(
-            open: open, elsewhere: elsewhere, listed: Self.listed(open, elsewhere), entries: entries,
-            listings: [:], configured: [], owners: [:])
+        self.rows = Self.list(
+            Self.groups(
+                open: open, elsewhere: elsewhere, entries: entries, listings: [:], configured: [], owners: [:]),
+            query: nil)
         self.onChoose = onChoose
         self.onSwitch = onSwitch
         self.onReveal = onReveal
@@ -70,6 +73,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             placeholder: "Search workspaces",
             emptyText: "",
             onDismiss: onDismiss)
+        refreshNewTip()
 
         let probes = configuredPaths.union((open + elsewhere).map { $0.folder.standardizedFileURL })
         churnProbed = probes
@@ -137,44 +141,115 @@ final class RepoPickerOverlay: PaletteOverlay {
         return owners
     }
 
-    // A worktree mirrors its parent's configuration, so a parent listed above is redrawn muted as its label.
-    private static func sections(
-        open: [RunningWorkspace], elsewhere: [RunningWorkspace], listed: Set<URL>,
-        entries: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>,
-        owners: [URL: URL]
-    ) -> [Row] {
-        var rows: [Row] = [.newWorkspace]
+    private enum Placement { case here, elsewhere, closed }
 
-        if !open.isEmpty {
-            rows.append(.header(Section.open))
-            rows += open.map(Row.open)
+    private struct Group {
+        let placement: Placement
+        var rows: [Row]
+    }
+
+    // A worktree mirrors its parent's configuration, so its unopened siblings join the first group its parent leads.
+    private static func groups(
+        open: [RunningWorkspace], elsewhere: [RunningWorkspace], entries: [Workspace],
+        listings: [URL: WorktreeListing], configured: Set<URL>, owners: [URL: URL]
+    ) -> [Group] {
+        let listed = listed(open, elsewhere)
+        var placed: Set<URL> = []
+        func entry(at folder: URL) -> Workspace? {
+            entries.first { $0.path.standardizedFileURL == folder.standardizedFileURL }
         }
-
-        if !elsewhere.isEmpty {
-            rows.append(.header(Section.elsewhere))
-            rows += elsewhere.map(Row.elsewhere)
-        }
-
-        rows.append(.header(Section.configured))
-        for workspace in entries {
-            let isOpen = listed.contains(workspace.path.standardizedFileURL)
-            let path = workspace.path.standardizedFileURL
-            var children: [Worktree] = []
-            if let listing = listings[path], owners[listing.commonDir ?? path] == path {
-                children = listing.worktrees.filter {
-                    !configured.contains($0.path.standardizedFileURL)
-                        && !isListed($0, parent: workspace, among: listed)
+        func closedWorktrees(of parent: Workspace) -> [Row] {
+            let path = parent.path.standardizedFileURL
+            guard let listing = listings[path], owners[listing.commonDir ?? path] == path,
+                placed.insert(path).inserted
+            else { return [] }
+            return listing.worktrees
+                .filter {
+                    !configured.contains($0.path.standardizedFileURL) && !isListed($0, parent: parent, among: listed)
                 }
-            }
-            guard !isOpen else {
-                if !children.isEmpty { rows.append(.mutedParent(workspace)) }
-                rows += children.map { .worktree($0, parent: workspace) }
-                continue
-            }
-            rows.append(.workspace(workspace))
-            rows += children.map { .worktree($0, parent: workspace) }
+                .map { .worktree($0, parent: parent) }
         }
-        return rows + [.add]
+
+        var groups: [Group] = []
+        var leads: Set<URL> = listed
+        for (running, placement) in [(open, Placement.here), (elsewhere, .elsewhere)] {
+            for members in grouped(running) {
+                let lead = members[0]
+                let parent = entry(at: lead.folder)
+                leads.insert(lead.folder.standardizedFileURL)
+                var rows: [Row] = [lead.id == nil ? .closedParent(lead, entry: parent) : row(lead, placement)]
+                rows += members.dropFirst().map { row($0, placement) }
+                if let parent { rows += closedWorktrees(of: parent) }
+                groups.append(Group(placement: placement, rows: rows))
+            }
+        }
+        for workspace in entries where !leads.contains(workspace.path.standardizedFileURL) {
+            groups.append(Group(placement: .closed, rows: [.workspace(workspace)] + closedWorktrees(of: workspace)))
+        }
+        return groups
+    }
+
+    private static func row(_ running: RunningWorkspace, _ placement: Placement) -> Row {
+        placement == .here ? .open(running) : .elsewhere(running)
+    }
+
+    private static func grouped(_ running: [RunningWorkspace]) -> [[RunningWorkspace]] {
+        var groups: [[RunningWorkspace]] = []
+        for row in running {
+            if row.isWorktree, !groups.isEmpty {
+                groups[groups.count - 1].append(row)
+            } else {
+                groups.append([row])
+            }
+        }
+        return groups
+    }
+
+    private static func list(_ groups: [Group], query: String?) -> [Row] {
+        guard let query else { return groups.flatMap(\.rows) + [.add] }
+        return [.newWorkspace] + ranked(groups, matching: query).flatMap { $0 } + [.add]
+    }
+
+    // Ranks within each placement, so a worktree never leaves its parent and an open group never drops below a closed one.
+    private static func ranked(_ groups: [Group], matching query: String) -> [[Row]] {
+        let scored = groups.compactMap { group -> (placement: Placement, score: Int, title: String, rows: [Row])? in
+            let lead = group.rows[0]
+            let leadScore = score(lead, query)
+            let children = Array(group.rows.dropFirst())
+            let hits = leadScore != nil ? children : children.filter { score($0, query) != nil }
+            guard let best = leadScore ?? hits.compactMap({ score($0, query) }).max() else { return nil }
+            return (group.placement, best, title(of: lead), [lead] + hits)
+        }
+        return [Placement.here, .elsewhere, .closed].flatMap { placement in
+            scored.filter { $0.placement == placement }
+                .enumerated()
+                .sorted { a, b in
+                    if a.element.score != b.element.score { return a.element.score > b.element.score }
+                    guard placement == .closed else { return a.offset < b.offset }
+                    return a.element.title.localizedCaseInsensitiveCompare(b.element.title) == .orderedAscending
+                }
+                .map(\.element.rows)
+        }
+    }
+
+    private static func title(of row: Row) -> String {
+        switch row {
+        case .open(let running), .elsewhere(let running), .closedParent(let running, _): return running.name
+        case .workspace(let workspace): return workspace.title
+        case .worktree(let worktree, _): return worktree.name
+        case .newWorkspace, .add: return ""
+        }
+    }
+
+    private static func score(_ row: Row, _ query: String) -> Int? {
+        switch row {
+        case .newWorkspace, .add: return nil
+        case .closedParent(_, nil): return nil
+        case .open(let running), .elsewhere(let running), .closedParent(let running, _):
+            return FuzzyMatch.score(query, running.name)
+        case .workspace(let workspace): return FuzzyMatch.score(query, workspace.title)
+        case .worktree(let worktree, _): return score(worktree, query)
+        }
     }
 
     // An open worktree keeps no `Worktree` of its own, so its row resolves back through the listings.
@@ -220,23 +295,40 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     // New Workspace holds the selection until a query matches something, so a search that finds nothing makes one.
     override func defaultSelectionIndex() -> Int {
-        guard let query = newWorkspaceName else { return 0 }
-        return rows.indices.first { isSelectable(at: $0) && Self.matches(rows[$0], query) } ?? 0
+        let selectable = rows.indices.filter { isSelectable(at: $0) }
+        guard let query = newWorkspaceName else {
+            return selectable.first { state(at: $0).map { $0 != .current } ?? false } ?? selectable.first ?? 0
+        }
+        return selectable.first { Self.score(rows[$0], query) != nil } ?? selectable.first ?? 0
     }
 
-    private static func matches(_ row: Row, _ query: String) -> Bool {
-        switch row {
-        case .newWorkspace, .add, .header, .mutedParent: return false
-        case .open(let running), .elsewhere(let running):
-            return FuzzyMatch.score(query, running.name) != nil
-        case .workspace(let workspace): return FuzzyMatch.score(query, workspace.title) != nil
-        case .worktree(let worktree, _): return score(worktree, query) != nil
+    private func state(at index: Int) -> State? {
+        switch rows[index] {
+        case .open(let running): return running.id == current ? .current : .open
+        case .elsewhere: return .otherWindow
+        case .worktree(let worktree, let parent):
+            switch Self.worktreeOpenState(worktree, parent: parent, openState: openState) {
+            case .here: return .open
+            case .elsewhere: return .otherWindow
+            case .closed: return nil
+            }
+        default: return nil
         }
     }
 
-    var newWorkspaceName: String? {
-        let query = currentQuery.trimmingCharacters(in: .whitespaces)
-        return query.isEmpty ? nil : query
+    private func refreshNewTip() {
+        guard newWorkspaceName == nil, let chord = Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)
+        else { return searchAccessory = nil }
+        searchAccessory = HintFooter.Item(HintFooter.Hint(keys: chord.displayGlyph, label: "New"))
+    }
+
+    var newTipForTesting: HintFooter.Item? { searchAccessory as? HintFooter.Item }
+
+    var newWorkspaceName: String? { newWorkspaceName(currentQuery) }
+
+    private func newWorkspaceName(_ query: String) -> String? {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     override func makeRow(at index: Int) -> PaletteRowView {
@@ -248,24 +340,22 @@ final class RepoPickerOverlay: PaletteOverlay {
                 emphasis: .listed)
         case .add:
             return ActionRowView(symbol: "folder.badge.plus", title: "Add Workspace…", shortcut: nil)
-        case .header(let title):
-            return PaletteSectionHeader(title: title)
         case .open(let workspace), .elsewhere(let workspace):
             if let removing = removingWorktree(workspace) { return RemovingRowView(worktree: removing) }
-            return workspace.id == nil ? RowView(ghost: workspace) : RowView(open: workspace)
-        case .mutedParent(let workspace):
-            return RowView(mutedParent: workspace)
+            return RowView(open: workspace, state: state(at: index))
+        case .closedParent(let running, let entry):
+            return entry.map { RowView(workspace: $0) } ?? RowView(ghost: running)
         case .workspace(let workspace):
             return RowView(workspace: workspace)
         case .worktree(let worktree, let parent):
             guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
-            return RowView(worktree: worktree, parent: parent)
+            return RowView(worktree: worktree, parent: parent, state: state(at: index))
         }
     }
 
     private func openState(row: Row) -> WorkspaceOpenState {
         switch row {
-        case .newWorkspace, .add, .header, .mutedParent: return .closed
+        case .newWorkspace, .add, .closedParent: return .closed
         case .open: return .here
         case .elsewhere: return .elsewhere
         case .workspace(let workspace): return openState(workspace.path)
@@ -276,9 +366,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     override func isSelectable(at index: Int) -> Bool {
         switch rows[index] {
-        case .header, .mutedParent: return false
-        case .open(let workspace), .elsewhere(let workspace):
-            return workspace.id != nil && removingWorktree(workspace) == nil
+        case .closedParent(_, let entry): return entry != nil
+        case .open(let workspace), .elsewhere(let workspace): return removingWorktree(workspace) == nil
         case .worktree(let worktree, _): return !removals.isRemoving(worktree.path)
         case .newWorkspace, .add, .workspace: return true
         }
@@ -298,9 +387,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
-    func refreshOpen(_ running: [RunningWorkspace], elsewhere others: [RunningWorkspace]) {
+    func refreshOpen(_ running: [RunningWorkspace], elsewhere others: [RunningWorkspace], current: WorkspaceID?) {
         open = running
         elsewhere = others
+        self.current = current
         rebuild()
     }
 
@@ -339,12 +429,13 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .newWorkspace: return ["new", newWorkspaceName ?? ""]
         case .add: return ["add"]
-        case .header(let title): return ["header", title]
-        case .mutedParent(let workspace): return ["muted", workspace.title]
+        case .closedParent(let running, let entry):
+            return ["parent", "\(running.window)", running.folder.path, entry?.title ?? ""]
         case .open(let workspace):
             return [
                 "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path, workspace.name,
                 removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
+                state(at: index)?.rawValue ?? "",
             ]
         case .elsewhere(let workspace):
             return [
@@ -353,68 +444,19 @@ final class RepoPickerOverlay: PaletteOverlay {
             ]
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .worktree(let worktree, _):
-            return ["worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : ""]
+            return [
+                "worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : "",
+                state(at: index)?.rawValue ?? "",
+            ]
         }
     }
 
     override func applyFilter(query: String) {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else {
-            rows = Self.sections(
-                open: open, elsewhere: elsewhere, listed: Self.listed(open, elsewhere), entries: entries,
-                listings: listings, configured: configuredPaths, owners: worktreeOwners)
-            return
-        }
-
-        var scored: [(workspace: Workspace, score: Int)] = []
-        var narrowed: [URL: WorktreeListing] = [:]
-        for workspace in entries {
-            let path = workspace.path.standardizedFileURL
-            let all = listings[path]?.worktrees ?? []
-            let titleScore = FuzzyMatch.score(q, workspace.title)
-            let hits = titleScore != nil ? all : all.filter { Self.score($0, q) != nil }
-            guard let score = titleScore ?? hits.compactMap({ Self.score($0, q) }).max() else { continue }
-            scored.append((workspace, score))
-            narrowed[path] = WorktreeListing(commonDir: listings[path]?.commonDir, worktrees: hits)
-        }
-        scored.sort { a, b in
-            if a.score != b.score { return a.score > b.score }
-            return a.workspace.title.localizedCaseInsensitiveCompare(b.workspace.title) == .orderedAscending
-        }
-
-        rows = Self.sections(
-            open: Self.ranked(open, matching: q), elsewhere: Self.ranked(elsewhere, matching: q),
-            listed: Self.listed(open, elsewhere), entries: scored.map(\.workspace), listings: narrowed,
-            configured: configuredPaths, owners: worktreeOwners)
-    }
-
-    // Ranks the Open section by group, so a worktree never leaves the parent it opened from.
-    private static func ranked(
-        _ open: [RunningWorkspace], matching query: String
-    ) -> [RunningWorkspace] {
-        var groups: [(lead: RunningWorkspace, children: [RunningWorkspace])] = []
-        for row in open {
-            if row.isWorktree, !groups.isEmpty {
-                groups[groups.count - 1].children.append(row)
-            } else {
-                groups.append((row, []))
-            }
-        }
-        return
-            groups
-            .compactMap { group -> (score: Int, rows: [RunningWorkspace])? in
-                let leadScore = group.lead.id == nil ? nil : FuzzyMatch.score(query, group.lead.name)
-                let hits =
-                    leadScore != nil
-                    ? group.children : group.children.filter { FuzzyMatch.score(query, $0.name) != nil }
-                guard
-                    let score = leadScore
-                        ?? hits.compactMap({ FuzzyMatch.score(query, $0.name) }).max()
-                else { return nil }
-                return (score, [group.lead] + hits)
-            }
-            .sorted { $0.score > $1.score }
-            .flatMap(\.rows)
+        let groups = Self.groups(
+            open: open, elsewhere: elsewhere, entries: entries, listings: listings, configured: configuredPaths,
+            owners: worktreeOwners)
+        rows = Self.list(groups, query: newWorkspaceName(query))
+        refreshNewTip()
     }
 
     private static func score(_ worktree: Worktree, _ query: String) -> Int? {
@@ -457,7 +499,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     var createTarget: CreateTarget? {
         guard rows.indices.contains(selected) else { return nil }
         switch rows[selected] {
-        case .newWorkspace, .add, .header, .mutedParent: return nil
+        case .newWorkspace, .add: return nil
+        case .closedParent(_, let entry): return entry.map { CreateTarget(workspace: $0, repo: $0.path) }
         case .open(let row), .elsewhere(let row):
             if row.isWorktree {
                 guard let found = listedWorktree(at: row.folder) else { return nil }
@@ -497,7 +540,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .newWorkspace: onNewWorkspace(newWorkspaceName)
         case .add: onAddWorkspace()
-        case .header, .mutedParent: return
+        case .closedParent(_, let entry): if let entry { onChoose(entry, nil) }
         case .open(let row):
             guard let id = row.id else { return }
             onSwitch(id)
@@ -564,18 +607,32 @@ final class RepoPickerOverlay: PaletteOverlay {
     final class RowView: SelectableRowView {
         enum Style {
             case workspace
-            case child
-            // A group label rather than a listing: the selectable row is closed, or sits in another section.
+            case openChild
+            case closedChild
+            // The closed parent of an open worktree that no configured workspace can open.
             case ghost
 
-            var ink: ChromeTheme.InkLevel { self == .workspace ? .normal : .faint }
+            var ink: ChromeTheme.InkLevel {
+                switch self {
+                case .workspace, .openChild: return .normal
+                case .closedChild: return .muted
+                case .ghost: return .faint
+                }
+            }
+
+            var isChild: Bool { self == .openChild || self == .closedChild }
+
+            var symbol: String { isChild ? ProcessIcon.worktree.mark : RowView.workspaceSymbol }
         }
+
+        static let workspaceSymbol = "folder"
 
         let workspace: Workspace?
         let worktree: Worktree?
         let running: RunningWorkspace?
         let style: Style
         let label: String
+        let state: State?
         private let statusPath: URL?
         private let churnLabel = NSTextField(labelWithString: "")
 
@@ -600,48 +657,43 @@ final class RepoPickerOverlay: PaletteOverlay {
         convenience init(workspace: Workspace) {
             self.init(
                 workspace: workspace, worktree: nil, running: nil, label: workspace.title,
-                statusPath: workspace.path, style: .workspace)
+                statusPath: workspace.path, style: .workspace, state: nil)
         }
 
-        convenience init(worktree: Worktree, parent: Workspace) {
+        convenience init(worktree: Worktree, parent: Workspace, state: State? = nil) {
             self.init(
                 workspace: parent, worktree: worktree, running: nil, label: Self.typeRail,
-                statusPath: worktree.path, style: .child)
+                statusPath: worktree.path, style: state == nil ? .closedChild : .openChild, state: state)
         }
 
-        convenience init(open: RunningWorkspace) {
+        convenience init(open: RunningWorkspace, state: State?) {
             self.init(
                 workspace: nil, worktree: nil, running: open,
                 label: open.isWorktree ? open.pinnedName ?? Self.typeRail : open.name, statusPath: open.folder,
-                style: open.isWorktree ? .child : .workspace)
-        }
-
-        convenience init(mutedParent: Workspace) {
-            self.init(
-                workspace: mutedParent, worktree: nil, running: nil, label: mutedParent.title,
-                statusPath: nil, style: .ghost)
+                style: open.isWorktree ? .openChild : .workspace, state: state)
         }
 
         convenience init(ghost: RunningWorkspace) {
             self.init(
                 workspace: nil, worktree: nil, running: ghost, label: ghost.name, statusPath: nil,
-                style: .ghost)
+                style: .ghost, state: nil)
         }
 
         private init(
             workspace: Workspace?, worktree: Worktree?, running: RunningWorkspace?, label: String,
-            statusPath: URL?, style: Style
+            statusPath: URL?, style: Style, state: State?
         ) {
             self.workspace = workspace
             self.worktree = worktree
             self.running = running
             self.style = style
             self.label = label
+            self.state = state
             self.statusPath = statusPath
             super.init(
                 Content(
-                    title: label, leading: style == .child ? .symbol(ProcessIcon.worktree.mark) : nil, ink: style.ink,
-                    nesting: style == .child ? .indented : .none))
+                    title: label, note: state?.rawValue, leading: .symbol(style.symbol), ink: style.ink,
+                    nesting: style.isChild ? .indented : .none))
 
             churnLabel.alignment = .right
             churnLabel.lineBreakMode = .byClipping
@@ -671,7 +723,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 ?? GitRepoStatus.branch(statusPath)
             detail = head ?? ""
             detailLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })
-            setAccessibilityValue(detailLabel.accessibilityLabel())
+            announce()
 
             let churn = GitRepoStatus.churn(statusPath) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
@@ -680,8 +732,13 @@ final class RepoPickerOverlay: PaletteOverlay {
         private func applyRemoved(_ name: String) {
             detail = "\(name) \(WorktreeOrigin.removedDetail)"
             detailLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
-            setAccessibilityValue(detailLabel.accessibilityLabel())
+            announce()
             churnLabel.attributedStringValue = NSAttributedString()
+        }
+
+        private func announce() {
+            let parts = [detailLabel.accessibilityLabel(), state?.rawValue].compactMap { $0 }
+            setAccessibilityValue(parts.isEmpty ? nil : parts.joined(separator: ", "))
         }
     }
 }

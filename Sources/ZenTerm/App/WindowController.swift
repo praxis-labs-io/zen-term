@@ -848,7 +848,7 @@ final class WindowController: NSObject {
 
     func refreshOpenPicker() {
         (modal?.overlay as? RepoPickerOverlay)?.refreshOpen(
-            runningWorkspaces(), elsewhere: openWorkspacesElsewhere?() ?? [])
+            runningWorkspaces(), elsewhere: openWorkspacesElsewhere?() ?? [], current: activeWorkspaceID)
     }
 
     private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]
@@ -1550,6 +1550,7 @@ final class WindowController: NSObject {
                 entries: workspaces,
                 open: self.runningWorkspaces(),
                 elsewhere: self.openWorkspacesElsewhere?() ?? [],
+                current: self.activeWorkspaceID,
                 removals: self.worktreeRemovals,
                 openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
