@@ -454,6 +454,37 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertNil(emblem.glyphForTesting)
     }
 
+    func test_connecting_fadesIntoTheTerminal_overConnect_thenDetachesAndResetsIt() throws {
+        let (c, _) = try loggingIn()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let host = try XCTUnwrap(screen.superview)
+
+        fake.connect()
+
+        let terminal = try XCTUnwrap(host.subviews.last { $0 !== screen })
+        let terminalIndex = try XCTUnwrap(host.subviews.firstIndex(of: terminal))
+        let screenIndex = try XCTUnwrap(host.subviews.firstIndex(of: screen), "Connect stays up while it fades")
+        XCTAssertGreaterThan(terminalIndex, screenIndex, "the terminal fades in above Connect")
+        XCTAssertNil(c.connectViewForTesting, "the terminal is the mounted canvas and takes the keys")
+        XCTAssertEqual(screen.emblemForTesting.glyphForTesting, .check, "Connect still says connected as it fades")
+
+        let detached = expectation(for: NSPredicate { _, _ in screen.superview == nil }, evaluatedWith: nil)
+        wait(for: [detached], timeout: 2)
+        XCTAssertNil(screen.emblemForTesting.glyphForTesting, "a later disconnect comes back to Ready")
+    }
+
+    func test_aHostLeftWhileItConnects_staysInTheBackground() throws {
+        let (c, _) = try loggingIn()
+        let local = try XCTUnwrap(c.workspaceIDsForTesting.first, "the window opened on a local workspace")
+        c.activateWorkspaceForTesting(local)
+
+        fake.connect()
+
+        XCTAssertNotEqual(c.selectedHostForTesting, host)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, local)
+        XCTAssertEqual(try sidebarDetail(in: c), "Connected")
+    }
+
     func test_withoutZen_connectMountsTheTerminalAtOnce_andSSHPromptsThere() throws {
         SSHConnection.askpassProgramOverrideForTesting = .some(nil)
         let (c, login) = try loggingIn()

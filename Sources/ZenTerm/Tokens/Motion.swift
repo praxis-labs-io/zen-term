@@ -145,6 +145,45 @@ enum Motion {
         }
     }
 
+    // Under Reduce Motion the incoming view still fades in, shorter, over an outgoing one that holds still.
+    static func handOff(outgoing: NSView?, incoming: NSView, completion: @escaping () -> Void) {
+        typealias Timing = HostConnect
+        incoming.wantsLayer = true
+        outgoing?.wantsLayer = true
+        guard let inLayer = incoming.layer else { return completion() }
+        let reduced = isReduceMotionEnabled()
+        inLayer.opacity = 1
+        let fadeIn = CABasicAnimation(keyPath: "opacity")
+        fadeIn.fromValue = 0
+        fadeIn.toValue = 1
+        fadeIn.duration = reduced ? Timing.reducedTerminalFade : Timing.terminalFadeIn
+        fadeIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        if !reduced {
+            fadeIn.beginTime = inLayer.convertTime(CACurrentMediaTime(), from: nil) + Timing.terminalDelay
+            fadeIn.fillMode = .backwards
+        }
+        let outLayer = reduced ? nil : outgoing?.layer
+        let shrunk = outLayer.map { centeredScale(Timing.handOffScale, in: $0.bounds) }
+        outLayer?.opacity = 0
+        if let shrunk { outLayer?.transform = shrunk }
+        let fadeOut = CABasicAnimation(keyPath: "opacity")
+        fadeOut.fromValue = 1
+        fadeOut.toValue = 0
+        let shrink = CABasicAnimation(keyPath: "transform")
+        shrink.fromValue = NSValue(caTransform3D: CATransform3DIdentity)
+        shrink.toValue = shrunk.map { NSValue(caTransform3D: $0) }
+        for leaving in [fadeOut, shrink] {
+            leaving.duration = Timing.handOffFadeOut
+            leaving.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        }
+
+        run(completion: completion) {
+            inLayer.add(fadeIn, forKey: "motion.opacity")
+            outLayer?.add(fadeOut, forKey: "motion.opacity")
+            outLayer?.add(shrink, forKey: "motion.transform")
+        }
+    }
+
     static func drawerSlide(
         panel: NSView, opening: Bool, parkOffset: CGVector,
         animate: [(constraint: NSLayoutConstraint, to: CGFloat)], in root: NSView,

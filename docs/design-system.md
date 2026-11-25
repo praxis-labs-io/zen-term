@@ -193,7 +193,8 @@ tier's `contextBlur` and `offset`.
 ## Motion
 
 Animation goes through `Motion`. Its helpers check Reduce Motion themselves, except
-`drawerSlide`, whose callers do. Under Reduce Motion a completion runs synchronously.
+`drawerSlide`, whose callers do. Under Reduce Motion a completion runs synchronously, except
+`slideFade`'s and `handOff`'s, which still fade.
 
 | Token or helper | For |
 |---|---|
@@ -209,6 +210,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
+| `handOff` | An SSH host's Connect screen giving way to its terminal |
 | `slideFade` | The collapsed sidebar's hover reveal, the find bar and the mode header |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |

@@ -925,6 +925,7 @@ final class WindowController: NSObject {
     enum MountTransition {
         case instant
         case slide(from: SlideEdge)
+        case fade
     }
 
     private var selectedCanvas: NSView? {
@@ -1010,12 +1011,15 @@ final class WindowController: NSObject {
         refreshConnectLogin()
     }
 
-    private func mount(_ transition: MountTransition) {
-        guard let canvas = selectedCanvas else { return unmountCanvas() }
+    private func mount(_ transition: MountTransition, then finished: @escaping () -> Void = {}) {
+        guard let canvas = selectedCanvas else {
+            unmountCanvas()
+            return finished()
+        }
         guard mountedCanvas !== canvas else {
             restoreFocusToActive()
             renderDock()
-            return
+            return finished()
         }
         let outgoing = mountedCanvas
         pinCanvas(canvas)
@@ -1029,12 +1033,20 @@ final class WindowController: NSObject {
         switch transition {
         case .instant:
             outgoing?.removeFromSuperview()
+            finished()
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
             beginCanvasSlide(from: edge)
             Motion.slideSwap(incoming: canvas, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
                 self?.detachIfInactive(outgoing)
                 self?.endCanvasSlide()
+                finished()
+            }
+        case .fade:
+            container.layoutSubtreeIfNeeded()
+            Motion.handOff(outgoing: outgoing, incoming: canvas) { [weak self] in
+                self?.detachIfInactive(outgoing)
+                finished()
             }
         }
     }
@@ -1286,17 +1298,22 @@ final class WindowController: NSObject {
     }
 
     /// Swaps the whole canvas. An inactive workspace is detached and retained, the same as an inactive tab.
-    private func activate(_ id: WorkspaceID, transition: MountTransition? = nil) {
+    private func activate(
+        _ id: WorkspaceID, transition: MountTransition? = nil, then finished: @escaping () -> Void = {}
+    ) {
         guard let workspace = workspaces.first(where: { $0.id == id }), workspace !== activeWorkspace
-        else { return }
-        if isBehindConnect(workspace), let host = workspace.host { return activate(host) }
+        else { return finished() }
+        if isBehindConnect(workspace), let host = workspace.host {
+            activate(host)
+            return finished()
+        }
         Log.info("workspace switched", category: .tabs)
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
         let transition = transition ?? workspaceSlide(from: activeWorkspace?.id, to: id)
         selection = .workspace(workspace)
-        mount(transition)
+        mount(transition, then: finished)
         if let tab = workspace.activeID { visit(tab) }
         renderAttention()
     }
@@ -1589,12 +1606,13 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
+    // The outcome clears only once Connect has faded, or the fade would show Ready.
     private func handOff(to host: SSHHostID) {
-        defer { if let connectView, connectView.host == host { connectView.setOutcome(nil) } }
+        let screen = connectView?.host == host ? connectView : nil
         guard case .host(let shown) = selection, shown == host,
             let workspace = workspaces.first(where: { $0.host == host && !isBehindConnect($0) })
-        else { return }
-        activate(workspace.id, transition: .instant)
+        else { return screen?.setOutcome(nil) ?? () }
+        activate(workspace.id, transition: .fade) { screen?.setOutcome(nil) }
     }
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?, reason: String?) {

@@ -896,7 +896,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   workspace is installed but never selected while `SSHConnection.isLoggingInBehindConnect`, so the
   login surface starts detached; every path into it (`activate`, `reveal`, `land`, a removed
   host's landing, the control socket) shows Connect instead, and the first connect mounts it only
-  when Connect for that host is still showing. That login's ssh runs `zen` as `SSH_ASKPASS` with
+  when Connect for that host is still showing, with `MountTransition.fade` once the answer has settled
+  (`Motion.handOff`: Connect fades and shrinks as the terminal fades in above it). That login's ssh runs `zen` as `SSH_ASKPASS` with
   `SSH_ASKPASS_REQUIRE=force` and a per-login token, and `ssh.askpass` hands each question to the
   connection, which Connect asks in plain words in its one message line (`SSHLoginPrompt`). A new
   host key gets Trust or Cancel and any other yes/no gets ssh's own words with Continue or Cancel,
