@@ -1,6 +1,6 @@
 import TerminalKit
 
-enum ToastVariant: Equatable {
+enum ToastVariant: Equatable, CaseIterable {
     case info, positive, warning, destructive
 
     func role(in chrome: ChromeTheme) -> TerminalColor {

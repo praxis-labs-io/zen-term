@@ -46,11 +46,18 @@ final class ToastView: ShadowCardView, ThemeReapplying {
     private static let closeInset = ChromeMetrics.Spacing.s10
     private static let closeSide = ChromeMetrics.Height.sm
     private static let glyphGap = ChromeMetrics.Spacing.s10
+    private static let glyphConfiguration = NSImage.SymbolConfiguration(
+        pointSize: ChromeMetrics.Icon.md, weight: .semibold)
+    private static let widestGlyph: CGFloat =
+        ToastVariant.allCases.compactMap {
+            NSImage(systemSymbolName: $0.defaultIcon, accessibilityDescription: nil)?
+                .withSymbolConfiguration(glyphConfiguration)?.size.width
+        }.max() ?? ChromeMetrics.Icon.md
 
     // Exposed so copy can be measured against the real wrap budget.
     static let messageMaxWidth: CGFloat = width - 2 * textInset
     static let titleMaxWidth: CGFloat =
-        width - textInset - ChromeMetrics.Icon.md - glyphGap - glyphGap - closeSide - closeInset
+        width - textInset - widestGlyph - glyphGap - glyphGap - closeSide - closeInset
     // A title up to this share of the row never gives way to its tail; a longer title yields first.
     private static let titleFloorShare: CGFloat = 0.55
     static let titleFont: NSFont = ChromeType.font(.body, weight: .medium)
@@ -84,7 +91,7 @@ final class ToastView: ShadowCardView, ThemeReapplying {
 
         glyph.image = NSImage(
             systemSymbolName: content.icon ?? content.variant.defaultIcon, accessibilityDescription: content.title)
-        glyph.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.md, weight: .semibold)
+        glyph.symbolConfiguration = Self.glyphConfiguration
         glyph.contentTintColor = variant.role(in: Theme.current.chrome).nsColor
         glyph.setContentHuggingPriority(.required, for: .horizontal)
         glyph.setContentCompressionResistancePriority(.required, for: .horizontal)
