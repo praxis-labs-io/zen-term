@@ -1523,6 +1523,10 @@ final class WindowController: NSObject {
     private func closeConnectScreen() {
         Log.info("connect screen closed", category: .workspace)
         guard !workspaces.allSatisfy(isBehindConnect) else {
+            let closing = selection.host
+            if workspaces.contains(where: { isBehindConnect($0) && $0.host != closing }) {
+                return landOnLoginBehindConnect(otherThan: closing)
+            }
             return presentConfirm(
                 CloseWarning.prompt(closing: .lastPane(running: windowIsRunning), naming: runningNamesInWindow())
             ) { [weak self] in self?.window.close() }
@@ -1530,8 +1534,8 @@ final class WindowController: NSObject {
         land(at: order.navigableWorkspaces.count)
     }
 
-    private func landOnLoginBehindConnect() {
-        guard let host = workspaces.first(where: isBehindConnect)?.host else { return }
+    private func landOnLoginBehindConnect(otherThan closing: SSHHostID? = nil) {
+        guard let host = workspaces.first(where: { isBehindConnect($0) && $0.host != closing })?.host else { return }
         selection = .host(host)
         mount(.instant)
         renderAttention()

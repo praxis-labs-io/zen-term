@@ -276,6 +276,21 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertNotNil(c.connectionForTesting(of: host))
     }
 
+    func test_closingOneHostsConnect_landsOnAnotherHostsWaitingLogin_ratherThanClosingTheWindow() throws {
+        var config = GeneralConfig.current
+        config.sshHosts.append(SSHHostEntry(alias: "other"))
+        GeneralConfig.setCurrentForTesting(config)
+        let (c, _) = try loggingIn()
+        for id in c.workspaceIDsForTesting where c.host(of: id) == nil { c.removeWorkspace(id) }
+        c.selectHostForTesting(SSHHostID(alias: "other"))
+
+        c.handle(.closePane)
+
+        XCTAssertFalse(c.isConfirmOpen, "the window still holds a login")
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertNotNil(c.connectionForTesting(of: host))
+    }
+
     func test_aLoginThatConnects_closesACardOpenOverConnect() throws {
         let (c, _) = try loggingIn()
         c.handle(.searchSelection)
