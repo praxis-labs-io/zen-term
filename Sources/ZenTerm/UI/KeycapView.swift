@@ -17,19 +17,16 @@ final class KeycapView: NSView, ThemeReapplying {
     enum Style {
         case chip
         case plain
-        case glyph(ink: (ChromeTheme) -> NSColor)
     }
 
     let shortcut: String
-    var style: Style {
-        didSet { reapplyTheme() }
-    }
+    private let style: Style
     private let tokenStack: NSStackView
 
     init(shortcut: String, style: Style = .chip) {
         self.shortcut = shortcut
         self.style = style
-        let stack = NSStackView(views: Self.tokens(for: shortcut, ink: Self.ink(style)))
+        let stack = NSStackView(views: Self.tokens(for: shortcut, ink: Self.ink))
         stack.orientation = .horizontal
         stack.spacing = Self.tokenSpacing
         stack.alignment = .centerY
@@ -44,8 +41,8 @@ final class KeycapView: NSView, ThemeReapplying {
         addSubview(stack)
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset(style)),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset(style)),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.horizontalInset),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.horizontalInset),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
             heightAnchor.constraint(equalToConstant: Self.height),
         ])
@@ -65,37 +62,24 @@ final class KeycapView: NSView, ThemeReapplying {
 
     /// Without it a keycap is the elastic view in a stack and stretches into a pill.
     override var intrinsicContentSize: NSSize {
-        NSSize(width: tokenStack.fittingSize.width + Self.inset(style) * 2, height: Self.height)
+        NSSize(width: tokenStack.fittingSize.width + Self.horizontalInset * 2, height: Self.height)
     }
 
     func reapplyTheme() {
         layer?.backgroundColor = Self.background(style)?.cgColor
         tokenStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        Self.tokens(for: shortcut, ink: Self.ink(style)).forEach { tokenStack.addArrangedSubview($0) }
+        Self.tokens(for: shortcut, ink: Self.ink).forEach { tokenStack.addArrangedSubview($0) }
         invalidateIntrinsicContentSize()
-    }
-
-    private static func inset(_ style: Style) -> CGFloat {
-        switch style {
-        case .chip, .plain: return horizontalInset
-        case .glyph: return 0
-        }
     }
 
     private static func background(_ style: Style) -> NSColor? {
         switch style {
         case .chip: return Theme.current.chrome.fill(.rest)
-        case .plain, .glyph: return nil
+        case .plain: return nil
         }
     }
 
-    private static func ink(_ style: Style) -> NSColor {
-        let chrome = Theme.current.chrome
-        switch style {
-        case .chip, .plain: return chrome.ink(.subtle)
-        case .glyph(let ink): return ink(chrome)
-        }
-    }
+    private static var ink: NSColor { Theme.current.chrome.ink(.subtle) }
 
     private static func tokens(for shortcut: String, ink: NSColor) -> [NSView] {
         var views: [NSView] = []

@@ -5,7 +5,6 @@ final class AppButton: NSButton, HoverSuppressing {
 
     private static let height = ChromeMetrics.Height.control
     static let horizontalPadding = ChromeMetrics.Spacing.s8
-    private static let keycapGap = ChromeMetrics.Spacing.s6
 
     var onTap: () -> Void
 
@@ -18,7 +17,6 @@ final class AppButton: NSButton, HoverSuppressing {
     var onBacktab: (() -> Void)?
 
     private let variant: Variant
-    private let keycap: KeycapView?
     private let symbolName: String?
     private var labelText: String
     private lazy var controlState = ControlState(
@@ -26,10 +24,7 @@ final class AppButton: NSButton, HoverSuppressing {
     private let insetRing = CALayer()
 
     override var isEnabled: Bool {
-        didSet {
-            if isEnabled != oldValue, let keycap { keycap.style = Self.keycapStyle(for: variant, isEnabled: isEnabled) }
-            restyle()
-        }
+        didSet { restyle() }
     }
 
     // SF Symbol baseline metadata would otherwise pad the frame past `height`.
@@ -38,41 +33,27 @@ final class AppButton: NSButton, HoverSuppressing {
     override var intrinsicContentSize: NSSize {
         guard !isSymbolOnly else { return NSSize(width: Self.height, height: Self.height) }
         var fitted = super.intrinsicContentSize
-        fitted.width += Self.horizontalPadding * 2 + keycapReserve
+        fitted.width += Self.horizontalPadding * 2
         fitted.height = Self.height
         return fitted
     }
 
     private var isSymbolOnly: Bool {
-        symbolName != nil && labelText.isEmpty && keycap == nil
-    }
-
-    private var keycapReserve: CGFloat {
-        guard let keycap else { return 0 }
-        return Self.keycapGap + keycap.intrinsicContentSize.width
+        symbolName != nil && labelText.isEmpty
     }
 
     init(
         title: String = "", variant: Variant, symbol: String? = nil,
-        shortcut: String? = nil, keyEquivalent: String = "", keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
+        keyEquivalent: String = "", keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
         onTap: @escaping () -> Void = {}
     ) {
         self.onTap = onTap
         self.variant = variant
         self.symbolName = symbol
         self.labelText = title
-        self.keycap = shortcut.map { KeycapView(shortcut: $0, style: Self.keycapStyle(for: variant, isEnabled: true)) }
         super.init(frame: .zero)
         let cell = AppButtonCell()
-        cell.trailingReserve = keycapReserve
         self.cell = cell
-        if let keycap {
-            addSubview(keycap)
-            NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.horizontalPadding),
-                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-        }
         translatesAutoresizingMaskIntoConstraints = false
         isBordered = false
         wantsLayer = true
@@ -101,11 +82,6 @@ final class AppButton: NSButton, HoverSuppressing {
     func setTitle(_ title: String) {
         labelText = title
         restyle()
-    }
-
-    private static func keycapStyle(for variant: Variant, isEnabled: Bool) -> KeycapView.Style {
-        guard variant == .primary else { return .chip }
-        return .glyph { isEnabled ? $0.onAccent.nsColor : $0.ink(.faint) }
     }
 
     func reapplyTheme() {
@@ -234,7 +210,6 @@ final class AppButton: NSButton, HoverSuppressing {
 
     @objc private func fire() { onTap() }
 
-    var keycapForTesting: KeycapView? { keycap }
     var insetRingForTesting: CALayer { insetRing }
 
     #if DEBUG
@@ -244,14 +219,12 @@ final class AppButton: NSButton, HoverSuppressing {
 
 // AppKit hands `drawTitle` a disabled title already recolored in the system color, which follows the macOS appearance, not the theme.
 private final class AppButtonCell: NSButtonCell {
-    var trailingReserve: CGFloat = 0
-
     override func drawTitle(_ _: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
         let title = attributedTitle
         let size = title.size()
-        let width = min(size.width, frame.width - trailingReserve)
+        let width = min(size.width, frame.width)
         let rect = NSRect(
-            x: frame.minX + (frame.width - width) / 2 - trailingReserve / 2,
+            x: frame.minX + (frame.width - width) / 2,
             y: frame.minY + (frame.height - size.height) / 2,
             width: width, height: size.height)
         if width < size.width {

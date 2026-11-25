@@ -1126,7 +1126,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(button.title, "Connect")
 
         XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
-        XCTAssertNil(button.keycapForTesting, "the hint row names ↵, so the button carries no keycap")
 
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
