@@ -1,4 +1,5 @@
 import AppLog
+import ControlProtocol
 import Foundation
 import TerminalKit
 
@@ -24,6 +25,19 @@ final class SSHConnection {
     static let recheckDelay: TimeInterval = 1
     static let checksBeforeGivingUp = 3
 
+    typealias AskpassReply = (Result<AskpassAnswer, ControlError>) -> Void
+
+    private struct Asked: Equatable {
+        let prompt: String
+        let sshPID: Int?
+    }
+
+    private struct PendingAnswer {
+        let asked: Asked
+        let ticket: Int
+        let reply: AskpassReply
+    }
+
     private struct Waiting {
         let id: SurfaceID
         weak var surface: TerminalSurface?
@@ -36,6 +50,8 @@ final class SSHConnection {
     private(set) var state: State = .connecting
     var onConnectedChange: ((Bool) -> Void)?
     var onLoginFailed: (() -> Void)?
+    var onQuestionChange: ((SSHLoginQuestion?) -> Void)?
+    private(set) var question: SSHLoginQuestion?
 
     private let watchers: Watchers
     private var login: Waiting?
@@ -47,13 +63,31 @@ final class SSHConnection {
     private var failedChecks = 0
     private var masterPID: pid_t?
     private var isMasterEnded = false
+    private let askpassProgram: URL?
+    private var askpassToken: String?
+    private var hasConnected = false
+    private var pendingAnswer: PendingAnswer?
+    private var lastAnswered: Asked?
+    private var questionsAsked = 0
 
     #if DEBUG
         static var watchersOverrideForTesting: Watchers?
+        static var askpassProgramOverrideForTesting: URL??
     #endif
 
-    init(host: SSHHostID, controlPath: URL? = nil, watchers: Watchers? = nil) {
+    static var defaultAskpassProgram: URL? {
+        #if DEBUG
+            if let override = askpassProgramOverrideForTesting { return override }
+        #endif
+        return SSHLaunch.askpassProgram()
+    }
+
+    init(
+        host: SSHHostID, controlPath: URL? = nil, watchers: Watchers? = nil,
+        askpassProgram: URL?? = nil
+    ) {
         self.host = host
+        self.askpassProgram = askpassProgram ?? Self.defaultAskpassProgram
         self.controlPath = controlPath ?? SSHLaunch.controlPath(for: host)
         #if DEBUG
             self.watchers = watchers ?? Self.watchersOverrideForTesting ?? .live
@@ -68,7 +102,7 @@ final class SSHConnection {
         if state == .connected { return launch(surface, as: entry) }
         if let login {
             guard login.id == id else { return waiting.append(entry) }
-            if isLoginLaunched { launch(surface, as: entry) }
+            if isLoginLaunched { launchLogin(surface, as: entry) }
             return
         }
         login = entry
@@ -87,6 +121,77 @@ final class SSHConnection {
         watchers.resolveMaster(host, controlPath) { [weak self] pid in self?.resolvedBeforeLogin(pid) }
     }
 
+    // Only a first login asks through the Connect screen; a login after a drop runs in a pane already on screen.
+    var asksThroughConnect: Bool { askpassProgram != nil && !hasConnected }
+
+    var isLoggingInBehindConnect: Bool { asksThroughConnect && state == .connecting && !isShutDown }
+
+    // libghostty runs ssh under login(1), which prints its own line before ssh writes anything.
+    private static let loginBanner = "Last login:"
+
+    func loginOutput(limit: Int) -> [String] {
+        guard let text = login?.surface?.text(lastLines: limit * 4) else { return [] }
+        let lines = text.split(whereSeparator: \.isNewline)
+            .map { $0.replacingOccurrences(of: "\r", with: "").trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix(Self.loginBanner) }
+        return Array(lines.suffix(limit))
+    }
+
+    func answersAskpass(_ token: String) -> Bool {
+        guard let askpassToken, !isShutDown, state == .connecting else { return false }
+        let expected = Array(askpassToken.utf8)
+        let given = Array(token.utf8)
+        guard expected.count == given.count else { return false }
+        return zip(expected, given).reduce(0) { $0 | ($1.0 ^ $1.1) } == 0
+    }
+
+    func ask(
+        _ prompt: String, sshPID: Int?, token: String, hangup: ControlHangup, reply: @escaping AskpassReply
+    ) -> Bool {
+        guard answersAskpass(token) else { return false }
+        settleQuestion(.failure(ControlError(.failed, "ssh asked another question first.")))
+        let asked = Asked(prompt: prompt, sshPID: sshPID)
+        let parsed = SSHLoginPrompt.parse(prompt)
+        let repeats: Bool
+        if case .secret = parsed { repeats = asked == lastAnswered } else { repeats = false }
+        questionsAsked += 1
+        let ticket = questionsAsked
+        pendingAnswer = PendingAnswer(asked: asked, ticket: ticket, reply: reply)
+        let question = SSHLoginQuestion(prompt: parsed, isRetry: repeats)
+        self.question = question
+        hangup.onHangup { [weak self] in self?.withdraw(ticket) }
+        watchers.after(TimeInterval(ControlWire.longestLoginAnswer)) { [weak self] in self?.withdraw(ticket) }
+        if pendingAnswer?.ticket == ticket { onQuestionChange?(question) }
+        return true
+    }
+
+    func answer(_ answer: AskpassAnswer) {
+        guard let pending = pendingAnswer else { return }
+        lastAnswered = pending.asked
+        settleQuestion(.success(answer))
+    }
+
+    func trustHostKey() { answer(AskpassAnswer("yes")) }
+
+    private func withdraw(_ ticket: Int) {
+        guard pendingAnswer?.ticket == ticket else { return }
+        settleQuestion(.failure(ControlError(.failed, "ssh stopped waiting for the answer.")))
+    }
+
+    private func settleQuestion(_ result: Result<AskpassAnswer, ControlError>) {
+        guard let pending = pendingAnswer else { return }
+        pendingAnswer = nil
+        question = nil
+        pending.reply(result)
+        onQuestionChange?(nil)
+    }
+
+    private func stopAsking() {
+        askpassToken = nil
+        lastAnswered = nil
+        settleQuestion(.failure(ControlError(.failed, "The ssh login ended.")))
+    }
+
     func isAwaitingLogin(on id: SurfaceID?) -> Bool {
         guard let id, state == .connecting, !isShutDown else { return false }
         return login?.id == id
@@ -103,6 +208,7 @@ final class SSHConnection {
         state = .failed
         waiting = []
         self.login = nil
+        stopAsking()
         stopWatching?()
         stopWatching = nil
         onLoginFailed?()
@@ -114,6 +220,7 @@ final class SSHConnection {
         let wasConnected = state == .connected
         waiting = []
         login = nil
+        stopAsking()
         stopWatching?()
         stopWatching = nil
         if wasConnected { onConnectedChange?(false) }
@@ -145,7 +252,7 @@ final class SSHConnection {
     private func loginReady() {
         guard !isShutDown, state == .connecting, let login, !isLoginLaunched else { return }
         isLoginLaunched = true
-        if let surface = login.surface { launch(surface, as: login) }
+        if let surface = login.surface { launchLogin(surface, as: login) }
     }
 
     private func socketUnwatchable() {
@@ -180,6 +287,8 @@ final class SSHConnection {
     private func masterFound(_ pid: pid_t) {
         Log.info("ssh connection up (master pid \(pid))", category: .workspace)
         state = .connected
+        hasConnected = true
+        stopAsking()
         failedChecks = 0
         masterPID = pid
         let unlaunchedLogin = isLoginLaunched ? nil : login
@@ -201,14 +310,27 @@ final class SSHConnection {
         onConnectedChange?(false)
     }
 
-    private func launch(_ surface: TerminalSurface, as entry: Waiting) {
+    private func launchLogin(_ surface: TerminalSurface, as entry: Waiting) {
+        guard asksThroughConnect, let askpassProgram else { return launch(surface, as: entry) }
+        let token = askpassToken ?? Self.mintToken()
+        askpassToken = token
+        launch(surface, as: entry, adding: SSHLaunch.askpassEnvironment(program: askpassProgram, token: token))
+    }
+
+    // SystemRandomNumberGenerator is the system's CSPRNG on Darwin.
+    private static func mintToken() -> String {
+        (0..<32).map { _ in String(format: "%02x", UInt8.random(in: .min ... .max)) }.joined()
+    }
+
+    private func launch(_ surface: TerminalSurface, as entry: Waiting, adding extra: [String: String] = [:]) {
         guard let form else {
             Log.error("ssh: a host surface launched before its config was read", category: .workspace)
             return assertionFailure("a host surface launched before its config was read")
         }
         surface.start(
             SSHLaunch.config(
-                host: host, controlPath: controlPath, form: form, env: entry.env, backingScale: entry.backingScale))
+                host: host, controlPath: controlPath, form: form, env: entry.env.merging(extra) { $1 },
+                backingScale: entry.backingScale))
     }
 }
 

@@ -1,7 +1,7 @@
 import AppKit
 
 final class FieldBox: NSView, NSTextFieldDelegate {
-    let field = ClickField()
+    let field: NSTextField
     var onChange: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
@@ -12,9 +12,13 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onBacktab: (() -> Void)?
     var onEndEditing: (() -> Void)?
     var onSubmit: (() -> Void)?
+    var onEscape: (() -> Void)?
 
-    var text: String { field.stringValue }
-    func setText(_ value: String) { field.stringValue = value }
+    var text: String { editor?.string ?? field.stringValue }
+    func setText(_ value: String) {
+        field.stringValue = value
+        editor?.string = value
+    }
 
     // Retained because `placeholderString` reads nil once `placeholderAttributedString` is set.
     private(set) var placeholder: String
@@ -24,8 +28,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         applyPlaceholder()
     }
 
-    init(placeholder: String) {
+    init(placeholder: String, hidesText: Bool = false) {
         self.placeholder = placeholder
+        let reporting: NSTextField & FocusReporting = hidesText ? HiddenClickField() : ClickField()
+        field = reporting
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
@@ -40,7 +46,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         applyPlaceholder()
         field.textColor = Theme.current.chrome.ink(.normal)
         field.delegate = self
-        field.onGainedFocus = { [weak self] in self?.setFocused(true) }
+        reporting.onGainedFocus = { [weak self] in self?.setFocused(true) }
         field.translatesAutoresizingMaskIntoConstraints = false
         addSubview(field)
 
@@ -62,10 +68,16 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     }
 
     func reapplyTheme() {
-        setFocused(field.currentEditor() != nil)
+        setFocused(editor != nil)
         field.textColor = Theme.current.chrome.ink(.normal)
         field.applyThemedEditor()
         applyPlaceholder()
+    }
+
+    // A secure field's editor is first responder without showing up as its `currentEditor()`.
+    private var editor: NSText? {
+        guard let editor = field.window?.firstResponder as? NSText, editor.delegate === field else { return nil }
+        return editor
     }
 
     // The system placeholder tint follows `effectiveAppearance`, not `Theme.current`.
@@ -111,6 +123,9 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         case #selector(NSResponder.insertBacktab(_:)):
             guard let onBacktab else { return false }
             onBacktab()
+        case #selector(NSResponder.cancelOperation(_:)):
+            guard let onEscape else { return false }
+            onEscape()
         default:
             return false
         }
@@ -127,8 +142,22 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         return range.location == (textView.string as NSString).length && range.length == 0
     }
 
-    // Editing notifications don't fire reliably under keyboard navigation, so focus comes from responder transitions.
-    final class ClickField: NSTextField {
+    // Reports focus from responder transitions, since editing notifications don't fire under keyboard navigation.
+    private protocol FocusReporting: AnyObject {
+        var onGainedFocus: (() -> Void)? { get set }
+    }
+
+    private final class ClickField: NSTextField, FocusReporting {
+        var onGainedFocus: (() -> Void)?
+
+        override func becomeFirstResponder() -> Bool {
+            let ok = super.becomeFirstResponder()
+            if ok { onGainedFocus?() }
+            return ok
+        }
+    }
+
+    private final class HiddenClickField: NSSecureTextField, FocusReporting {
         var onGainedFocus: (() -> Void)?
 
         override func becomeFirstResponder() -> Bool {

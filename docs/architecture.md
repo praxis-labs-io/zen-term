@@ -885,7 +885,21 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   the host disconnected. The check runs before the login launches and again when the socket
   appears; a socket that refuses the connection is stale and is removed, and anything else is
   left alone. A login that ends before the socket drops the waiting surfaces and
-  closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
+  closes the workspace back to Connect.
+- **A host's first login runs behind its Connect screen, which answers ssh's questions.** The
+  workspace is installed but never selected while `SSHConnection.isLoggingInBehindConnect`, so the
+  login surface starts detached; every path into it (`activate`, `reveal`, `land`, a removed
+  host's landing, the control socket) shows Connect instead, and the first connect mounts it only
+  when Connect for that host is still showing. That login's ssh runs `zen` as `SSH_ASKPASS` with
+  `SSH_ASKPASS_REQUIRE=force` and a per-login token, and `ssh.askpass` hands each question to the
+  connection, which Connect asks in plain words in its one message line (`SSHLoginPrompt`). A new
+  host key gets Trust or Cancel and any other yes/no gets ssh's own words with Continue or Cancel,
+  never free text, since ssh re-asks forever on any other answer. Cancel (⎋) removes the workspace,
+  because a failed askpass only makes ssh ask again; ↵ answers a secret, never says yes (Trust and
+  Continue take a click or Tab), and never cancels. Connect polls the last few lines of the login's terminal while it waits,
+  since a detached surface reports no scroll, and shows the latest one the screen doesn't already
+  say as its detail line (`SSHLoginOutput`). A login
+  after a drop, or with no `zen` beside the app, prompts in its own pane as before. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
   on Connect reconnects. A host leaving the `ssh-host` lines, from Settings or a hand edit, disconnects in every

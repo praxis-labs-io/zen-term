@@ -234,6 +234,8 @@ A boxed input (a text field, a text area, a picker) takes its rest fill and bord
 
 A form or row's message line is a `FormErrorLabel`, in its destructive, warning or muted tone.
 
+A centered message that wraps is a `BalancedLabel`: its lines come out of similar width, and it never truncates.
+
 A mark on a rounded chip is an `IconBadge`: tinted by one role, or a process chip (see
 [Process chips](#process-chips)).
 

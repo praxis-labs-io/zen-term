@@ -1,3 +1,4 @@
+import ControlProtocol
 import TerminalKit
 import XCTest
 
@@ -505,5 +506,174 @@ final class SSHConnectionTests: XCTestCase {
         FileManager.default.createFile(atPath: path.path, contents: nil)
 
         wait(for: [appeared], timeout: 2)
+    }
+}
+
+@MainActor
+final class SSHConnectionAskpassTests: XCTestCase {
+    private let host = SSHHostID(alias: "devbox")
+    private let zen = URL(fileURLWithPath: "/Applications/ZenTerm.app/Contents/MacOS/zen")
+    private var fake: FakeSSHWatchers!
+    private var connection: SSHConnection!
+    private var questions: [SSHLoginQuestion?] = []
+
+    override func setUp() {
+        super.setUp()
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        fake = FakeSSHWatchers()
+        connection = SSHConnection(
+            host: host, controlPath: URL(fileURLWithPath: "/tmp/zt/1-ab"), watchers: fake.watchers,
+            askpassProgram: zen)
+        connection.onQuestionChange = { [weak self] in self?.questions.append($0) }
+    }
+
+    private func loggingIn() -> RecordingSurface {
+        let login = RecordingSurface()
+        connection.start(login, id: SurfaceID(raw: 1), env: ["A": "1"])
+        fake.ready?()
+        return login
+    }
+
+    private func token(of surface: RecordingSurface) throws -> String {
+        try XCTUnwrap(surface.lastConfig?.environment[ControlEndpoint.askpassTokenKey])
+    }
+
+    private func ask(
+        _ prompt: String, token: String, pid: Int? = 900, hangup: ControlHangup = ControlHangup()
+    ) -> (asked: Bool, replies: () -> [Result<AskpassAnswer, ControlError>]) {
+        var replies: [Result<AskpassAnswer, ControlError>] = []
+        let asked = connection.ask(prompt, sshPID: pid, token: token, hangup: hangup) { replies.append($0) }
+        return (asked, { replies })
+    }
+
+    func test_theLoginAloneRunsZenAsAskpass_forcedPastItsTty_withAFreshToken() throws {
+        let login = loggingIn()
+        let pane = RecordingSurface()
+        connection.start(pane, id: SurfaceID(raw: 2), env: [:])
+        fake.connect()
+
+        let env = try XCTUnwrap(login.lastConfig?.environment)
+        XCTAssertEqual(env["SSH_ASKPASS"], zen.path)
+        XCTAssertEqual(env["SSH_ASKPASS_REQUIRE"], "force")
+        XCTAssertEqual(env["A"], "1")
+        XCTAssertEqual(try token(of: login).count, 64)
+        XCTAssertNil(pane.lastConfig?.environment["SSH_ASKPASS"], "a pane that reuses the connection never asks")
+        XCTAssertNil(pane.lastConfig?.environment[ControlEndpoint.askpassTokenKey])
+    }
+
+    func test_aLoginOverAMasterThatAlreadyRuns_getsNoAskpass() {
+        fake.answerBeforeLogin = .some(77)
+        let login = RecordingSurface()
+        connection.start(login, id: SurfaceID(raw: 1), env: [:])
+
+        XCTAssertEqual(login.startCount, 1)
+        XCTAssertNil(login.lastConfig?.environment["SSH_ASKPASS"])
+    }
+
+    func test_aLoginAfterADrop_promptsInItsOwnPane() {
+        _ = loggingIn()
+        fake.connect()
+        fake.exited?()
+        let relogin = RecordingSurface()
+        connection.start(relogin, id: SurfaceID(raw: 3), env: [:])
+        fake.ready?()
+
+        XCTAssertEqual(relogin.startCount, 1)
+        XCTAssertNil(relogin.lastConfig?.environment["SSH_ASKPASS"])
+    }
+
+    func test_withoutZen_theLoginPromptsInItsPane() {
+        connection = SSHConnection(
+            host: host, controlPath: URL(fileURLWithPath: "/tmp/zt/1-ab"), watchers: fake.watchers,
+            askpassProgram: .some(nil))
+        let login = loggingIn()
+
+        XCTAssertFalse(connection.asksThroughConnect)
+        XCTAssertNil(login.lastConfig?.environment["SSH_ASKPASS"])
+    }
+
+    func test_onlyTheLoginsTokenAsks_andOnlyWhileItLogsIn() throws {
+        let token = try token(of: loggingIn())
+
+        let otherFirst = token.first == "f" ? "0" : "f"
+        XCTAssertFalse(ask("Password: ", token: otherFirst + token.dropFirst()).asked)
+        XCTAssertFalse(ask("Password: ", token: String(token.dropLast())).asked)
+        XCTAssertTrue(ask("Password: ", token: token).asked)
+        fake.connect()
+        fake.exited?()
+        XCTAssertEqual(connection.state, .connecting)
+        XCTAssertFalse(connection.answersAskpass(token), "connecting revokes the token, even once it drops")
+    }
+
+    func test_failingOrShuttingDown_revokesTheToken_andFailsTheOpenQuestion() throws {
+        let token = try token(of: loggingIn())
+        let open = ask("Password: ", token: token)
+
+        connection.shutdown()
+
+        XCTAssertFalse(connection.answersAskpass(token))
+        guard case .failure(let error)? = open.replies().first else { return XCTFail("\(open.replies())") }
+        XCTAssertEqual(error.code, .failed)
+        XCTAssertNil(connection.question)
+        XCTAssertEqual(questions.last, .some(nil))
+    }
+
+    func test_anAnswerRepliesOnce_andTheSamePromptFromTheSameSSHIsARetry() throws {
+        let token = try token(of: loggingIn())
+        let first = ask("devbox's password: ", token: token)
+        XCTAssertEqual(
+            connection.question, SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false))
+
+        connection.answer(AskpassAnswer("wrong"))
+        connection.answer(AskpassAnswer("again"))
+
+        XCTAssertEqual(first.replies().map { try? $0.get().text }, ["wrong"])
+        _ = ask("devbox's password: ", token: token)
+        XCTAssertEqual(connection.question?.isRetry, true)
+        connection.answer(AskpassAnswer("x"))
+        _ = ask("devbox's password: ", token: token, pid: 901)
+        XCTAssertEqual(connection.question?.isRetry, false, "a ProxyJump's nested ssh asks the same text first time")
+    }
+
+    func test_trustAnswersExactlyYes() throws {
+        let token = try token(of: loggingIn())
+        let asked = ask("ED25519 key fingerprint is: SHA256:abc\nAre you sure (yes/no/[fingerprint])? ", token: token)
+
+        connection.trustHostKey()
+
+        XCTAssertEqual(asked.replies().map { try? $0.get().text }, ["yes"])
+    }
+
+    func test_aQuestionPastTheAnswerDeadline_isWithdrawn() throws {
+        let token = try token(of: loggingIn())
+        let asked = ask("Password: ", token: token)
+
+        fake.runDelayed()
+
+        XCTAssertNil(connection.question)
+        guard case .failure? = asked.replies().first else { return XCTFail("\(asked.replies())") }
+    }
+
+    func test_aHangupWithdrawsTheQuestion() throws {
+        let token = try token(of: loggingIn())
+        let hangup = ControlHangup()
+        _ = ask("Password: ", token: token, hangup: hangup)
+
+        hangup.hangUp()
+
+        XCTAssertNil(connection.question)
+        XCTAssertEqual(
+            questions, [SSHLoginQuestion(prompt: .secret(headline: "Enter your password"), isRetry: false), nil])
+    }
+
+    func test_aQuestionWhoseAskerAlreadyHungUp_isNeverAnnouncedAfterItsWithdrawal() throws {
+        let token = try token(of: loggingIn())
+        let hangup = ControlHangup()
+        hangup.hangUp()
+
+        _ = ask("Password: ", token: token, hangup: hangup)
+
+        XCTAssertNil(connection.question)
+        XCTAssertEqual(questions.last, .some(nil), "the last word is that nothing is asked")
     }
 }

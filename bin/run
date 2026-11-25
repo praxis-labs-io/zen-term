@@ -14,4 +14,7 @@ bin/ghosttykit-stamp verify
 # suppress them on the current linker. The `> >(…) 2>&1` process substitution filters both streams
 # while `exec` keeps the app's exit code, signals, and debug symbols intact.
 LINKER_NOISE='could not find symbol .* in object file'
+
+# The app runs zen as ssh's askpass from beside its own binary, so the dev build needs it there too.
+swift build --product zen "$@" > >(grep --line-buffered -vE "$LINKER_NOISE") 2>&1
 exec swift run ZenTerm "$@" > >(grep --line-buffered -vE "$LINKER_NOISE") 2>&1
