@@ -3,7 +3,7 @@
 
     enum GalleryCards {
         static func sections() -> [GallerySection] {
-            [cards(), modalParts(), hoverCards(), dividersAndEmptyStates()]
+            [cards(), modalParts(), toastStack(), hoverCards(), dividersAndEmptyStates()]
         }
 
         private static func cards() -> GallerySection {
@@ -97,6 +97,34 @@
                 card.heightAnchor.constraint(equalToConstant: Self.sampleSize.height),
             ])
             return card
+        }
+
+        private static func toastStack() -> GallerySection {
+            GallerySection(
+                title: "ToastPile",
+                rows: [
+                    GallerySection.Row(label: "Folded", samples: [pileOfThree(unfolded: false)]),
+                    GallerySection.Row(label: "Unfolded", samples: [pileOfThree(unfolded: true)]),
+                ])
+        }
+
+        private static func pileOfThree(unfolded: Bool) -> ToastPile {
+            let pile = ToastPile(foldsOnClickOutside: !unfolded)
+            pile.add(toast(ToastContent(variant: .positive, title: "Worktree created", message: nil)))
+            pile.add(
+                toast(
+                    ToastContent(
+                        variant: .info, title: "Config reloaded",
+                        message: "2 changes applied. Open panes keep their font size.")))
+            pile.add(toast(ToastContent(variant: .warning, title: "Couldn't connect to devbox", message: nil)))
+            if unfolded { pile.unfold() }
+            return pile
+        }
+
+        private static func toast(
+            _ content: ToastContent, actions: [ToastAction] = [], showsClose: Bool = false
+        ) -> ToastView {
+            ToastView(content: content, actions: actions, armsKeys: false, showsClose: showsClose)
         }
 
         private static func hoverCards() -> GallerySection {

@@ -551,6 +551,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
   `keyDown`). A confirm refuses Space. A non-modal sticky card claims no keys;
   `dismiss_toast` and `dismiss_all_toasts` exist for the keyboard.
+- **Every toast and card shares one stack** (`ToastPile`), folded so one card shows: a pending
+  confirm ahead of anything newer, otherwise the newest. A click unfolds it into a list; a click
+  outside, Show Less, or one card left folds it. Countdowns hold while it is unfolded and restart
+  a whole duration when it folds.
 - **A toast that offers an action stays until it is answered.** Only an attention or completion
   card under `auto` counts down with its actions. A non-modal card's actions are text links and
   it never takes focus; a confirm keeps its buttons, because it owns Return and Esc.
