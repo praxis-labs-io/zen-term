@@ -7,15 +7,14 @@
         ]
 
         static func sections() -> [GallerySection] {
-            [cards(), modalParts(), toasts(), hoverCards(), dividersAndEmptyStates()]
+            [cards(), modalParts(), toasts(), toastStack(), hoverCards(), dividersAndEmptyStates()]
         }
 
         private static func cards() -> GallerySection {
             GallerySection(
                 title: "CardChrome",
                 rows: [
-                    GallerySection.Row(label: "Plain edge", samples: [card(focusBorder: false)]),
-                    GallerySection.Row(label: "Focus border", samples: [card(focusBorder: true)]),
+                    GallerySection.Row(label: "Edge and shadow", samples: [card()])
                 ])
         }
 
@@ -92,10 +91,10 @@
 
         private static let sampleSize = NSSize(width: 220, height: 80)
 
-        private static func card(focusBorder: Bool) -> NSView {
+        private static func card() -> NSView {
             let card = CardView()
             card.translatesAutoresizingMaskIntoConstraints = false
-            CardChrome.apply(to: card, focusBorder: focusBorder)
+            CardChrome.apply(to: card)
             NSLayoutConstraint.activate([
                 card.widthAnchor.constraint(equalToConstant: Self.sampleSize.width),
                 card.heightAnchor.constraint(equalToConstant: Self.sampleSize.height),
@@ -148,6 +147,28 @@
                     ]),
             ]
             return GallerySection(title: "ToastView", rows: rows)
+        }
+
+        private static func toastStack() -> GallerySection {
+            GallerySection(
+                title: "ToastPile",
+                rows: [
+                    GallerySection.Row(label: "Folded", samples: [pileOfThree(unfolded: false)]),
+                    GallerySection.Row(label: "Unfolded", samples: [pileOfThree(unfolded: true)]),
+                ])
+        }
+
+        private static func pileOfThree(unfolded: Bool) -> ToastPile {
+            let pile = ToastPile(foldsOnClickOutside: !unfolded)
+            pile.add(toast(ToastContent(variant: .positive, title: "Worktree created", message: nil)))
+            pile.add(
+                toast(
+                    ToastContent(
+                        variant: .info, title: "Config reloaded",
+                        message: "2 changes applied. Open panes keep their font size.")))
+            pile.add(toast(ToastContent(variant: .warning, title: "Couldn't connect to devbox", message: nil)))
+            if unfolded { pile.unfold() }
+            return pile
         }
 
         private static func toast(

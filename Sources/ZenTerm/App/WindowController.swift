@@ -66,6 +66,7 @@ final class WindowController: NSObject {
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
             card.update(text: text)
+            toasts.bringForward(card: card)
         } else {
             let card = FontSizeCard(text: text)
             fontSizeCard = card

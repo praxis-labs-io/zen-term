@@ -551,6 +551,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast never takes the keyboard.** Its buttons answer clicks only;
   `dismiss_toast` and `dismiss_all_toasts` exist for the keyboard.
+- **Every toast and card shares one stack** (`ToastPile`), folded so one card shows: a pending
+  confirm ahead of anything newer, otherwise the newest. A click unfolds it into a list; a click
+  outside, Show Less, or one card left folds it. Countdowns hold while it is unfolded and restart
+  a whole duration when it folds.
 
 ### The interaction language
 
