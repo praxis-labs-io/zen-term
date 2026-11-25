@@ -649,7 +649,7 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
 `--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
-With `ZEN_ASKPASS_TOKEN` set and exactly one argument, `zen` is ssh's askpass: it sends the
+With `ZEN_ASKPASS_TOKEN` set, exactly one argument and a parent named `ssh`, `zen` is ssh's askpass: it sends the
 argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's pid, prints
 the answer, and exits 0. It never reads stdin. With `SSH_ASKPASS_PROMPT=confirm` it exits 1
 without asking, which ssh reads as no; with `none`, a notice, it exits 0. Any failure exits 1,

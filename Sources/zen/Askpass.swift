@@ -5,8 +5,18 @@ import Foundation
 enum Askpass {
     static let hintKey = "SSH_ASKPASS_PROMPT"
 
-    static func runs(arguments: [String], environment: [String: String]) -> Bool {
+    // The token reaches every child of the login's ssh, a ProxyCommand's own `zen` calls too.
+    static func runs(
+        arguments: [String], environment: [String: String], parent: String? = executable(of: getppid())
+    ) -> Bool {
         arguments.count == 2 && environment[ControlEndpoint.askpassTokenKey]?.isEmpty == false
+            && parent.map { URL(fileURLWithPath: $0).lastPathComponent == "ssh" } == true
+    }
+
+    static func executable(of pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
     }
 
     // `confirm` is a yes/no ssh reads a failure as no to; `none` is a notice that needs no answer.

@@ -50,11 +50,19 @@ final class AskpassTests: XCTestCase {
         }
     }
 
-    func test_runsOnlyWithTheTokenAndOneArgument() {
-        XCTAssertTrue(Askpass.runs(arguments: ["zen", "Password: "], environment: environment))
-        XCTAssertFalse(Askpass.runs(arguments: ["zen", "list", "--pretty"], environment: environment))
-        XCTAssertFalse(Askpass.runs(arguments: ["zen", "list"], environment: [:]))
-        XCTAssertFalse(Askpass.runs(arguments: ["zen", "list"], environment: [ControlEndpoint.askpassTokenKey: ""]))
+    func test_runsOnlyForSSH_withTheTokenAndOneArgument() {
+        let ssh = "/usr/bin/ssh"
+        XCTAssertTrue(Askpass.runs(arguments: ["zen", "Password: "], environment: environment, parent: ssh))
+        XCTAssertTrue(
+            Askpass.runs(arguments: ["zen", "Password: "], environment: environment, parent: "/opt/homebrew/bin/ssh"))
+        XCTAssertFalse(Askpass.runs(arguments: ["zen", "list", "--pretty"], environment: environment, parent: ssh))
+        XCTAssertFalse(Askpass.runs(arguments: ["zen", "list"], environment: [:], parent: ssh))
+        XCTAssertFalse(
+            Askpass.runs(arguments: ["zen", "list"], environment: [ControlEndpoint.askpassTokenKey: ""], parent: ssh))
+        XCTAssertFalse(
+            Askpass.runs(arguments: ["zen", "list"], environment: environment, parent: "/bin/zsh"),
+            "a ProxyCommand's own zen call keeps the CLI")
+        XCTAssertFalse(Askpass.runs(arguments: ["zen", "list"], environment: environment, parent: nil))
     }
 
     func test_printsTheAnswer_andSendsThePromptVerbatimWithTheToken() {
