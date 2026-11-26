@@ -50,7 +50,7 @@ enum SettingsDetail {
     }
 
     static func moveFocus(
-        stops: [NSView], from anchor: Int?, delta: Int, wrap: Bool = false,
+        stops: [NSView], from anchor: Int?, delta: Int, wrap: Bool = false, holding fillSlide: RowFillSlide? = nil,
         scrollTarget: (NSView) -> NSView
     ) {
         guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count, wrap: wrap)
@@ -63,7 +63,9 @@ enum SettingsDetail {
             case .some: .down
             case nil: .unknown
             }
-        KeyboardFocus.reveal(scrollTarget(target), among: stops, travelling: travel)
+        let revealed = scrollTarget(target)
+        let reveal = { KeyboardFocus.reveal(revealed, among: stops, travelling: travel) }
+        if let fillSlide { fillSlide.holdInViewport(while: reveal) } else { reveal() }
     }
 
     static func trailingRow(_ view: NSView) -> NSStackView {

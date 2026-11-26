@@ -129,7 +129,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         guard let view else { return }
         let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
-        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { $0 }
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, holding: fillSlide) { $0 }
     }
 
     private func moveTab(from view: NSView?, delta: Int) {
@@ -140,7 +140,7 @@ final class SettingsWorkspacesSection: SettingsSection {
             onExitToNav?()
             return
         }
-        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: true) { $0 }
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: true, holding: fillSlide) { $0 }
     }
 }
 
