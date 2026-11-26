@@ -41,7 +41,8 @@ final class WindowController: NSObject {
     private var toasts: ToastPresenter {
         if let builtToasts { return builtToasts }
         let presenter = ToastPresenter(
-            host: container, below: modal?.overlay ?? confirmCard, topInset: Self.toastTopInset,
+            host: container, below: modal?.overlay ?? confirmCard, floor: floatArea.bottomAnchor,
+            topInset: Self.toastTopInset,
             trailingInset: Self.toastTrailingInset, dismissAfter: GeneralConfig.current.toastDuration,
             isPresent: { [weak self] in self.map { Self.isPresent($0.window) } ?? true })
         builtToasts = presenter

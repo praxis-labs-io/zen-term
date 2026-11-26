@@ -276,11 +276,6 @@ final class ToastView: ShadowCardView, ThemeReapplying {
         shortcutSlots.forEach { $0.refresh() }
     }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(self, appearing: true)
-    }
-
     func animateOut(completion: @escaping () -> Void) {
         guard !isDismissing else { return }
         isDismissing = true
