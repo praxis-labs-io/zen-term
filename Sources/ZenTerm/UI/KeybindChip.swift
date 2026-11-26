@@ -100,6 +100,5 @@ final class KeybindChip: ControlView, ThemeReapplying {
         }
         easeFill(fill)
         showFocusRing(hasKeyboardFocus)
-        if isCapturing { layer?.borderColor = chrome.accent.nsColor.cgColor }
     }
 }
