@@ -328,6 +328,16 @@ final class PaneCanvasControllerTests: WindowTestCase {
         XCTAssertEqual(controller.title, "api")
     }
 
+    func test_aShellStartedInsideThePanesShell_namesItselfInTheHeader() throws {
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
+        surface.foregroundProcessGroupID = try jobs.startWithoutArguments(named: "bash")
+
+        controller.refreshHeaders()
+
+        let header = try XCTUnwrap(controller.hostsForTesting[controller.focusedLeafID]?.header)
+        XCTAssertEqual(header.nameForTesting, "bash", "a nested shell is not the pane's own, but it still has a name")
+    }
+
     func test_anEmptyOrShellCommand_namesNoJob() {
         XCTAssertNil(PaneCanvasController.jobName(fromCommand: ""))
         XCTAssertNil(PaneCanvasController.jobName(fromCommand: "zsh"))
