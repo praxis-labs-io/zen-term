@@ -329,8 +329,15 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             idBySurface[ObjectIdentifier(surface)].flatMap { programIcon?($0, surface) }
             ?? PaneIdentity.running(in: surface).process
         let running = PaneIdentity.Running(
-            process: program != .shell ? program : ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
+            process: [program, Self.configuredProgram(spec)].first { $0 != .shell } ?? ProcessIcon.toolFloat(spec)
+                ?? .tool,
+            name: spec.title)
         return PaneIdentity.header(named: nil, running: running, directory: spec.command.isEmpty ? place : nil)
+    }
+
+    // The launch shell is in front until it starts the command, so the command names the program meanwhile.
+    private static func configuredProgram(_ spec: ToolFloat) -> ProcessIcon {
+        ProcessIcon.forCommand(spec.command.split(whereSeparator: \.isWhitespace).map(String.init))
     }
 
     func refreshHeader() {

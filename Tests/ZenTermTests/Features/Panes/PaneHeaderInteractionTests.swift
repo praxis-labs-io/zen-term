@@ -289,6 +289,16 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         XCTAssertEqual(header?.processForTesting, ProcessIcon.forAgent("codex"), "not Node.js, the way a pane reads it")
     }
 
+    func test_aToolFloatsHeader_leadsWithItsCommandsIcon_whileTheLaunchShellIsInFront() throws {
+        let (c, _, header, surface) = try openProbeFloat(command: "lazygit --path .")
+        XCTAssertEqual(header?.processForTesting.name, "Git", "before the poll sees anything")
+
+        surface.foregroundProcessGroupID = try jobs.start(named: "zsh")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(header?.processForTesting.name, "Git", "not the float's own icon, then Git")
+    }
+
     func test_aToolFloatsHeader_wearsAPickedBrandMark_inItsBrandsChip() throws {
         let (_, _, header, _) = try openProbeFloat(icon: "linear")
 
