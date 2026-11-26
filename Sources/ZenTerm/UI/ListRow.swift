@@ -75,7 +75,11 @@ class ListRow: ControlView, ThemeReapplying {
     }
     var focusesOnClick = false
     var isHighlighted = false {
-        didSet { if isHighlighted != oldValue { refreshFill() } }
+        didSet {
+            guard isHighlighted != oldValue else { return }
+            fillSlide?.rowMarkDidChange()
+            refreshFill()
+        }
     }
     var isCurrent = false {
         didSet {
@@ -389,12 +393,22 @@ class ListRow: ControlView, ThemeReapplying {
     var restingFill: NSColor {
         let chrome = Theme.current.chrome
         if showsHover || fillSlide?.marks(self, with: .focus) ?? hasKeyboardFocus { return chrome.fill(.hover) }
-        if isHighlighted || fillSlide?.marks(self, with: .current) ?? isCurrent { return chrome.fill(.active) }
+        let highlighted = fillSlide?.marks(self, with: .highlight) ?? isHighlighted
+        if highlighted || fillSlide?.marks(self, with: .current) ?? isCurrent { return chrome.fill(.active) }
         return .clear
     }
 
-    func refreshFill(snapping: Bool = false) {
-        if snapping { snapFill(restingFill) } else { easeFill(restingFill) }
+    func refreshFill() { easeFill(restingFill) }
+
+    // The slide takes over this row's fill where it stands, so only a fill that goes clear can cut to it.
+    func passFillToSlide() {
+        let resting = restingFill
+        if resting.alphaComponent == 0 { snapFill(resting) } else { easeFill(resting) }
+    }
+
+    func takeFill(fromSlide color: CGColor) {
+        let resting = restingFill
+        if resting.cgColor == color { snapFill(resting) } else { easeFill(resting, from: color) }
     }
 
     // AppKit promotes any clicked view that accepts, so a keyboard-only row accepts only in `takeKeyboardFocus`.

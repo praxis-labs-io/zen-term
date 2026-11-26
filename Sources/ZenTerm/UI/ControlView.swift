@@ -21,7 +21,7 @@ class ControlView: NSView, HoverSuppressing {
 
     func setHoverSuppressed(_ suppressed: Bool) { state.setHoverSuppressed(suppressed) }
     func hoverCoverDidChange() { state.hoverCoverDidChange() }
-    func easeFill(_ color: NSColor) { state.easeFill(color) }
+    func easeFill(_ color: NSColor, from start: CGColor? = nil) { state.easeFill(color, from: start) }
     func snapFill(_ color: NSColor) { state.snapFill(color) }
     func showFocusRing(_ shown: Bool) { state.showFocusRing(shown) }
 

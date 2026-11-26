@@ -1,10 +1,11 @@
 import AppKit
 
-// Carries the fill marking a list's current or focused row from the row that loses it to the row that gains it.
+// Carries the fill marking a list's current, focused or highlighted row from the row that loses it to the one that gains it.
 final class RowFillSlide {
     enum Mark: CaseIterable {
         case current
         case focus
+        case highlight
     }
 
     private final class Track {
@@ -22,6 +23,7 @@ final class RowFillSlide {
     private weak var host: NSView?
     private let rows = NSHashTable<ListRow>.weakObjects()
     private let tracks: [Mark: Track]
+    private var placesInPlace = false
 
     init(host: NSView) {
         self.host = host
@@ -50,6 +52,17 @@ final class RowFillSlide {
         return track.marked === row && track.arriving !== row
     }
 
+    func placeInPlace(_ change: () -> Void) {
+        placesInPlace = true
+        change()
+        placesInPlace = false
+        for track in tracks.values {
+            track.departedThisTurn = nil
+            track.departedRow = nil
+            if track.arriving != nil { land(track) }
+        }
+    }
+
     func rowMarkDidChange() {
         for mark in Mark.allCases { resolve(mark) }
     }
@@ -70,6 +83,7 @@ final class RowFillSlide {
         switch mark {
         case .current: return row.isCurrent
         case .focus: return row.hasKeyboardFocus
+        case .highlight: return row.isHighlighted
         }
     }
 
@@ -83,16 +97,13 @@ final class RowFillSlide {
         track.marked = next
 
         let held = track.arriving
-        let start =
-            held != nil
-            ? inFlightStop(of: track)
-            : previous.flatMap(paintedStop(of:)) ?? (track.departedRow === next ? nil : track.departedThisTurn)
+        let start = placesInPlace ? nil : slideStart(of: track, from: previous, to: next)
         track.generation += 1
         let generation = track.generation
         guard let next, let start, let target = frame(of: next) else {
             settle(track)
-            held?.refreshFill(snapping: true)
-            if next == nil { depart(track, row: previous, from: start, generation: generation) }
+            for row in [held, previous, next] { row?.refreshFill() }
+            if next == nil, !placesInPlace { depart(track, row: previous, from: start, generation: generation) }
             return
         }
         for other in tracks.values where other !== track && other.arriving === next && other.uncommittedStart != nil {
@@ -112,7 +123,7 @@ final class RowFillSlide {
         }
         guard slides else {
             settle(track)
-            held?.refreshFill(snapping: true)
+            for row in [held, previous, departed, next] { row?.refreshFill() }
             return
         }
         track.uncommittedStart = start
@@ -120,7 +131,10 @@ final class RowFillSlide {
             guard let track, track.generation == generation else { return }
             track.uncommittedStart = nil
         }
-        for row in [held, previous, departed, next] { row?.refreshFill(snapping: true) }
+        previous?.passFillToSlide()
+        departed?.passFillToSlide()
+        held?.refreshFill()
+        next.refreshFill()
     }
 
     private func depart(_ track: Track, row: ListRow?, from stop: Motion.FillStop?, generation: Int) {
@@ -133,10 +147,18 @@ final class RowFillSlide {
         }
     }
 
+    private func slideStart(of track: Track, from previous: ListRow?, to next: ListRow?) -> Motion.FillStop? {
+        if track.arriving != nil { return inFlightStop(of: track) }
+        if let painted = previous.flatMap(paintedStop(of:)) { return painted }
+        return track.departedRow === next ? nil : track.departedThisTurn
+    }
+
     private func land(_ track: Track) {
         let landed = track.arriving
+        let carried = track.layer.backgroundColor
         settle(track)
-        landed?.refreshFill(snapping: true)
+        guard let landed else { return }
+        if let carried { landed.takeFill(fromSlide: carried) } else { landed.refreshFill() }
     }
 
     private func settle(_ track: Track) {

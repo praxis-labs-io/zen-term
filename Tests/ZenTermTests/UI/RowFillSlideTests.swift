@@ -144,6 +144,57 @@ final class RowFillSlideTests: WindowTestCase {
         XCTAssertEqual(rows[0].layer?.backgroundColor, clear)
     }
 
+    private func crossing(_ type: NSEvent.EventType) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+    }
+
+    private func fillEase(on row: NavRow) -> CABasicAnimation? {
+        row.layer?.animation(forKey: "motion.backgroundColor") as? CABasicAnimation
+    }
+
+    func test_clickingAHoveredRowCurrent_letsItsHoverKeepEasing() throws {
+        rows[0].isCurrent = true
+        rows[1].mouseEntered(with: try crossing(.mouseEntered))
+        XCTAssertNotNil(fillEase(on: rows[1]), "precondition: the hover eases in")
+
+        rows[0].isCurrent = false
+        rows[1].isCurrent = true
+
+        XCTAssertTrue(slide.isSlidingForTesting(.current), "precondition")
+        XCTAssertNotNil(fillEase(on: rows[1]), "the slide cut the hover's ease short")
+    }
+
+    func test_aSlideLandingOnARowHoveredMidSlide_fadesFromTheSlidesFill() throws {
+        rows[0].isCurrent = true
+        rows[0].isCurrent = false
+        rows[1].isCurrent = true
+        let carried = try XCTUnwrap(slide.slideColorForTesting(.current))
+        rows[1].mouseEntered(with: try crossing(.mouseEntered))
+        XCTAssertNotEqual(rows[1].restingFill.cgColor, carried, "precondition: hover and current differ")
+
+        waitUntil(slide.slidingRowForTesting(.current) == nil, "the slide to land")
+
+        let fade = try XCTUnwrap(fillEase(on: rows[1]), "the landing switched to the hover fill")
+        let from = try XCTUnwrap(fade.fromValue) as AnyObject
+        XCTAssertTrue(CFEqual(from, carried), "the fade starts from the slide's fill")
+        XCTAssertEqual(rows[1].layer?.backgroundColor, rows[1].restingFill.cgColor)
+    }
+
+    func test_thePointerLeavingTheCurrentRow_easesBackToItsFill() throws {
+        Motion.isReduceMotionEnabled = { true }
+        rows[1].isCurrent = true
+        rows[1].mouseEntered(with: try crossing(.mouseEntered))
+        Motion.isReduceMotionEnabled = { false }
+
+        rows[1].mouseExited(with: try crossing(.mouseExited))
+
+        XCTAssertNotNil(fillEase(on: rows[1]), "leaving the row switched its fill")
+        XCTAssertEqual(rows[1].layer?.backgroundColor, rows[1].restingFill.cgColor)
+    }
+
     func test_hoverStillFillsInPlace() throws {
         let row = rows[1]
         row.mouseEntered(

@@ -306,10 +306,11 @@ enum Motion {
         _ layer: CALayer,
         keyPath: String,
         to value: Any?,
+        from start: Any? = nil,
         duration: CFTimeInterval = fadeDuration,
         completion: (() -> Void)? = nil
     ) {
-        let from = layer.presentation()?.value(forKeyPath: keyPath) ?? layer.value(forKeyPath: keyPath)
+        let from = start ?? layer.presentation()?.value(forKeyPath: keyPath) ?? layer.value(forKeyPath: keyPath)
         layer.setValue(value, forKeyPath: keyPath)
 
         if isReduceMotionEnabled() {
