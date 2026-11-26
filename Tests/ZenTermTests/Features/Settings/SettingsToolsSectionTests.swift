@@ -250,6 +250,58 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertIdentical(slide.slidingRowForTesting(.focus), floatRows[1])
     }
 
+    private var manyFloats: String {
+        "abcdefghijklmnopqrst".map { "float = title:\($0) key:cmd+ctrl+\($0) command:vim" }
+            .joined(separator: "\n")
+    }
+
+    private func mountScrolling(_ section: SettingsToolsSection) -> NSView {
+        let detail = mount(section)
+        detail.translatesAutoresizingMaskIntoConstraints = true
+        detail.frame = detail.superview?.bounds ?? .zero
+        detail.layoutSubtreeIfNeeded()
+        return detail
+    }
+
+    private func pressesUntilTheListScrolls() throws -> Int {
+        Motion.isReduceMotionEnabled = { true }
+        try seed(manyFloats)
+        let section = SettingsToolsSection()
+        let detail = mountScrolling(section)
+        let floatRows = rows(in: detail)
+        let scroll = try XCTUnwrap(floatRows.first?.enclosingScrollView)
+        window?.makeFirstResponder(floatRows[0])
+        for presses in 1..<floatRows.count {
+            floatRows[presses - 1].keyDown(with: arrow(125))
+            if scroll.contentView.bounds.minY > 0.5 { return presses }
+        }
+        return try XCTUnwrap(nil as Int?, "the list never scrolled")
+    }
+
+    func test_plainArrow_pastTheMargin_carriesTheSlideWithTheScroll() throws {
+        let presses = try pressesUntilTheListScrolls()
+        let section = SettingsToolsSection()
+        let detail = mountScrolling(section)
+        let floatRows = rows(in: detail)
+        let scroll = try XCTUnwrap(floatRows.first?.enclosingScrollView)
+        window?.makeFirstResponder(floatRows[0])
+        for index in 0..<(presses - 1) { floatRows[index].keyDown(with: arrow(125)) }
+        Motion.isReduceMotionEnabled = { false }
+        let slide = try XCTUnwrap(section.fillSlideForTesting)
+        let leaving = slide.frameForTesting(of: floatRows[presses - 1])
+        let top = scroll.contentView.bounds.minY
+
+        floatRows[presses - 1].keyDown(with: arrow(125))
+
+        let scrolled = scroll.contentView.bounds.minY - top
+        XCTAssertGreaterThan(scrolled, 0, "the list has to scroll for this test to mean anything")
+        XCTAssertIdentical(slide.slidingRowForTesting(.focus), floatRows[presses])
+        XCTAssertEqual(
+            slide.slideStartForTesting(.focus), leaving.offsetBy(dx: 0, dy: scrolled),
+            "the fill starts where the last row showed on screen, not where the scroll carried it")
+        XCTAssertEqual(slide.slideFrameForTesting(.focus), slide.frameForTesting(of: floatRows[presses]))
+    }
+
     func test_optionCommandArrow_doesNotReorder() throws {
         try seed(twoFloats)
         let section = SettingsToolsSection()
