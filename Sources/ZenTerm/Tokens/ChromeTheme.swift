@@ -50,8 +50,8 @@ struct ChromeTheme: Equatable {
 
     enum FillLevel: CaseIterable {
         case rest
-        case hover
         case active
+        case hover
 
         var alpha: CGFloat {
             switch self {

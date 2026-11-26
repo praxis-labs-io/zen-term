@@ -248,7 +248,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
     func test_everyBundledTheme_keepsTheFillLadderOrdered() throws {
         for (token, terminal) in try bundledTerminals() {
             let chrome = ChromeThemeDeriver.derive(from: terminal)
-            let painted = [ChromeTheme.FillLevel.rest, .active, .hover].map { chrome.fill($0).alphaComponent }
+            let painted = ChromeTheme.FillLevel.allCases.map { chrome.fill($0).alphaComponent }
             XCTAssertEqual(
                 painted, painted.sorted(), "\(token) paints the fill tiers out of order: \(painted)")
             XCTAssertEqual(Set(painted).count, painted.count, "\(token) collapses two fill tiers")

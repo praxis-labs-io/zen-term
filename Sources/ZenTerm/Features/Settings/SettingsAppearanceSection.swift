@@ -38,7 +38,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 key: "window-gutter", caption: "Window gutter", blurb: "Space at the window top and sides",
                 range: 0...64, read: { $0.windowGutter }, width: 64)
             self.addNumericRow(
-                key: "pane-gap", caption: "Pane gap", blurb: "",
+                key: "pane-gap", caption: "Pane gap", blurb: nil,
                 range: 0...64, read: { $0.panelGap }, width: 64)
             self.addNumericRow(
                 key: "bottom-drawer-fraction", caption: "Default bottom drawer height",
@@ -54,7 +54,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 width: 64)
             self.addNumericRow(
                 key: "max-drawer-fraction", caption: "Max drawer width/height",
-                blurb: "", range: 0.3...0.95, read: { $0.maxDrawerFraction }, width: 64)
+                blurb: nil, range: 0.3...0.95, read: { $0.maxDrawerFraction }, width: 64)
         }
         addGroup("Motion") {
             self.addSegmentedRow(

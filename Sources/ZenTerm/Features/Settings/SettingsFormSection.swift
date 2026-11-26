@@ -91,7 +91,7 @@ class SettingsFormSection: SettingsSection {
     }
 
     func addNumericRow(
-        key: String, caption: String, blurb: String, range: ClosedRange<CGFloat>,
+        key: String, caption: String, blurb: String?, range: ClosedRange<CGFloat>,
         read: @escaping (GeneralConfig) -> CGFloat, width: CGFloat = 64, integer: Bool = false
     ) {
         scalarKeys.append(key)
@@ -124,7 +124,7 @@ class SettingsFormSection: SettingsSection {
         }
         box.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
-            key: key, caption: caption, description: blurb.isEmpty ? rangeText(range) : "\(blurb), \(rangeText(range))",
+            key: key, caption: caption, description: blurb.map { "\($0), \(rangeText(range))" } ?? rangeText(range),
             control: box, focusStop: box.field, width: width,
             refresh: { [weak self, weak box] in
                 guard let self, let box, box.field.currentEditor() == nil else { return }

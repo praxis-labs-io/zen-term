@@ -15,7 +15,7 @@ final class SettingsTerminalSection: SettingsFormSection {
                 key: "font-family", caption: "Font family", blurb: nil,
                 placeholder: GeneralConfig.builtIn.fontName, read: { $0.fontName }, width: 200)
             self.addNumericRow(
-                key: "font-size", caption: "Font size", blurb: "",
+                key: "font-size", caption: "Font size", blurb: nil,
                 range: SessionFontSize.range, read: { $0.fontSize }, width: 64)
             self.addSegmentedRow(
                 key: "font-thicken", caption: "Thicken", blurb: nil,
@@ -25,7 +25,7 @@ final class SettingsTerminalSection: SettingsFormSection {
         addGroup("Background") {
             self.addNumericRow(
                 key: "background-alpha", caption: "Background alpha",
-                blurb: "", range: 0...1,
+                blurb: nil, range: 0...1,
                 read: { CGFloat($0.backgroundAlpha) }, width: 64)
         }
         addGroup("Cursor") {
@@ -48,7 +48,7 @@ final class SettingsTerminalSection: SettingsFormSection {
                 options: ["On", "Off"], read: { $0.optionAsAlt ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addNumericRow(
-                key: "scroll-multiplier", caption: "Scroll speed", blurb: "",
+                key: "scroll-multiplier", caption: "Scroll speed", blurb: nil,
                 range: 0.1...10, read: { CGFloat($0.scrollMultiplier) }, width: 64)
         }
         addGroup("Shell") {
