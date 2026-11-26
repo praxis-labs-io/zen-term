@@ -147,37 +147,6 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertNotEqual(pillBefore, tabBar.pillColorForTesting)
     }
 
-    func test_keymapChange_rebuildsThePanelHeaderKeycap() throws {
-        var config = GeneralConfig.builtIn
-        GeneralConfig.setCurrentForTesting(config)
-
-        let controller = WindowController(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
-        self.controller = controller
-        controller.mountAndStart()
-        controller.handle(.toggleBottomDrawer)
-        let opened = expectation(description: "drawer opened")
-        OperationQueue.main.addOperation { opened.fulfill() }
-        wait(for: [opened], timeout: 5)
-
-        guard
-            let header = descendants(of: controller.window.contentView!)
-                .compactMap({ ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }).first
-        else {
-            return XCTFail("expected a drawer panel header mounted in the window")
-        }
-
-        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.rebind(.toggleZoom, to: rebound)
-        GeneralConfig.setCurrentForTesting(config)
-        post(.keymap)
-
-        let after = descendants(of: controller.window.contentView!)
-            .compactMap { ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }.first
-        XCTAssertNotEqual(header, after, "the rebind never reached the drawer header keycap")
-        XCTAssertEqual(after, rebound.displayGlyph)
-    }
-
     func test_dismissConfigDiagnosticsToast_takesTheNoticeOffScreen() throws {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)

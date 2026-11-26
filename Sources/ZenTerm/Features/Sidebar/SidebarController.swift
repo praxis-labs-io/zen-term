@@ -57,6 +57,9 @@ final class SidebarController {
     var onCloseAgent: (SurfaceID) -> Void = { _ in }
     var onActivateHost: (SSHHostID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
+    var onMoveWindowButtons: (_ to: HostWindow.WindowButtonPlacement, _ visible: Bool, _ animated: Bool) -> Void = {
+        _, _, _ in
+    }
     var onFocusYield: () -> Void = {}
     var onFocusRestore: () -> Void = {}
 
@@ -111,7 +114,7 @@ final class SidebarController {
         let canvasOffset = canvasEdge.leadingAnchor.constraint(equalTo: edge.leadingAnchor, constant: canvasGap)
         let leadWidth = lead.widthAnchor.constraint(equalToConstant: leadOffset)
         let tabBarLeading = tabBar.leadingAnchor.constraint(equalTo: lead.trailingAnchor, constant: tabBarPull)
-        let sidebarTop = column.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.topInset)
+        let sidebarTop = column.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.windowGutter)
         let collapsedToggleLeading = collapsedToggle.leadingAnchor.constraint(
             equalTo: container.leadingAnchor, constant: ChromeMetrics.windowGutter)
         self.collapsedToggleLeading = collapsedToggleLeading
@@ -145,6 +148,7 @@ final class SidebarController {
         ])
         edgeReveal.install(in: container)
         settle()
+        moveWindowButtons(animated: false)
     }
 
     private var edgeOffset: CGFloat { isDocked ? SidebarView.width : 0 }
@@ -171,6 +175,10 @@ final class SidebarController {
         if wasRevealed { onRevealChanged() } else { handTheToggleToTheWindow() }
         isDocked.toggle()
         Self.lastChoiceIsDocked = isDocked
+        if isDocked, !wasRevealed {
+            parkWindowButtons(Self.windowButtonPlacement(onCard: false).shifted(by: -SidebarView.width))
+        }
+        moveWindowButtons(animated: true)
         column.setContentHidden(false)
         lead.isHidden = false
         Motion.fade(footer, to: isDocked ? 1 : 0, duration: Motion.pageSlideDuration)
@@ -233,6 +241,7 @@ final class SidebarController {
         revealID &+= 1
         edgeReveal.setRevealed(false)
         isDocked = false
+        moveWindowButtons(animated: false)
         slideID &+= 1
         isSliding = false
         columnLeading?.constant = 0
@@ -264,6 +273,29 @@ final class SidebarController {
 
     var isShown: Bool { isDocked || isRevealed }
 
+    // The titlebar's buttons travel and fade with the column, from or to its parked spot past the window's edge.
+    private func moveWindowButtons(animated: Bool) {
+        if isShown {
+            onMoveWindowButtons(Self.windowButtonPlacement(onCard: isRevealed), true, animated)
+        } else {
+            let wasOnCard = column.isFloating
+            let park = wasOnCard ? revealPark.dx : -SidebarView.width
+            onMoveWindowButtons(Self.windowButtonPlacement(onCard: wasOnCard).shifted(by: park), false, animated)
+        }
+    }
+
+    private func parkWindowButtons(_ placement: HostWindow.WindowButtonPlacement) {
+        onMoveWindowButtons(placement, false, false)
+    }
+
+    // Centered in the strip above the rows, the close button's edge on the heading's, docked or on the card.
+    private static func windowButtonPlacement(onCard: Bool) -> HostWindow.WindowButtonPlacement {
+        let cardInset = onCard ? ChromeMetrics.windowGutter : 0
+        return HostWindow.WindowButtonPlacement(
+            leading: cardInset + SidebarView.captionLeading,
+            centerFromTop: ChromeMetrics.windowGutter + cardInset + SidebarView.windowButtonStripHeight / 2)
+    }
+
     private func applyRevealInsets() {
         columnLeading?.constant = ChromeMetrics.windowGutter
         columnBottom?.constant = -ChromeMetrics.windowGutter
@@ -284,6 +316,8 @@ final class SidebarController {
         edgeReveal.setRevealed(true)
         settle()
         column.superview?.layoutSubtreeIfNeeded()
+        parkWindowButtons(Self.windowButtonPlacement(onCard: true).shifted(by: revealPark.dx))
+        moveWindowButtons(animated: true)
         Motion.slideFade(column, appearing: true, from: revealPark) { [weak self] in
             guard let self, self.revealID == id else { return }
             self.collapsedToggle.isHidden = true
@@ -315,6 +349,7 @@ final class SidebarController {
         let id = revealID
         edgeReveal.setRevealed(false)
         collapsedToggle.isHidden = false
+        moveWindowButtons(animated: true)
         onRevealChanged()
         if handBackFocus { onFocusRestore() }
         Motion.slideFade(column, appearing: false, from: revealPark) { [weak self] in
@@ -507,7 +542,7 @@ final class SidebarController {
     func shutdown() { edgeReveal.shutdown() }
 
     func reapplyChromeLayout() {
-        sidebarTop?.constant = ChromeMetrics.topInset
+        sidebarTop?.constant = ChromeMetrics.windowGutter
         collapsedToggleLeading?.constant = ChromeMetrics.windowGutter
         column.reapplyToggleInset()
         lead.setLeadingInset(Self.leadInset)
@@ -517,6 +552,8 @@ final class SidebarController {
         if isRevealed { applyRevealInsets() }
         edgeReveal.reapplyLiveRegion()
         column.reapplyCornerRadius()
+        view.reapplyWindowButtonStrip()
+        moveWindowButtons(animated: false)
     }
 
     var windowToggleForTesting: IconButton { collapsedToggle }

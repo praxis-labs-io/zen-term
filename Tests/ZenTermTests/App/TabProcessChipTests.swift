@@ -93,15 +93,18 @@ final class TabProcessChipTests: WindowTestCase {
         XCTAssertEqual(try chipProcess(in: c)?.name, "Homebrew")
     }
 
-    func test_aProgramWhoseArgumentsCannotBeRead_isUnknown_neverTheRestingShell() throws {
+    func test_aProgramWhoseArgumentsCannotBeRead_readsAsTheShell() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
         XCTAssertNil(ProcessArguments.arguments(of: 1), "precondition: launchd's arguments are not readable")
 
+        pane.foregroundProcessGroupID = try jobs.start(named: "nvim")
+        c.pollTitlesForTesting()
+        XCTAssertEqual(try chipProcess(in: c)?.name, "Neovim", "precondition")
+
         pane.foregroundProcessGroupID = 1
         c.pollTitlesForTesting()
-
-        XCTAssertEqual(try chipProcess(in: c), .unknown)
+        XCTAssertEqual(try chipProcess(in: c), .shell)
     }
 
     func test_aTabsChip_followsTheProgramInItsFocusedPane() throws {
@@ -115,27 +118,28 @@ final class TabProcessChipTests: WindowTestCase {
 
         pane.foregroundProcessGroupID = try jobs.start(named: "fooctl")
         c.pollTitlesForTesting()
-        XCTAssertEqual(try chipProcess(in: c), .unknown, "an unknown program gets the generic chip")
+        XCTAssertEqual(try chipProcess(in: c), .shell, "an unknown program gets the shell chip")
 
         pane.foregroundProcessGroupID = nil
         c.pollTitlesForTesting()
         XCTAssertEqual(try chipProcess(in: c), .shell, "back at the prompt, the shell chip returns")
     }
 
-    func test_aTabIsNamedForTheProgramInItsFocusedPane_andForItsFolderBackAtThePrompt() throws {
+    func test_aTabReadsItsFocusedPanesTitle_andItsFolderBackAtThePrompt() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
         pane.currentDirectory = URL(fileURLWithPath: "/tmp/api", isDirectory: true)
         pane.title = "~/tmp/api"
         c.pollTitlesForTesting()
-        XCTAssertEqual(c.tabTitlesForTesting.first, "api", "at a prompt, the folder outranks the shell's path title")
+        XCTAssertEqual(c.tabTitlesForTesting.first, "api", "a path title reads as its folder, never the full path")
 
         pane.foregroundProcessGroupID = try jobs.start(named: "nvim")
         pane.title = "nvim Sources/App.swift"
         c.pollTitlesForTesting()
-        XCTAssertEqual(c.tabTitlesForTesting.first, "nvim", "a job is named for its program, not its command line")
+        XCTAssertEqual(c.tabTitlesForTesting.first, "nvim Sources/App.swift", "a job reads as the title it runs under")
 
         pane.foregroundProcessGroupID = nil
+        pane.title = "~/tmp/api"
         c.pollTitlesForTesting()
         XCTAssertEqual(c.tabTitlesForTesting.first, "api")
     }

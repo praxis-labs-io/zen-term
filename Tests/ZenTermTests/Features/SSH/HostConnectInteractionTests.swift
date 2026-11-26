@@ -1347,14 +1347,24 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(emblem.tileFillForTesting, chrome.background.nsColor.cgColor)
     }
 
+    // The smallest window alone leaves room for both, so a wider gutter takes the height the emblem would need.
+    private static let squeezingGutter: CGFloat = 48
+
+    private func squeezeToTheSmallestWindow(_ c: WindowController) throws {
+        var config = GeneralConfig.current
+        config.windowGutter = Self.squeezingGutter
+        GeneralConfig.setCurrentForTesting(config)
+        postConfigChange(.chromeLayout)
+        c.window.setContentSize(c.window.contentMinSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+        try XCTUnwrap(c.window.contentView).layoutSubtreeIfNeeded()
+    }
+
     func test_atTheSmallestWindow_connectStaysOnScreen_andTheEmblemGivesWay() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        let content = try XCTUnwrap(c.window.contentView)
 
-        c.window.setContentSize(c.window.contentMinSize)
-        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
-        content.layoutSubtreeIfNeeded()
+        try squeezeToTheSmallestWindow(c)
 
         let button = screen.actionButtonForTesting
         let panel = screen.panelForTesting
@@ -1372,9 +1382,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         let emblem = screen.emblemForTesting
         let fullSize = content.frame.size
-        c.window.setContentSize(c.window.contentMinSize)
-        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
-        content.layoutSubtreeIfNeeded()
+        try squeezeToTheSmallestWindow(c)
         XCTAssertTrue(screen.detachedForTesting.contains(emblem), "premise: the emblem gave way")
         let before = emblem.cellColorsForTesting
         try loadTheme("background = #010101\nforeground = #fefefe\n")

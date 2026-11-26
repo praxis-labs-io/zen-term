@@ -25,7 +25,7 @@ final class ModeChromeMotionTests: WindowTestCase {
         window.contentView?.addSubview(container)
         chrome = ModeChrome(
             container: container, content: content, padding: ChromeMetrics.Spacing.s8,
-            header: PanelMeta(title: "Scroll", action: .toggleScrollMode), onStripsChanged: {})
+            header: nil, onStripsChanged: {})
     }
 
     override func tearDownWithError() throws {
@@ -50,18 +50,6 @@ final class ModeChromeMotionTests: WindowTestCase {
         XCTAssertFalse(bar.isHidden, "the bar leaves by sliding, not by vanishing")
         XCTAssertNotNil(bar.layer?.animation(forKey: "motion.slide"))
         waitUntil(bar.isHidden, "the bar to hide once it has slid out")
-    }
-
-    func test_theHeader_slidesDownFromTheTopEdgeAndBackUp() throws {
-        chrome.setHeader(PanelMeta(title: "Scroll", action: .toggleScrollMode))
-        let header = try XCTUnwrap(chrome.headerViewForTesting)
-        XCTAssertGreaterThan(try slide(on: header).height, 0, "the header drops from above the pane's top edge")
-
-        chrome.setHeader(nil)
-
-        XCTAssertFalse(chrome.isHeaderVisibleForTesting)
-        XCTAssertFalse(header.isHidden, "the header leaves by sliding, not by vanishing")
-        waitUntil(header.isHidden, "the header to hide once it has slid out")
     }
 
     func test_dismissingTheBarWhileItArrives_slidesItBackOut() throws {

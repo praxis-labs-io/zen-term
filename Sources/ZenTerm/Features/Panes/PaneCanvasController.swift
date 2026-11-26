@@ -33,8 +33,6 @@ final class PaneCanvasController: NSObject {
     private var panesHoldFocus = true
 
     private let isToolFloatOpen: () -> Bool
-    // A host pane's foreground job is the local `ssh`, never the program running on the host.
-    private let readsForeground: Bool
 
     private static let minSplitExtent: CGFloat = 240
     private static let resizeStep: Double = 0.04
@@ -75,6 +73,10 @@ final class PaneCanvasController: NSObject {
     var onSurfaceExited: ((TerminalSurface) -> Void)?
 
     var onZoomEnded: (() -> Void)?
+
+    var onHeaderControl: ((KeyInterceptor.ReservedChord) -> Void)?
+
+    var running: (SurfaceID, TerminalSurface) -> PaneIdentity.Running = { PaneIdentity.running(in: $1) }
 
     var onSurfaceStartFailed: ((_ retry: @escaping () -> Void, _ close: @escaping () -> Void) -> Void)?
 
@@ -119,23 +121,14 @@ final class PaneCanvasController: NSObject {
         return NavRegistry.shared.isVim(token: token)
     }
 
-    // The shell's title is its prompt path or command line, so the program and folder outrank it.
     var title: String {
-        if let name = recordByLeaf[tree.focusedLeaf]?.name { return name }
         let surface = registry.surface(for: tree.focusedLeaf)
-        if readsForeground, let program = surface.flatMap(Self.runningProgram(in:)) { return program }
-        if let folder = (surface?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf]).flatMap(PathDisplay.folderName) {
-            return folder
-        }
-        if let osc = surface?.title {
-            let trimmed = osc.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return PathDisplay.folderName(fromTitle: trimmed) }
-        }
-        return "shell"
+        return PaneIdentity.tabTitle(
+            title: surface?.title, directory: surface?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf])
     }
 
     // `p_comm` names a program whose arguments the app cannot read (`sudo`).
-    private static func runningProgram(in surface: TerminalSurface) -> String? {
+    static func runningProgram(in surface: TerminalSurface) -> String? {
         guard let group = surface.foregroundProcessGroupID, !ForegroundGroup.isShell(group) else { return nil }
         if let arguments = ProcessArguments.arguments(of: group) {
             if ProcessArguments.isInteractiveShell(arguments) { return nil }
@@ -151,7 +144,7 @@ final class PaneCanvasController: NSObject {
     init(
         initialCWD: URL? = nil, initialCommand: PaneProgram? = nil, env: [String: String] = [:],
         backingScale: CGFloat? = nil,
-        isToolFloatOpen: @escaping () -> Bool = { false }, readsForeground: Bool = true,
+        isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
     ) {
@@ -162,7 +155,6 @@ final class PaneCanvasController: NSObject {
         self.workspaceEnv = env
         self.backingScale = backingScale
         self.isToolFloatOpen = isToolFloatOpen
-        self.readsForeground = readsForeground
         super.init()
         nextID = 2
         if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
@@ -275,15 +267,36 @@ final class PaneCanvasController: NSObject {
     private func hostView(for id: PaneID) -> NSView {
         if let cached = hostByLeaf[id] { return cached }
         guard let surface = registry.surface(for: id) else { return NSView() }
+        let header = PaneHeader(
+            content: headerContent(of: id, surface),
+            controls: [.splitHorizontal, .splitVertical, .focusMode, .close],
+            onControl: { [weak self] control in
+                self?.focus(id)
+                control.chord.map { self?.onHeaderControl?($0) }
+            })
         let host = PanelHostView(
             content: surface.view,
-            meta: nil,
-            zoomMeta: PanelMeta(title: "Terminal pane: Focus Mode", action: .toggleZoom),
+            header: header,
             onFocusRequest: { [weak self] in
                 self?.focus(id)
             })
         hostByLeaf[id] = host
         return host
+    }
+
+    private func headerContent(of id: PaneID, _ surface: TerminalSurface) -> PaneHeader.Content {
+        let program = surfaceIDByLeaf[id].map { running($0, surface) } ?? PaneIdentity.running(in: surface)
+        return PaneIdentity.header(
+            named: recordByLeaf[id]?.name, running: program, directory: surface.currentDirectory ?? cwdByLeaf[id])
+    }
+
+    func refreshHeaders() {
+        for id in hostByLeaf.keys { refreshHeader(of: id) }
+    }
+
+    private func refreshHeader(of id: PaneID) {
+        guard let header = hostByLeaf[id]?.header, let surface = registry.surface(for: id) else { return }
+        header.content = headerContent(of: id, surface)
     }
 
     var hostsForTesting: [PaneID: PanelHostView] { hostByLeaf }
@@ -302,6 +315,7 @@ final class PaneCanvasController: NSObject {
         let showsBorder = focusBorderIsVisible && (sharesScreen || (zoomedLeaf == nil && tree.leafIDs.count > 1))
         for (id, host) in hostByLeaf {
             host.isFocused = panesHoldFocus && (id == tree.focusedLeaf) && showsBorder
+            host.isActive = panesHoldFocus && (id == tree.focusedLeaf)
             host.isZoomed = (id == zoomedLeaf)
         }
     }
@@ -580,6 +594,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
         guard let id = leafID(of: s) else { return }
         cwdByLeaf[id] = url
+        refreshHeader(of: id)
         if id == tree.focusedLeaf { onTitleChanged?() }
     }
     func surface(_ s: TerminalSurface, titleDidChange title: String) {

@@ -124,40 +124,18 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertFalse(output.contains("zen tab rename"))
     }
 
-    private static let renameLine =
-        #"- Your first action after the user's first prompt: name your tab for the task in 2 or 3 words "#
-        + #"with `zen tab rename "<words>"`."#
-
-    func test_shippedHookAsksATopLevelSessionToNameItsTabAtStartupAndAfterClear() throws {
+    func test_shippedHookNeverAsksASessionToRenameItsTab() throws {
         let pane = #"{"agent":{"name":"claude"},"token":31}"#
-        for start in ["startup", "clear"] {
-            let (status, output) = try runShippedHook(
-                environment: try zenPaneEnvironment(pane: 31, answering: pane), start: start)
-
-            XCTAssertEqual(status, 0)
-            XCTAssertTrue(output.contains(Self.renameLine), start)
-        }
-    }
-
-    func test_shippedHookLeavesTheTabAloneWhenASessionResumesOrCompacts() throws {
-        let pane = #"{"agent":{"name":"claude"},"token":31}"#
-        for start in ["resume", "compact"] {
+        for start in ["startup", "clear", "resume", "compact"] {
             let (status, output) = try runShippedHook(
                 environment: try zenPaneEnvironment(pane: 31, answering: pane), start: start)
 
             XCTAssertEqual(status, 0)
             XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"), start)
-            XCTAssertFalse(output.contains("zen tab rename"), start)
+            XCTAssertFalse(output.contains("zen tab rename"), "a tab follows its agent's own title: \(start)")
+            XCTAssertTrue(
+                output.contains("- Your first action after the user's first prompt: load the /zen skill."), start)
         }
-    }
-
-    func test_shippedHookLeavesATabSomeoneNamedAlone() throws {
-        let pane = #"{"agent":{"name":"claude"},"tab_named":true,"token":31}"#
-        let (status, output) = try runShippedHook(environment: try zenPaneEnvironment(pane: 31, answering: pane))
-
-        XCTAssertEqual(status, 0)
-        XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
-        XCTAssertFalse(output.contains("zen tab rename"))
     }
 
     func test_shippedHookHasNoHelperLineWithoutAParent() throws {

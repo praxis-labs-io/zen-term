@@ -33,7 +33,12 @@ final class WorkspaceRecipeTests: WindowTestCase {
     }
 
     private func revealedDrawerCount(in controller: WindowController) -> Int {
-        panels(in: controller).filter(\.isHeaderVisibleForTesting).count
+        panels(in: controller).filter(Self.isDrawer).count
+    }
+
+    // A drawer's header carries no split, which is what tells it from a pane's.
+    private static func isDrawer(_ panel: PanelHostView) -> Bool {
+        panel.header?.controlsForTesting.contains(.splitHorizontal) == false
     }
 
     private func makeController() -> WindowController {
@@ -79,7 +84,7 @@ final class WorkspaceRecipeTests: WindowTestCase {
         let focused = panels(in: controller).filter { $0.borderForTesting.width == ChromeMetrics.Border.paneFocus }
         XCTAssertEqual(focused.count, 1, "exactly one region holds the tab's focus")
         XCTAssertTrue(
-            focused.first?.isHeaderVisibleForTesting == true,
+            focused.first.map(Self.isDrawer) == true,
             "the recipe's focus landed on a drawer and stayed there, rather than being taken back "
                 + "by the main pane because the recipe ran before the tab started")
     }

@@ -11,7 +11,7 @@ final class ModeChrome {
 
     private let cursor = ScrollCursorView()
 
-    private var header: PanelHeader?
+    private let header: PaneHeader?
     private var isHeaderShown = false
     private var contentTopToHeader: NSLayoutConstraint?
     private let contentTopToContainer: NSLayoutConstraint
@@ -24,10 +24,16 @@ final class ModeChrome {
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
+    // What a shown header takes from the content's height, above the padding it would have anyway.
+    static var headerRoom: CGFloat {
+        GeneralConfig.current.paneHeaders ? stripInset + ChromeMetrics.Height.xs : 0
+    }
+
     init(
-        container: NSView, content: NSView, padding: CGFloat, header: PanelMeta?,
+        container: NSView, content: NSView, padding: CGFloat, header: PaneHeader?,
         onStripsChanged: @escaping () -> Void
     ) {
+        self.header = header
         self.container = container
         self.content = content
         self.padding = padding
@@ -47,20 +53,32 @@ final class ModeChrome {
             cursor.topAnchor.constraint(equalTo: content.topAnchor),
             cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
-        if let header { makeHeader(header) }
+        if let header { mount(header) }
+        setHeaderShown(Self.showsHeader(header))
     }
 
-    func setHeader(_ meta: PanelMeta?) {
-        guard let meta else {
-            if header != nil { setHeaderShown(false) }
-            return
+    func applyHeaderShown() {
+        let shown = Self.showsHeader(header)
+        guard shown != isHeaderShown else { return }
+        setHeaderShown(shown)
+        onStripsChanged()
+    }
+
+    private static func showsHeader(_ header: PaneHeader?) -> Bool {
+        header != nil && GeneralConfig.current.paneHeaders
+    }
+
+    private func setHeaderShown(_ shown: Bool) {
+        isHeaderShown = shown
+        header?.isHidden = !shown
+        if shown {
+            contentTopToContainer.isActive = false
+            contentTopToHeader?.isActive = true
+        } else {
+            contentTopToHeader?.isActive = false
+            contentTopToContainer.isActive = true
         }
-        let view = header ?? makeHeader(meta)
-        view.apply(meta)
-        setHeaderShown(true)
     }
-
-    func reapplyKeymap() { header?.reapplyKeymap() }
 
     func setScrollCursor(
         _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
@@ -86,7 +104,7 @@ final class ModeChrome {
             findBar.isDismissed = true
             contentBottomToFindBar.isActive = false
             contentBottomToContainer.isActive = true
-            slide(findBar, appearing: false, fromBottom: true)
+            slide(findBar, appearing: false)
             return nil
         }
         let bar = findBar ?? makeFindBar()
@@ -95,7 +113,7 @@ final class ModeChrome {
         bar.isDismissed = false
         contentBottomToContainer.isActive = false
         contentBottomToFindBar?.isActive = true
-        slide(bar, appearing: true, fromBottom: true)
+        slide(bar, appearing: true)
         return bar
     }
 
@@ -105,43 +123,23 @@ final class ModeChrome {
 
     var scrollCursorForTesting: ScrollCursorView { cursor }
     var findBarForTesting: FindBarView? { isFindBarShown ? findBar : nil }
-    var isHeaderVisibleForTesting: Bool { isHeaderShown }
-    var headerViewForTesting: NSView? { header }
-    var headerContentForTesting: (title: String, shortcut: String)? { header?.contentForTesting }
-    var builtHeaderKeycapForTesting: String? { header?.builtKeycapShortcutForTesting }
-
-    private func setHeaderShown(_ shown: Bool) {
-        guard let header, let contentTopToHeader, shown != isHeaderShown else { return }
-        defer { onStripsChanged() }
-        isHeaderShown = shown
-        if shown {
-            contentTopToContainer.isActive = false
-            contentTopToHeader.isActive = true
-        } else {
-            contentTopToHeader.isActive = false
-            contentTopToContainer.isActive = true
-        }
-        slide(header, appearing: shown, fromBottom: false)
-    }
+    var shownHeaderForTesting: PaneHeader? { isHeaderShown ? header : nil }
 
     // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the strip.
-    private func slide(_ strip: NSView, appearing: Bool, fromBottom: Bool) {
+    private func slide(_ strip: NSView, appearing: Bool) {
         let key = ObjectIdentifier(strip)
         let run = (slideRuns[key] ?? 0) + 1
         slideRuns[key] = run
         let depth = strip.fittingSize.height + Self.stripInset
         strip.isHidden = false
-        Motion.slideFade(strip, appearing: appearing, from: CGVector(dx: 0, dy: fromBottom ? -depth : depth)) {
+        Motion.slideFade(strip, appearing: appearing, from: CGVector(dx: 0, dy: -depth)) {
             [weak self] in
             guard !appearing, self?.slideRuns[key] == run else { return }
             strip.isHidden = true
         }
     }
 
-    @discardableResult
-    private func makeHeader(_ meta: PanelMeta) -> PanelHeader {
-        let view = PanelHeader(meta)
-        view.translatesAutoresizingMaskIntoConstraints = false
+    private func mount(_ view: PaneHeader) {
         view.isHidden = true
         container.addSubview(view)
         NSLayoutConstraint.activate([
@@ -151,8 +149,6 @@ final class ModeChrome {
         ])
         contentTopToHeader = content.topAnchor.constraint(
             equalTo: view.bottomAnchor, constant: padding)
-        header = view
-        return view
     }
 
     private func makeFindBar() -> FindBarView {
@@ -170,76 +166,5 @@ final class ModeChrome {
         findBar = bar
         bar.paneFill = findBarFill
         return bar
-    }
-}
-
-private final class PanelHeader: NSView, ThemeReapplying {
-    private var title: String
-    private var action: KeyInterceptor.ReservedChord
-    private let titleField = NSTextField(labelWithString: "")
-    private var keycap: KeycapView
-    private static let font = ChromeType.font(.small, weight: .medium, face: .digits)
-
-    var contentForTesting: (title: String, shortcut: String) {
-        (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
-    }
-
-    var builtKeycapShortcutForTesting: String { keycap.shortcut }
-
-    init(_ meta: PanelMeta) {
-        title = meta.title
-        action = meta.action
-        keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, style: .plain)
-        super.init(frame: .zero)
-        titleField.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(titleField)
-        addSubview(keycap)
-        NSLayoutConstraint.activate([
-            titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
-            titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
-        ])
-        activateKeycapConstraints()
-        applyTitle()
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    func apply(_ meta: PanelMeta) {
-        let actionMoved = action != meta.action
-        title = meta.title
-        action = meta.action
-        applyTitle()
-        if actionMoved { rebuildKeycap() }
-    }
-
-    func reapplyTheme() { applyTitle() }
-
-    func reapplyKeymap() { rebuildKeycap() }
-
-    private func rebuildKeycap() {
-        keycap.removeFromSuperview()
-        keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, style: .plain)
-        addSubview(keycap)
-        activateKeycapConstraints()
-    }
-
-    private func activateKeycapConstraints() {
-        keycap.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            keycap.trailingAnchor.constraint(equalTo: trailingAnchor),
-            keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-            keycap.leadingAnchor.constraint(
-                greaterThanOrEqualTo: titleField.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
-        ])
-    }
-
-    private func applyTitle() {
-        titleField.attributedStringValue = NSAttributedString(
-            string: title,
-            attributes: [
-                .font: Self.font,
-                .foregroundColor: Theme.current.chrome.ink(.muted),
-            ])
     }
 }

@@ -49,7 +49,7 @@ final class WindowController: NSObject {
         return presenter
     }
 
-    private static var toastTopInset: CGFloat { ChromeMetrics.topInset + 12 }
+    private static var toastTopInset: CGFloat { ChromeMetrics.windowGutter + 12 }
     private static var toastTrailingInset: CGFloat { ChromeMetrics.windowGutter + 12 }
 
     func showToast(_ content: ToastContent) { toasts.show(content) }
@@ -186,8 +186,22 @@ final class WindowController: NSObject {
             self?.floatNotified(surface: surface, n, from: spec, owner: owner)
         }
         controller.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
+        controller.paneHeaderContent = { [weak self] id, surface in self?.floatPaneHeader(id, surface) }
+        controller.onHeaderClose = { [weak self] in self?.requestCloseFloat() }
         return controller
     }()
+
+    private func floatPaneHeader(_ id: SurfaceID, _ surface: TerminalSurface) -> PaneHeader.Content? {
+        guard let found = pane(where: { $0.surfaceID == id }) else { return nil }
+        return PaneIdentity.header(
+            named: found.pane.record.name, running: running(id, surface), directory: found.pane.cwd)
+    }
+
+    private func requestCloseFloat() {
+        if let pane = floats.shownPaneSurface { return requestClose(agent: pane) }
+        guard floats.activeFloatIsBusy else { return floats.endActive() }
+        presentConfirm(CloseWarning.prompt(closing: .float, naming: [])) { [weak self] in self?.floats.endActive() }
+    }
 
     // Always laid out, so a float pane opened in a tab that is not showing sizes to the card it will show in.
     private let floatArea = NSLayoutGuide()
@@ -511,6 +525,9 @@ final class WindowController: NSObject {
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
         sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
+        sidebar.onMoveWindowButtons = { [weak self] in
+            self?.window.moveWindowButtons(to: $0, visible: $1, animated: $2)
+        }
         sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
         sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
@@ -564,12 +581,13 @@ final class WindowController: NSObject {
                         .cgColor
                 }
                 if change.contains(.chromeLayout) {
-                    self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
+                    self.window.reapplyWindowChrome()
                     self.sidebar.reapplyChromeLayout()
                     self.dockTrailing?.constant = -ChromeMetrics.windowGutter
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
                     self.connectView?.reapplyChromeLayout()
                     self.reapplyFloatLayout()
+                    self.floats.applyHeaderShown()
                     self.reapplyModalLayout()
                     self.builtToasts?.reapplyInsets(
                         topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
@@ -604,10 +622,6 @@ final class WindowController: NSObject {
                     self.leaveRemovedHost(shownHosts: shownHosts)
                     self.refreshConnectView()
                     self.renderTabBar()
-                }
-                if change.contains(.keymap) {
-                    for host in self.panelHosts { host.reapplyKeymap() }
-                    self.floats.reapplyKeymap()
                 }
                 if change.contains(.keymap) || change.contains(.floats) {
                     (self.modal?.overlay as? PaletteOverlay)?.reapplyKeymap()
@@ -800,9 +814,12 @@ final class WindowController: NSObject {
             }
         }
         if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
+        activeController?.refreshHeaders()
+        floats.refreshHeader()
         if refreshWorkspaceNames() { changed = true }
         if changed { renderTabBar() }
-        if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(programIcon) != shown }) {
+        if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(ProcessIcon.running(in:)) != shown })
+        {
             renderAgents()
         }
 
@@ -903,7 +920,7 @@ final class WindowController: NSObject {
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             backingScale: window.backingScaleFactor,
-            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false }, readsForeground: connection == nil,
+            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
             startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
@@ -1024,6 +1041,7 @@ final class WindowController: NSObject {
             unmountCanvas()
             return finished()
         }
+        activeController?.refreshHeaders()
         guard mountedCanvas !== canvas else {
             restoreFocusToActive()
             renderDock()
@@ -1193,7 +1211,7 @@ final class WindowController: NSObject {
             leading: floatArea.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
             trailing: floatArea.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
             top: floatArea.topAnchor.constraint(
-                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
+                equalTo: container.topAnchor, constant: ChromeMetrics.windowGutter),
             bottom: floatArea.bottomAnchor.constraint(
                 equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
@@ -1211,7 +1229,7 @@ final class WindowController: NSObject {
             trailing: overlay.trailingAnchor.constraint(
                 equalTo: container.trailingAnchor, constant: -gutter),
             top: overlay.topAnchor.constraint(
-                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
+                equalTo: container.topAnchor, constant: ChromeMetrics.windowGutter),
             bottom: overlay.bottomAnchor.constraint(
                 equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
@@ -1224,7 +1242,7 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         floatGutter.leading.constant = gutter
         floatGutter.trailing.constant = -gutter
-        floatGutter.top.constant = ChromeMetrics.topInset
+        floatGutter.top.constant = ChromeMetrics.windowGutter
         floatGutter.bottom.constant = -ChromeMetrics.footerGap
     }
 
@@ -1233,7 +1251,7 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         modalGutter.leading.constant = gutter
         modalGutter.trailing.constant = -gutter
-        modalGutter.top.constant = ChromeMetrics.topInset
+        modalGutter.top.constant = ChromeMetrics.windowGutter
         modalGutter.bottom.constant = -ChromeMetrics.footerGap
     }
 
@@ -3600,6 +3618,11 @@ final class WindowController: NSObject {
             self?.helperExited(exit)
         }
         c.onPaneTokensReleased = { [weak self] tokens in self?.familyWindows.forEach { $0.closeChildren(of: tokens) } }
+        c.running = { [weak self] id, surface in self?.running(id, surface) ?? PaneIdentity.running(in: surface) }
+        c.onHeaderControl = { [weak self, weak c] chord in
+            guard let self, c === self.activeController else { return }
+            self.handle(chord)
+        }
         c.floatPanePresenter = floats
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
@@ -4508,7 +4531,7 @@ final class WindowController: NSObject {
             let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
             var item = SidebarAgentItem(
                 id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
-            item.process = programIcon(of: pane.surface)
+            item.process = ProcessIcon.running(in: pane.surface)
             item.place = place.listed
             item.canClose = pane.drawer == nil
             return AgentFamilies.Member(
@@ -4907,21 +4930,24 @@ final class WindowController: NSObject {
         tabBar.render(items)
     }
 
-    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
     private func processIcon(of id: TabID) -> ProcessIcon? {
         guard let controller = workspace(of: id)?.controller(id), let surfaceID = controller.focusedPaneSurfaceID,
             let surface = controller.surface(surfaceID)
         else { return nil }
-        if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
-            return ProcessIcon.forAgent(name)
-        }
-        return programIcon(of: surface)
+        return running(surfaceID, surface).process
     }
 
-    // Unreadable arguments are a program that runs, never the resting shell.
-    private func programIcon(of surface: TerminalSurface) -> ProcessIcon {
-        guard let group = surface.foregroundProcessGroupID else { return .shell }
-        return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
+    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
+    // A host's pane runs the local `ssh`, which says nothing about the host, so it is named for the host.
+    private func running(_ surfaceID: SurfaceID, _ surface: TerminalSurface) -> PaneIdentity.Running {
+        if let host = workspace(holding: surfaceID)?.host {
+            return PaneIdentity.Running(
+                process: ProcessIcon.forProgram("ssh"), name: GeneralConfig.current.displayName(of: host))
+        }
+        if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
+            return PaneIdentity.Running(process: ProcessIcon.forAgent(name), name: name)
+        }
+        return PaneIdentity.running(in: surface)
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {

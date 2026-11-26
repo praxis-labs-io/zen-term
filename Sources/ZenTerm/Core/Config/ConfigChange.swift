@@ -40,6 +40,7 @@ struct ConfigChange: OptionSet {
         if oldTheme != newTheme { change.insert(.theme) }
         if old.windowChrome != new.windowChrome || old.backdropAlpha != new.backdropAlpha
             || old.windowGutter != new.windowGutter || old.panelGap != new.panelGap
+            || old.paneHeaders != new.paneHeaders
         {
             change.insert(.chromeLayout)
         }

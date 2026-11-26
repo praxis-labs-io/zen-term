@@ -163,7 +163,7 @@ needs fixing, not a new step.
 | `Border.paneFocus` | A focused pane |
 | `Icon.xs`, `.sm`, `.md`, `.xl` | SF Symbol point sizes |
 
-`panelGap`, `windowGutter`, `topInset` and `footerGap` are window layout, set from config,
+`panelGap`, `windowGutter` and `footerGap` are window layout, set from config,
 not design tokens.
 
 A `Width`, `Size`, `Side`, `Thickness`, `Length` or `Diameter` name is for a true shape
@@ -215,7 +215,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
 | `handOff` | An SSH host's Connect screen giving way to its terminal |
-| `slideFade` | The collapsed sidebar's hover reveal, the find bar, the mode header, and toasts arriving from the window's trailing edge |
+| `slideFade` | The collapsed sidebar's hover reveal, the find bar, and toasts arriving from the window's trailing edge |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
 | `morph` | A folded toast growing out of its plate or sinking back into it |
@@ -236,7 +236,9 @@ A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowVi
 
 The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; a workspace picker row's icon is plain (`ListRow.Leading.symbol`). A row's detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
-A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`. It is never a ring. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
+Every terminal pane, drawer and float wears a `PaneHeader` (unless `pane-headers` is off): its process chip at `.small`, its name in `.medium` weight and its path, both in `ink(.muted)` wherever focus sits, a quiet line of context; then its controls as `IconButton`s at `Icon.xs`, resting in `ink(.muted)`. An unfocused header shows its controls only while the pointer is over it. A narrow header truncates the path from its front first, so the folder survives, then the name, then drops every control but close.
+
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 

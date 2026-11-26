@@ -18,8 +18,13 @@ final class SettingsAppearanceSection: SettingsFormSection {
         addGroup("Window") {
             self.addSegmentedRow(
                 key: "window-chrome", caption: "Window buttons",
-                blurb: "Show the standard macOS window buttons", options: ["On", "Off"],
+                blurb: "Show the window buttons at the top of the sidebar", options: ["On", "Off"],
                 read: { $0.windowChrome ? 0 : 1 },
+                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addSegmentedRow(
+                key: "pane-headers", caption: "Pane headers",
+                blurb: "Show what runs in each pane above it", options: ["On", "Off"],
+                read: { $0.paneHeaders ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
         }
         addGroup("Toolbar") {

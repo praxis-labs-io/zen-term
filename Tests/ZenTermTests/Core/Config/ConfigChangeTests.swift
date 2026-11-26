@@ -59,6 +59,7 @@ final class ConfigChangeTests: XCTestCase {
 
     func test_eachChromeLayoutField_yieldsChromeLayout() {
         XCTAssertEqual(change(from: { $0.windowChrome.toggle() }), .chromeLayout)
+        XCTAssertEqual(change(from: { $0.paneHeaders.toggle() }), .chromeLayout)
         XCTAssertEqual(change(from: { $0.backdropAlpha += 0.1 }), .chromeLayout)
         XCTAssertEqual(change(from: { $0.windowGutter += 4 }), .chromeLayout)
         XCTAssertEqual(change(from: { $0.panelGap += 4 }), .chromeLayout)
