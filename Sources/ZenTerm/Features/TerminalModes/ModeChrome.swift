@@ -19,12 +19,10 @@ final class ModeChrome {
     private var findField: FindField?
     private var isFindFieldShown = false
     private var slideRuns: [ObjectIdentifier: Int] = [:]
-    private var findFieldPastChip: NSLayoutConstraint?
-    private var findFieldPastPadding: NSLayoutConstraint?
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
-    // Below required: a pane too narrow for the count and steppers lets the field over the chip, not break layout.
+    // Below required: a pane too narrow for the count and steppers lets the field past the text, not break layout.
     private static let findFieldLimitPriority = NSLayoutConstraint.Priority(
         NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
 
@@ -83,12 +81,6 @@ final class ModeChrome {
             contentTopToHeader?.isActive = false
             contentTopToContainer.isActive = true
         }
-        applyFindFieldLimit()
-    }
-
-    private func applyFindFieldLimit() {
-        findFieldPastChip?.isActive = isHeaderShown
-        findFieldPastPadding?.isActive = !isHeaderShown
     }
 
     func setScrollCursor(
@@ -158,19 +150,13 @@ final class ModeChrome {
         field.translatesAutoresizingMaskIntoConstraints = false
         field.isHidden = true
         container.addSubview(field)
-        let inset = ChromeMetrics.Spacing.s4
+        let pastText = field.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor)
+        pastText.priority = Self.findFieldLimitPriority
         NSLayoutConstraint.activate([
-            field.topAnchor.constraint(equalTo: container.topAnchor, constant: inset),
-            field.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
+            field.topAnchor.constraint(equalTo: content.topAnchor),
+            field.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            pastText,
         ])
-        findFieldPastChip = header.map {
-            field.leadingAnchor.constraint(
-                greaterThanOrEqualTo: $0.chipTrailingAnchor, constant: ChromeMetrics.Spacing.s8)
-        }
-        findFieldPastPadding = field.leadingAnchor.constraint(
-            greaterThanOrEqualTo: container.leadingAnchor, constant: padding)
-        for limit in [findFieldPastChip, findFieldPastPadding] { limit?.priority = Self.findFieldLimitPriority }
-        applyFindFieldLimit()
         findField = field
         return field
     }

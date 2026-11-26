@@ -151,8 +151,6 @@ final class PaneHeader: ControlView, ThemeReapplying {
         return gap
     }
 
-    var chipTrailingAnchor: NSLayoutXAxisAnchor { chip.trailingAnchor }
-
     // A press on the strip reaches the pane around it, which focuses the pane.
     override var mouseDownCanMoveWindow: Bool { false }
 

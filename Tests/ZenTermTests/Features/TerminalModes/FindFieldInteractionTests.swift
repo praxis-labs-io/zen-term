@@ -96,7 +96,7 @@ final class FindFieldInteractionTests: WindowTestCase {
 
         XCTAssertEqual(
             opened.surface.searchSteps, [.next, .next],
-            "after the newest is selected, the click lands on the field's button and not the header's control under it")
+            "after the newest is selected, the click lands on the field's button and not the terminal under it")
     }
 
     func test_clickingDown_stepsToTheNewerMatch() throws {
