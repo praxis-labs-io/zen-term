@@ -280,6 +280,24 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.search.isEditing)
     }
 
+    func test_handingOffAfterSteppingInTheFieldLandsOnTheSelectedMatch() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        for row in [5, 10, 15] { surface.rows[row] = "an error here" }
+        surface.rows[23] = "❯ "
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        controller.search.report(selected: 0, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 1, from: surface)
+
+        controller.search.enterScrollMode()
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 10, "the match the count names, not the newest on screen")
+    }
+
     func test_returnInTheFieldStepsOlderAndShiftReturnNewer() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)

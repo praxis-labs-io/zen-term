@@ -126,7 +126,12 @@ final class SearchController {
             navigate(.next)
             return
         }
-        if selected != nil { land(after: .next) }
+        guard selected != nil else { return }
+        if let fieldLanding {
+            scrollMode.land(on: fieldLanding)
+        } else {
+            land(after: .next)
+        }
     }
 
     private func flushPendingNeedle() {
@@ -135,6 +140,7 @@ final class SearchController {
         debounce = nil
         unsent = nil
         selected = nil
+        fieldLanding = nil
         didRequestSelection = false
         surface?.search(text)
     }
@@ -192,6 +198,7 @@ final class SearchController {
         needle = ""
         total = nil
         selected = nil
+        fieldLanding = nil
         pendingStep = nil
         rowsAtStep = nil
         didRequestSelection = false
@@ -221,6 +228,7 @@ final class SearchController {
         guard !text.isEmpty, text.count < Self.debounceBelowLength else {
             unsent = nil
             selected = nil
+            fieldLanding = nil
             showCount()
             surface?.search(text)
             return
@@ -230,6 +238,7 @@ final class SearchController {
             guard let self, self.isActive else { return }
             self.unsent = nil
             self.selected = nil
+            fieldLanding = nil
             self.surface?.search(text)
         }
         debounce = work
@@ -288,16 +297,24 @@ final class SearchController {
 
     private var pendingStep: TerminalSearchStep?
 
+    /// Steps from the field land on a cell of their own, so a hand-off to scroll mode starts on the selected match.
+    private var fieldLanding: ScrollCell?
+
     private func land(after step: TerminalSearchStep) {
-        guard scrollMode.isActive, let surface else { return }
+        guard let surface else { return }
         let rows = Self.viewportRows(of: surface)
+        let from = scrollMode.isActive ? scrollMode.cursor : fieldLanding ?? ScrollCell(row: rows.count, column: 0)
         guard
             let cell = Self.matchCell(
-                needle: needle, rows: rows, from: scrollMode.cursor, step: step,
+                needle: needle, rows: rows, from: from, step: step,
                 viewportMoved: rowsAtStep.map { $0 != rows } ?? false, selected: selected,
                 total: total)
         else { return }
-        scrollMode.land(on: cell)
+        if scrollMode.isActive {
+            scrollMode.land(on: cell)
+        } else {
+            fieldLanding = cell
+        }
     }
 
     private static func viewportRows(of surface: TerminalSurface) -> [String] {
