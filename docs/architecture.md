@@ -233,9 +233,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `openWorkspacesElsewhere` (so an unconfigured workspace running elsewhere is listed too),
   then the configured workspaces no window has open, in config order, then every `ssh-host` line
   in config order, then Add Workspace…. A query ranks within each of those blocks, so a host
-  never sorts above a workspace. A host row goes through `activate(_ host:)`, the sidebar's path,
+  never sorts above a workspace, and selects the row it names in full, else its best match. A host row goes through `activate(_ host:)`, the sidebar's path,
   so it switches to a live session wherever it runs and otherwise shows Connect. Its status
-  word redraws from `sshHostStatusDidChange`.
+  word redraws in place from `sshHostStatusDidChange`, and its state reads where the session runs.
   A group is its lead, its open worktrees, and the lead's unopened worktrees, so a workspace
   is listed once. A ghost lead is a selectable row that opens its configured entry, unless that
   entry is already listed, when it stays a label. A row's

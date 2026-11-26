@@ -255,7 +255,7 @@ final class NewWorkspaceTests: WindowTestCase {
         try type("Al", into: picker, in: c)
         XCTAssertNotEqual(picker.selected, 0, "the match takes the selection")
 
-        try command(#selector(NSResponder.moveUp(_:)), in: picker)
+        for _ in 0..<picker.selected { try command(#selector(NSResponder.moveUp(_:)), in: picker) }
         XCTAssertEqual(picker.selected, 0)
         try command(#selector(NSResponder.insertNewline(_:)), in: picker)
 

@@ -121,13 +121,37 @@ final class RepoPickerHostRowTests: WindowTestCase {
         XCTAssertEqual(c.connectViewForTesting?.host, build)
     }
 
-    func test_aStatusChange_whileOpen_updatesTheRow() throws {
+    func test_aStatusChange_whileOpen_updatesTheRowInPlace() throws {
         let picker = try openPicker(in: makeWindow())
-        XCTAssertEqual(hostRows(of: picker).first?.detail, "Offline")
+        let row = try XCTUnwrap(hostRows(of: picker).first)
+        XCTAssertEqual(row.detail, "Offline")
 
         SSHHostStatusCenter.shared.setReachable(true, host: devbox)
 
-        XCTAssertEqual(hostRows(of: picker).first?.detail, "Online")
+        XCTAssertEqual(row.detail, "Online")
+        XCTAssertTrue(hostRows(of: picker).first === row, "the row is kept, not rebuilt")
+    }
+
+    func test_anExactHostAlias_outranksALooserWorkspaceMatch() throws {
+        try "[Builder]\npath = ~/Dev/builder\n".write(
+            to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+
+        try type("build", into: picker, in: c)
+
+        let selected = picker.rowViews[picker.selected] as? RepoPickerOverlay.HostRowView
+        XCTAssertEqual(selected?.host, build)
+    }
+
+    func test_theHostOnScreen_offersSwitch_notOpen() throws {
+        let c = makeWindow()
+        c.selectHostForTesting(devbox)
+        let picker = try openPicker(in: c)
+
+        try type("Dev Box", into: picker, in: c)
+
+        XCTAssertEqual(picker.barHintsForTesting.first?.label, "Switch")
     }
 
     func test_theHostOnScreen_readsCurrent() throws {

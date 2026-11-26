@@ -33,6 +33,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let entries: [Workspace]
     private let hosts: [SSHHostID]
     private let currentHost: SSHHostID?
+    private let hostOpenState: (SSHHostID) -> WorkspaceOpenState
     private var open: [RunningWorkspace]
     private var elsewhere: [RunningWorkspace]
     private var current: WorkspaceID?
@@ -52,6 +53,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         current: WorkspaceID? = nil, hosts: [SSHHostID] = [], currentHost: SSHHostID? = nil,
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
+        hostOpenState: @escaping (SSHHostID) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void,
         onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
         onReveal: @escaping (Int, WorkspaceID) -> Bool = { _, _ in false },
@@ -62,6 +64,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.entries = entries
         self.hosts = hosts
         self.currentHost = currentHost
+        self.hostOpenState = hostOpenState
         self.open = open
         self.elsewhere = elsewhere
         self.current = current
@@ -269,6 +272,17 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
+    // Fuzzy scores tie a whole name with a prefix of a longer one, so typing a name in full picks that row.
+    private static func isNamed(_ row: Row, _ query: String) -> Bool {
+        let names: [String]
+        switch row {
+        case .host(let host): names = [GeneralConfig.current.displayName(of: host), host.alias]
+        case .newWorkspace, .add, .closedParent(_, nil): names = []
+        default: names = [title(of: row)]
+        }
+        return names.contains { $0.caseInsensitiveCompare(query) == .orderedSame }
+    }
+
     // An open worktree keeps no `Worktree` of its own, so its row resolves back through the listings.
     private func listedWorktree(at folder: URL) -> (worktree: Worktree, parent: Workspace)? {
         let target = folder.standardizedFileURL
@@ -317,7 +331,10 @@ final class RepoPickerOverlay: PaletteOverlay {
             let notCurrent = selectable.filter { state(at: $0) != .current }
             return notCurrent.first { state(at: $0) != nil } ?? notCurrent.first ?? selectable.first ?? 0
         }
-        return selectable.first { Self.score(rows[$0], query) != nil } ?? selectable.first ?? 0
+        if let exact = selectable.first(where: { Self.isNamed(rows[$0], query) }) { return exact }
+        let best = selectable.compactMap { index in Self.score(rows[index], query).map { (index, $0) } }
+            .max { $0.1 < $1.1 }
+        return best?.0 ?? selectable.first ?? 0
     }
 
     private func state(at index: Int) -> State? {
@@ -330,7 +347,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             case .elsewhere: return .otherWindow
             case .closed: return nil
             }
-        case .host(let host): return host == currentHost ? .current : nil
+        case .host(let host):
+            if host == currentHost { return .current }
+            switch hostOpenState(host) {
+            case .here: return .open
+            case .elsewhere: return .otherWindow
+            case .closed: return nil
+            }
         default: return nil
         }
     }
@@ -422,7 +445,16 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     func refreshRemovalState() { rebuild() }
 
-    func refreshHostStatuses() { rebuild() }
+    // In place, so a probe flipping a host's reachability never replays its row's arrival.
+    func refreshHostStatuses() {
+        let hostRows = rowViews.compactMap { $0 as? HostRowView }
+        for row in hostRows { row.setStatus(SSHHostStatusCenter.shared.status(of: row.host)) }
+        let restated = rows.indices.contains { index in
+            guard case .host(let host) = rows[index] else { return false }
+            return hostRows.first { $0.host == host }?.state != state(at: index)
+        }
+        if restated { rebuild(animated: false) }
+    }
 
     private func removingWorktree(_ running: RunningWorkspace) -> Worktree? {
         guard running.isWorktree, let found = listedWorktree(at: running.folder),
@@ -465,8 +497,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             ]
         case .host(let host):
             return [
-                "host", host.alias, GeneralConfig.current.displayName(of: host),
-                SSHHostStatusCenter.shared.status(of: host).word, state(at: index)?.rawValue ?? "",
+                "host", host.alias, GeneralConfig.current.displayName(of: host), state(at: index)?.rawValue ?? "",
             ]
         }
     }
@@ -488,7 +519,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .newWorkspace: return "New Workspace"
         case .add: return "Add Workspace"
-        case .host(let host): return SSHHostStatusCenter.shared.status(of: host) == .connected ? "Switch" : "Open"
+        case .host(let host): return host == currentHost || hostOpenState(host) != .closed ? "Switch" : "Open"
         default: break
         }
         return openState(row: rows[index]) == .closed ? "Open" : "Switch"
@@ -618,13 +649,19 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     final class HostRowView: SelectableRowView {
         let host: SSHHostID
+        let state: State?
 
         init(host: SSHHostID, status: SSHHostStatus, state: State?) {
             self.host = host
+            self.state = state
             super.init(
                 Content(
                     title: GeneralConfig.current.displayName(of: host), titleSuffix: state?.rawValue,
                     leading: .process(.host)))
+            setStatus(status)
+        }
+
+        func setStatus(_ status: SSHHostStatus) {
             detail = status.word
             setAccessibilityValue([status.word, state?.rawValue].compactMap { $0 }.joined(separator: ", "))
         }

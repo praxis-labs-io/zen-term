@@ -1732,6 +1732,7 @@ final class WindowController: NSObject {
                 currentHost: self.selection.host,
                 removals: self.worktreeRemovals,
                 openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
+                hostOpenState: { [weak self] host in self?.hostOpenState(host) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
                 onSwitch: { [weak self] id in
                     self?.closeModal()
@@ -3024,6 +3025,12 @@ final class WindowController: NSObject {
             } + children.listings,
             floats: tabs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
+    }
+
+    // A login still behind Connect is no session yet, but ↩ reveals it in another window all the same.
+    private func hostOpenState(_ host: SSHHostID) -> WorkspaceOpenState {
+        if workspaces.contains(where: { $0.host == host && !isBehindConnect($0) }) { return .here }
+        return appWindows?().contains { $0 !== self && $0.holdsHost(host) } == true ? .elsewhere : .closed
     }
 
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {
