@@ -348,7 +348,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         else { return }
         selected = selectable[next]
         updateHighlight()
-        scrollSelectedToVisible(travelling: delta < 0 ? .up : .down)
+        fillSlide.holdInViewport { scrollSelectedToVisible(travelling: delta < 0 ? .up : .down) }
     }
 
     private func pointRow(at index: Int) {

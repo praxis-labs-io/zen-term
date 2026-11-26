@@ -62,6 +62,19 @@ final class RowFillSlide {
         for track in tracks.values where track.arriving != nil && !isRider(track) { land(track) }
     }
 
+    // A slide runs in list coordinates, so a scroll would jerk it back; layer geometry trails a scroll, so read the views.
+    func holdInViewport(while scroll: () -> Void) {
+        guard let host, let hostLayer = host.layer, let viewport = host.enclosingScrollView else { return scroll() }
+        viewport.documentView?.layoutSubtreeIfNeeded()
+        let before = host.convert(host.bounds, to: viewport).maxY
+        scroll()
+        let moved = host.convert(host.bounds, to: viewport).maxY - before
+        guard moved != 0 else { return }
+        let rise = viewport.isFlipped ? -moved : moved
+        let shift = CGVector(dx: 0, dy: hostLayer.contentsAreFlipped() ? rise : -rise)
+        for track in tracks.values where !isRider(track) { carry(track, by: shift) }
+    }
+
     func rowMarksDidChange(_ row: ListRow) {
         for mark in Mark.allCases { rowMark(mark, didChangeOn: row) }
     }
@@ -78,6 +91,8 @@ final class RowFillSlide {
     func slidingRowForTesting(_ mark: Mark) -> ListRow? { tracks[mark]?.arriving }
 
     func slideFrameForTesting(_ mark: Mark) -> CGRect { tracks[mark]?.layer.frame ?? .zero }
+
+    func slideStartForTesting(_ mark: Mark) -> CGRect? { tracks[mark]?.uncommittedStart?.frame }
 
     func slideColorForTesting(_ mark: Mark) -> CGColor? { tracks[mark]?.layer.backgroundColor }
 
@@ -126,26 +141,30 @@ final class RowFillSlide {
         track.departedThisTurn = nil
         track.departedRow = nil
         setHidden(track.layer, false)
-        let slides = Motion.slideFill(
-            track.layer, from: start, to: Motion.FillStop(frame: target, color: targetColor)
-        ) { [weak self, weak track] in
-            guard let self, let track, track.generation == generation else { return }
-            self.land(track)
-        }
-        guard slides else {
+        guard slide(track, from: start, to: Motion.FillStop(frame: target, color: targetColor)) else {
             settle(track)
             for row in [held, previous, departed, next] { row?.refreshFill() }
             return
-        }
-        track.uncommittedStart = start
-        DispatchQueue.main.async { [weak track] in
-            guard let track, track.generation == generation else { return }
-            track.uncommittedStart = nil
         }
         previous?.passFillToSlide()
         departed?.passFillToSlide()
         held?.refreshFill()
         next.refreshFill()
+    }
+
+    private func slide(_ track: Track, from start: Motion.FillStop, to target: Motion.FillStop) -> Bool {
+        let generation = track.generation
+        let slides = Motion.slideFill(track.layer, from: start, to: target) { [weak self, weak track] in
+            guard let self, let track, track.generation == generation else { return }
+            self.land(track)
+        }
+        guard slides else { return false }
+        track.uncommittedStart = start
+        DispatchQueue.main.async { [weak track] in
+            guard let track, track.generation == generation else { return }
+            track.uncommittedStart = nil
+        }
+        return true
     }
 
     private func depart(_ track: Track, row: ListRow?, from stop: Motion.FillStop?, generation: Int) {
@@ -184,6 +203,15 @@ final class RowFillSlide {
         for rider in tracks.values where rider !== leader && rider.arriving === row && isRider(rider) {
             settle(rider)
         }
+    }
+
+    private func carry(_ track: Track, by shift: CGVector) {
+        guard track.arriving != nil, let start = inFlightStop(of: track) else { return }
+        let color = track.layer.backgroundColor ?? NSColor.clear.cgColor
+        let target = Motion.FillStop(frame: track.layer.frame, color: color)
+        let carried = Motion.FillStop(frame: start.frame.offsetBy(dx: shift.dx, dy: shift.dy), color: start.color)
+        track.generation += 1
+        if !slide(track, from: carried, to: target) { land(track) }
     }
 
     private func land(_ track: Track) {

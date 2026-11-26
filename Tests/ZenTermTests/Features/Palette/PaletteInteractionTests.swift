@@ -485,6 +485,76 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertGreaterThan(gap, 24, "the selection lands inside the list, not flush against the edge")
     }
 
+    private func pressesUntilTheListScrolls() throws -> Int {
+        Motion.isReduceMotionEnabled = { true }
+        let (overlay, scroll) = try mountLongPalette()
+        var presses = 0
+        while scroll.contentView.bounds.minY < 0.5, presses < overlay.rowViews.count {
+            send(Self.moveDown, to: overlay)
+            presses += 1
+        }
+        XCTAssertGreaterThan(
+            scroll.contentView.bounds.minY, 0.5, "the list has to scroll for this test to mean anything")
+        return presses
+    }
+
+    private func mountOneRowShortOfScrolling() throws -> (CommandPaletteOverlay, NSScrollView, RowFillSlide) {
+        let presses = try pressesUntilTheListScrolls()
+        let (overlay, scroll) = try mountLongPalette()
+        for _ in 0..<(presses - 1) { send(Self.moveDown, to: overlay) }
+        Motion.isReduceMotionEnabled = { false }
+        return (overlay, scroll, overlay.fillSlideForTesting)
+    }
+
+    private func selectedRow(of overlay: PaletteOverlay) throws -> ListRow {
+        try XCTUnwrap(overlay.rowViews.first { $0.isSelected } as? ListRow)
+    }
+
+    func test_commandPalette_arrowingPastTheMargin_carriesTheSlideWithTheScroll() throws {
+        let (overlay, scroll, slide) = try mountOneRowShortOfScrolling()
+        let leaving = slide.frameForTesting(of: try selectedRow(of: overlay))
+        let top = scroll.contentView.bounds.minY
+
+        send(Self.moveDown, to: overlay)
+
+        let scrolled = scroll.contentView.bounds.minY - top
+        XCTAssertGreaterThan(scrolled, 0)
+        let arriving = try selectedRow(of: overlay)
+        XCTAssertIdentical(slide.slidingRowForTesting(.highlight), arriving)
+        XCTAssertEqual(
+            slide.slideStartForTesting(.highlight), leaving.offsetBy(dx: 0, dy: scrolled),
+            "the fill starts where the last row showed on screen, not where the scroll carried it")
+        XCTAssertEqual(slide.slideFrameForTesting(.highlight), slide.frameForTesting(of: arriving))
+        waitUntil(slide.slidingRowForTesting(.highlight) == nil, "the slide to land")
+        XCTAssertEqual(arriving.layer?.backgroundColor, arriving.restingFill.cgColor)
+    }
+
+    func test_commandPalette_reversingMidSlide_retargetsFromWhereTheFillIs() throws {
+        let (overlay, _, slide) = try mountOneRowShortOfScrolling()
+        let leaving = try selectedRow(of: overlay)
+        send(Self.moveDown, to: overlay)
+        let inFlight = try XCTUnwrap(slide.slideStartForTesting(.highlight))
+
+        send(Self.moveUp, to: overlay)
+
+        XCTAssertIdentical(slide.slidingRowForTesting(.highlight), leaving)
+        XCTAssertEqual(slide.slideStartForTesting(.highlight), inFlight)
+        XCTAssertEqual(slide.slideFrameForTesting(.highlight), slide.frameForTesting(of: leaving))
+    }
+
+    func test_commandPalette_arrowingPastTheMarginUnderReduceMotion_snapsTheFill() throws {
+        let (overlay, scroll, slide) = try mountOneRowShortOfScrolling()
+        Motion.isReduceMotionEnabled = { true }
+        let top = scroll.contentView.bounds.minY
+
+        send(Self.moveDown, to: overlay)
+
+        XCTAssertGreaterThan(scroll.contentView.bounds.minY, top)
+        XCTAssertFalse(slide.isSlidingForTesting(.highlight))
+        let arriving = try selectedRow(of: overlay)
+        XCTAssertEqual(arriving.layer?.backgroundColor, arriving.restingFill.cgColor)
+    }
+
     func test_commandPalette_opensAtTheTopOfItsList() throws {
         let (_, scroll) = try mountLongPalette()
 
