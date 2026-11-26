@@ -98,6 +98,22 @@ final class RowFillSlideTests: WindowTestCase {
         XCTAssertFalse(slide.isSlidingForTesting(.current), "focus moving leaves the current fill alone")
     }
 
+    func test_aFocusThatLandsOnAnUnlaidRow_leavesNoStaleStartBehind() {
+        let unlaid = NavRow(title: "unlaid") {}
+        unlaid.translatesAutoresizingMaskIntoConstraints = true
+        host.addSubview(unlaid)
+        slide.adopt(unlaid)
+        window.makeFirstResponder(rows[0])
+        XCTAssertTrue(unlaid.bounds.isEmpty, "precondition")
+
+        window.makeFirstResponder(unlaid)
+        unlaid.removeFromSuperview()
+        window.makeFirstResponder(rows[2])
+
+        XCTAssertFalse(slide.isSlidingForTesting(.focus), "the fill slid in from a row focus left long before")
+        assertShowsItsFill(rows[2])
+    }
+
     func test_focusLeavingTheList_clearsInPlace() {
         window.makeFirstResponder(rows[0])
 

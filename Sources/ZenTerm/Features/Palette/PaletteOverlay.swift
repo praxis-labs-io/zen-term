@@ -242,7 +242,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         fillSlide.placeInPlace(rebuildRows)
     }
 
-    /// Reused rows stay arranged: detaching drops the width constraint but keeps the height one, stacking a duplicate.
+    // Reused rows stay arranged: detaching drops the width constraint but keeps the height one, stacking a duplicate.
     private func rebuildRows() {
         var reusable: [AnyHashable: LaidOutRow] = [:]
         for row in laidOutRows {

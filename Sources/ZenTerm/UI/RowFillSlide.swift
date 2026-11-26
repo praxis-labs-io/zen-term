@@ -43,10 +43,9 @@ final class RowFillSlide {
     func adopt(_ row: ListRow) {
         rows.add(row)
         row.fillSlide = self
-        rowMarkDidChange()
+        rowMarksDidChange(row)
     }
 
-    // A row a fill is still sliding to paints everything but that fill.
     func marks(_ row: ListRow, with mark: Mark) -> Bool {
         guard let track = tracks[mark] else { return false }
         return track.marked === row && track.arriving !== row
@@ -59,12 +58,17 @@ final class RowFillSlide {
         for track in tracks.values {
             track.departedThisTurn = nil
             track.departedRow = nil
-            if track.arriving != nil { land(track) }
         }
+        for track in tracks.values where track.arriving != nil && !isRider(track) { land(track) }
     }
 
-    func rowMarkDidChange() {
-        for mark in Mark.allCases { resolve(mark) }
+    func rowMarksDidChange(_ row: ListRow) {
+        for mark in Mark.allCases { rowMark(mark, didChangeOn: row) }
+    }
+
+    func rowMark(_ mark: Mark, didChangeOn row: ListRow) {
+        guard let track = tracks[mark], Self.carries(mark, row) || track.marked === row else { return }
+        resolve(mark)
     }
 
     func isSlidingForTesting(_ mark: Mark) -> Bool {
@@ -102,14 +106,21 @@ final class RowFillSlide {
         let generation = track.generation
         guard let next, let start, let target = frame(of: next) else {
             settle(track)
+            if next != nil {
+                track.departedThisTurn = nil
+                track.departedRow = nil
+            }
             for row in [held, previous, next] { row?.refreshFill() }
             if next == nil, !placesInPlace { depart(track, row: previous, from: start, generation: generation) }
             return
         }
-        for other in tracks.values where other !== track && other.arriving === next && other.uncommittedStart != nil {
-            settle(other)
+        if let held { releaseRiders(of: track, at: held) }
+        let riders = tracks.values.filter {
+            $0 !== track && $0.arriving === next && $0.uncommittedStart != nil && !isRider($0)
         }
+        riders.forEach { $0.arriving = nil }
         let targetColor = next.restingFill.cgColor
+        riders.forEach { ride($0, to: next) }
         let departed = track.departedRow
         track.arriving = next
         track.departedThisTurn = nil
@@ -148,20 +159,44 @@ final class RowFillSlide {
     }
 
     private func slideStart(of track: Track, from previous: ListRow?, to next: ListRow?) -> Motion.FillStop? {
-        if track.arriving != nil { return inFlightStop(of: track) }
+        if track.arriving != nil { return inFlightStop(of: leader(of: track) ?? track) }
         if let painted = previous.flatMap(paintedStop(of:)) { return painted }
         return track.departedRow === next ? nil : track.departedThisTurn
+    }
+
+    // A mark bound for the row another slide is carrying rides that slide, its own layer hidden, and lands with it.
+    private func ride(_ rider: Track, to row: ListRow) {
+        rider.generation += 1
+        rider.uncommittedStart = nil
+        rider.layer.removeAllAnimations()
+        setHidden(rider.layer, true)
+        rider.arriving = row
+    }
+
+    private func isRider(_ track: Track) -> Bool { track.arriving != nil && track.layer.isHidden }
+
+    private func leader(of rider: Track) -> Track? {
+        guard isRider(rider) else { return nil }
+        return tracks.values.first { $0 !== rider && $0.arriving === rider.arriving && !isRider($0) }
+    }
+
+    private func releaseRiders(of leader: Track, at row: ListRow) {
+        for rider in tracks.values where rider !== leader && rider.arriving === row && isRider(rider) {
+            settle(rider)
+        }
     }
 
     private func land(_ track: Track) {
         let landed = track.arriving
         let carried = track.layer.backgroundColor
+        if let landed { releaseRiders(of: track, at: landed) }
         settle(track)
         guard let landed else { return }
         if let carried { landed.takeFill(fromSlide: carried) } else { landed.refreshFill() }
     }
 
     private func settle(_ track: Track) {
+        if let row = track.arriving, !isRider(track) { releaseRiders(of: track, at: row) }
         track.arriving = nil
         track.uncommittedStart = nil
         track.layer.removeAllAnimations()

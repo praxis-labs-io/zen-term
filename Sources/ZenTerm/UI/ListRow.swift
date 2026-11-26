@@ -77,7 +77,7 @@ class ListRow: ControlView, ThemeReapplying {
     var isHighlighted = false {
         didSet {
             guard isHighlighted != oldValue else { return }
-            fillSlide?.rowMarkDidChange()
+            fillSlide?.rowMark(.highlight, didChangeOn: self)
             refreshFill()
         }
     }
@@ -85,7 +85,7 @@ class ListRow: ControlView, ThemeReapplying {
         didSet {
             guard isCurrent != oldValue else { return }
             refreshAccessibilitySelected()
-            fillSlide?.rowMarkDidChange()
+            fillSlide?.rowMark(.current, didChangeOn: self)
             refreshFill()
         }
     }
@@ -421,7 +421,7 @@ class ListRow: ControlView, ThemeReapplying {
     }
 
     override func focusDidChange() {
-        fillSlide?.rowMarkDidChange()
+        fillSlide?.rowMark(.focus, didChangeOn: self)
         refreshFill()
     }
 
@@ -454,7 +454,7 @@ class ListRow: ControlView, ThemeReapplying {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { hideTooltip() }
-        fillSlide?.rowMarkDidChange()
+        fillSlide?.rowMarksDidChange(self)
     }
 
     override func viewDidChangeBackingProperties() {

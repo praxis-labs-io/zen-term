@@ -152,6 +152,8 @@ final class SettingsOverlayNavTests: WindowTestCase {
         XCTAssertIdentical(slide.slidingRowForTesting(.focus), rows[1])
         XCTAssertFalse(
             slide.isSlidingForTesting(.current), "current and focus move together, so one fill slides, not two")
+        XCTAssertEqual(
+            rows[1].layer?.backgroundColor?.alpha, 0, "the next section lit up before the slide reached it")
         waitUntil(slide.slidingRowForTesting(.focus) == nil, "the slide to land")
         XCTAssertEqual(rows[1].layer?.backgroundColor, rows[1].restingFill.cgColor)
         XCTAssertGreaterThan(rows[1].layer?.backgroundColor?.alpha ?? 0, 0, "the section it landed on is lit")
