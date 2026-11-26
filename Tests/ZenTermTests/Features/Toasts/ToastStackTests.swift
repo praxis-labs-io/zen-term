@@ -206,13 +206,15 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(pile.isUnfolded)
     }
 
+    // A windowless wheel event reads its screen location as `locationInWindow`, so place it at the window point.
     private func scrollWheel(by delta: Int32, at point: NSPoint) throws {
-        let onScreen = window.convertPoint(toScreen: point)
         let displayHeight = try XCTUnwrap(NSScreen.screens.first).frame.height
         let wheel = try XCTUnwrap(
             CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0))
-        wheel.location = CGPoint(x: onScreen.x, y: displayHeight - onScreen.y)
-        window.sendEvent(try XCTUnwrap(NSEvent(cgEvent: wheel)))
+        wheel.location = CGPoint(x: point.x, y: displayHeight - point.y)
+        let event = try XCTUnwrap(NSEvent(cgEvent: wheel))
+        XCTAssertEqual(event.locationInWindow, point, "the wheel lands where the test aims it")
+        window.sendEvent(event)
     }
 
     func test_anUnfoldedListTallerThanTheWindow_scrollsToShowLess() throws {
