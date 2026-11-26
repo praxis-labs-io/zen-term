@@ -581,12 +581,12 @@
 #
 # ─── Find ────────────────────────────────────────────────────────────────────
 #
-# `toggle_search` (⌘F) opens a find field in the top-right corner of the focused
-# pane, below its header, and searches its whole scrollback, not just what's on
-# screen. Every match is highlighted as you type, and the field selects the newest
-# one and counts them. If that match is only in history, the pane scrolls to it so
-# you can see it while you type. With a tool float open the field opens in the card
-# and searches the float's scrollback.
+# `toggle_search` (⌘F) opens a find field over the top-right corner of the focused
+# pane's header and searches its whole scrollback, not just what's on screen. Every
+# match is highlighted as you type, and the field selects the newest one and counts
+# them. If that match is only in history, the pane scrolls to it so you can see it
+# while you type. With a tool float open the field opens in the card and searches
+# the float's scrollback.
 #
 # ⌘F opens on whatever you have selected, so searching a word you can see never
 # means retyping it. Either kind counts: a mouse selection, or a `v` selection made

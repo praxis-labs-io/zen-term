@@ -98,7 +98,7 @@ final class FindField: NSView, ThemeReapplying {
             preferredWidth,
         ])
 
-        CardChrome.apply(to: self, tier: .overlay)
+        CardChrome.apply(to: self, cornerRadius: ChromeMetrics.Radius.control, tier: .overlay)
         showCount(total: nil, selected: nil)
         reapplyTheme()
     }
