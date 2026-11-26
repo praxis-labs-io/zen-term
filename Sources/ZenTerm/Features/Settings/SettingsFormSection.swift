@@ -76,16 +76,16 @@ class SettingsFormSection: SettingsSection {
         let group = NSStackView(views: [caption])
         group.orientation = .vertical
         group.alignment = .leading
-        group.spacing = ChromeMetrics.Spacing.s4
+        group.spacing = SettingsDetail.rowGap
         stack.addArrangedSubview(group)
         group.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        if let lastGroup { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastGroup) }
+        if let lastGroup { stack.setCustomSpacing(SettingsDetail.groupGap, after: lastGroup) }
         groupStack = group
         let firstRowIndex = rows.count
         build()
         groupStack = nil
         if rows.indices.contains(firstRowIndex) {
-            group.setCustomSpacing(ChromeMetrics.Spacing.s10 - rows[firstRowIndex].spaceAboveCaption, after: caption)
+            group.setCustomSpacing(rows[firstRowIndex].gapBelowGroupCaption, after: caption)
         }
         lastGroup = group
     }

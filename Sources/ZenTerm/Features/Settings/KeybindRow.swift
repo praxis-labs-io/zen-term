@@ -74,6 +74,8 @@ final class KeybindRow: NSView, ThemeReapplying {
     }
     func focusChip() { window?.makeFirstResponder(chip) }
 
+    var gapBelowGroupCaption: CGFloat { SettingsDetail.gap(belowCaptionAbove: titleLabel) }
+
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         chip.render(shortcut: lastShortcut)
