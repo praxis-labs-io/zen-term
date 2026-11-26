@@ -83,10 +83,16 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertTrue(visible("Third", in: pile), "the newest sits in front")
         XCTAssertFalse(visible("Second", in: pile), "older toasts stay folded behind it")
         XCTAssertFalse(visible("First", in: pile))
-        XCTAssertEqual(pile.plateOpacityForTesting, [0.75, 0.45], "two cards recede behind the front one")
+        XCTAssertEqual(pile.plateOpacityForTesting, [1, 1], "two opaque cards sit behind the front one")
         XCTAssertEqual(
-            pile.frame.height, front.frame.height + 2 * ChromeMetrics.Spacing.s12,
-            "the folded stack is one card tall plus the receding edges")
+            pile.plateRecessionForTesting, ChromeTheme.toastRecession, "each fades toward the background by its step")
+        XCTAssertTrue(
+            pile.isStackedBackToFrontForTesting, "Show Less, then the deepest plate, sit behind everything nearer")
+        XCTAssertEqual(
+            pile.frame.height,
+            front.frame.height + 2 * ChromeMetrics.Spacing.s12 + ChromeMetrics.Spacing.s8
+                + pile.listToggleForTesting.frame.height,
+            "the folded stack is one card tall plus the receding edges and room for Show More")
     }
 
     func test_clickingTheFoldedStack_unfoldsItAndHoldsTheCountdowns() throws {
@@ -185,9 +191,162 @@ final class ToastStackTests: WindowTestCase {
         click(try XCTUnwrap(toast(titled: "Third")))
         XCTAssertTrue(pile.isUnfolded, "precondition")
 
-        click(pile.showLessForTesting)
+        click(pile.listToggleForTesting)
 
         XCTAssertFalse(pile.isUnfolded)
+    }
+
+    private func scrollWheel(by delta: Int32, at point: NSPoint) throws {
+        let onScreen = window.convertPoint(toScreen: point)
+        let displayHeight = try XCTUnwrap(NSScreen.screens.first).frame.height
+        let wheel = try XCTUnwrap(
+            CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0))
+        wheel.location = CGPoint(x: onScreen.x, y: displayHeight - onScreen.y)
+        window.sendEvent(try XCTUnwrap(NSEvent(cgEvent: wheel)))
+    }
+
+    func test_anUnfoldedListTallerThanTheWindow_scrollsToShowLess() throws {
+        let presenter = presenter()
+        for index in 1...10 { presenter.show(notice("Toast \(index)")) }
+        window.contentView!.layoutSubtreeIfNeeded()
+        let pile = presenter.pileForTesting
+        let front = try XCTUnwrap(toast(titled: "Toast 10"))
+        click(front)
+        window.contentView!.layoutSubtreeIfNeeded()
+        XCTAssertTrue(pile.isUnfolded, "precondition")
+        let showLess = pile.listToggleForTesting
+        XCTAssertTrue(showLess.visibleRect.isEmpty, "precondition: the list runs past the window")
+
+        let viewport = presenter.viewportForTesting
+        XCTAssertGreaterThanOrEqual(viewport.frame.minY, 0, "the list stops at the window's bottom edge")
+        try scrollWheel(by: -4000, at: front.convert(NSPoint(x: front.bounds.midX, y: 4), to: nil))
+
+        XCTAssertEqual(showLess.visibleRect, showLess.bounds, "scrolling to the end shows Show Less whole")
+        click(showLess)
+        XCTAssertFalse(pile.isUnfolded)
+    }
+
+    func test_aClickBesideTheStack_reachesWhatIsUnderIt() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let front = try XCTUnwrap(toast(titled: "Third"))
+        let beside = front.convert(NSPoint(x: -4, y: front.bounds.midY), to: nil)
+        let root = window.contentView!
+
+        let hit = root.hitTest(root.convert(beside, from: nil))
+
+        XCTAssertTrue(hit === root, "the padding around the stack never takes a click")
+    }
+
+    private func pointer(_ type: NSEvent.EventType, over view: NSView) -> NSEvent {
+        NSEvent.enterExitEvent(
+            with: type, location: view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil),
+            modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+            trackingNumber: 0, userData: nil)!
+    }
+
+    func test_hoveringTheFoldedStack_offersShowMore_andItOpensTheList() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let pile = presenter.pileForTesting
+        let toggle = pile.listToggleForTesting
+        letTimePass(0.05)
+        XCTAssertTrue(
+            pile.trackingAreas.contains { $0.owner === pile && $0.options.contains(.mouseEnteredAndExited) },
+            "the stack tracks the pointer")
+        XCTAssertEqual(pile.footerOpacityForTesting, 0, "precondition: hidden until hovered")
+
+        pile.mouseEntered(with: pointer(.mouseEntered, over: pile))
+        XCTAssertEqual(pile.footerOpacityForTesting, 1)
+        XCTAssertEqual(toggle.attributedTitle.string, "Show More")
+
+        click(toggle)
+        XCTAssertTrue(pile.isUnfolded)
+        XCTAssertEqual(toggle.attributedTitle.string, "Show Less")
+
+        click(toggle)
+        XCTAssertFalse(pile.isUnfolded)
+        XCTAssertEqual(
+            pile.footerOpacityForTesting, 0, "folding out from under the pointer sends no exit, so it rechecks")
+    }
+
+    func test_aFoldedCardsPose_landsOnItsPlate() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let pile = presenter.pileForTesting
+        for (title, plate) in zip(["Second", "First"], pile.plateLayerFramesForTesting) {
+            let view = try XCTUnwrap(toast(titled: title))
+            let layer = try XCTUnwrap(view.layer)
+            layer.transform = pile.restingPoseForTesting(view)
+            let card = layer.frame
+            layer.transform = CATransform3DIdentity
+            XCTAssertEqual(card.minX, plate.minX, accuracy: 0.5, "\(title) narrows to its plate")
+            XCTAssertEqual(card.maxX, plate.maxX, accuracy: 0.5)
+            XCTAssertEqual(
+                pile.isFlipped ? card.maxY : card.minY, pile.isFlipped ? plate.maxY : plate.minY, accuracy: 0.5,
+                "\(title) sits on its plate's bottom edge")
+        }
+    }
+
+    func test_unfolding_growsEachCardOutOfItsPlate() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let pile = presenter.pileForTesting
+        let second = try XCTUnwrap(toast(titled: "Second"))
+        let folded = pile.restingPoseForTesting(second)
+        Motion.isReduceMotionEnabled = { false }
+
+        pile.unfold()
+
+        let morph = try XCTUnwrap(second.layer?.animation(forKey: "motion.morph") as? CABasicAnimation)
+        let from = try XCTUnwrap(morph.fromValue as? NSValue).caTransform3DValue
+        let to = try XCTUnwrap(morph.toValue as? NSValue).caTransform3DValue
+        XCTAssertTrue(CATransform3DEqualToTransform(from, folded), "it starts on its plate")
+        XCTAssertTrue(CATransform3DIsIdentity(to), "and ends full size in the list")
+    }
+
+    func test_aToastArrivingOnAFullStack_pushesEachPlateBack() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let pile = presenter.pileForTesting
+        let plates = pile.plateLayersForTesting
+        let ahead = [try XCTUnwrap(toast(titled: "Third")?.layer?.frame), plates[0].frame]
+        Motion.isReduceMotionEnabled = { false }
+
+        presenter.show(notice("Fourth"))
+
+        for (plate, target) in zip(plates, ahead) {
+            let morph = try XCTUnwrap(plate.animation(forKey: "motion.morph") as? CABasicAnimation)
+            let from = try XCTUnwrap(morph.fromValue as? NSValue).caTransform3DValue
+            plate.transform = from
+            let start = plate.frame
+            plate.transform = CATransform3DIdentity
+            XCTAssertEqual(start.width, target.width, accuracy: 0.5, "each plate starts the size of the one ahead")
+            XCTAssertEqual(start.midY, target.midY, accuracy: 0.5, "and where it sat")
+        }
+    }
+
+    func test_clear_dismissesEveryToastInTheStack() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let pile = presenter.pileForTesting
+        click(try XCTUnwrap(toast(titled: "Third")))
+        XCTAssertTrue(pile.isUnfolded, "precondition")
+
+        click(pile.clearForTesting)
+
+        waitUntil(pile.cards.isEmpty, "every toast to leave")
+    }
+
+    func test_hoveringASingleToast_offersNothingToShow() throws {
+        let presenter = presenter()
+        presenter.show(notice("Only"))
+        window.contentView!.layoutSubtreeIfNeeded()
+        let pile = presenter.pileForTesting
+
+        pile.mouseEntered(with: pointer(.mouseEntered, over: pile))
+
+        XCTAssertEqual(pile.footerOpacityForTesting, 0)
     }
 
     func test_dismissingDownToOneToast_foldsTheStackAsItLeaves() throws {

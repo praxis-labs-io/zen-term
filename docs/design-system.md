@@ -207,7 +207,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `pageSlideDuration` | Page and canvas slides |
 | `hoverIntent` | The delay before a tooltip or hover card shows |
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
-| `springScaleFade` | Modals, toasts and floats appearing and leaving |
+| `springScaleFade` | Modals and floats appearing and leaving, toasts leaving |
 | `fade` | Plain opacity changes, tooltips and the link preview |
 | `crossfade` | A process chip swapping its mark when its program changes; with `whenReduced`, a dissolve that stands in for movement |
 | `HostConnect` | The SSH host Connect screen's choreography: the emblem's rain and answer, the words after it, and the hand-off to the terminal |
@@ -215,9 +215,10 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `stretch` | The selection pill sliding between tabs |
 | `slideSwap` | Switching workspaces |
 | `handOff` | An SSH host's Connect screen giving way to its terminal |
-| `slideFade` | The collapsed sidebar's hover reveal, the find bar and the mode header |
+| `slideFade` | The collapsed sidebar's hover reveal, the find bar, the mode header, and toasts arriving from the window's trailing edge |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
+| `morph` | A folded toast growing out of its plate or sinking back into it |
 
 Debounces, polls and timeouts are not motion; they stay with their owner.
 

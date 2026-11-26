@@ -2,10 +2,15 @@ import AppKit
 
 final class ToastPresenter {
     private let pile = ToastPile()
+    private let viewport = Viewport()
     /// A `var` so a `toast-duration` edit reaches a presenter built before it.
     private var dismissAfter: TimeInterval
     private let topConstraint: NSLayoutConstraint
     private let trailingConstraint: NSLayoutConstraint
+
+    // Room inside the viewport's clip for a card's shadow, which falls downward.
+    private static let shadowRoom = FloatShadow.Tier.float.blur
+    private static let shadowFall = shadowRoom - FloatShadow.Tier.float.offset.height
     // Defaults to yes, so a caller that cannot tell whether you are here keeps today's behavior.
     private let isPresent: () -> Bool
     private let waitingForYou = NSHashTable<ToastView>.weakObjects()
@@ -13,16 +18,26 @@ final class ToastPresenter {
     private var presenceObservers: [NSObjectProtocol] = []
 
     init(
-        host: NSView, below: NSView? = nil, topInset: CGFloat, trailingInset: CGFloat,
-        dismissAfter: TimeInterval = Motion.Linger.toast, isPresent: @escaping () -> Bool = { true }
+        host: NSView, below: NSView? = nil, floor: NSLayoutYAxisAnchor? = nil, topInset: CGFloat,
+        trailingInset: CGFloat, dismissAfter: TimeInterval = Motion.Linger.toast,
+        isPresent: @escaping () -> Bool = { true }
     ) {
         self.dismissAfter = dismissAfter
         self.isPresent = isPresent
-        host.addSubview(pile, positioned: below == nil ? .above : .below, relativeTo: below)
-        topConstraint = pile.topAnchor.constraint(equalTo: host.topAnchor, constant: topInset)
-        trailingConstraint = pile.trailingAnchor.constraint(
-            equalTo: host.trailingAnchor, constant: -trailingInset)
-        NSLayoutConstraint.activate([topConstraint, trailingConstraint])
+        host.addSubview(viewport, positioned: below == nil ? .above : .below, relativeTo: below)
+        let document = viewport.mount(pile)
+        topConstraint = pile.topAnchor.constraint(equalTo: document.topAnchor, constant: topInset)
+        trailingConstraint = pile.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -trailingInset)
+        NSLayoutConstraint.activate([
+            topConstraint, trailingConstraint,
+            viewport.topAnchor.constraint(equalTo: host.topAnchor),
+            viewport.bottomAnchor.constraint(equalTo: floor ?? host.bottomAnchor),
+            viewport.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            viewport.widthAnchor.constraint(equalTo: document.widthAnchor),
+            pile.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: Self.shadowRoom),
+            document.bottomAnchor.constraint(equalTo: pile.bottomAnchor, constant: Self.shadowFall),
+        ])
+        pile.onClear = { [weak self] in self?.dismissAll() }
         pile.onUnfoldChange = { [weak self] unfolded in
             unfolded ? self?.pauseCountdowns() : self?.startCountdownsNowSomeoneIsHere()
         }
@@ -67,7 +82,13 @@ final class ToastPresenter {
 
     private func add(_ toast: ToastView) {
         pile.add(toast)
-        if pile.isShowing(toast) { toast.animateIn() }
+        enter(toast)
+    }
+
+    private func enter(_ view: NSView) {
+        guard pile.isShowing(view), let edge = view.window?.contentView?.bounds.maxX else { return }
+        let offscreen = edge - view.convert(view.bounds, to: nil).minX
+        Motion.slideFade(view, appearing: true, from: CGVector(dx: offscreen, dy: 0))
     }
 
     private var countdownsHeld: Bool { !isPresent() || pile.isUnfolded }
@@ -121,7 +142,7 @@ final class ToastPresenter {
     func present(card: ShadowCardView) {
         dispatchPrecondition(condition: .onQueue(.main))
         pile.add(card)
-        if pile.isShowing(card) { Motion.springScaleFade(card, appearing: true) }
+        enter(card)
     }
 
     func bringForward(card: ShadowCardView) {
@@ -170,4 +191,49 @@ final class ToastPresenter {
     }
 
     var pileForTesting: ToastPile { pile }
+    var viewportForTesting: NSView { viewport }
+
+    // Never resizes, so nothing jumps mid-animation; scrolls a tall list and passes through clicks that miss a card.
+    private final class Viewport: NSView {
+        private let scroll = FadingScrollView()
+        private weak var pile: ToastPile?
+
+        init() {
+            super.init(frame: .zero)
+            translatesAutoresizingMaskIntoConstraints = false
+            scroll.translatesAutoresizingMaskIntoConstraints = false
+            scroll.drawsBackground = false
+            scroll.hasVerticalScroller = false
+            scroll.hasHorizontalScroller = false
+            addSubview(scroll)
+            NSLayoutConstraint.activate([
+                scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+                scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+                scroll.topAnchor.constraint(equalTo: topAnchor),
+                scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        func mount(_ pile: ToastPile) -> NSView {
+            let document = FlippedView()
+            document.translatesAutoresizingMaskIntoConstraints = false
+            document.addSubview(pile)
+            scroll.documentView = document
+            NSLayoutConstraint.activate([
+                document.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+                document.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            ])
+            self.pile = pile
+            return document
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let pile, let hit = super.hitTest(point), hit === pile || hit.isDescendant(of: pile) else {
+                return nil
+            }
+            return hit
+        }
+    }
 }

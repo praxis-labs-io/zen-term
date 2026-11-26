@@ -362,6 +362,18 @@ enum Motion {
         layer.add(width, forKey: "stretch.width")
     }
 
+    // AppKit resets a view's backing-layer transform on its next layout, so the pose lives in the animation only.
+    static func morph(_ layer: CALayer, from start: CATransform3D, to end: CATransform3D) {
+        guard !isReduceMotionEnabled() else { return }
+        let interrupted = layer.animation(forKey: "motion.morph") != nil ? layer.presentation() : nil
+        let anim = CABasicAnimation(keyPath: "transform")
+        anim.fromValue = NSValue(caTransform3D: interrupted?.transform ?? start)
+        anim.toValue = NSValue(caTransform3D: end)
+        anim.duration = pageSlideDuration
+        anim.timingFunction = landingTiming
+        layer.add(anim, forKey: "motion.morph")
+    }
+
     /// Independent of `anchorPoint`, which AppKit may put at the center or a corner.
     static func centeredScale(_ scale: CGFloat, in bounds: CGRect) -> CATransform3D {
         let cx = bounds.midX

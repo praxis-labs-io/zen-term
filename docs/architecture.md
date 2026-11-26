@@ -554,8 +554,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A toast never takes the keyboard.** Its buttons answer clicks only;
   `dismiss_toast` and `dismiss_all_toasts` exist for the keyboard.
 - **Every toast and card shares one stack** (`ToastPile`), folded so the newest card shows. A
-  click unfolds it into a list; a click outside, Show Less, or one card left folds it. Countdowns
-  hold while it is unfolded and restart a whole duration when it folds.
+  click, or Show More under it on hover, unfolds it into a list; a click outside, Show Less, or one card
+  left folds it. Clear beside the toggle dismisses every toast that has a close. Countdowns
+  hold while it is unfolded and restart a whole duration when it folds. A list that reaches the
+  panes' floor scrolls, with no scroller, inside a viewport that passes through every click missing a card.
 - **A toast that offers an action stays until it is answered.** Only an attention or completion
   card under `auto` counts down with its actions. A toast's actions are text links and it never
   takes focus.

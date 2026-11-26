@@ -96,6 +96,8 @@ struct ChromeTheme: Equatable {
     static let flashTint: CGFloat = 0.5
     // A layer opacity, not a fill: the pane's own background laid over it while a float is up.
     static let paneVeil: CGFloat = 0.5
+    // The window background laid over each folded toast behind the front one, deepest last.
+    static let toastRecession: [CGFloat] = [0.25, 0.55]
     // Above the hover level: blended into an opaque accent, that level steps half as far as a neutral hover.
     static let primaryHoverBlend: CGFloat = 0.20
 
