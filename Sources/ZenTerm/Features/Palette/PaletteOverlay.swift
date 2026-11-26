@@ -94,6 +94,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private var laidOutRows: [LaidOutRow] = []
     private(set) var selected = 0
     private var animatesNextReload = false
+    private lazy var fillSlide = RowFillSlide(host: rowsStack)
 
     init(
         placeholder: String, emptyText: String, onDismiss: @escaping () -> Void
@@ -237,8 +238,12 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         activate(index: index, modifiers: [])
     }
 
-    /// Reused rows stay arranged: detaching drops the width constraint but keeps the height one, stacking a duplicate.
     private func reloadRows() {
+        fillSlide.placeInPlace(rebuildRows)
+    }
+
+    // Reused rows stay arranged: detaching drops the width constraint but keeps the height one, stacking a duplicate.
+    private func rebuildRows() {
         var reusable: [AnyHashable: LaidOutRow] = [:]
         for row in laidOutRows {
             if let id = row.id { reusable[id] = row }
@@ -259,6 +264,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
                 let view = makeRow(at: index)
                 if animatesNextReload { arrived.append(view) }
                 rowsStack.insertArrangedSubview(view, at: index)
+                (view as? ListRow).map(fillSlide.adopt)
                 let heightConstraint = view.heightAnchor.constraint(equalToConstant: Self.height(of: view, at: index))
                 NSLayoutConstraint.activate([
                     view.widthAnchor.constraint(equalTo: rowsStack.widthAnchor), heightConstraint,
@@ -322,7 +328,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         let anchor = laidOutRows.firstIndex { $0.id == identity } ?? heldIndex
         guard let index = nearestSelectableIndex(to: anchor) else { return }
         selected = index
-        updateHighlight()
+        fillSlide.placeInPlace(updateHighlight)
         scrollSelectedToVisible()
     }
 
@@ -370,6 +376,8 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     }
 
     var barHintsForTesting: [HintFooter.Hint] { footer.hints }
+
+    var fillSlideForTesting: RowFillSlide { fillSlide }
 
     private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
         guard laidOutRows.indices.contains(selected) else { return }

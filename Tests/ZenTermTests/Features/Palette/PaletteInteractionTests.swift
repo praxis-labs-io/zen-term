@@ -181,6 +181,74 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(ran, .closePane)
     }
 
+    private func mountForSliding() -> (CommandPaletteOverlay, [SelectableRowView], RowFillSlide) {
+        Motion.isReduceMotionEnabled = { false }
+        let overlay = makeCommandPalette()
+        mount(overlay).layoutIfNeeded()
+        return (overlay, rows(in: overlay), overlay.fillSlideForTesting)
+    }
+
+    func test_commandPalette_theArrowSlidesTheCursorsFill_overTheHeader() {
+        let (overlay, shown, slide) = mountForSliding()
+        XCTAssertFalse(slide.isSlidingForTesting(.highlight), "the first cursor appears in place")
+        XCTAssertGreaterThan(shown[0].layer?.backgroundColor?.alpha ?? 0, 0)
+
+        send(Self.moveDown, to: overlay)
+        send(Self.moveDown, to: overlay)
+
+        XCTAssertTrue(slide.isSlidingForTesting(.highlight))
+        XCTAssertIdentical(slide.slidingRowForTesting(.highlight), shown[2], "a second press carries the slide on")
+        XCTAssertEqual(slide.slideFrameForTesting(.highlight), slide.frameForTesting(of: shown[2]))
+        XCTAssertEqual(shown[2].layer?.backgroundColor?.alpha, 0, "the slide stands in for the row's fill")
+        XCTAssertEqual(shown[0].layer?.backgroundColor?.alpha, 0)
+        waitUntil(slide.slidingRowForTesting(.highlight) == nil, "the slide to land")
+        XCTAssertEqual(shown[2].layer?.backgroundColor, shown[2].restingFill.cgColor)
+        XCTAssertGreaterThan(shown[2].layer?.backgroundColor?.alpha ?? 0, 0)
+    }
+
+    func test_commandPalette_thePointerSlidesTheCursorsFill() throws {
+        let (overlay, shown, slide) = mountForSliding()
+        let window = try XCTUnwrap(overlay.window)
+
+        shown[1].mouseEntered(
+            with: try XCTUnwrap(
+                NSEvent.enterExitEvent(
+                    with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
+                    userData: nil)))
+
+        XCTAssertTrue(slide.isSlidingForTesting(.highlight))
+        XCTAssertIdentical(slide.slidingRowForTesting(.highlight), shown[1])
+    }
+
+    func test_commandPalette_aQueryRebuildsTheRows_andTheCursorsFillAppearsInPlace() {
+        let (overlay, _, slide) = mountForSliding()
+        send(Self.moveDown, to: overlay)
+        XCTAssertTrue(slide.isSlidingForTesting(.highlight), "precondition")
+
+        type("tab", into: overlay)
+        overlay.layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(slide.isSlidingForTesting(.highlight), "no slide from a row the rebuild dropped or moved")
+        XCTAssertNil(slide.slidingRowForTesting(.highlight))
+        let lit = rows(in: overlay).filter { $0.isHighlighted }
+        XCTAssertEqual(lit.count, 1)
+        XCTAssertEqual(lit.first?.layer?.backgroundColor, lit.first?.restingFill.cgColor)
+        XCTAssertGreaterThan(lit.first?.layer?.backgroundColor?.alpha ?? 0, 0)
+    }
+
+    func test_commandPalette_reduceMotion_snapsTheCursorsFill() {
+        let (overlay, shown, slide) = mountForSliding()
+        Motion.isReduceMotionEnabled = { true }
+
+        send(Self.moveDown, to: overlay)
+
+        XCTAssertFalse(slide.isSlidingForTesting(.highlight))
+        XCTAssertEqual(shown[1].layer?.backgroundColor, shown[1].restingFill.cgColor)
+        XCTAssertGreaterThan(shown[1].layer?.backgroundColor?.alpha ?? 0, 0)
+        XCTAssertEqual(shown[0].layer?.backgroundColor?.alpha, 0)
+    }
+
     func test_commandPalette_theArrowStopsAtTheEnds() {
         var ran: [KeyInterceptor.ReservedChord] = []
         let overlay = makeCommandPalette(onRun: { ran.append($0) })

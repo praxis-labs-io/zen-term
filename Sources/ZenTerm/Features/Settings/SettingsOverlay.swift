@@ -9,6 +9,8 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private let navStack = NSStackView()
     private let navScroll = FadingScrollView()
     private var navRows: [NavRow] = []
+    private lazy var navFillSlide = RowFillSlide(host: navStack)
+    var navFillSlideForTesting: RowFillSlide { navFillSlide }
     private let detailContainer = NSView()
     private var selectedIndex = 0
     private let heading = SectionCaption("Settings")
@@ -85,6 +87,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
             row.onEnterDetail = { [weak self] in self?.enterDetail() }
             navRows.append(row)
             navStack.addArrangedSubview(row)
+            navFillSlide.adopt(row)
             row.widthAnchor.constraint(
                 equalTo: navStack.widthAnchor, constant: -(navStack.edgeInsets.left + navStack.edgeInsets.right)
             ).isActive = true

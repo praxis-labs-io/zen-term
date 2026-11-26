@@ -93,11 +93,20 @@ final class ControlState {
         focusChanged()
     }
 
-    func easeFill(_ color: NSColor) {
+    func easeFill(_ color: NSColor, from start: CGColor? = nil) {
         guard let layer = host.layer else { return }
         let target = color.cgColor
-        guard layer.backgroundColor != target else { return }
-        Motion.ease(layer, keyPath: "backgroundColor", to: target)
+        guard start != nil || layer.backgroundColor != target else { return }
+        Motion.ease(layer, keyPath: "backgroundColor", to: target, from: start)
+    }
+
+    func snapFill(_ color: NSColor) {
+        guard let layer = host.layer else { return }
+        layer.removeAnimation(forKey: "motion.backgroundColor")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.backgroundColor = color.cgColor
+        CATransaction.commit()
     }
 
     func showFocusRing(_ shown: Bool) {

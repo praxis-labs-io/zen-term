@@ -63,6 +63,41 @@ final class MotionTests: XCTestCase {
         XCTAssertNil(layer.animation(forKey: "stretch.width"))
     }
 
+    func test_slideFill_movesStraightToTheTarget_onTheLandingCurve() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let layer = CALayer()
+        let start = Motion.FillStop(frame: CGRect(x: 0, y: 0, width: 200, height: 28), color: NSColor.red.cgColor)
+        let target = Motion.FillStop(frame: CGRect(x: 0, y: 56, width: 200, height: 40), color: NSColor.blue.cgColor)
+
+        XCTAssertTrue(Motion.slideFill(layer, from: start, to: target))
+
+        XCTAssertEqual(layer.frame, target.frame, "the model lands on the target at once")
+        XCTAssertEqual(layer.backgroundColor, target.color)
+        let position = try XCTUnwrap(layer.animation(forKey: "slideFill.position") as? CABasicAnimation)
+        XCTAssertEqual((position.fromValue as? NSValue)?.pointValue, CGPoint(x: 100, y: 14))
+        XCTAssertEqual((position.toValue as? NSValue)?.pointValue, CGPoint(x: 100, y: 76))
+        let size = try XCTUnwrap(layer.animation(forKey: "slideFill.size") as? CABasicAnimation)
+        XCTAssertEqual((size.fromValue as? NSValue)?.sizeValue, start.frame.size, "a straight slide, no stretch")
+        let color = try XCTUnwrap(layer.animation(forKey: "slideFill.color") as? CABasicAnimation)
+        for anim in [position, size, color] {
+            XCTAssertEqual(anim.duration, Motion.pageSlideDuration)
+            XCTAssertTrue(anim.timingFunction === Motion.landingTiming)
+        }
+    }
+
+    func test_slideFill_snapsUnderReduceMotion() {
+        Motion.isReduceMotionEnabled = { true }
+        let layer = CALayer()
+        let target = Motion.FillStop(frame: CGRect(x: 0, y: 56, width: 200, height: 28), color: NSColor.blue.cgColor)
+
+        let slid = Motion.slideFill(
+            layer, from: Motion.FillStop(frame: .zero, color: NSColor.red.cgColor), to: target)
+
+        XCTAssertFalse(slid)
+        XCTAssertEqual(layer.frame, target.frame)
+        XCTAssertNil(layer.animation(forKey: "slideFill.position"))
+    }
+
     func test_reduceMotion_springScaleFadeAppearing_appliesFinalStateSynchronously() {
         Motion.isReduceMotionEnabled = { true }
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))

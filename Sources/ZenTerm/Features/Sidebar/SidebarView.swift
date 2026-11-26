@@ -64,6 +64,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private let agentStack = NSStackView()
     private let scroll = FadingScrollView()
     private let content = FlippedView()
+    private lazy var fillSlide = RowFillSlide(host: content)
     private var contentEndsAtRows: NSLayoutConstraint?
     private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
@@ -267,6 +268,7 @@ final class SidebarView: NSView, ThemeReapplying {
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
         row.onReturn = { [weak self] in self?.onActivateHost?(id) }
         row.onEscape = { [weak self] in self?.onLeave?() }
+        fillSlide.adopt(row)
         hostRows[host] = row
         return row
     }
@@ -313,6 +315,7 @@ final class SidebarView: NSView, ThemeReapplying {
             self.rowMenu.close()
             self.onJump?(id)
         }
+        fillSlide.adopt(row)
         agentRows[id] = row
         return row
     }
@@ -414,6 +417,7 @@ final class SidebarView: NSView, ThemeReapplying {
             guard let self, let row else { return }
             self.rowMenu.open(self.menuItems(for: id), from: row)
         }
+        fillSlide.adopt(row)
         rows[item.id] = row
         return row
     }
@@ -579,4 +583,6 @@ final class SidebarView: NSView, ThemeReapplying {
     var agentSectionForTesting: [NSView] { agentStack.arrangedSubviews }
 
     var scrollForTesting: FadingScrollView { scroll }
+
+    var fillSlideForTesting: RowFillSlide { fillSlide }
 }

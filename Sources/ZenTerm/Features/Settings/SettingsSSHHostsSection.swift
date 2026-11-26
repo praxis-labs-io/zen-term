@@ -25,6 +25,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var hostRows: [SSHHostRow] = []
     private var addButton: AppButton?
     private var rowsStack: NSStackView?
+    private var fillSlide: RowFillSlide?
 
     deinit {
         statusObserver.map(NotificationCenter.default.removeObserver)
@@ -38,6 +39,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
+        fillSlide = RowFillSlide(host: stack)
 
         let button = AppButton(title: "＋ Add Host…", variant: .muted)
         button.isKeyboardFocusable = true
@@ -168,6 +170,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
         row.onBacktab = { [weak self, weak row] in self?.moveTab(from: row, delta: -1) }
         row.onExitToNav = { [weak self] in self?.onExitToNav?() }
+        fillSlide?.adopt(row)
         return row
     }
 

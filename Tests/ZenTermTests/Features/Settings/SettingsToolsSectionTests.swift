@@ -233,6 +233,23 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual((window?.firstResponder as? ToolFloatRow)?.float.id, "top", "it moves focus instead")
     }
 
+    func test_plainArrow_slidesTheFocusFillToTheNextRow() throws {
+        Motion.isReduceMotionEnabled = { false }
+        try seed(twoFloats)
+        let section = SettingsToolsSection()
+        let detail = mount(section)
+        detail.layoutSubtreeIfNeeded()
+        let floatRows = rows(in: detail)
+        window?.makeFirstResponder(floatRows[0])
+        let slide = try XCTUnwrap(section.fillSlideForTesting)
+
+        floatRows[0].keyDown(with: arrow(125))
+
+        XCTAssertIdentical(window?.firstResponder, floatRows[1], "precondition")
+        XCTAssertTrue(slide.isSlidingForTesting(.focus))
+        XCTAssertIdentical(slide.slidingRowForTesting(.focus), floatRows[1])
+    }
+
     func test_optionCommandArrow_doesNotReorder() throws {
         try seed(twoFloats)
         let section = SettingsToolsSection()
