@@ -27,7 +27,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
 | `info` | A neutral notice |
-| `cursor` | The accent, painted onto the terminal cursor too, and chrome that marks where the cursor or focus will land |
+| `cursor` | The accent, painted onto the terminal cursor too, a text field's caret, and chrome that marks where the cursor or focus will land |
 
 Agent state roles are their own and never borrow `info`, `positive`, `warning` or `destructive`.
 
