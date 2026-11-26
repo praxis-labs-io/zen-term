@@ -169,11 +169,9 @@ final class ToastStackTests: WindowTestCase {
         let presenter = presenter()
         showThree(on: presenter)
         let front = try XCTUnwrap(toast(titled: "Third"))
-        let over = front.convert(NSPoint(x: front.bounds.midX, y: front.bounds.midY), to: nil)
-
         let pile = presenter.pileForTesting
-        NSApp.sendEvent(mouse(.mouseMoved, at: over))
-        for view in [pile, front] { view.mouseEntered(with: mouse(.mouseMoved, at: over)) }
+
+        for view in [pile, front] { view.mouseEntered(with: pointer(.mouseEntered, over: view)) }
 
         XCTAssertFalse(pile.isUnfolded, "hover alone does not unfold")
     }
