@@ -67,7 +67,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private static let returnKey = "⏎"
     private static let searchInset = ChromeMetrics.Spacing.s12
     private static let searchRowHeight = ChromeMetrics.Height.xl
-    static let maxListHeight: CGFloat = 338
+    static let maxListHeight: CGFloat = 320
     private static let emptyListHeight = ChromeMetrics.Height.xl
     static let fullHeight = searchRowHeight + ChromeMetrics.Border.width + maxListHeight + HintFooter.height
     // Below every other vertical constraint in the card, so a short window shrinks the list before anything else.

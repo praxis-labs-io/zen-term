@@ -187,7 +187,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private static let footerSpacing: CGFloat = ChromeMetrics.Spacing.s6
     // The nav narrows with the card on a small window, down to the width the footer is measured against.
     private static let navWidthRange: ClosedRange<CGFloat> = 168...188
-    private static let navPadding = SidebarView.padding
+    private static let navPadding = ChromeMetrics.Spacing.s8
     private static let footerTrailingInset = navPadding
     private static let navTextInset = navPadding + ChromeMetrics.Spacing.controlInset
     static var versionMaxWidth: CGFloat {
