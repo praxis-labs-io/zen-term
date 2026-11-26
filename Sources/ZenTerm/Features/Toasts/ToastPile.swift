@@ -7,10 +7,10 @@ final class ToastPile: NSView {
     private(set) var cards: [NSView] = []
     private var leaving: Set<ObjectIdentifier> = []
     private let plates = ChromeTheme.toastRecession.map(Plate.init)
-    var onClear: (() -> Void)?
+    var onClear: (() -> Void)? { didSet { clear.isHidden = onClear == nil } }
     private let listToggle = AppButton(title: ToastPile.showMore, variant: .quietLink)
     private let clear = AppButton(title: "Clear", variant: .quietLink)
-    // Mounted behind the cards: under the folded stack on hover, at the end of the list once unfolded.
+    // Mounted behind the cards, so it slides out from under the list rather than across it.
     private let footer: NSStackView
     private var isHovering = false
     private var restingPoses: [ObjectIdentifier: CATransform3D] = [:]
@@ -32,6 +32,7 @@ final class ToastPile: NSView {
         footer.orientation = .horizontal
         footer.spacing = ChromeMetrics.Spacing.s12
         footer.translatesAutoresizingMaskIntoConstraints = false
+        clear.isHidden = true
         translatesAutoresizingMaskIntoConstraints = false
         let snug = widthAnchor.constraint(equalToConstant: 0)
         snug.priority = .defaultLow
@@ -133,14 +134,21 @@ final class ToastPile: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard !isUnfolded, settled.count > 1, let front else { return super.hitTest(point) }
-        let local = convert(point, from: superview)
-        guard local.x >= front.frame.minX, local.x <= front.frame.maxX, bounds.contains(local) else { return nil }
+        guard foldedArea.contains(convert(point, from: superview)) else { return nil }
         if let hit = super.hitTest(point), Self.isControl(hit, within: front) { return hit }
         return self
     }
 
     override func mouseDown(with event: NSEvent) {
         unfold()
+    }
+
+    // The footer's strip stays the terminal's until Show More is on screen in it.
+    private var foldedArea: NSRect {
+        guard let front else { return .zero }
+        let stack = plates.prefix(foldedDepth).reduce(front.frame) { $0.union($1.frame) }
+        let footerShows = !footer.isHidden && (footer.layer?.opacity ?? 0) > 0
+        return footerShows ? stack.union(footer.frame) : stack
     }
 
     override func updateTrackingAreas() {
@@ -154,8 +162,14 @@ final class ToastPile: NSView {
 
     // A stack that folds out from under a still pointer, or rebuilds its tracking area, never gets `mouseExited`.
     private func refreshHover() {
-        guard isHovering, !pointerIsInside else { return }
+        guard isHovering, !pointerIsOver else { return }
         setHovering(false)
+    }
+
+    // Unlike `pointerIsInside`, true in a window that is not key, where the tracking area still reports.
+    private var pointerIsOver: Bool {
+        guard let window else { return false }
+        return convert(visibleRect, to: nil).contains(window.mouseLocationOutsideOfEventStream)
     }
 
     override func mouseEntered(with event: NSEvent) { setHovering(true) }
@@ -166,11 +180,12 @@ final class ToastPile: NSView {
         guard hovering != isHovering else { return }
         isHovering = hovering
         fadeToTargets(sparing: nil)
+        window?.invalidateCursorRects(for: self)
     }
 
     override func resetCursorRects() {
         guard !isUnfolded, foldedDepth > 0 else { return }
-        addCursorRect(bounds, cursor: .pointingHand)
+        addCursorRect(foldedArea, cursor: .pointingHand)
     }
 
     private static func isControl(_ view: NSView, within card: NSView) -> Bool {
@@ -253,7 +268,8 @@ final class ToastPile: NSView {
             let target = restingTransform(of: card)
             let previous = restingPoses[id] ?? CATransform3DIdentity
             restingPoses[id] = target
-            guard animated, card !== arriving, let layer = card.layer, !CATransform3DEqualToTransform(previous, target)
+            guard animated, card !== arriving, let layer = card.layer, !CATransform3DEqualToTransform(previous, target),
+                layer.animation(forKey: "motion.slide") == nil
             else { continue }
             Motion.morph(layer, from: previous, to: target)
         }

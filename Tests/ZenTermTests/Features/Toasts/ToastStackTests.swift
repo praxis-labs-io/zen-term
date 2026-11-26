@@ -326,6 +326,25 @@ final class ToastStackTests: WindowTestCase {
         }
     }
 
+    func test_aClickUnderTheFoldedStack_reachesTheTerminal_untilShowMoreShows() throws {
+        let presenter = presenter()
+        showThree(on: presenter)
+        let pile = presenter.pileForTesting
+        let toggle = pile.listToggleForTesting
+        let under = toggle.convert(NSPoint(x: toggle.bounds.midX, y: toggle.bounds.midY), to: nil)
+        let root = window.contentView!
+
+        XCTAssertTrue(root.hitTest(root.convert(under, from: nil)) === root, "a hidden footer takes no click")
+
+        pile.mouseEntered(with: pointer(.mouseEntered, over: pile))
+        XCTAssertTrue(root.hitTest(root.convert(under, from: nil)) === toggle, "Show More takes it once it shows")
+    }
+
+    func test_clear_showsOnlyWhenSomethingHandlesIt() {
+        XCTAssertTrue(ToastPile().clearForTesting.isHidden, "a pile nobody clears shows no Clear")
+        XCTAssertFalse(presenter().pileForTesting.clearForTesting.isHidden)
+    }
+
     func test_clear_dismissesEveryToastInTheStack() throws {
         let presenter = presenter()
         showThree(on: presenter)

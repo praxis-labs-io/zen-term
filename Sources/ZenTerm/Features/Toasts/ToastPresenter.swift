@@ -193,7 +193,7 @@ final class ToastPresenter {
     var pileForTesting: ToastPile { pile }
     var viewportForTesting: NSView { viewport }
 
-    // Never resizes, so nothing jumps mid-animation; scrolls a tall list and passes through clicks that miss a card.
+    // A fixed height, so nothing jumps mid-animation: resizing a scroll view snaps its clip ahead of its frame.
     private final class Viewport: NSView {
         private let scroll = FadingScrollView()
         private weak var pile: ToastPile?
@@ -205,6 +205,8 @@ final class ToastPresenter {
             scroll.drawsBackground = false
             scroll.hasVerticalScroller = false
             scroll.hasHorizontalScroller = false
+            scroll.verticalScrollElasticity = .none
+            scroll.horizontalScrollElasticity = .none
             addSubview(scroll)
             NSLayoutConstraint.activate([
                 scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
