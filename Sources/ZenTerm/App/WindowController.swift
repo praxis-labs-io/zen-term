@@ -564,6 +564,7 @@ final class WindowController: NSObject {
             MainActor.assumeIsolated {
                 self?.renderTabBar()
                 self?.refreshConnectView()
+                (self?.modal?.overlay as? RepoPickerOverlay)?.refreshHostStatuses()
             }
         }
 
@@ -1727,6 +1728,8 @@ final class WindowController: NSObject {
                 open: self.runningWorkspaces(),
                 elsewhere: self.openWorkspacesElsewhere?() ?? [],
                 current: self.activeWorkspaceID,
+                hosts: GeneralConfig.current.sshHostAliases.map(SSHHostID.init),
+                currentHost: self.selection.host,
                 removals: self.worktreeRemovals,
                 openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
@@ -1741,6 +1744,10 @@ final class WindowController: NSObject {
                 },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onNewWorkspace: { [weak self] in self?.newWorkspace(named: $0) },
+                onActivateHost: { [weak self] host in
+                    self?.closeModal()
+                    self?.activate(host)
+                },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(picker, kind: .repoPicker)

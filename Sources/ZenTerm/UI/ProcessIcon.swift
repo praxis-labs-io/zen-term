@@ -34,6 +34,7 @@ struct ProcessIcon: Equatable {
     static let workspaceWorktree = purpose("Worktree", "git-branch", .magenta)
     static let newWorkspace = purpose("New Workspace", "plus", .magenta)
     static let addWorkspace = purpose("Add Workspace", "folder-plus", .magenta)
+    static let host = purpose("Host", "server", .magenta)
     static let tab = purpose("Tab", "panel-top", .cyan)
     static let pane = purpose("Pane", "columns-2", .yellow)
     static let terminal = purpose("Terminal", "terminal", .green)

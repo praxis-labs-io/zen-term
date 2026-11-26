@@ -231,7 +231,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **The ⌘P picker is one list of groups, with no headings.** This window's `WorkspaceOrder`
   groups come first, then the groups the other windows report through
   `openWorkspacesElsewhere` (so an unconfigured workspace running elsewhere is listed too),
-  then the configured workspaces no window has open, in config order, then Add Workspace….
+  then the configured workspaces no window has open, in config order, then every `ssh-host` line
+  in config order, then Add Workspace…. A query ranks within each of those blocks, so a host
+  never sorts above a workspace. A host row goes through `activate(_ host:)`, the sidebar's path,
+  so it switches to a live session wherever it runs and otherwise shows Connect. Its status
+  word redraws from `sshHostStatusDidChange`.
   A group is its lead, its open worktrees, and the lead's unopened worktrees, so a workspace
   is listed once. A ghost lead is a selectable row that opens its configured entry, unless that
   entry is already listed, when it stays a label. A row's
@@ -746,8 +750,8 @@ next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It take
 blocked agent and a draft, as a queued `pane.send` does. `pane.send`, `pane.keys` and a held note
 all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
-through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
-and leaves hosts out. `action` hands its keymap action
+through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker's
+workspace rows and leaves hosts out. `action` hands its keymap action
 to `AppDelegate.route`, the path a reserved chord takes, so it meets the same app-global and
 modal gates a keystroke does; only the keystroke-level pass-through guards are skipped, since
 there is no key to pass through.

@@ -11,6 +11,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case add
         case workspace(Workspace)
         case worktree(Worktree, parent: Workspace)
+        case host(SSHHostID)
     }
 
     static let newHintLabel = "New"
@@ -27,8 +28,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let openState: (URL) -> WorkspaceOpenState
     private let onAddWorkspace: () -> Void
     private let onNewWorkspace: (String?) -> Void
+    private let onActivateHost: (SSHHostID) -> Void
 
     private let entries: [Workspace]
+    private let hosts: [SSHHostID]
+    private let currentHost: SSHHostID?
     private var open: [RunningWorkspace]
     private var elsewhere: [RunningWorkspace]
     private var current: WorkspaceID?
@@ -45,15 +49,19 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     init(
         entries: [Workspace], open: [RunningWorkspace] = [], elsewhere: [RunningWorkspace] = [],
-        current: WorkspaceID? = nil, removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
+        current: WorkspaceID? = nil, hosts: [SSHHostID] = [], currentHost: SSHHostID? = nil,
+        removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void,
         onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
         onReveal: @escaping (Int, WorkspaceID) -> Bool = { _, _ in false },
         onAddWorkspace: @escaping () -> Void,
-        onNewWorkspace: @escaping (String?) -> Void = { _ in }, onDismiss: @escaping () -> Void
+        onNewWorkspace: @escaping (String?) -> Void = { _ in },
+        onActivateHost: @escaping (SSHHostID) -> Void = { _ in }, onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
+        self.hosts = hosts
+        self.currentHost = currentHost
         self.open = open
         self.elsewhere = elsewhere
         self.current = current
@@ -62,7 +70,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.churnProbed = []
         self.rows = Self.list(
             Self.groups(
-                open: open, elsewhere: elsewhere, entries: entries, listings: [:], configured: [], owners: [:]),
+                open: open, elsewhere: elsewhere, entries: entries, hosts: hosts, listings: [:], configured: [],
+                owners: [:]),
             query: nil)
         self.onChoose = onChoose
         self.onSwitch = onSwitch
@@ -70,6 +79,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.openState = openState
         self.onAddWorkspace = onAddWorkspace
         self.onNewWorkspace = onNewWorkspace
+        self.onActivateHost = onActivateHost
         super.init(
             placeholder: "Search workspaces",
             emptyText: "",
@@ -141,7 +151,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         return owners
     }
 
-    private enum Placement { case here, elsewhere, closed }
+    private enum Placement { case here, elsewhere, closed, host }
 
     private struct Group {
         let placement: Placement
@@ -150,7 +160,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     // A worktree mirrors its parent's configuration, so its unopened siblings join the first group its parent leads.
     private static func groups(
-        open: [RunningWorkspace], elsewhere: [RunningWorkspace], entries: [Workspace],
+        open: [RunningWorkspace], elsewhere: [RunningWorkspace], entries: [Workspace], hosts: [SSHHostID],
         listings: [URL: WorktreeListing], configured: Set<URL>, owners: [URL: URL]
     ) -> [Group] {
         let listed = listed(open, elsewhere)
@@ -190,7 +200,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         for workspace in entries where !leads.contains(workspace.path.standardizedFileURL) {
             groups.append(Group(placement: .closed, rows: [.workspace(workspace)] + closedWorktrees(of: workspace)))
         }
-        return groups
+        return groups + hosts.map { Group(placement: .host, rows: [.host($0)]) }
     }
 
     private static func row(_ running: RunningWorkspace, _ placement: Placement) -> Row {
@@ -224,7 +234,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             guard let best = leadScore ?? hits.compactMap({ score($0, query) }).max() else { return nil }
             return (group.placement, best, title(of: lead), [lead] + hits)
         }
-        return [Placement.here, .elsewhere, .closed].flatMap { placement in
+        return [Placement.here, .elsewhere, .closed, .host].flatMap { placement in
             scored.filter { $0.placement == placement }
                 .enumerated()
                 .sorted { a, b in
@@ -241,6 +251,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .closedParent(_, let entry?), .workspace(let entry): return entry.title
         case .open(let running), .elsewhere(let running), .closedParent(let running, nil): return running.name
         case .worktree(let worktree, _): return worktree.name
+        case .host(let host): return GeneralConfig.current.displayName(of: host)
         case .newWorkspace, .add: return ""
         }
     }
@@ -252,6 +263,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .closedParent(_, let entry?), .workspace(let entry): return FuzzyMatch.score(query, entry.title)
         case .open(let running), .elsewhere(let running): return FuzzyMatch.score(query, running.name)
         case .worktree(let worktree, _): return score(worktree, query)
+        case .host(let host):
+            return [GeneralConfig.current.displayName(of: host), host.alias]
+                .compactMap { FuzzyMatch.score(query, $0) }.max()
         }
     }
 
@@ -316,6 +330,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             case .elsewhere: return .otherWindow
             case .closed: return nil
             }
+        case .host(let host): return host == currentHost ? .current : nil
         default: return nil
         }
     }
@@ -346,12 +361,14 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .worktree(let worktree, let parent):
             guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
             return RowView(worktree: worktree, parent: parent, state: state(at: index))
+        case .host(let host):
+            return HostRowView(host: host, status: SSHHostStatusCenter.shared.status(of: host), state: state(at: index))
         }
     }
 
     private func openState(row: Row) -> WorkspaceOpenState {
         switch row {
-        case .newWorkspace, .add, .closedParent: return .closed
+        case .newWorkspace, .add, .closedParent, .host: return .closed
         case .open: return .here
         case .elsewhere: return .elsewhere
         case .workspace(let workspace): return openState(workspace.path)
@@ -365,7 +382,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .closedParent(_, let entry): return entry != nil
         case .open(let workspace), .elsewhere(let workspace): return removingWorktree(workspace) == nil
         case .worktree(let worktree, _): return !removals.isRemoving(worktree.path)
-        case .newWorkspace, .add, .workspace: return true
+        case .newWorkspace, .add, .workspace, .host: return true
         }
     }
 
@@ -404,6 +421,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     func refreshRemovalState() { rebuild() }
+
+    func refreshHostStatuses() { rebuild() }
 
     private func removingWorktree(_ running: RunningWorkspace) -> Worktree? {
         guard running.isWorktree, let found = listedWorktree(at: running.folder),
@@ -444,13 +463,18 @@ final class RepoPickerOverlay: PaletteOverlay {
                 "worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : "",
                 state(at: index)?.rawValue ?? "",
             ]
+        case .host(let host):
+            return [
+                "host", host.alias, GeneralConfig.current.displayName(of: host),
+                SSHHostStatusCenter.shared.status(of: host).word, state(at: index)?.rawValue ?? "",
+            ]
         }
     }
 
     override func applyFilter(query: String) {
         let groups = Self.groups(
-            open: open, elsewhere: elsewhere, entries: entries, listings: listings, configured: configuredPaths,
-            owners: worktreeOwners)
+            open: open, elsewhere: elsewhere, entries: entries, hosts: hosts, listings: listings,
+            configured: configuredPaths, owners: worktreeOwners)
         rows = Self.list(groups, query: newWorkspaceName(query))
     }
 
@@ -464,6 +488,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .newWorkspace: return "New Workspace"
         case .add: return "Add Workspace"
+        case .host(let host): return SSHHostStatusCenter.shared.status(of: host) == .connected ? "Switch" : "Open"
         default: break
         }
         return openState(row: rows[index]) == .closed ? "Open" : "Switch"
@@ -497,7 +522,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     var createTarget: CreateTarget? {
         guard rows.indices.contains(selected) else { return nil }
         switch rows[selected] {
-        case .newWorkspace, .add: return nil
+        case .newWorkspace, .add, .host: return nil
         case .closedParent(_, let entry): return entry.map { CreateTarget(workspace: $0, repo: $0.path) }
         case .open(let row), .elsewhere(let row):
             if row.isWorktree {
@@ -555,6 +580,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             elsewhere.removeAll { $0.window == row.window && $0.id == row.id }
             rebuild()
         case .workspace(let workspace): onChoose(workspace, nil)
+        case .host(let host): onActivateHost(host)
         case .worktree(let worktree, let parent):
             onChoose(
                 Self.workspace(for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path)),
@@ -585,6 +611,22 @@ final class RepoPickerOverlay: PaletteOverlay {
                 Content(
                     title: title, leading: .process(icon), trailing: shortcut.map { .keycap($0) },
                     ink: emphasis.ink))
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    }
+
+    final class HostRowView: SelectableRowView {
+        let host: SSHHostID
+
+        init(host: SSHHostID, status: SSHHostStatus, state: State?) {
+            self.host = host
+            super.init(
+                Content(
+                    title: GeneralConfig.current.displayName(of: host), titleSuffix: state?.rawValue,
+                    leading: .process(.host)))
+            detail = status.word
+            setAccessibilityValue([status.word, state?.rawValue].compactMap { $0 }.joined(separator: ", "))
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
