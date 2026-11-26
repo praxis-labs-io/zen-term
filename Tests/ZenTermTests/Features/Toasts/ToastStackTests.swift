@@ -17,7 +17,17 @@ final class ToastStackTests: WindowTestCase {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
             styleMask: [.borderless], backing: .buffered, defer: false)
+        window.setFrameOrigin(Self.originAwayFromThePointer(for: window.frame.size))
         window.orderFront(nil)
+    }
+
+    // Hover rechecks read the real pointer, so the window must not sit under it.
+    private static func originAwayFromThePointer(for size: NSSize) -> NSPoint {
+        let screen = NSScreen.screens.first?.frame ?? .zero
+        let pointer = NSEvent.mouseLocation
+        let x = pointer.x < screen.midX ? screen.maxX - size.width : screen.minX
+        let y = pointer.y < screen.midY ? screen.maxY - size.height : screen.minY
+        return NSPoint(x: x, y: y)
     }
 
     override func tearDownWithError() throws {
