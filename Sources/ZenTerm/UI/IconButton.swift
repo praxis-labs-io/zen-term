@@ -22,6 +22,16 @@ final class IconButton: ControlView, ThemeReapplying {
 
     var isActive = false { didSet { update() } }
 
+    /// A disabled button rests in faint ink and ignores clicks, presses and Return.
+    var isEnabled = true {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            setAccessibilityEnabled(isEnabled)
+            window?.invalidateCursorRects(for: self)
+            update()
+        }
+    }
+
     var showsActivity = false { didSet { activityDot.state = showsActivity ? .live : nil } }
 
     var activityDotHiddenForTesting: Bool { activityDot.state == nil }
@@ -92,17 +102,26 @@ final class IconButton: ControlView, ThemeReapplying {
 
     override func mouseDown(with event: NSEvent) {
         tooltip.hide(from: self)
+        guard isEnabled else { return }
         guard firesOnRelease else { return onClick() }
         isPressed = event.clickCount == 1
     }
     override func mouseUp(with event: NSEvent) {
+        guard isEnabled else { return }
         guard firesOnRelease, isPressed else { return super.mouseUp(with: event) }
         isPressed = false
         guard !isHiddenOrHasHiddenAncestor, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         onClick()
     }
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
-    override func accessibilityPerformPress() -> Bool { onClick(); return true }
+    override func resetCursorRects() {
+        guard isEnabled else { return }
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        onClick()
+        return true
+    }
 
     override var acceptsFirstResponder: Bool { isKeyboardFocusable }
 
@@ -112,7 +131,7 @@ final class IconButton: ControlView, ThemeReapplying {
     override func keyDown(with event: NSEvent) {
         guard isKeyboardFocusable else { return super.keyDown(with: event) }
         switch KeyboardFocus.key(for: event) {
-        case .activate where KeyboardFocus.isUnmodified(event): onClick()
+        case .activate where KeyboardFocus.isUnmodified(event): if isEnabled { onClick() }
         case .up where onArrowUp != nil: onArrowUp?()
         case .down where onArrowDown != nil: onArrowDown?()
         case .left where onArrowLeft != nil: onArrowLeft?()
@@ -144,7 +163,10 @@ final class IconButton: ControlView, ThemeReapplying {
         let chrome = Theme.current.chrome
         let bg: NSColor
         let tint: NSColor
-        if isActive {
+        if !isEnabled {
+            bg = restsFilled ? chrome.fill(.rest) : .clear
+            tint = chrome.ink(.faint)
+        } else if isActive {
             bg = chrome.fill(.active); tint = chrome.ink(.normal)
         } else if showsHover {
             bg = chrome.fill(.hover); tint = chrome.ink(.normal)
