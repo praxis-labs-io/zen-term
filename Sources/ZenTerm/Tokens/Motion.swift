@@ -374,6 +374,50 @@ enum Motion {
         layer.add(anim, forKey: "motion.morph")
     }
 
+    struct FillStop {
+        let frame: CGRect
+        let color: CGColor
+    }
+
+    @discardableResult
+    static func slideFill(
+        _ layer: CALayer, from start: FillStop, to target: FillStop, completion: (() -> Void)? = nil
+    ) -> Bool {
+        layer.removeAnimation(forKey: "slideFill.position")
+        layer.removeAnimation(forKey: "slideFill.size")
+        layer.removeAnimation(forKey: "slideFill.color")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.frame = target.frame
+        layer.backgroundColor = target.color
+        CATransaction.commit()
+        guard !isReduceMotionEnabled() else { return false }
+
+        func anchored(_ frame: CGRect) -> CGPoint {
+            CGPoint(
+                x: frame.minX + layer.anchorPoint.x * frame.width, y: frame.minY + layer.anchorPoint.y * frame.height)
+        }
+        let position = CABasicAnimation(keyPath: "position")
+        position.fromValue = NSValue(point: anchored(start.frame))
+        position.toValue = NSValue(point: anchored(target.frame))
+        let size = CABasicAnimation(keyPath: "bounds.size")
+        size.fromValue = NSValue(size: start.frame.size)
+        size.toValue = NSValue(size: target.frame.size)
+        let color = CABasicAnimation(keyPath: "backgroundColor")
+        color.fromValue = start.color
+        color.toValue = target.color
+        for anim in [position, size, color] {
+            anim.duration = pageSlideDuration
+            anim.timingFunction = landingTiming
+        }
+        run(completion: completion) {
+            layer.add(position, forKey: "slideFill.position")
+            layer.add(size, forKey: "slideFill.size")
+            layer.add(color, forKey: "slideFill.color")
+        }
+        return true
+    }
+
     /// Independent of `anchorPoint`, which AppKit may put at the center or a corner.
     static func centeredScale(_ scale: CGFloat, in bounds: CGRect) -> CATransform3D {
         let cx = bounds.midX

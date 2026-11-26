@@ -126,6 +126,38 @@ final class SettingsOverlayNavTests: WindowTestCase {
         XCTAssertIdentical(win.firstResponder, rows[0], "Up wrapped from the first section")
     }
 
+    func test_downThroughTheNav_slidesOneFillToTheNextSection() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let overlay = SettingsOverlay(sections: [BareSection(), BareSection()], capturer: nil, onClose: {})
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+        overlay.layoutSubtreeIfNeeded()
+        window = win
+        let rows = descendants(of: overlay).compactMap { $0 as? NavRow }
+        win.makeFirstResponder(rows[0])
+        let slide = overlay.navFillSlideForTesting
+        waitUntil(slide.slidingRowForTesting(.focus) == nil, "the first row's fill to settle")
+
+        rows[0].keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "\u{F701}", charactersIgnoringModifiers: "\u{F701}",
+                isARepeat: false, keyCode: 125)!)
+
+        XCTAssertIdentical(win.firstResponder, rows[1], "precondition: Down moves to the next section")
+        XCTAssertTrue(slide.isSlidingForTesting(.focus))
+        XCTAssertIdentical(slide.slidingRowForTesting(.focus), rows[1])
+        XCTAssertFalse(
+            slide.isSlidingForTesting(.current), "current and focus move together, so one fill slides, not two")
+        waitUntil(slide.slidingRowForTesting(.focus) == nil, "the slide to land")
+        XCTAssertEqual(rows[1].layer?.backgroundColor, rows[1].restingFill.cgColor)
+        XCTAssertGreaterThan(rows[1].layer?.backgroundColor?.alpha ?? 0, 0, "the section it landed on is lit")
+        XCTAssertEqual(rows[0].layer?.backgroundColor?.alpha, 0)
+    }
+
     private final class CountingCapturer: KeybindCapturing {
         private(set) var endCount = 0
         func beginCapture(_ handler: @escaping (NSEvent) -> Void) {}

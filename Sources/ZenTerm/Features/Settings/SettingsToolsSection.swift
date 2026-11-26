@@ -11,6 +11,8 @@ final class SettingsToolsSection: SettingsSection {
     private weak var reorderHint: NSTextField?
     private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
+    private var fillSlide: RowFillSlide?
+    var fillSlideForTesting: RowFillSlide? { fillSlide }
     private var configObserver: NSObjectProtocol?
 
     init() {
@@ -33,6 +35,7 @@ final class SettingsToolsSection: SettingsSection {
         stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
+        fillSlide = RowFillSlide(host: stack)
 
         let button = AppButton(title: "＋ Add tool float", variant: .muted)
         button.isKeyboardFocusable = true
@@ -120,6 +123,7 @@ final class SettingsToolsSection: SettingsSection {
                 rows.append(row)
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+                fillSlide?.adopt(row)
             }
         }
         stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)

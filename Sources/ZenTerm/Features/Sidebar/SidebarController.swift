@@ -564,6 +564,8 @@ final class SidebarController {
 
     static func resetLastChoiceForTesting() { lastChoiceIsDocked = true }
 
+    func rerenderRowsForTesting() { renderRows() }
+
     var branchProbesInFlightForTesting: Set<URL> { branchProbesInFlight }
 
     func holdBranchProbeForTesting(_ folder: URL) { branchProbesInFlight.insert(folder.standardizedFileURL) }

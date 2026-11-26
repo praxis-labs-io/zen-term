@@ -388,6 +388,47 @@ final class SidebarInteractionTests: WindowTestCase {
         }
     }
 
+    func test_switchingWorkspace_slidesTheCurrentFill_andARerenderThatKeepsItKeepsTheSlide() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let other = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let sidebar = controller.sidebarForTesting
+        let slide = sidebar.view.fillSlideForTesting
+        sidebar.view.layoutSubtreeIfNeeded()
+        let rows = sidebar.view.rowsForTesting
+        XCTAssertEqual(rows.count, 2, "precondition")
+        waitUntil(slide.slidingRowForTesting(.current) == nil, "the first row's fill to settle")
+
+        controller.activateWorkspaceForTesting(other)
+        XCTAssertTrue(slide.isSlidingForTesting(.current), "a workspace switch slides the fill")
+        XCTAssertTrue(slide.slidingRowForTesting(.current) === rows[1])
+        XCTAssertEqual(rows[1].layer?.backgroundColor, NSColor.clear.cgColor, "the slide stands in for its fill")
+
+        sidebar.rerenderRowsForTesting()
+        sidebar.view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(slide.isSlidingForTesting(.current), "a rerender that keeps the workspace keeps the slide")
+        XCTAssertTrue(slide.slidingRowForTesting(.current) === rows[1])
+    }
+
+    func test_arrowingThroughTheSidebar_slidesTheFocusFill() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        sidebar.view.layoutSubtreeIfNeeded()
+        let rows = sidebar.view.rowsForTesting
+        sidebar.focusActiveRow()
+        XCTAssertTrue(controller.window.firstResponder === rows[0], "precondition")
+
+        controller.window.sendEvent(key(.down, in: controller))
+
+        XCTAssertTrue(controller.window.firstResponder === rows[1])
+        XCTAssertTrue(sidebar.view.fillSlideForTesting.isSlidingForTesting(.focus), "↓ slides the focus fill")
+        XCTAssertTrue(sidebar.view.fillSlideForTesting.slidingRowForTesting(.focus) === rows[1])
+    }
+
     func test_clickingARow_neverGivesItTheKeyboard() throws {
         let controller = makeController()
         _ = controller.addWorkspaceForTesting(name: "api", folder: root)

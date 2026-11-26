@@ -100,6 +100,15 @@ final class ControlState {
         Motion.ease(layer, keyPath: "backgroundColor", to: target)
     }
 
+    func snapFill(_ color: NSColor) {
+        guard let layer = host.layer else { return }
+        layer.removeAnimation(forKey: "motion.backgroundColor")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.backgroundColor = color.cgColor
+        CATransaction.commit()
+    }
+
     func showFocusRing(_ shown: Bool) {
         host.layer?.borderWidth = ChromeMetrics.Border.width
         host.layer?.borderColor = (shown ? Theme.current.chrome.focusRing : .clear).cgColor

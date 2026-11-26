@@ -81,9 +81,11 @@ class ListRow: ControlView, ThemeReapplying {
         didSet {
             guard isCurrent != oldValue else { return }
             refreshAccessibilitySelected()
+            fillSlide?.rowMarkDidChange()
             refreshFill()
         }
     }
+    weak var fillSlide: RowFillSlide?
     private var accessoryViews: [NSView] = []
     var accessories: [NSView] {
         get { accessoryViews }
@@ -384,15 +386,15 @@ class ListRow: ControlView, ThemeReapplying {
 
     override var showsHover: Bool { super.showsHover && onPointerEnter == nil }
 
-    private func refreshFill() {
+    var restingFill: NSColor {
         let chrome = Theme.current.chrome
-        if showsHover || hasKeyboardFocus {
-            easeFill(chrome.fill(.hover))
-        } else if isHighlighted || isCurrent {
-            easeFill(chrome.fill(.active))
-        } else {
-            easeFill(.clear)
-        }
+        if showsHover || fillSlide?.marks(self, with: .focus) ?? hasKeyboardFocus { return chrome.fill(.hover) }
+        if isHighlighted || fillSlide?.marks(self, with: .current) ?? isCurrent { return chrome.fill(.active) }
+        return .clear
+    }
+
+    func refreshFill(snapping: Bool = false) {
+        if snapping { snapFill(restingFill) } else { easeFill(restingFill) }
     }
 
     // AppKit promotes any clicked view that accepts, so a keyboard-only row accepts only in `takeKeyboardFocus`.
@@ -404,7 +406,10 @@ class ListRow: ControlView, ThemeReapplying {
         isTakingKeyboardFocus = false
     }
 
-    override func focusDidChange() { refreshFill() }
+    override func focusDidChange() {
+        fillSlide?.rowMarkDidChange()
+        refreshFill()
+    }
 
     override func hoverDidChange() {
         if !isHovered {
@@ -435,6 +440,7 @@ class ListRow: ControlView, ThemeReapplying {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { hideTooltip() }
+        fillSlide?.rowMarkDidChange()
     }
 
     override func viewDidChangeBackingProperties() {

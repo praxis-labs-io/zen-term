@@ -10,6 +10,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     private var addButton: AppButton?
     private weak var reorderHint: NSTextField?
     private var rowsStack: NSStackView?
+    private var fillSlide: RowFillSlide?
 
     func makeDetailView() -> NSView {
         let stack = NSStackView()
@@ -18,6 +19,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
+        fillSlide = RowFillSlide(host: stack)
 
         let button = AppButton(title: "＋ Add workspace", variant: .muted)
         button.isKeyboardFocusable = true
@@ -82,6 +84,7 @@ final class SettingsWorkspacesSection: SettingsSection {
                 rows.append(row)
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+                fillSlide?.adopt(row)
             }
             GitRepoStatus.refresh(workspaces.map(\.path)) { [weak self] in
                 self?.rows.forEach { $0.applyGitStatus() }
