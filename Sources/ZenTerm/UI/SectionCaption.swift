@@ -21,15 +21,8 @@ final class SectionCaption: NSTextField, ThemeReapplying {
 
     func reapplyTheme() {
         let ink = Theme.current.chrome.ink(.muted)
-        let string = NSMutableAttributedString(
-            string: text, attributes: [.font: ChromeType.sectionLabel, .foregroundColor: ink])
-        if isRequired {
-            string.append(
-                NSAttributedString(
-                    string: " ✳",
-                    attributes: [.font: ChromeType.font(.caption, weight: .medium), .foregroundColor: ink]
-                ))
-        }
-        attributedStringValue = string
+        attributedStringValue = NSAttributedString(
+            string: isRequired ? text + " ✳" : text,
+            attributes: [.font: ChromeType.sectionLabel, .foregroundColor: ink])
     }
 }

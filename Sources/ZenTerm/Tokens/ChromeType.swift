@@ -38,7 +38,7 @@ enum ChromeType {
         case text, mono, digits
     }
 
-    static let sectionLabel = font(.small, weight: .medium)
+    static let sectionLabel = font(.caption, weight: .medium)
 
     static func font(_ role: Role, weight: Weight? = nil, face: Face = .text) -> NSFont {
         let size = role.pointSize

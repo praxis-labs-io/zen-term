@@ -32,7 +32,7 @@ final class SectionCaptionTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 60), styleMask: [.borderless],
             backing: .buffered, defer: false)
         window.contentView?.addSubview(caption)
-        XCTAssertEqual(runs(caption).count, 2, "premise: the label and the marker are separate runs")
+        XCTAssertEqual(caption.stringValue, "Name ✳", "premise: the caption carries the required marker")
 
         var dimmed = Theme.zenInk
         dimmed.foreground = try XCTUnwrap(TerminalColor(hex: "#575279"))
