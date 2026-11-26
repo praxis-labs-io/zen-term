@@ -37,6 +37,7 @@ final class FindFieldInteractionTests: WindowTestCase {
     private struct Opened {
         let controller: WindowController
         let surface: RecordingSurface
+        let panel: PanelHostView
         let field: FindField
     }
 
@@ -55,7 +56,7 @@ final class FindFieldInteractionTests: WindowTestCase {
             controller.search.report(selected: 0, from: surface)
         }
         controller.window.contentView?.layoutSubtreeIfNeeded()
-        return Opened(controller: controller, surface: surface, field: field)
+        return Opened(controller: controller, surface: surface, panel: panel, field: field)
     }
 
     // Hit-tested rather than sent: an inactive window swallows the first click to activate itself.
@@ -186,5 +187,47 @@ final class FindFieldInteractionTests: WindowTestCase {
         XCTAssertFalse(opened.field.isFieldFirstResponder, "premise: focus left the field")
         XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.start, false)
         XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.end, true)
+    }
+
+    func test_inTheHeader_findTakesTheRowAndTheChip() throws {
+        let opened = try openFind()
+        let header = try XCTUnwrap(opened.panel.shownHeaderForTesting)
+
+        XCTAssertTrue(opened.field.isFlat)
+        XCTAssertEqual(header.chipForTesting, .find)
+        XCTAssertFalse(header.showsTitleAndControlsForTesting)
+    }
+
+    func test_closingFind_givesTheHeaderBackItsChipTitleAndControls() throws {
+        let opened = try openFind()
+        let header = try XCTUnwrap(opened.panel.shownHeaderForTesting)
+
+        try click(opened.field.closeButtonForTesting, in: opened.controller.window)
+
+        XCTAssertEqual(header.chipForTesting, header.processForTesting)
+        XCTAssertTrue(header.showsTitleAndControlsForTesting)
+    }
+
+    func test_aProgramChangeDuringFind_waitsUntilFindClosesToReachTheChip() throws {
+        let opened = try openFind()
+        let header = try XCTUnwrap(opened.panel.shownHeaderForTesting)
+        XCTAssertNotEqual(header.processForTesting, .worktree, "premise: the new process differs")
+
+        header.content.process = .worktree
+
+        XCTAssertEqual(header.chipForTesting, .find)
+        try click(opened.field.closeButtonForTesting, in: opened.controller.window)
+        XCTAssertEqual(header.chipForTesting, .worktree)
+    }
+
+    func test_withHeadersOff_findIsACardOverTheTerminal() throws {
+        var config = GeneralConfig.builtIn
+        config.paneHeaders = false
+        GeneralConfig.setCurrentForTesting(config)
+
+        let opened = try openFind()
+
+        XCTAssertNil(opened.panel.shownHeaderForTesting)
+        XCTAssertFalse(opened.field.isFlat)
     }
 }

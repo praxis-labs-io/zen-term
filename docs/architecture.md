@@ -803,8 +803,8 @@ Bundled themes carry an `nvim-colorscheme` key.
 `navigate_search:`, `end_search`) and the `SEARCH_*` actions come back as
 `TerminalSurfaceDelegate` search events.
 
-- **The field floats over the header.** Opening it never resizes the terminal, so it
-  causes no reflow.
+- **The field takes the header's row**, or floats over the terminal's top-right corner
+  with headers off. Opening it never resizes the terminal, so it causes no reflow.
 - **Keys follow the caret.** While the field has focus the mode handler claims nothing,
   and ⏎/⇧⏎ step (`FindField` reads Shift off `NSApp.currentEvent`). With the caret back
   in a live pane every key reaches the prompt. Only in scroll mode does

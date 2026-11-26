@@ -19,12 +19,12 @@ final class ModeChrome {
     private var findField: FindField?
     private var isFindFieldShown = false
     private var slideRuns: [ObjectIdentifier: Int] = [:]
-    private var findFieldPastChip: NSLayoutConstraint?
-    private var findFieldPastPadding: NSLayoutConstraint?
+    private var findFieldInHeader: [NSLayoutConstraint] = []
+    private var findFieldAsCard: [NSLayoutConstraint] = []
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
-    // Below required: a pane too narrow for the count and steppers lets the field over the chip, not break layout.
+    // Below required: a pane too narrow for the count and steppers lets the field past the padding, not break layout.
     private static let findFieldLimitPriority = NSLayoutConstraint.Priority(
         NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
 
@@ -83,12 +83,17 @@ final class ModeChrome {
             contentTopToHeader?.isActive = false
             contentTopToContainer.isActive = true
         }
-        applyFindFieldLimit()
+        placeFindField()
     }
 
-    private func applyFindFieldLimit() {
-        findFieldPastChip?.isActive = isHeaderShown
-        findFieldPastPadding?.isActive = !isHeaderShown
+    private var findsInHeader: Bool { isHeaderShown && !findFieldInHeader.isEmpty }
+
+    private func placeFindField() {
+        guard let findField else { return }
+        NSLayoutConstraint.deactivate(findFieldInHeader + findFieldAsCard)
+        NSLayoutConstraint.activate(findsInHeader ? findFieldInHeader : findFieldAsCard)
+        findField.isFlat = findsInHeader
+        header?.isFinding = findsInHeader && isFindFieldShown
     }
 
     func setScrollCursor(
@@ -112,15 +117,31 @@ final class ModeChrome {
             guard isFindFieldShown, let findField else { return nil }
             isFindFieldShown = false
             findField.isDismissed = true
-            slide(findField, appearing: false)
+            header?.isFinding = false
+            reveal(findField, appearing: false)
             return nil
         }
         let field = findField ?? makeFindField()
         guard !isFindFieldShown else { return field }
         isFindFieldShown = true
         field.isDismissed = false
-        slide(field, appearing: true)
+        placeFindField()
+        reveal(field, appearing: true)
         return field
+    }
+
+    private func reveal(_ field: FindField, appearing: Bool) {
+        guard field.isFlat else { return slide(field, appearing: appearing) }
+        let key = ObjectIdentifier(field)
+        let run = (slideRuns[key] ?? 0) + 1
+        slideRuns[key] = run
+        field.isHidden = false
+        field.wantsLayer = true
+        if appearing { field.layer?.opacity = 0 }
+        Motion.fade(field, to: appearing ? 1 : 0) { [weak self] in
+            guard !appearing, self?.slideRuns[key] == run else { return }
+            field.isHidden = true
+        }
     }
 
     var scrollCursorForTesting: ScrollCursorView { cursor }
@@ -159,19 +180,25 @@ final class ModeChrome {
         field.isHidden = true
         container.addSubview(field)
         let inset = ChromeMetrics.Spacing.s8
-        NSLayoutConstraint.activate([
+        let pastPadding = field.leadingAnchor.constraint(
+            greaterThanOrEqualTo: container.leadingAnchor, constant: padding)
+        pastPadding.priority = Self.findFieldLimitPriority
+        findFieldAsCard = [
             field.topAnchor.constraint(equalTo: container.topAnchor, constant: inset),
             field.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
-        ])
-        findFieldPastChip = header.map {
-            field.leadingAnchor.constraint(
-                greaterThanOrEqualTo: $0.chipTrailingAnchor, constant: ChromeMetrics.Spacing.s8)
-        }
-        findFieldPastPadding = field.leadingAnchor.constraint(
-            greaterThanOrEqualTo: container.leadingAnchor, constant: padding)
-        for limit in [findFieldPastChip, findFieldPastPadding] { limit?.priority = Self.findFieldLimitPriority }
-        applyFindFieldLimit()
+            pastPadding,
+        ]
+        findFieldInHeader =
+            header.map {
+                [
+                    field.leadingAnchor.constraint(
+                        equalTo: $0.chipTrailingAnchor, constant: ChromeMetrics.Spacing.s8),
+                    field.trailingAnchor.constraint(equalTo: $0.trailingAnchor),
+                    field.centerYAnchor.constraint(equalTo: $0.centerYAnchor),
+                ]
+            } ?? []
         findField = field
+        placeFindField()
         return field
     }
 }

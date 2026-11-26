@@ -9,19 +9,27 @@ final class FindField: NSView, ThemeReapplying {
     private let divider = ToolbarDivider()
     private let queryFade = EdgeFade(axis: .horizontal)
     private weak var observedEditorClip: NSClipView?
-    private lazy var olderButton = stepButton(
-        symbol: "chevron.up", label: "Older Match", shortcut: "↩", step: .next)
-    private lazy var newerButton = stepButton(
-        symbol: "chevron.down", label: "Newer Match", shortcut: "⇧↩", step: .previous)
-    private lazy var closeButton = IconButton(
-        symbol: "xmark", size: Self.buttonSize, accessibilityLabel: "Close Find", shortcut: { "esc" },
-        onClick: { [weak self] in self?.onCancel?() })
+    private var olderButton: IconButton!
+    private var newerButton: IconButton!
+    private var closeButton: IconButton!
+    private let buttons = NSStackView()
 
     var onChange: ((String) -> Void)?
     var onStep: ((TerminalSearchStep) -> Void)?
     var onCancel: (() -> Void)?
     var onFocusChange: ((Bool) -> Void)?
     var isDismissed = false
+
+    // Flat, the field is the header's row: no card, no glyph, since the header's chip carries it.
+    var isFlat = false {
+        didSet {
+            guard isFlat != oldValue else { return }
+            applyLook()
+        }
+    }
+    private var heightConstraint: NSLayoutConstraint?
+    private var cardWidth: [NSLayoutConstraint] = []
+    private var row: NSStackView?
 
     /// Setting it doesn't fire `onChange`, so a seed from a selection doesn't re-run its search.
     var needle: String {
@@ -72,11 +80,10 @@ final class FindField: NSView, ThemeReapplying {
         count.setContentHuggingPriority(.required, for: .horizontal)
         count.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let buttons = NSStackView(views: [divider, olderButton, newerButton, closeButton])
         buttons.orientation = .horizontal
         buttons.spacing = ChromeMetrics.Spacing.s2
-        buttons.setCustomSpacing(ChromeMetrics.Spacing.s4, after: divider)
         buttons.setHuggingPriority(.required, for: .horizontal)
+        buildButtons()
 
         let row = NSStackView(views: [glyph, field, count, buttons])
         row.orientation = .horizontal
@@ -93,10 +100,13 @@ final class FindField: NSView, ThemeReapplying {
             row.trailingAnchor.constraint(equalTo: trailingAnchor),
             row.topAnchor.constraint(equalTo: topAnchor),
             row.bottomAnchor.constraint(equalTo: bottomAnchor),
-            heightAnchor.constraint(equalToConstant: Self.height),
-            widthAnchor.constraint(lessThanOrEqualToConstant: Self.width),
-            preferredWidth,
         ])
+        cardWidth = [widthAnchor.constraint(lessThanOrEqualToConstant: Self.width), preferredWidth]
+        NSLayoutConstraint.activate(cardWidth)
+        self.row = row
+        let height = heightAnchor.constraint(equalToConstant: Self.height)
+        height.isActive = true
+        heightConstraint = height
 
         CardChrome.apply(to: self, cornerRadius: ChromeMetrics.Radius.control, tier: .overlay)
         showCount(total: nil, selected: nil)
@@ -105,12 +115,29 @@ final class FindField: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    private func stepButton(symbol: String, label: String, shortcut: String, step: TerminalSearchStep)
-        -> IconButton
-    {
-        IconButton(
-            symbol: symbol, size: Self.buttonSize, accessibilityLabel: label, shortcut: { shortcut },
-            onClick: { [weak self] in self?.onStep?(step) })
+    // Flat in the header, the buttons take the header's own control size and ink, and close reads as find's, not the pane's.
+    private func buildButtons() {
+        let pointSize = isFlat ? ChromeMetrics.Icon.xs : ChromeMetrics.Icon.sm
+        let restInk: ChromeTheme.InkLevel = isFlat ? .muted : .subtle
+        func button(_ symbol: String, _ label: String, _ shortcut: String, _ action: @escaping () -> Void)
+            -> IconButton
+        {
+            IconButton(
+                symbol: symbol, size: Self.buttonSize, pointSize: pointSize, accessibilityLabel: label,
+                shortcut: { shortcut }, restInk: restInk, onClick: action)
+        }
+        let enabled = olderButton?.isEnabled ?? false
+        olderButton = button("chevron.up", "Older Match", "↩") { [weak self] in self?.onStep?(.next) }
+        newerButton = button("chevron.down", "Newer Match", "⇧↩") { [weak self] in self?.onStep?(.previous) }
+        closeButton = button(isFlat ? "escape" : "xmark", "Close Find", "esc") { [weak self] in
+            self?.onCancel?()
+        }
+        olderButton.isEnabled = enabled
+        newerButton.isEnabled = enabled
+        for view in buttons.arrangedSubviews { view.removeFromSuperview() }
+        let views: [NSView] = (isFlat ? [] : [divider]) + [olderButton, newerButton, closeButton]
+        for view in views { buttons.addArrangedSubview(view) }
+        if !isFlat { buttons.setCustomSpacing(ChromeMetrics.Spacing.s4, after: divider) }
     }
 
     /// `selected` is zero-based and newest-first, libghostty's order; the count shows oldest-first.
@@ -198,16 +225,34 @@ final class FindField: NSView, ThemeReapplying {
         return (colors.first?.alpha == 0, colors.last?.alpha == 0)
     }
 
+    private func applyLook() {
+        glyph.isHidden = isFlat
+        buildButtons()
+        reapplyTheme()
+        heightConstraint?.constant = isFlat ? ChromeMetrics.Height.xs : Self.height
+        for constraint in cardWidth { constraint.isActive = !isFlat }
+        row?.edgeInsets = NSEdgeInsets(
+            top: 0, left: isFlat ? 0 : ChromeMetrics.Spacing.controlInset, bottom: 0,
+            right: isFlat ? 0 : ChromeMetrics.Spacing.s4)
+        if isFlat {
+            layer?.backgroundColor = nil
+            layer?.borderWidth = 0
+            layer?.shadowOpacity = 0
+        } else {
+            CardChrome.apply(to: self, cornerRadius: ChromeMetrics.Radius.control, tier: .overlay)
+        }
+    }
+
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: self, tier: .overlay)
+        if !isFlat { CardChrome.reapplyTheme(to: self, tier: .overlay) }
         field.applyThemedEditor()
         glyph.contentTintColor = chrome.ink(.muted)
         field.textColor = chrome.ink(.normal)
         count.textColor = chrome.ink(.muted)
         field.placeholderAttributedString = NSAttributedString(
             string: "Find in scrollback",
-            attributes: [.foregroundColor: chrome.ink(.faint), .font: field.font ?? ChromeType.font(.small)])
+            attributes: [.foregroundColor: chrome.ink(.muted), .font: field.font ?? ChromeType.font(.small)])
     }
 }
 
