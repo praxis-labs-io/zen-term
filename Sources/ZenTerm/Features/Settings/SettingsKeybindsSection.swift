@@ -108,7 +108,7 @@ final class SettingsKeybindsSection: SettingsSection {
         for (category, actions) in Self.groups {
             let caption = SectionCaption(category)
             rowsStack.addArrangedSubview(caption)
-            if let previous { rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s16, after: previous) }
+            if let previous { rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s24, after: previous) }
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
                 row.chip.onActivate = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }

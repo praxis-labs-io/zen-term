@@ -67,8 +67,8 @@ final class SettingsDetailScrollTests: WindowTestCase {
     }
 
     private func captions(in scroll: NSScrollView) -> [NSTextField] {
-        let stack = scroll.documentView?.subviews.compactMap { $0 as? NSStackView }.first
-        return stack?.arrangedSubviews.compactMap { $0 as? NSTextField } ?? []
+        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
+        return scroll.documentView.map { descendants(of: $0).compactMap { $0 as? SectionCaption } } ?? []
     }
 
     private func isFullyVisible(_ view: NSView, in scroll: NSScrollView) -> Bool {

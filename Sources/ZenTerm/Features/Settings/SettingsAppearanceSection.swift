@@ -18,12 +18,12 @@ final class SettingsAppearanceSection: SettingsFormSection {
         addGroup("Window") {
             self.addSegmentedRow(
                 key: "window-chrome", caption: "Window buttons",
-                blurb: "Show the window buttons at the top of the sidebar", options: ["On", "Off"],
+                blurb: nil, options: ["On", "Off"],
                 read: { $0.windowChrome ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addSegmentedRow(
                 key: "pane-headers", caption: "Pane headers",
-                blurb: "Show what runs in each pane above it", options: ["On", "Off"],
+                blurb: nil, options: ["On", "Off"],
                 read: { $0.paneHeaders ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
         }
@@ -38,15 +38,15 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 key: "window-gutter", caption: "Window gutter", blurb: "Space at the window top and sides",
                 range: 0...64, read: { $0.windowGutter }, width: 64)
             self.addNumericRow(
-                key: "pane-gap", caption: "Pane gap", blurb: "Space between split panes",
+                key: "pane-gap", caption: "Pane gap", blurb: "",
                 range: 0...64, read: { $0.panelGap }, width: 64)
             self.addNumericRow(
                 key: "bottom-drawer-fraction", caption: "Default bottom drawer height",
-                blurb: "Height it opens to (new tabs)", range: 0.1...0.9, read: { $0.bottomDrawerFraction },
+                blurb: "Applies to new tabs", range: 0.1...0.9, read: { $0.bottomDrawerFraction },
                 width: 64)
             self.addNumericRow(
                 key: "right-drawer-fraction", caption: "Default right drawer width",
-                blurb: "Width it opens to (new tabs)", range: 0.1...0.9, read: { $0.rightDrawerFraction },
+                blurb: "Applies to new tabs", range: 0.1...0.9, read: { $0.rightDrawerFraction },
                 width: 64)
             self.addNumericRow(
                 key: "drawer-resize-step", caption: "Drawer resize step",
@@ -54,7 +54,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 width: 64)
             self.addNumericRow(
                 key: "max-drawer-fraction", caption: "Max drawer width/height",
-                blurb: "Largest a drawer can grow", range: 0.3...0.95, read: { $0.maxDrawerFraction }, width: 64)
+                blurb: "", range: 0.3...0.95, read: { $0.maxDrawerFraction }, width: 64)
         }
         addGroup("Motion") {
             self.addSegmentedRow(
@@ -88,7 +88,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
         addCustomRow(
             key: "hide-toolbar-buttons", caption: "Toolbar buttons",
             description: "Shortcuts still work when hidden",
-            control: list, focusStop: list, controlNote: nil, width: 220,
+            control: list, focusStop: list, width: 220,
             refresh: { [weak self] in
                 self?.toolbarList?.setItems(Self.toolbarItems(), title: Self.toolbarSummary())
             })
@@ -115,8 +115,8 @@ final class SettingsAppearanceSection: SettingsFormSection {
         themeDropdown = dropdown
 
         addCustomRow(
-            key: "theme", caption: "Theme", description: "Applies instantly",
-            control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
+            key: "theme", caption: "Theme", description: nil,
+            control: dropdown, focusStop: dropdown, width: 220,
             refresh: { [weak self] in self?.refreshThemeRow() })
     }
 
@@ -154,8 +154,8 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
         addCustomRow(
             key: "accent-color", caption: "Accent color",
-            description: "Focus, active states, confirms",
-            control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
+            description: nil,
+            control: dropdown, focusStop: dropdown, width: 220,
             refresh: { [weak self] in self?.refreshAccentRow() })
     }
 

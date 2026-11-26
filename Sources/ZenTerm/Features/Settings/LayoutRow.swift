@@ -5,12 +5,11 @@ final class LayoutRow: NSView, ThemeReapplying {
 
     private let captionLabel: NSTextField
     private let descriptionLabel: NSTextField?
-    private let controlNoteLabel: NSTextField?
     private let messageLabel = FormErrorLabel()
     private(set) var messageKind: MessageKind?
     var isDimmed = false { didSet { reapplyTheme() } }
 
-    init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
+    init(caption: String, description: String?, control: NSView, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)
         label.font = ChromeType.font(.body)
         label.textColor = Theme.current.chrome.ink(.normal)
@@ -18,20 +17,17 @@ final class LayoutRow: NSView, ThemeReapplying {
 
         control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
-        let (captionColumn, descriptionNote) = LayoutRow.column(primary: label, note: description, alignment: .leading)
-        let (controlColumn, controlNoteField) = LayoutRow.column(
-            primary: control, note: controlNote, alignment: .trailing)
+        let (captionColumn, descriptionNote) = LayoutRow.column(primary: label, note: description)
 
         captionLabel = label
         descriptionLabel = descriptionNote
-        controlNoteLabel = controlNoteField
 
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let controls = NSStackView(views: [captionColumn, spacer, controlColumn])
+        let controls = NSStackView(views: [captionColumn, spacer, control])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = ChromeMetrics.Spacing.s8
@@ -48,6 +44,7 @@ final class LayoutRow: NSView, ThemeReapplying {
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            controls.heightAnchor.constraint(greaterThanOrEqualToConstant: ChromeMetrics.Height.lg),
             messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ]
         if let controlWidth {
@@ -58,9 +55,7 @@ final class LayoutRow: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    private static func column(
-        primary: NSView, note: String?, alignment: NSLayoutConstraint.Attribute
-    ) -> (NSView, NSTextField?) {
+    private static func column(primary: NSView, note: String?) -> (NSView, NSTextField?) {
         guard let note else { return (primary, nil) }
         let noteLabel = NSTextField(labelWithString: note)
         noteLabel.font = ChromeType.font(.caption)
@@ -68,7 +63,7 @@ final class LayoutRow: NSView, ThemeReapplying {
         let stack = NSStackView(views: [primary, noteLabel])
         stack.orientation = .vertical
         stack.spacing = ChromeMetrics.Spacing.s2
-        stack.alignment = alignment
+        stack.alignment = .leading
         return (stack, noteLabel)
     }
 
@@ -90,6 +85,5 @@ final class LayoutRow: NSView, ThemeReapplying {
         let chrome = Theme.current.chrome
         captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.ink(.normal)
         descriptionLabel?.textColor = chrome.ink(isDimmed ? .faint : .muted)
-        controlNoteLabel?.textColor = chrome.ink(.muted)
     }
 }
