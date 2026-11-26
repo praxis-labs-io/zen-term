@@ -21,39 +21,39 @@ enum PaneIdentity {
 
     static func tabTitle(title: String?, directory: URL?) -> String {
         let raw = title ?? ""
-        if isPath(raw) { return folderName(ofPath: raw) }
+        if isPath(raw, in: directory) { return folderName(ofPath: raw) }
         let shown = withoutStatus(raw)
         return shown.isEmpty ? directory.flatMap(PathDisplay.folderName) ?? "shell" : shown
     }
 
     private static func programName(in surface: TerminalSurface) -> String {
         if let program = PaneCanvasController.runningProgram(in: surface) { return program }
-        let shell = surface.foregroundProcessGroupID
-            .flatMap(ProcessArguments.arguments(of:))?.first.flatMap(ProcessArguments.programName(from:))
-        return shell ?? "shell"
+        guard let group = surface.foregroundProcessGroupID else { return "shell" }
+        guard ForegroundGroup.isShell(group) else { return ProcessIcon.unknown.name.lowercased() }
+        return ProcessArguments.arguments(of: group)?.first.flatMap(ProcessArguments.programName(from:)) ?? "shell"
     }
 
-    // An agent leads its title with a status glyph or a bracketed mark; a leading bracket or quote is the title's own.
+    // An agent leads its title with a word of bare symbols (`✳`, a spinner frame) or a bracketed mark; a command's `./` is its own.
     private static func withoutStatus(_ title: String) -> String {
-        let leading = title.drop { character in
-            guard let scalar = character.unicodeScalars.first else { return true }
-            let category = scalar.properties.generalCategory
-            return
-                !(character.isLetter || character.isNumber || category == .openPunctuation
-                || category == .initialPunctuation)
-        }
-        var shown = String(leading)
+        var shown = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        for mark in ["[ ! ] ", "[ . ] "] where shown.hasPrefix(mark) { shown.removeFirst(mark.count) }
+        let words = shown.split(separator: " ", maxSplits: 1)
+        if words.count == 2, !words[0].contains(where: { $0.isLetter || $0.isNumber }) { shown = String(words[1]) }
         for mark in ["[ ! ] ", "[ . ] "] where shown.hasPrefix(mark) { shown.removeFirst(mark.count) }
         return shown.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func pathStart(_ title: String) -> Substring {
-        title.drop { !($0.isLetter || $0.isNumber || $0 == "~" || $0 == "/") }
+        title.drop { !($0.isLetter || $0.isNumber || $0 == "~" || $0 == "/" || $0 == ".") }
     }
 
-    private static func isPath(_ title: String) -> Bool {
-        let start = pathStart(title)
-        return start.hasPrefix("~") || start.hasPrefix("/")
+    // A shell titles its prompt with the folder and a running job with its command line, which can start with a path too.
+    private static func isPath(_ title: String, in directory: URL?) -> Bool {
+        let start = pathStart(title).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard start.hasPrefix("~") || start.hasPrefix("/") else { return false }
+        guard start.contains(where: \.isWhitespace) else { return true }
+        guard let directory else { return false }
+        return [directory.path, PathDisplay.abbreviatingHome(directory.path)].contains { $0.hasSuffix(start) }
     }
 
     private static func folderName(ofPath title: String) -> String {

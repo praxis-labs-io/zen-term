@@ -254,6 +254,25 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).flatMap(\.panes).first { $0.token == got.token }, got)
     }
 
+    func test_aHostPanesHeader_namesTheHost_notTheLocalSSH() throws {
+        let c = makeWindow()
+        let pane = try connected(c)
+        pane.foregroundProcessGroupID = getpid()
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let host = try XCTUnwrap(
+            Self.descendants(of: c.window.contentView!).compactMap { $0 as? PanelHostView }
+                .first { pane.view.isDescendant(of: $0) })
+        host.header?.content = PaneHeader.Content(process: .unknown, name: "stale", path: nil)
+
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(host.header?.nameForTesting, "devbox", "the local ssh says nothing about the host")
+    }
+
+    private static func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
     private let address = "ssh:devbox"
 
     func test_anSSHAddressFindsTheHostsWorkspaceInAnotherWindow_andSwitchRaisesIt() throws {

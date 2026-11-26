@@ -43,7 +43,7 @@
                             samples: [
                                 header(
                                     PaneHeader.Content(process: .tool, name: "Zen Octo", path: nil),
-                                    controls: [.minimize, .close], active: true)
+                                    controls: [.minimize, .end], active: true)
                             ]),
                         GallerySection.Row(
                             label: "Narrow pane",

@@ -1274,6 +1274,10 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, titleDidChange title: String) {
         guard let id = drawerSurfaceID(of: s) else { return }
         onTitle?(id, title)
+    }
+
+    func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
+        guard let id = drawerSurfaceID(of: s) else { return }
         if s === bottomDrawerSurface { refreshDrawerHeader(bottomDrawerPanel, s, id) }
         if s === rightDrawerSurface { refreshDrawerHeader(rightDrawerPanel, s, id) }
     }

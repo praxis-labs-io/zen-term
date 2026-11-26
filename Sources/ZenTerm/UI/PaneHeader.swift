@@ -9,7 +9,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
     }
 
     enum Control: CaseIterable {
-        case splitHorizontal, splitVertical, focusMode, minimize, close
+        // A float's `end` stops its program, where ⌘W only hides it: that is `minimize`'s shortcut.
+        case splitHorizontal, splitVertical, focusMode, minimize, close, end
 
         var symbol: String {
             switch self {
@@ -17,7 +18,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
             case .splitVertical: return "rectangle.split.2x1"
             case .focusMode: return "arrow.up.left.and.arrow.down.right"
             case .minimize: return "minus"
-            case .close: return "xmark"
+            case .close, .end: return "xmark"
             }
         }
 
@@ -27,17 +28,23 @@ final class PaneHeader: ControlView, ThemeReapplying {
             case .splitVertical: return .splitVertical
             case .focusMode: return .toggleZoom
             case .close: return .closePane
-            case .minimize: return nil
+            case .minimize, .end: return nil
             }
         }
 
         var label: String {
             switch self {
-            case .splitHorizontal: return "Split horizontally"
-            case .splitVertical: return "Split vertically"
-            case .focusMode: return "Focus mode"
             case .minimize: return "Minimize"
-            case .close: return "Close"
+            case .end: return "Close"
+            default: return chord.map { CommandCatalog.spec(for: $0).title } ?? ""
+            }
+        }
+
+        var shortcut: String? {
+            switch self {
+            case .minimize: return CommandCatalog.spec(for: .closePane).shortcut
+            case .end: return nil
+            default: return chord.map { CommandCatalog.spec(for: $0).shortcut }
             }
         }
     }
@@ -106,7 +113,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
             let button = IconButton(
                 symbol: control.symbol,
                 size: NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs),
-                pointSize: ChromeMetrics.Icon.xs, accessibilityLabel: control.label, restInk: .muted,
+                pointSize: ChromeMetrics.Icon.xs, accessibilityLabel: control.label,
+                shortcut: control.shortcut.map { _ in { control.shortcut } }, restInk: .muted,
                 onClick: { [weak self] in self?.onControl(control) })
             button.firesOnRelease = true
             buttons[control] = button
@@ -116,11 +124,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
         chip.translatesAutoresizingMaskIntoConstraints = false
         [chip, nameField, pathField, controlStack].forEach(addSubview)
         let gap = ChromeMetrics.Spacing.s8
-        // An empty path still holds its gap, so in a header too narrow for both gaps it is the one that gives.
-        let pathGap = pathField.leadingAnchor.constraint(equalTo: nameField.trailingAnchor, constant: gap)
-        pathGap.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            pathGap,
+            Self.yieldingGap(after: nameField, before: pathField),
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
             chip.leadingAnchor.constraint(equalTo: leadingAnchor),
             chip.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -138,6 +143,13 @@ final class PaneHeader: ControlView, ThemeReapplying {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    // An empty path still holds its gap, so in a header too narrow for both gaps it is the one that gives.
+    private static func yieldingGap(after name: NSView, before path: NSView) -> NSLayoutConstraint {
+        let gap = path.leadingAnchor.constraint(equalTo: name.trailingAnchor, constant: ChromeMetrics.Spacing.s8)
+        gap.priority = .defaultHigh
+        return gap
+    }
 
     // A press on the strip reaches the pane around it, which focuses the pane.
     override var mouseDownCanMoveWindow: Bool { false }
@@ -216,7 +228,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
         let collapsed = bounds.width > 0 && bounds.width < needed
         if collapsed != isCollapsed {
             isCollapsed = collapsed
-            for (control, button) in buttons { button.isHidden = collapsed && control != .close }
+            for (control, button) in buttons { button.isHidden = collapsed && control != .close && control != .end }
         }
         super.updateConstraints()
     }

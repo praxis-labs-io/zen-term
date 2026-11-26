@@ -599,9 +599,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surface(_ s: TerminalSurface, titleDidChange title: String) {
         surfaceID(of: s).map { onTitle?($0, title) }
-        guard let id = leafID(of: s) else { return }
-        refreshHeader(of: id)
-        guard id == tree.focusedLeaf else { return }
+        guard let id = leafID(of: s), id == tree.focusedLeaf else { return }
         onTitleChanged?()
     }
     func surfaceWantsFocus(_ s: TerminalSurface) {

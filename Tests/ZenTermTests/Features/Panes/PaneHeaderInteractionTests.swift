@@ -79,7 +79,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
 
         surface.foregroundProcessGroupID = try runJob(["/bin/sleep", "60"])
         surface.title = "✳ Deploying staging"
-        surface.delegate?.surface(surface, titleDidChange: surface.title)
+        c.pollTitlesForTesting()
 
         XCTAssertEqual(header.nameForTesting, "sleep", "the header names the program")
         XCTAssertEqual(header.pathForTesting, path, "and where it runs")
@@ -87,7 +87,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
 
         surface.foregroundProcessGroupID = nil
         surface.title = root.path
-        surface.delegate?.surface(surface, titleDidChange: surface.title)
+        c.pollTitlesForTesting()
 
         XCTAssertEqual(header.nameForTesting, "shell")
         XCTAssertEqual(c.tabTitleForTesting(index: 0), root.lastPathComponent, "a tab never shows a full path")
@@ -139,6 +139,20 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         XCTAssertEqual(drawer.header?.controlsShownForTesting, true, "focus lands in a drawer as it opens")
     }
 
+    func test_aDrawersPath_followsItsFolderTheMomentItChanges() throws {
+        let c = makeWindow()
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let drawer = try XCTUnwrap(hosts(c).first { !paneHosts(c).contains($0) })
+        let surface = try XCTUnwrap(surface(of: drawer))
+
+        surface.currentDirectory = root
+        surface.delegate?.surface(surface, cwdDidChange: root)
+
+        XCTAssertEqual(
+            drawer.header?.pathForTesting, PathDisplay.abbreviatingHome(root.path), "without waiting for a poll")
+    }
+
     func test_aDrawersFocusModeButton_zoomsTheDrawer_andStaysLit() throws {
         let c = makeWindow()
         c.handle(.toggleBottomDrawer)
@@ -160,7 +174,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
         let card = try floatCard(c)
         let surface = try XCTUnwrap(spawned.last)
-        XCTAssertEqual(card.header?.controlsForTesting, [.minimize, .close])
+        XCTAssertEqual(card.header?.controlsForTesting, [.minimize, .end])
 
         try click(.minimize, on: card.header, in: c.window)
 
@@ -188,7 +202,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         let card = try floatCard(c)
         let surface = try XCTUnwrap(spawned.last)
 
-        try click(.close, on: card.header, in: c.window)
+        try click(.end, on: card.header, in: c.window)
 
         XCTAssertFalse(c.floatsForTesting.isOpen)
         XCTAssertTrue(surface.terminated)
@@ -203,7 +217,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.last)
         surface.isBusy = true
 
-        try click(.close, on: card.header, in: c.window)
+        try click(.end, on: card.header, in: c.window)
 
         XCTAssertFalse(surface.terminated, "a busy float waits for the confirmation")
         XCTAssertNotNil(descendants(of: c.window.contentView!).first { $0 is ConfirmCard })
@@ -222,7 +236,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat(ephemeral.id))
 
         let header = try floatCard(c).shownHeaderForTesting
-        XCTAssertEqual(header?.controlsForTesting, [.close], "minimize would end it too, so it is not offered")
+        XCTAssertEqual(header?.controlsForTesting, [.end], "minimize would end it too, so it is not offered")
         XCTAssertEqual(header?.nameForTesting, "Probe", "a tool float is named by its float")
         XCTAssertNil(header?.pathForTesting, "and its folder is not worth showing")
     }

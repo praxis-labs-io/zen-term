@@ -813,7 +813,7 @@ final class WindowController: NSObject {
             }
         }
         if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
-        for controller in allTabControllers { controller.refreshHeaders() }
+        activeController?.refreshHeaders()
         floats.refreshHeader()
         if refreshWorkspaceNames() { changed = true }
         if changed { renderTabBar() }
@@ -1040,6 +1040,7 @@ final class WindowController: NSObject {
             unmountCanvas()
             return finished()
         }
+        activeController?.refreshHeaders()
         guard mountedCanvas !== canvas else {
             restoreFocusToActive()
             renderDock()
@@ -4936,7 +4937,12 @@ final class WindowController: NSObject {
     }
 
     // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
+    // A host's pane runs the local `ssh`, which says nothing about the host, so it is named for the host.
     private func running(_ surfaceID: SurfaceID, _ surface: TerminalSurface) -> PaneIdentity.Running {
+        if let host = workspace(holding: surfaceID)?.host {
+            return PaneIdentity.Running(
+                process: ProcessIcon.forProgram("ssh"), name: GeneralConfig.current.displayName(of: host))
+        }
         if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
             return PaneIdentity.Running(process: ProcessIcon.forAgent(name), name: name)
         }

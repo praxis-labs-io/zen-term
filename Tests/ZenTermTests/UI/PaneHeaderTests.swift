@@ -91,6 +91,23 @@ final class PaneHeaderTests: WindowTestCase {
         XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.normal))
     }
 
+    func test_aControlsTooltip_namesItsCommandAndShortcut() throws {
+        let (header, _) = mounted()
+        let split = try XCTUnwrap(header.buttonForTesting(.splitVertical))
+        XCTAssertEqual(split.tooltipLabelForTesting, CommandCatalog.spec(for: .splitVertical).title)
+        XCTAssertEqual(split.tooltipShortcutForTesting, CommandCatalog.spec(for: .splitVertical).shortcut)
+    }
+
+    func test_aFloatsClose_endsItsProgram_soItOffersNoHideShortcut() throws {
+        let (header, _) = mounted(controls: [.minimize, .end])
+        let minimize = try XCTUnwrap(header.buttonForTesting(.minimize))
+        let end = try XCTUnwrap(header.buttonForTesting(.end))
+        XCTAssertEqual(
+            minimize.tooltipShortcutForTesting, CommandCatalog.spec(for: .closePane).shortcut, "⌘W hides a float")
+        XCTAssertNil(end.tooltipShortcutForTesting, "nothing on the keyboard ends a float's program")
+        XCTAssertEqual(end.tooltipLabelForTesting, "Close")
+    }
+
     func test_aNarrowHeader_truncatesTheLabelFirst_thenDropsEveryControlButClose() {
         let all: [PaneHeader.Control] = [.splitHorizontal, .splitVertical, .focusMode, .close]
         XCTAssertEqual(mounted().0.visibleControlsForTesting, all)
@@ -104,7 +121,7 @@ final class PaneHeaderTests: WindowTestCase {
     }
 
     func test_aToolFloatsHeader_hasNoPath() {
-        let (header, _) = mounted(controls: [.minimize, .close])
+        let (header, _) = mounted(controls: [.minimize, .end])
         header.content = PaneHeader.Content(process: .tool, name: "Zen Octo", path: nil)
         XCTAssertEqual(header.nameForTesting, "Zen Octo")
         XCTAssertNil(header.pathForTesting)

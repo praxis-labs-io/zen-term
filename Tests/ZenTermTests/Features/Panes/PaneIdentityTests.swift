@@ -38,6 +38,17 @@ final class PaneIdentityTests: XCTestCase {
         XCTAssertEqual(tab("~"), PathDisplay.homeName, "home reads as its own name, never a lone ~")
     }
 
+    func test_aCommandLineThatStartsWithAPath_staysWhole() {
+        XCTAssertEqual(tab("./build.sh --out dist/app"), "./build.sh --out dist/app")
+        XCTAssertEqual(tab("~/bin/deploy staging/us-east"), "~/bin/deploy staging/us-east")
+        XCTAssertEqual(tab("/usr/bin/env python3 server.py"), "/usr/bin/env python3 server.py")
+    }
+
+    func test_aFolderWithASpace_stillReadsAsItsFolder() {
+        let spaced = URL(fileURLWithPath: PathDisplay.homePath).appendingPathComponent("My Projects/app")
+        XCTAssertEqual(PaneIdentity.tabTitle(title: "~/My Projects/app", directory: spaced), "app")
+    }
+
     func test_aTabWithNoTitle_readsItsFolder() {
         XCTAssertEqual(tab(""), "zen-term")
         XCTAssertEqual(PaneIdentity.tabTitle(title: nil, directory: nil), "shell")

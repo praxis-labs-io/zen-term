@@ -292,7 +292,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         }
         let header = PaneHeader(
             content: headerContent(spec, surface, pane: pane),
-            controls: spec?.persist == .ephemeral ? [.close] : [.minimize, .close],
+            controls: spec?.persist == .ephemeral ? [.end] : [.minimize, .end],
             onControl: { [weak self] control in
                 if control == .minimize { self?.close() } else { self?.onHeaderClose?() }
             })
