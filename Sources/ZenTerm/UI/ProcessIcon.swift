@@ -47,9 +47,21 @@ struct ProcessIcon: Equatable {
 
     // Nil for an icon name nothing draws, such as a typo in config, so the row falls back to its group's chip.
     static func toolFloat(_ float: ToolFloat) -> ProcessIcon? {
+        if let brand = brandChip(picked: float.icon) {
+            return ProcessIcon(name: float.title, mark: brand.mark, look: brand.look, scale: brand.scale)
+        }
         let icon = ProcessIcon(name: float.title, mark: float.icon, look: .catalog(toolTint), scale: 1)
         return icon.image == nil ? nil : icon
     }
+
+    private static func brandChip(picked mark: String) -> ProcessIcon? {
+        guard IconCatalog.brands.contains(mark) else { return nil }
+        let drawn = pickerArtwork[mark] ?? mark
+        return (agents.map(\.icon) + programs.map(\.icon)).first { $0.mark == drawn }
+    }
+
+    // The picker offers Gemini as a one-color mark; its chip draws the mark in Gemini's own colors.
+    private static let pickerArtwork: [String: String] = ["gemini": "gemini-color"]
 
     private static func purpose(_ name: String, _ mark: String, _ hue: AccentSlot) -> ProcessIcon {
         ProcessIcon(name: name, mark: mark, look: .purpose(hue), scale: lucideScale)
@@ -143,6 +155,7 @@ struct ProcessIcon: Equatable {
         (["htop"], brand("htop", "htop", 0x111111, 0x6EE07A)),
         (["linear"], brand("Linear", "linear", 0x222326, 0xF7F8F8)),
         (["spotify_player", "spt"], brand("Spotify", "spotify", 0x121212, 0x1ED760)),
+        (["slack"], brand("Slack", "slack", 0x4A154B, 0xFFFFFF)),
         (["zsh", "bash", "sh", "fish", "nu", "dash", "ksh", "tcsh", "csh", "elvish", "xonsh", "pwsh"], shell),
         (["aider", "amp", "goose", "crush", "cursor-agent", "llm", "aichat", "mods", "qwen"], unknownAgent),
         (["ssh", "mosh", "et", "autossh"], neutral("Remote", "server")),

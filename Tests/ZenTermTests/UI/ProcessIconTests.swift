@@ -92,4 +92,34 @@ final class ProcessIconTests: XCTestCase {
         let names = ProcessIcon.programNamesForTesting
         XCTAssertEqual(Set(names).count, names.count, "a duplicate name means one of its chips is never reached")
     }
+
+    func test_everyPickedBrandMark_takesItsBrandsChip_notTheToolsTint() throws {
+        for mark in IconCatalog.brands {
+            let icon = try XCTUnwrap(ProcessIcon.toolFloat(probe(icon: mark)), mark)
+            switch icon.look {
+            case .brand, .artwork: break
+            default: XCTFail("\(mark) draws as \(icon.look)")
+            }
+            XCTAssertEqual(icon.name, "Probe", "named by its float, not the brand")
+            XCTAssertNotNil(icon.image, mark)
+        }
+    }
+
+    func test_pickedGemini_drawsInGeminisOwnColors() throws {
+        let icon = try XCTUnwrap(ProcessIcon.toolFloat(probe(icon: "gemini")))
+        XCTAssertEqual(icon.mark, "gemini-color")
+        XCTAssertEqual(icon.look, ProcessIcon.forAgent("gemini").look)
+    }
+
+    func test_aPickedSymbol_keepsTheToolsTint() throws {
+        let icon = try XCTUnwrap(ProcessIcon.toolFloat(probe(icon: "hammer")))
+        guard case .catalog = icon.look else { return XCTFail("a symbol draws as \(icon.look)") }
+    }
+
+    private func probe(icon: String) -> ToolFloat {
+        ToolFloat(
+            id: "probe", order: 1, title: "Probe", icon: icon, command: "true", dir: nil,
+            widthFraction: 0.6, heightFraction: 0.6, requiresGitRepo: false, persist: .window,
+            toggle: Chord(command: true, control: true, key: "p"))
+    }
 }
