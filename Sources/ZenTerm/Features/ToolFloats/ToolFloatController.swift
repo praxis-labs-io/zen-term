@@ -317,14 +317,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     // A tool is named by its float and has no folder worth showing; Scratch is a shell, so its folder shows.
+    // A program the catalog has no icon for reads as the shell, so the float's own icon stands in for it.
     private func headerContent(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Content {
         let place = surface.currentDirectory
         guard let spec else {
             return pane.flatMap { paneHeaderContent?($0, surface) }
                 ?? PaneIdentity.header(named: nil, running: PaneIdentity.running(in: surface), directory: place)
         }
+        let program = PaneIdentity.running(in: surface).process
         let running = PaneIdentity.Running(
-            process: ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
+            process: program != .shell ? program : ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
         return PaneIdentity.header(named: nil, running: running, directory: spec.command.isEmpty ? place : nil)
     }
 

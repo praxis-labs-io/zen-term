@@ -11,6 +11,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
     private let root = FileManager.default.temporaryDirectory
+    private let jobs = ProgramJobs()
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -29,6 +30,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         spawned = []
+        jobs.stopAll()
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try super.tearDownWithError()
@@ -239,5 +241,40 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         XCTAssertEqual(header?.controlsForTesting, [.end], "minimize would end it too, so it is not offered")
         XCTAssertEqual(header?.nameForTesting, "Probe", "a tool float is named by its float")
         XCTAssertNil(header?.pathForTesting, "and its folder is not worth showing")
+    }
+
+    private func openProbeFloat() throws -> (WindowController, ToolFloat, PaneHeader?, RecordingSurface) {
+        let probe = ToolFloat(
+            id: "probe", order: 1, title: "Probe", icon: "hammer", command: "true", dir: nil,
+            widthFraction: 0.6, heightFraction: 0.6, requiresGitRepo: false, persist: .window,
+            toggle: Chord(command: true, control: true, key: "p"))
+        var config = GeneralConfig.builtIn
+        config.floats = [probe]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(probe.id))
+        let header = try floatCard(c).shownHeaderForTesting
+        return (c, probe, header, try XCTUnwrap(spawned.last))
+    }
+
+    func test_aToolFloatsHeader_leadsWithItsProgramsIcon() throws {
+        let (c, _, header, surface) = try openProbeFloat()
+
+        surface.foregroundProcessGroupID = try jobs.start(named: "lazygit")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(header?.processForTesting.name, "Git")
+        XCTAssertEqual(header?.nameForTesting, "Probe", "still named by its float")
+    }
+
+    func test_aToolFloatsHeader_keepsItsOwnIcon_forAProgramWithNone() throws {
+        let (c, probe, header, surface) = try openProbeFloat()
+        let tinted = try XCTUnwrap(ProcessIcon.toolFloat(probe))
+        XCTAssertEqual(header?.processForTesting, tinted, "before its program starts")
+
+        surface.foregroundProcessGroupID = try jobs.start(named: "zt-unlisted-tool")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(header?.processForTesting, tinted)
     }
 }
