@@ -101,14 +101,15 @@ final class SettingsKeybindsSection: SettingsSection {
         let rowsStack = NSStackView()
         rowsStack.orientation = .vertical
         rowsStack.alignment = .leading
-        rowsStack.spacing = ChromeMetrics.Spacing.s2
+        rowsStack.spacing = SettingsDetail.rowGap
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
 
         var previous: NSView?
         for (category, actions) in Self.groups {
             let caption = SectionCaption(category)
             rowsStack.addArrangedSubview(caption)
-            if let previous { rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s24, after: previous) }
+            if let previous { rowsStack.setCustomSpacing(SettingsDetail.groupGap, after: previous) }
+            var isFirstRow = true
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
                 row.chip.onActivate = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }
@@ -121,6 +122,8 @@ final class SettingsKeybindsSection: SettingsSection {
                 rows.append(row)
                 rowsStack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
+                if isFirstRow { rowsStack.setCustomSpacing(row.gapBelowGroupCaption, after: caption) }
+                isFirstRow = false
                 previous = row
             }
         }

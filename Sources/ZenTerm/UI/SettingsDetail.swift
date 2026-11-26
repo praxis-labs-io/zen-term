@@ -30,6 +30,15 @@ enum SettingsDetail {
         return scroll
     }
 
+    static let captionGap = ChromeMetrics.Spacing.s10
+    static let rowGap = ChromeMetrics.Spacing.s4
+    static let groupGap = ChromeMetrics.Spacing.s20
+
+    // A one-line row centers its label in `Height.lg`, so the caption gap above it gives back that inset.
+    static func gap(belowCaptionAbove label: NSTextField) -> CGFloat {
+        captionGap - max(0, (ChromeMetrics.Height.lg - label.intrinsicContentSize.height) / 2)
+    }
+
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
         hint.font = ChromeType.font(.caption, weight: .medium)

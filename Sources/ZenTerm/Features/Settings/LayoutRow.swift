@@ -67,9 +67,9 @@ final class LayoutRow: NSView, ThemeReapplying {
         return (stack, noteLabel)
     }
 
-    var spaceAboveCaption: CGFloat {
-        guard descriptionLabel == nil else { return 0 }
-        return max(0, (ChromeMetrics.Height.lg - captionLabel.intrinsicContentSize.height) / 2)
+    var gapBelowGroupCaption: CGFloat {
+        guard descriptionLabel == nil else { return SettingsDetail.captionGap }
+        return SettingsDetail.gap(belowCaptionAbove: captionLabel)
     }
 
     func showMessage(_ text: String?, kind: MessageKind = .failure) {

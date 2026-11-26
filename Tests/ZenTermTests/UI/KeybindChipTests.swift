@@ -25,12 +25,12 @@ final class KeybindChipTests: WindowTestCase {
         XCTAssertEqual(chip.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
     }
 
-    func test_capturing_ringsTheChipInAccent() {
+    func test_capturing_keepsTheNeutralFocusRing() {
         let (chip, window) = mount()
         XCTAssertTrue(window.makeFirstResponder(chip))
 
         chip.setCapturing(true)
 
-        XCTAssertEqual(chip.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(chip.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
     }
 }

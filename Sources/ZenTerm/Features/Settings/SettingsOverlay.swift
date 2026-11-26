@@ -4,7 +4,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private let sections: [SettingsSection]
     private let capturer: KeybindCapturing?
 
-    private static let cardSize = NSSize(width: 620, height: 460)
+    private static let cardSize = NSSize(width: 640, height: 440)
 
     private let navStack = NSStackView()
     private let navScroll = FadingScrollView()
@@ -60,10 +60,9 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private func buildContent() -> NSView {
         navStack.orientation = .vertical
         navStack.alignment = .leading
-        navStack.spacing = ChromeMetrics.Spacing.s2
+        navStack.spacing = 0
         navStack.edgeInsets = NSEdgeInsets(
-            top: ChromeMetrics.Spacing.s16, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s16,
-            right: ChromeMetrics.Spacing.s12)
+            top: Self.navPadding, left: Self.navPadding, bottom: Self.navPadding, right: Self.navPadding)
 
         let headingRow = NSView()
         headingRow.translatesAutoresizingMaskIntoConstraints = false
@@ -72,11 +71,10 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
             heading.leadingAnchor.constraint(
                 equalTo: headingRow.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             heading.trailingAnchor.constraint(equalTo: headingRow.trailingAnchor),
-            heading.topAnchor.constraint(equalTo: headingRow.topAnchor),
-            heading.bottomAnchor.constraint(equalTo: headingRow.bottomAnchor),
+            heading.centerYAnchor.constraint(equalTo: headingRow.centerYAnchor),
+            headingRow.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
         ])
         navStack.addArrangedSubview(headingRow)
-        navStack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: headingRow)
 
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
@@ -116,6 +114,9 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
 
         let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
+        let navWidth = navScroll.widthAnchor.constraint(
+            equalTo: root.widthAnchor, multiplier: Self.navWidthRange.upperBound / Self.cardSize.width)
+        navWidth.priority = .defaultHigh
         root.addSubview(navScroll)
         root.addSubview(reportButton)
         root.addSubview(footer)
@@ -124,7 +125,9 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
         NSLayoutConstraint.activate([
             navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navScroll.topAnchor.constraint(equalTo: root.topAnchor),
-            navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
+            navScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.navWidthRange.lowerBound),
+            navScroll.widthAnchor.constraint(lessThanOrEqualToConstant: Self.navWidthRange.upperBound),
+            navWidth,
             navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -ChromeMetrics.Spacing.s8),
 
             reportButton.leadingAnchor.constraint(
@@ -182,11 +185,13 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     static let versionFont: NSFont = ChromeType.font(.body, weight: .medium)
     private static let brandMarkSize: CGFloat = 16
     private static let footerSpacing: CGFloat = ChromeMetrics.Spacing.s6
-    private static let navWidth: CGFloat = 168
-    private static let footerTrailingInset: CGFloat = ChromeMetrics.Spacing.s12
-    private static let navTextInset = ChromeMetrics.Spacing.s12 + ChromeMetrics.Spacing.controlInset
+    // The nav narrows with the card on a small window, down to the width the footer is measured against.
+    private static let navWidthRange: ClosedRange<CGFloat> = 168...188
+    private static let navPadding = ChromeMetrics.Spacing.s8
+    private static let footerTrailingInset = navPadding
+    private static let navTextInset = navPadding + ChromeMetrics.Spacing.controlInset
     static var versionMaxWidth: CGFloat {
-        navWidth - navTextInset - footerTrailingInset - brandMarkSize - footerSpacing
+        navWidthRange.lowerBound - navTextInset - footerTrailingInset - brandMarkSize - footerSpacing
     }
 
     private func selectSection(_ index: Int) {
