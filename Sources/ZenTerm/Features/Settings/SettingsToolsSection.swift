@@ -29,7 +29,7 @@ final class SettingsToolsSection: SettingsSection {
     func makeDetailView() -> NSView {
         let stack = NSStackView()
         stack.orientation = .vertical
-        stack.alignment = .leading
+        stack.alignment = .centerX
         stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
@@ -44,7 +44,7 @@ final class SettingsToolsSection: SettingsSection {
         addButton = button
 
         populateRows()
-        return SettingsDetail.scroll(for: stack)
+        return SettingsDetail.scroll(for: stack, outset: SettingsDetail.listOutset)
     }
 
     func detailStops() -> [NSView] { rows + [addButton].compactMap { $0 } }
@@ -88,7 +88,7 @@ final class SettingsToolsSection: SettingsSection {
         let header = SettingsDetail.headerRow(
             caption: caption, hint: floats.count > 1 ? makeReorderHint() : nil)
         stack.addArrangedSubview(header)
-        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        SettingsDetail.pinToListContent(header, in: stack)
 
         let dropped = droppedFloatMessages()
         if !dropped.isEmpty {
@@ -97,14 +97,14 @@ final class SettingsToolsSection: SettingsSection {
             notice.textColor = Theme.current.chrome.warning.nsColor
             droppedFloatNotice = notice
             stack.addArrangedSubview(notice)
-            notice.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            SettingsDetail.pinToListContent(notice, in: stack)
             stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: notice)
         }
 
         if floats.isEmpty {
             let hint = EmptyStateLabel("No tool floats yet. Add one to get a toolbar button and a shortcut.")
             stack.addArrangedSubview(hint)
-            hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            SettingsDetail.pinToListContent(hint, in: stack)
         } else {
             for float in floats {
                 let row = ToolFloatRow(float: float)
@@ -126,7 +126,7 @@ final class SettingsToolsSection: SettingsSection {
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
-        addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        SettingsDetail.pinToListContent(addRow, in: stack)
         stack.setCustomSpacing(
             ChromeMetrics.Spacing.s16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
     }

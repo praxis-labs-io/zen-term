@@ -1,7 +1,14 @@
 import AppKit
 
 enum SettingsDetail {
-    static func scroll(for rowsStack: NSStackView) -> NSScrollView {
+    // A list's rows reach this far past the content edge, so their fill bleeds into the gutter while their text aligns.
+    static let listOutset = ChromeMetrics.Spacing.controlInset
+
+    static func pinToListContent(_ view: NSView, in stack: NSStackView) {
+        view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -(listOutset + listOutset)).isActive = true
+    }
+
+    static func scroll(for rowsStack: NSStackView, outset: CGFloat = 0) -> NSScrollView {
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
@@ -14,9 +21,9 @@ enum SettingsDetail {
             doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
             rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: ChromeMetrics.Spacing.modalInsets.top),
             rowsStack.leadingAnchor.constraint(
-                equalTo: doc.leadingAnchor, constant: ChromeMetrics.Spacing.modalInsets.left),
+                equalTo: doc.leadingAnchor, constant: ChromeMetrics.Spacing.modalInsets.left - outset),
             rowsStack.trailingAnchor.constraint(
-                equalTo: doc.trailingAnchor, constant: -ChromeMetrics.Spacing.modalInsets.right),
+                equalTo: doc.trailingAnchor, constant: -ChromeMetrics.Spacing.modalInsets.right + outset),
             rowsStack.bottomAnchor.constraint(
                 equalTo: doc.bottomAnchor, constant: -ChromeMetrics.Spacing.modalInsets.bottom),
         ])

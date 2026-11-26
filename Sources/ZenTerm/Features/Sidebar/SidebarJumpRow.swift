@@ -16,7 +16,6 @@ class SidebarJumpRow: ListRow {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
-    var ringForTesting: CGColor? { layer?.borderColor }
 
     override func focusDidChange() {
         super.focusDidChange()

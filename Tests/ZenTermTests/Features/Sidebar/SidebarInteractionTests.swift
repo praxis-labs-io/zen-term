@@ -376,7 +376,7 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.sidebarForTesting.focusActiveRow()
         XCTAssertTrue(controller.window.firstResponder === rows[0], "entry lands on the active workspace")
         XCTAssertEqual(rows[0].layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
-        XCTAssertEqual(rows[0].layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
+        XCTAssertEqual(rows[0].layer?.borderWidth ?? 0, 0, "a row never wears the focus ring")
 
         for expected in [1, 2, 2] {
             controller.window.sendEvent(key(.down, in: controller))

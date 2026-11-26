@@ -66,7 +66,7 @@ final class ListRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0)
     }
 
-    func test_aClickNeverFocusesTheRow_butTakeKeyboardFocusRingsIt() {
+    func test_aClickNeverFocusesTheRow_butTakeKeyboardFocusFillsIt() {
         let row = mount(ListRow(ListRow.Content(title: "General")) {})
 
         XCTAssertFalse(row.acceptsFirstResponder, "AppKit would make a clicked row first responder")
@@ -74,10 +74,11 @@ final class ListRowTests: WindowTestCase {
         row.takeKeyboardFocus()
         XCTAssertTrue(window.firstResponder === row)
         XCTAssertFalse(row.isTakingKeyboardFocus, "the row keeps accepting focus after taking it")
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.layer?.borderWidth ?? 0, 0, "a row never wears the focus ring")
 
         window.makeFirstResponder(nil)
-        XCTAssertEqual(row.layer?.borderColor?.alpha, 0, "the ring stays after focus leaves")
+        XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0, "the fill stays after focus leaves")
     }
 
     func test_aThemeChange_keepsTheSameRunningSpinner() throws {

@@ -60,11 +60,11 @@ final class SettingsFocusRowTests: WindowTestCase {
             try sendClick(to: row)
             XCTAssertEqual(chosen, 1, "\(name) does not open on a click")
             XCTAssertTrue(window.firstResponder === row, "\(name) does not take focus on a click")
-            XCTAssertEqual(row.layer?.borderColor, chrome.focusRing.cgColor, "\(name) shows no focus ring")
-            XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0, "\(name) fills on focus")
+            XCTAssertEqual(row.layer?.backgroundColor, chrome.fill(.hover).cgColor, "\(name) shows no focus fill")
+            XCTAssertEqual(row.layer?.borderWidth ?? 0, 0, "\(name) wears a focus ring")
 
             window.makeFirstResponder(nil)
-            XCTAssertEqual(row.layer?.borderColor?.alpha, 0, "\(name) keeps its ring")
+            XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0, "\(name) keeps its focus fill")
             row.removeFromSuperview()
         }
     }

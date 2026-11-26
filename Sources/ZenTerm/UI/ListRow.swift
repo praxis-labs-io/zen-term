@@ -386,11 +386,12 @@ class ListRow: ControlView, ThemeReapplying {
 
     private func refreshFill() {
         let chrome = Theme.current.chrome
-        showFocusRing(hasKeyboardFocus)
         if showsHover || isHighlighted {
             easeFill(chrome.fill(.hover))
         } else if isCurrent {
             easeFill(chrome.fill(.active))
+        } else if hasKeyboardFocus {
+            easeFill(chrome.fill(.hover))
         } else {
             easeFill(.clear)
         }
