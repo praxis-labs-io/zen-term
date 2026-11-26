@@ -285,9 +285,9 @@ final class PaneCanvasController: NSObject {
     }
 
     private func headerContent(of id: PaneID, _ surface: TerminalSurface) -> PaneHeader.Content {
-        let running = surfaceIDByLeaf[id].map { running($0, surface) } ?? PaneIdentity.running(in: surface)
+        let program = surfaceIDByLeaf[id].map { running($0, surface) } ?? PaneIdentity.running(in: surface)
         return PaneIdentity.header(
-            named: recordByLeaf[id]?.name, running: running, directory: surface.currentDirectory ?? cwdByLeaf[id])
+            named: recordByLeaf[id]?.name, running: program, directory: surface.currentDirectory ?? cwdByLeaf[id])
     }
 
     func refreshHeaders() {

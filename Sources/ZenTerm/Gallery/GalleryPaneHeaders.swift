@@ -3,7 +3,9 @@
 
     @MainActor
     enum GalleryPaneHeaders {
-        private static let paneControls: [PaneHeader.Control] = [.splitHorizontal, .splitVertical, .focusMode, .close]
+        private nonisolated static let paneControls: [PaneHeader.Control] = [
+            .splitHorizontal, .splitVertical, .focusMode, .close,
+        ]
         private static let shell = PaneHeader.Content(process: .shell, name: "zsh", path: "~/dev/zen-term")
 
         static func sections() -> [GallerySection] {
