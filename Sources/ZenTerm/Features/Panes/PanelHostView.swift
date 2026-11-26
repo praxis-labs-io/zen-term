@@ -24,11 +24,6 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
 
     var isZoomed: Bool = false { didSet { header?.isZoomed = isZoomed } }
 
-    var modeDetail: String? {
-        get { header?.modeDetail }
-        set { header?.modeDetail = newValue }
-    }
-
     func setScrollCursor(
         _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
     ) {

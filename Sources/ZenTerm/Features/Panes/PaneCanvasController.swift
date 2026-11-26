@@ -78,8 +78,6 @@ final class PaneCanvasController: NSObject {
 
     var onHeaderControl: ((KeyInterceptor.ReservedChord) -> Void)?
 
-    var processIcon: (SurfaceID, TerminalSurface) -> ProcessIcon = { ProcessIcon.running(in: $1) }
-
     var onSurfaceStartFailed: ((_ retry: @escaping () -> Void, _ close: @escaping () -> Void) -> Void)?
 
     private func clearZoomIfLeafGone() {
@@ -138,9 +136,14 @@ final class PaneCanvasController: NSObject {
         return "shell"
     }
 
-    private static func runningProgram(in surface: TerminalSurface) -> String? {
-        guard case .job(let group, let arguments) = PaneIdentity.foreground(of: surface) else { return nil }
-        return PaneIdentity.jobName(group: group, arguments: arguments)
+    // `p_comm` names a program whose arguments the app cannot read (`sudo`).
+    static func runningProgram(in surface: TerminalSurface) -> String? {
+        guard let group = surface.foregroundProcessGroupID, !ForegroundGroup.isShell(group) else { return nil }
+        if let arguments = ProcessArguments.arguments(of: group) {
+            if ProcessArguments.isInteractiveShell(arguments) { return nil }
+            if let name = ProcessArguments.commandName(from: arguments) { return name }
+        }
+        return ForegroundGroup.system.command(group).flatMap(jobName(fromCommand:))
     }
 
     static func jobName(fromCommand command: String) -> String? {
@@ -275,7 +278,7 @@ final class PaneCanvasController: NSObject {
         if let cached = hostByLeaf[id] { return cached }
         guard let surface = registry.surface(for: id) else { return NSView() }
         let header = PaneHeader(
-            content: headerContent(of: id, surface),
+            label: headerLabel(of: id, surface),
             controls: [.splitHorizontal, .splitVertical, .focusMode, .close],
             onControl: { [weak self] control in
                 self?.focus(id)
@@ -291,11 +294,9 @@ final class PaneCanvasController: NSObject {
         return host
     }
 
-    private func headerContent(of id: PaneID, _ surface: TerminalSurface) -> PaneHeader.Content {
-        let process = surfaceIDByLeaf[id].map { processIcon($0, surface) } ?? ProcessIcon.running(in: surface)
-        return PaneIdentity.header(
-            of: surface, named: recordByLeaf[id]?.name, directory: surface.currentDirectory ?? cwdByLeaf[id],
-            readsForeground: readsForeground, process: process)
+    private func headerLabel(of id: PaneID, _ surface: TerminalSurface) -> PaneHeader.Label {
+        PaneIdentity.label(
+            of: surface, named: recordByLeaf[id]?.name, directory: surface.currentDirectory ?? cwdByLeaf[id])
     }
 
     func refreshHeaders() {
@@ -304,7 +305,7 @@ final class PaneCanvasController: NSObject {
 
     private func refreshHeader(of id: PaneID) {
         guard let header = hostByLeaf[id]?.header, let surface = registry.surface(for: id) else { return }
-        header.content = headerContent(of: id, surface)
+        header.label = headerLabel(of: id, surface)
     }
 
     var hostsForTesting: [PaneID: PanelHostView] { hostByLeaf }

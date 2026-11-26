@@ -1,11 +1,11 @@
 import AppKit
 
-// The strip atop a terminal pane, drawer or float: its process chip, name and detail, then its controls.
+// The strip atop a terminal pane, drawer or float: its label, then its controls.
 final class PaneHeader: ControlView, ThemeReapplying {
-    struct Content: Equatable {
-        var process: ProcessIcon
-        var name: String
-        var detail: String?
+    struct Label: Equatable {
+        var text: String
+        // A path loses its front instead of its end, so the folder it names survives truncation.
+        var isPath = false
     }
 
     enum Control: CaseIterable {
@@ -42,25 +42,16 @@ final class PaneHeader: ControlView, ThemeReapplying {
         }
     }
 
-    var content: Content {
+    var label: Label {
         didSet {
-            guard content != oldValue else { return }
-            if content.process != oldValue.process { chip.show(content.process) }
-            applyText()
-        }
-    }
-
-    var modeDetail: String? {
-        didSet {
-            guard modeDetail != oldValue else { return }
-            applyText()
+            guard label != oldValue else { return }
+            applyLabel()
         }
     }
 
     var isActive = false {
         didSet {
             guard isActive != oldValue else { return }
-            applyText()
             applyControlsShown(animated: true)
         }
     }
@@ -69,24 +60,21 @@ final class PaneHeader: ControlView, ThemeReapplying {
         didSet { buttons[.focusMode]?.isActive = isZoomed }
     }
 
-    // The name's capitals center on the chip, which a label's line box, descent and all, would not.
-    private static var nameFont: NSFont { ChromeType.font(.small, weight: .medium) }
+    // The label's capitals center on the strip, which a label's line box, descent and all, would not.
+    private static var labelFont: NSFont { ChromeType.font(.small, weight: .medium) }
 
     private let controls: [Control]
     private let onControl: (Control) -> Void
-    private let chip: IconBadge
-    private let nameField = NSTextField(labelWithString: "")
-    private let detailField = NSTextField(labelWithString: "")
+    private let labelField = NSTextField(labelWithString: "")
     private let controlStack = NSStackView()
     private var buttons: [Control: IconButton] = [:]
     private var isCollapsed = false
     private var controlsShown = false
 
-    init(content: Content, controls: [Control], onControl: @escaping (Control) -> Void) {
-        self.content = content
+    init(label: Label, controls: [Control], onControl: @escaping (Control) -> Void) {
+        self.label = label
         self.controls = controls
         self.onControl = onControl
-        chip = IconBadge(process: content.process, size: .small)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -94,16 +82,12 @@ final class PaneHeader: ControlView, ThemeReapplying {
         NotificationCenter.default.addObserver(
             self, selector: #selector(frameDidChange), name: NSView.frameDidChangeNotification, object: self)
 
-        for field in [nameField, detailField] {
-            field.makeSingleLine()
-            field.lineBreakMode = .byTruncatingTail
-            field.maximumNumberOfLines = 1
-            field.translatesAutoresizingMaskIntoConstraints = false
-        }
-        nameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        nameField.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        detailField.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
-        detailField.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        labelField.makeSingleLine()
+        labelField.lineBreakMode = .byTruncatingTail
+        labelField.maximumNumberOfLines = 1
+        labelField.translatesAutoresizingMaskIntoConstraints = false
+        labelField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        labelField.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         controlStack.orientation = .horizontal
         controlStack.spacing = ChromeMetrics.Spacing.s2
@@ -120,27 +104,18 @@ final class PaneHeader: ControlView, ThemeReapplying {
             controlStack.addArrangedSubview(button)
         }
 
-        chip.translatesAutoresizingMaskIntoConstraints = false
-        [chip, nameField, detailField, controlStack].forEach(addSubview)
+        [labelField, controlStack].forEach(addSubview)
         let gap = ChromeMetrics.Spacing.s8
-        // An empty detail still holds its gap, so in a header too narrow for both gaps it is the one that gives.
-        let detailGap = detailField.leadingAnchor.constraint(equalTo: nameField.trailingAnchor, constant: gap)
-        detailGap.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            detailGap,
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
-            chip.leadingAnchor.constraint(equalTo: leadingAnchor),
-            chip.centerYAnchor.constraint(equalTo: centerYAnchor),
-            nameField.leadingAnchor.constraint(equalTo: chip.trailingAnchor, constant: gap),
-            nameField.firstBaselineAnchor.constraint(
-                equalTo: chip.centerYAnchor, constant: Self.nameFont.capHeight / 2),
-            detailField.firstBaselineAnchor.constraint(equalTo: nameField.firstBaselineAnchor),
-            detailField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
-            nameField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
+            labelField.leadingAnchor.constraint(equalTo: leadingAnchor),
+            labelField.firstBaselineAnchor.constraint(
+                equalTo: centerYAnchor, constant: Self.labelFont.capHeight / 2),
+            labelField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
             controlStack.trailingAnchor.constraint(equalTo: trailingAnchor),
             controlStack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
-        applyText()
+        applyLabel()
         applyControlsShown(animated: false)
     }
 
@@ -151,23 +126,22 @@ final class PaneHeader: ControlView, ThemeReapplying {
 
     override func hoverDidChange() { applyControlsShown(animated: true) }
 
-    func reapplyTheme() { applyText() }
+    func reapplyTheme() { applyLabel() }
 
-    var nameForTesting: String { nameField.stringValue }
-    var detailForTesting: String? { detailField.isHidden ? nil : detailField.stringValue }
-    var processForTesting: ProcessIcon { content.process }
+    var labelForTesting: String { labelField.stringValue }
+    var labelTruncationForTesting: NSLineBreakMode? { labelParagraphStyleForTesting?.lineBreakMode }
     var controlsForTesting: [Control] { controls }
     var visibleControlsForTesting: [Control] {
         controls.filter { buttons[$0]?.isHidden == false }
     }
     var controlsShownForTesting: Bool { controlsShown }
     func buttonForTesting(_ control: Control) -> IconButton? { buttons[control] }
-    var nameInkForTesting: NSColor? {
-        nameField.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+    var labelInkForTesting: NSColor? {
+        labelField.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
     }
-    var detailParagraphStyleForTesting: NSParagraphStyle? {
-        guard detailField.attributedStringValue.length > 0 else { return nil }
-        return detailField.attributedStringValue.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
+    var labelParagraphStyleForTesting: NSParagraphStyle? {
+        guard labelField.attributedStringValue.length > 0 else { return nil }
+        return labelField.attributedStringValue.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
             as? NSParagraphStyle
     }
 
@@ -175,24 +149,14 @@ final class PaneHeader: ControlView, ThemeReapplying {
         func forceHoverForGallery() { setHovered(true) }
     #endif
 
-    private func applyText() {
-        let chrome = Theme.current.chrome
+    private func applyLabel() {
         let truncating = NSMutableParagraphStyle()
-        truncating.lineBreakMode = .byTruncatingTail
-        nameField.attributedStringValue = NSAttributedString(
-            string: content.name,
+        truncating.lineBreakMode = label.isPath ? .byTruncatingHead : .byTruncatingTail
+        labelField.attributedStringValue = NSAttributedString(
+            string: label.text,
             attributes: [
-                .font: Self.nameFont,
-                .foregroundColor: chrome.ink(isActive ? .normal : .subtle),
-                .paragraphStyle: truncating,
-            ])
-        let detail = modeDetail ?? content.detail
-        detailField.isHidden = detail == nil
-        detailField.attributedStringValue = NSAttributedString(
-            string: detail ?? "",
-            attributes: [
-                .font: ChromeType.font(.small, face: modeDetail == nil ? .mono : .text),
-                .foregroundColor: chrome.ink(.muted),
+                .font: Self.labelFont,
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .paragraphStyle: truncating,
             ])
         needsUpdateConstraints = true
@@ -212,13 +176,14 @@ final class PaneHeader: ControlView, ThemeReapplying {
 
     @objc private func frameDidChange() { needsUpdateConstraints = true }
 
-    // Every control but close drops out once the name itself would have to truncate.
+    // The label truncates first; every control but close drops out once the label would get less room than they take.
     override func updateConstraints() {
         let gap = ChromeMetrics.Spacing.s8
         let fullControls =
             ChromeMetrics.Height.xs * CGFloat(controls.count)
             + ChromeMetrics.Spacing.s2 * CGFloat(max(controls.count - 1, 0))
-        let needed = IconBadge.Size.small.side + gap + nameField.intrinsicContentSize.width + gap + fullControls
+        let labelFloor = min(labelField.intrinsicContentSize.width, fullControls)
+        let needed = labelFloor + gap + fullControls
         let collapsed = bounds.width > 0 && bounds.width < needed
         if collapsed != isCollapsed {
             isCollapsed = collapsed

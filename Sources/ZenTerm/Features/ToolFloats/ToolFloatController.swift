@@ -58,7 +58,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
 
     // A float pane is named like any pane, from the tab that owns it.
-    var paneHeaderContent: ((SurfaceID, TerminalSurface) -> PaneHeader.Content)?
+    var paneLabel: ((SurfaceID, TerminalSurface) -> PaneHeader.Label?)?
     var onHeaderClose: (() -> Void)?
 
     init(
@@ -291,7 +291,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             dismissingOverlay = nil
         }
         let header = PaneHeader(
-            content: headerContent(spec, surface, pane: pane),
+            label: headerLabel(spec, surface, pane: pane),
             controls: spec?.persist == .ephemeral ? [.close] : [.minimize, .close],
             onControl: { [weak self] control in
                 if control == .minimize { self?.close() } else { self?.onHeaderClose?() }
@@ -316,24 +316,17 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         onStateChanged?()
     }
 
-    private func headerContent(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?)
-        -> PaneHeader.Content
-    {
-        guard let spec else {
-            return pane.flatMap { paneHeaderContent?($0, surface) }
-                ?? PaneIdentity.header(
-                    of: surface, named: nil, directory: surface.currentDirectory, readsForeground: true,
-                    process: ProcessIcon.running(in: surface))
+    private func headerLabel(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Label {
+        guard let spec, !spec.command.isEmpty else {
+            return pane.flatMap { paneLabel?($0, surface) }
+                ?? PaneIdentity.label(of: surface, named: nil, directory: surface.currentDirectory)
         }
-        let place = surface.currentDirectory.map { PathDisplay.abbreviatingHome($0.path) }
-        return PaneHeader.Content(
-            process: ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title,
-            detail: spec.command.isEmpty ? place : spec.command)
+        return PaneIdentity.label(of: surface, named: nil, directory: nil, otherwise: spec.title)
     }
 
     func refreshHeader() {
         guard let active = activeFloat else { return }
-        active.overlay.header?.content = headerContent(active.spec, active.surface, pane: shownPane)
+        active.overlay.header?.label = headerLabel(active.spec, active.surface, pane: shownPane)
     }
 
     func applyHeaderShown() { activeFloat?.overlay.applyHeaderShown() }

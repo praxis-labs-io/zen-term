@@ -10,7 +10,6 @@ final class PaneHeaderInteractionTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
-    private var jobs: [Process] = []
     private let root = FileManager.default.temporaryDirectory
 
     override func setUpWithError() throws {
@@ -27,8 +26,6 @@ final class PaneHeaderInteractionTests: WindowTestCase {
     }
 
     override func tearDownWithError() throws {
-        jobs.forEach { $0.terminate() }
-        jobs = []
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         spawned = []
@@ -72,30 +69,36 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         }
     }
 
+    func test_theLabel_isATitleTheRunningProgramSets_elseThePath() throws {
+        let c = makeWindow()
+        let host = try XCTUnwrap(paneHosts(c).first)
+        let surface = try XCTUnwrap(surface(of: host))
+        let header = try XCTUnwrap(host.shownHeaderForTesting, "a lone pane wears a header too")
+        surface.currentDirectory = root
+        let path = PathDisplay.abbreviatingHome(root.path)
+
+        surface.foregroundProcessGroupID = try runJob(["/bin/sleep", "60"])
+        surface.title = "sleep 60"
+        surface.delegate?.surface(surface, titleDidChange: surface.title)
+        XCTAssertEqual(
+            header.labelForTesting, path, "the echoed command line is the program's name, which the tab shows")
+
+        surface.title = "Deploying staging"
+        surface.delegate?.surface(surface, titleDidChange: surface.title)
+        XCTAssertEqual(header.labelForTesting, "Deploying staging", "a title the program sets is the label")
+
+        surface.foregroundProcessGroupID = nil
+        surface.delegate?.surface(surface, titleDidChange: surface.title)
+        XCTAssertEqual(header.labelForTesting, path, "back at the prompt, the path")
+    }
+
     private func runJob(_ arguments: [String]) throws -> pid_t {
         let job = Process()
         job.executableURL = URL(fileURLWithPath: arguments[0])
         job.arguments = Array(arguments.dropFirst())
         try job.run()
-        jobs.append(job)
+        addTeardownBlock { job.terminate() }
         return job.processIdentifier
-    }
-
-    func test_theHeader_followsWhatRunsInItsPane() throws {
-        let c = makeWindow()
-        let host = try XCTUnwrap(paneHosts(c).first)
-        let surface = try XCTUnwrap(surface(of: host))
-        let header = try XCTUnwrap(host.shownHeaderForTesting, "a lone pane wears a header too")
-
-        surface.foregroundProcessGroupID = try runJob(["/bin/sleep", "60"])
-        surface.delegate?.surface(surface, titleDidChange: "")
-        XCTAssertEqual(header.nameForTesting, "sleep", "a running program names the pane")
-        XCTAssertEqual(header.detailForTesting, "60", "and what it runs on follows")
-
-        surface.title = "Deploying staging"
-        surface.delegate?.surface(surface, titleDidChange: surface.title)
-        XCTAssertEqual(header.nameForTesting, "Deploying staging", "a title the program sets wins")
-        XCTAssertNil(header.detailForTesting)
     }
 
     func test_aHeaderButton_actsOnItsOwnPane_notTheFocusedOne() throws {
@@ -156,7 +159,6 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
         let card = try floatCard(c)
         let surface = try XCTUnwrap(spawned.last)
-        XCTAssertEqual(card.shownHeaderForTesting?.nameForTesting, "Scratch")
         XCTAssertEqual(card.header?.controlsForTesting, [.minimize, .close])
 
         try click(.minimize, on: card.header, in: c.window)
@@ -206,6 +208,6 @@ final class PaneHeaderInteractionTests: WindowTestCase {
 
         let header = try floatCard(c).shownHeaderForTesting
         XCTAssertEqual(header?.controlsForTesting, [.close], "minimize would end it too, so it is not offered")
-        XCTAssertEqual(header?.detailForTesting, "true", "a float's detail is its command")
+        XCTAssertEqual(header?.labelForTesting, "Probe", "a tool float that sets no title is its own name")
     }
 }

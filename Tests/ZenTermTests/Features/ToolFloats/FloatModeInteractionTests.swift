@@ -88,8 +88,8 @@ final class FloatModeInteractionTests: WindowTestCase {
         c.handle(.toggleScrollMode)
 
         XCTAssertTrue(c.scrollMode.isActive, "the gate swallowed the chord")
-        XCTAssertEqual(overlay.shownHeaderForTesting?.detailForTesting, "Scroll", "the card's header reports the mode")
-        XCTAssertNil(panel.modeDetail, "the pane behind is not what is being read")
+        XCTAssertNotNil(overlay.scrollCursorForTesting.state, "the band paints on the card")
+        XCTAssertNil(panel.scrollCursorForTesting.state, "the pane behind is not what is being read")
     }
 
     func test_scrollKeysOverAFloat_moveTheBandOnTheCardsSurface() throws {
@@ -111,13 +111,12 @@ final class FloatModeInteractionTests: WindowTestCase {
         let c = makeWindow()
         let surface = try openScratch(c)
         c.handle(.toggleScrollMode)
-        let overlay = try card(c)
-        XCTAssertEqual(overlay.modeDetail, "Scroll", "premise: nothing reported yet")
+        XCTAssertNil(c.scrollMode.lastPositionForTesting, "premise: nothing reported yet")
 
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 100, viewport: 24))
 
-        XCTAssertEqual(overlay.modeDetail, "Scroll: 76 below")
+        XCTAssertEqual(c.scrollMode.lastPositionForTesting?.linesBelow, 76)
     }
 
     func test_closingTheCardEndsTheMode() throws {
@@ -131,7 +130,7 @@ final class FloatModeInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.scrollMode.isActive, "a mode over a card that is gone points at nothing")
         XCTAssertNil(overlay.scrollCursorForTesting.state)
-        XCTAssertNil(overlay.modeDetail)
+        XCTAssertNil(overlay.scrollCursorForTesting.state)
     }
 
     func test_theFindChordOverAFloat_raisesTheBarInTheCard() throws {
@@ -139,11 +138,13 @@ final class FloatModeInteractionTests: WindowTestCase {
         let surface = try openScratch(c)
         let overlay = try card(c)
         XCTAssertNil(overlay.findBarForTesting, "premise: a resting card shows no bar")
+        let labelBefore = overlay.shownHeaderForTesting?.labelForTesting
 
         c.handle(.toggleSearch)
 
         let bar = try XCTUnwrap(overlay.findBarForTesting, "the gate swallowed the chord")
-        XCTAssertNil(overlay.modeDetail, "the bar already says what is live")
+        XCTAssertEqual(
+            overlay.shownHeaderForTesting?.labelForTesting, labelBefore, "the bar already says what is live")
         let stack = try XCTUnwrap(bar.superview)
         let barIndex = try XCTUnwrap(stack.subviews.firstIndex(of: bar))
         let gridIndex = try XCTUnwrap(stack.subviews.firstIndex(of: surface.view))

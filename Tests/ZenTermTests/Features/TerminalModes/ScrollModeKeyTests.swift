@@ -239,32 +239,3 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertNil(decode(try keyDown("0"), count: 1), "and it runs nothing")
     }
 }
-
-final class ScrollModeHeaderTests: XCTestCase {
-    func test_readsScrollBeforeTheFirstReport() {
-        XCTAssertEqual(ScrollModeController.headerTitle(nil), "Scroll")
-    }
-
-    func test_saysAtBottomWhenNothingIsBelowTheViewport() {
-        let resting = TerminalScrollPosition(total: 500, offset: 460, viewport: 40)
-        XCTAssertEqual(resting.linesBelow, 0)
-        XCTAssertEqual(ScrollModeController.headerTitle(resting), "Scroll: at bottom")
-    }
-
-    func test_countsTheLinesBelowTheViewportWithASeparator() {
-        let scrolledUp = TerminalScrollPosition(total: 5000, offset: 1200, viewport: 40)
-        XCTAssertEqual(scrolledUp.linesBelow, 3760)
-        let grouped = ScrollModeController.groupedCount(3760)
-        XCTAssertTrue(grouped.contains("760"), "expected a grouped count, got \(grouped)")
-        XCTAssertEqual(ScrollModeController.headerTitle(scrolledUp), "Scroll: \(grouped) below")
-    }
-
-    func test_aLineSelectionCountsItsRowsAndAgreesWithItself() {
-        XCTAssertEqual(ScrollModeController.visualTitle(kind: .line, rows: 1), "Visual: 1 line")
-        XCTAssertEqual(ScrollModeController.visualTitle(kind: .line, rows: 4), "Visual: 4 lines")
-    }
-
-    func test_aCharacterSelectionGetsNoCount() {
-        XCTAssertEqual(ScrollModeController.visualTitle(kind: .character, rows: 3), "Visual")
-    }
-}

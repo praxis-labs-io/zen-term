@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class PaneHeaderTests: WindowTestCase {
-    private let shell = PaneHeader.Content(process: .shell, name: "zsh", detail: "~/Dev/zen-term")
+    private let shell = PaneHeader.Label(text: "~/Dev/zen-term", isPath: true)
     private var chosen: [PaneHeader.Control] = []
 
     override func setUp() {
@@ -19,7 +19,7 @@ final class PaneHeaderTests: WindowTestCase {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: width + 40, height: 80),
             styleMask: [.borderless], backing: .buffered, defer: false)
-        let header = PaneHeader(content: shell, controls: controls) { [weak self] in self?.chosen.append($0) }
+        let header = PaneHeader(label: shell, controls: controls) { [weak self] in self?.chosen.append($0) }
         window.contentView?.addSubview(header)
         NSLayoutConstraint.activate([
             header.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 20),
@@ -50,14 +50,13 @@ final class PaneHeaderTests: WindowTestCase {
         view.mouseEntered(with: event)
     }
 
-    func test_whereFocusSits_theNameTakesTheNormalInk_elsewhereTheSubtle() {
+    func test_theLabel_staysMuted_whereverFocusSits() {
         let (header, _) = mounted()
-        let chrome = Theme.current.chrome
-        XCTAssertEqual(header.nameInkForTesting, chrome.ink(.subtle))
+        XCTAssertEqual(header.labelInkForTesting, Theme.current.chrome.ink(.muted))
 
         header.isActive = true
 
-        XCTAssertEqual(header.nameInkForTesting, chrome.ink(.normal))
+        XCTAssertEqual(header.labelInkForTesting, Theme.current.chrome.ink(.muted), "a quiet place for context")
     }
 
     func test_anUnfocusedHeader_showsItsControlsOnlyUnderThePointer() throws {
@@ -82,31 +81,26 @@ final class PaneHeaderTests: WindowTestCase {
         let (header, _) = mounted()
         header.isActive = true
         let button = try XCTUnwrap(header.buttonForTesting(.close))
-        XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.muted), "controls recede behind the name")
+        XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.muted), "controls recede behind the label")
 
         try enter(button)
 
         XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.normal))
     }
 
-    func test_aNarrowHeader_dropsEveryControlButClose() {
-        XCTAssertEqual(
-            mounted().0.visibleControlsForTesting, [.splitHorizontal, .splitVertical, .focusMode, .close])
+    func test_aNarrowHeader_truncatesTheLabelFirst_thenDropsEveryControlButClose() {
+        let all: [PaneHeader.Control] = [.splitHorizontal, .splitVertical, .focusMode, .close]
+        XCTAssertEqual(mounted().0.visibleControlsForTesting, all)
+        XCTAssertEqual(mounted(width: 220).0.visibleControlsForTesting, all, "a short label truncates; controls stay")
         XCTAssertEqual(mounted(width: 120).0.visibleControlsForTesting, [.close])
     }
 
-    func test_aModesReport_takesTheDetailsPlace_andGivesItBack() {
+    func test_aPathTruncatesFromItsFront_aTitleFromItsEnd() {
         let (header, _) = mounted()
+        XCTAssertEqual(header.labelTruncationForTesting, .byTruncatingHead, "the folder you are in survives")
 
-        header.modeDetail = "Scroll: at bottom"
-        XCTAssertEqual(header.detailForTesting, "Scroll: at bottom")
+        header.label = PaneHeader.Label(text: "✳ A long task title")
 
-        header.modeDetail = nil
-        XCTAssertEqual(header.detailForTesting, "~/Dev/zen-term")
-    }
-
-    func test_theDetail_truncatesRatherThanWraps() throws {
-        let (header, _) = mounted()
-        XCTAssertEqual(try XCTUnwrap(header.detailParagraphStyleForTesting).lineBreakMode, .byTruncatingTail)
+        XCTAssertEqual(header.labelTruncationForTesting, .byTruncatingTail)
     }
 }

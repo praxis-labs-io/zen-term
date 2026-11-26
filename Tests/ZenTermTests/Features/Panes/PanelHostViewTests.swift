@@ -127,9 +127,7 @@ final class PanelHostViewTests: WindowTestCase {
     private func header(_ controls: [PaneHeader.Control] = [.splitHorizontal, .splitVertical, .focusMode, .close])
         -> PaneHeader
     {
-        PaneHeader(
-            content: PaneHeader.Content(process: .shell, name: "zsh", detail: "~"), controls: controls,
-            onControl: { _ in })
+        PaneHeader(label: PaneHeader.Label(text: "~", isPath: true), controls: controls, onControl: { _ in })
     }
 
     func test_aHeader_sitsAboveTheContent() throws {

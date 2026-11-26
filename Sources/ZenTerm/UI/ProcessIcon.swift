@@ -68,12 +68,6 @@ struct ProcessIcon: Equatable {
         return forProgram(program)
     }
 
-    // Unreadable arguments are a program that runs, never the resting shell.
-    static func running(in surface: TerminalSurface) -> ProcessIcon {
-        guard let group = surface.foregroundProcessGroupID else { return shell }
-        return ProcessArguments.arguments(of: group).map(forCommand) ?? unknown
-    }
-
     // An agent names itself in words (`Claude Code`), so any one of them can be its program.
     static func forAgent(_ name: String) -> ProcessIcon {
         let words = Set(name.lowercased().split { !$0.isLetter }.map(String.init))
