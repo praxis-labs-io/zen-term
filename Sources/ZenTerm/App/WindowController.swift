@@ -1758,7 +1758,7 @@ final class WindowController: NSObject {
     private func toggleAgentPicker() {
         if modal?.kind == .agentPicker { closeModal(); return }
         let picker = AgentPickerOverlay(
-            items: agentItems(),
+            items: agentItems(), onScreen: shownSurface,
             onFocus: { [weak self] surface in
                 self?.closeModal()
                 self?.jumpToAgent(surface)
@@ -4219,6 +4219,10 @@ final class WindowController: NSObject {
 
     private var focusedSurface: SurfaceID? {
         guard modal == nil, !sidebar.hasFocus else { return nil }
+        return shownSurface
+    }
+
+    private var shownSurface: SurfaceID? {
         if let float = floats.activeID { return floats.surfaceID(float) }
         if let pane = floats.shownPaneSurface { return pane }
         return activeController?.focusedSurfaceID
