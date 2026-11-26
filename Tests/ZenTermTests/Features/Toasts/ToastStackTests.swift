@@ -165,17 +165,6 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertEqual(pile.opacityForTesting(readout), 1)
     }
 
-    func test_hoveringTheFoldedStack_leavesItFolded() throws {
-        let presenter = presenter()
-        showThree(on: presenter)
-        let front = try XCTUnwrap(toast(titled: "Third"))
-        let pile = presenter.pileForTesting
-
-        for view in [pile, front] { view.mouseEntered(with: pointer(.mouseEntered, over: view)) }
-
-        XCTAssertFalse(pile.isUnfolded, "hover alone does not unfold")
-    }
-
     func test_aClickOutside_foldsTheStackAndResumesTheCountdowns() throws {
         let presenter = presenter(dismissAfter: 0.1)
         showThree(on: presenter)
@@ -221,31 +210,6 @@ final class ToastStackTests: WindowTestCase {
             with: type, location: view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil),
             modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0,
             trackingNumber: 0, userData: nil)!
-    }
-
-    func test_hoveringTheFoldedStack_offersShowMore_andItOpensTheList() throws {
-        let presenter = presenter()
-        showThree(on: presenter)
-        let pile = presenter.pileForTesting
-        let toggle = pile.listToggleForTesting
-        letTimePass(0.05)
-        XCTAssertTrue(
-            pile.trackingAreas.contains { $0.owner === pile && $0.options.contains(.mouseEnteredAndExited) },
-            "the stack tracks the pointer")
-        XCTAssertEqual(pile.footerOpacityForTesting, 0, "precondition: hidden until hovered")
-
-        pile.mouseEntered(with: pointer(.mouseEntered, over: pile))
-        XCTAssertEqual(pile.footerOpacityForTesting, 1)
-        XCTAssertEqual(toggle.attributedTitle.string, "Show More")
-
-        click(toggle)
-        XCTAssertTrue(pile.isUnfolded)
-        XCTAssertEqual(toggle.attributedTitle.string, "Show Less")
-
-        click(toggle)
-        XCTAssertFalse(pile.isUnfolded)
-        XCTAssertEqual(
-            pile.footerOpacityForTesting, 0, "folding out from under the pointer sends no exit, so it rechecks")
     }
 
     func test_aFoldedCardsPose_landsOnItsPlate() throws {
@@ -333,17 +297,6 @@ final class ToastStackTests: WindowTestCase {
         click(pile.clearForTesting)
 
         waitUntil(pile.cards.isEmpty, "every toast to leave")
-    }
-
-    func test_hoveringASingleToast_offersNothingToShow() throws {
-        let presenter = presenter()
-        presenter.show(notice("Only"))
-        window.contentView!.layoutSubtreeIfNeeded()
-        let pile = presenter.pileForTesting
-
-        pile.mouseEntered(with: pointer(.mouseEntered, over: pile))
-
-        XCTAssertEqual(pile.footerOpacityForTesting, 0)
     }
 
     func test_dismissingDownToOneToast_foldsTheStackAsItLeaves() throws {

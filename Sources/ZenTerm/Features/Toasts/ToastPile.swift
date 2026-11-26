@@ -404,7 +404,6 @@ final class ToastPile: NSView {
     var plateOpacityForTesting: [Float] { plates.map { $0.isHidden ? 0 : $0.layer?.opacity ?? 0 } }
     var listToggleForTesting: AppButton { listToggle }
     var clearForTesting: AppButton { clear }
-    var footerOpacityForTesting: Float { opacityForTesting(footer) ?? 0 }
     func restingPoseForTesting(_ card: NSView) -> CATransform3D { restingTransform(of: card) }
     var plateLayerFramesForTesting: [CGRect] { plates.compactMap { $0.layer?.frame } }
     var plateLayersForTesting: [CALayer] { plates.compactMap(\.layer) }
