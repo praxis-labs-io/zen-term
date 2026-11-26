@@ -55,7 +55,6 @@ final class ScrollModeController {
         cursor = ScrollCell(row: entry.row, column: offset(ofCell: entry.column, on: entry.row))
         let entryText = rowText(cursor.row)
         cursorLine = Self.isBlank(entryText) ? nil : entryText
-        updateHeader()
         panel.layoutSubtreeIfNeeded()
         refreshCursor(remembersLine: false)
         onActiveChanged?(true)
@@ -78,7 +77,6 @@ final class ScrollModeController {
         if holdsViewport { surface?.scroll(.bottom) }
         holdsViewport = false
         reflowArmedAt = nil
-        panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
         panel = nil
         surface = nil
@@ -310,7 +308,6 @@ final class ScrollModeController {
         let row = min(max(cell.row, 0), lastRow)
         cursor = ScrollCell(row: row, column: min(max(cell.column, 0), lastColumn(of: row)))
         refreshCursor()
-        if selection != nil { updateHeader() }
     }
 
     private var lastRow: Int { max((surface?.cellMetrics?.rows ?? 1) - 1, 0) }
@@ -447,14 +444,12 @@ final class ScrollModeController {
             selection = ScrollSelection(
                 kind: kind, anchor: cursor, anchorLine: Self.isBlank(text) ? nil : text)
         }
-        updateHeader()
         refreshCursor()
     }
 
     private func closeSelection() {
         selection = nil
         pendingSelectionAnchor = nil
-        updateHeader()
         refreshCursor()
     }
 
@@ -465,7 +460,6 @@ final class ScrollModeController {
         selection = current
         pendingSelectionAnchor = nil
         refreshCursor(remembersLine: false)
-        updateHeader()
     }
 
     private func shiftSelection(byRows rows: Int) {
@@ -486,7 +480,6 @@ final class ScrollModeController {
         pendingSelectionAnchor = nil
         guard selection != nil else { return }
         selection = nil
-        updateHeader()
         refreshCursor(remembersLine: false)
     }
 
@@ -506,7 +499,6 @@ final class ScrollModeController {
         yankPasteboard.setString(text, forType: .string)
         self.selection = nil
         pendingSelectionAnchor = nil
-        updateHeader()
         flash(range)
     }
 
@@ -610,6 +602,7 @@ final class ScrollModeController {
     }
 
     var isFlashingForTesting: Bool { flashLevel > 0 }
+    var lastPositionForTesting: TerminalScrollPosition? { lastPosition }
 
     private static let flashFrame: TimeInterval = 1.0 / 60
 
@@ -676,38 +669,5 @@ final class ScrollModeController {
             let bottom = lastWrittenRow
             if cursor.row > bottom { move(to: ScrollCell(row: bottom, column: cursor.column)) }
         }
-        updateHeader()
     }
-
-    private func updateHeader() {
-        let title =
-            selection.map {
-                Self.visualTitle(kind: $0.kind, rows: abs(cursor.row - $0.anchor.row) + 1)
-            } ?? Self.headerTitle(lastPosition)
-        panel?.modeMeta = PanelMeta(title: title, action: .toggleScrollMode)
-    }
-
-    static func headerTitle(_ position: TerminalScrollPosition?) -> String {
-        guard let position else { return "Scroll" }
-        let below = position.linesBelow
-        if below == 0 { return "Scroll: at bottom" }
-        return "Scroll: \(groupedCount(below)) below"
-    }
-
-    static func visualTitle(kind: ScrollSelection.Kind, rows: Int) -> String {
-        switch kind {
-        case .character: return "Visual"
-        case .line: return "Visual: \(groupedCount(rows)) \(rows == 1 ? "line" : "lines")"
-        }
-    }
-
-    static func groupedCount(_ value: Int) -> String {
-        lineCount.string(from: NSNumber(value: value)) ?? "\(value)"
-    }
-
-    private static let lineCount: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter
-    }()
 }

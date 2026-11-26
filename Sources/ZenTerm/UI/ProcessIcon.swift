@@ -67,6 +67,10 @@ struct ProcessIcon: Equatable {
         return forProgram(program)
     }
 
+    static func running(in surface: TerminalSurface) -> ProcessIcon {
+        surface.foregroundProcessGroupID.flatMap(ProcessArguments.arguments(of:)).map(forCommand) ?? shell
+    }
+
     // An agent names itself in words (`Claude Code`), so any one of them can be its program.
     static func forAgent(_ name: String) -> ProcessIcon {
         let words = Set(name.lowercased().split { !$0.isLetter }.map(String.init))

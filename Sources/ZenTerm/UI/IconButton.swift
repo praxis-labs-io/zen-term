@@ -32,16 +32,18 @@ final class IconButton: ControlView, ThemeReapplying {
     private let tooltip: TooltipHost
 
     private let restsFilled: Bool
+    private let restInk: ChromeTheme.InkLevel
 
     init(
         symbol: String, size: NSSize = NSSize(width: ChromeMetrics.Height.sm, height: ChromeMetrics.Height.sm),
         pointSize: CGFloat = ChromeMetrics.Icon.sm, weight: NSFont.Weight = .medium,
         accessibilityLabel label: String, shortcut: (() -> String?)? = nil,
-        restsFilled: Bool = false,
+        restsFilled: Bool = false, restInk: ChromeTheme.InkLevel = .subtle,
         onClick: @escaping () -> Void
     ) {
         self.onClick = onClick
         self.restsFilled = restsFilled
+        self.restInk = restInk
         tooltip = TooltipHost(label: label, shortcut: shortcut)
         super.init(frame: .zero)
         wantsLayer = true
@@ -148,7 +150,7 @@ final class IconButton: ControlView, ThemeReapplying {
             bg = chrome.fill(.hover); tint = chrome.ink(.normal)
         } else {
             bg = restsFilled ? chrome.fill(.rest) : .clear
-            tint = chrome.ink(.subtle)
+            tint = chrome.ink(restInk)
         }
         easeFill(bg)
         showFocusRing(hasKeyboardFocus)

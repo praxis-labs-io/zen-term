@@ -57,6 +57,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
 
+    // A float pane is named like any pane, from the tab that owns it.
+    var paneHeaderContent: ((SurfaceID, TerminalSurface) -> PaneHeader.Content?)?
+    var onHeaderClose: (() -> Void)?
+
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
         sessionCWD: @escaping () -> URL?,
@@ -93,7 +97,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         let inset = 2 * ChromeMetrics.Spacing.s10
         return NSSize(
             width: max(0, area.width * paneCard.widthFraction - inset),
-            height: max(0, area.height * paneCard.heightFraction - inset))
+            height: max(0, area.height * paneCard.heightFraction - inset - ModeChrome.headerRoom))
     }
 
     var hasBusy: Bool { allSurfaces.contains(where: \.isBusy) }
@@ -196,8 +200,6 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reapplyTerminalBehavior() { activeFloat?.overlay.reapplyTerminalBehavior() }
 
-    func reapplyKeymap() { activeFloat?.overlay.reapplyKeymap() }
-
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? sessionCWD() }
 
     func toggle(_ spec: ToolFloat) {
@@ -288,12 +290,20 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             dismissing.removeFromSuperview()
             dismissingOverlay = nil
         }
+        let header = PaneHeader(
+            content: headerContent(spec, surface, pane: pane),
+            controls: spec?.persist == .ephemeral ? [.end] : [.minimize, .end],
+            onControl: { [weak self] control in
+                if control == .minimize { self?.close() } else { self?.onHeaderClose?() }
+            })
+        header.isActive = true
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
             widthFraction: card.widthFraction,
             heightFraction: card.heightFraction,
             contentInset: ChromeMetrics.Spacing.s10,
             cornerRadius: ChromeMetrics.Radius.surface,
+            header: header,
             onDismiss: { [weak self] in self?.close() })
         overlay.backgroundOverride = surface.backgroundOverride
         presentOverlay(overlay)
@@ -303,6 +313,36 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         refocus()
         overlay.animateIn()
         (pane ?? idBySurface[ObjectIdentifier(surface)]).map { onShown?($0) }
+        onStateChanged?()
+    }
+
+    // A tool is named by its float and has no folder worth showing; Scratch is a shell, so its folder shows.
+    private func headerContent(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Content {
+        let place = surface.currentDirectory
+        guard let spec else {
+            return pane.flatMap { paneHeaderContent?($0, surface) }
+                ?? PaneIdentity.header(named: nil, running: PaneIdentity.running(in: surface), directory: place)
+        }
+        let running = PaneIdentity.Running(
+            process: ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
+        return PaneIdentity.header(named: nil, running: running, directory: spec.command.isEmpty ? place : nil)
+    }
+
+    func refreshHeader() {
+        guard let active = activeFloat else { return }
+        active.overlay.header?.content = headerContent(active.spec, active.surface, pane: shownPane)
+    }
+
+    func applyHeaderShown() { activeFloat?.overlay.applyHeaderShown() }
+
+    var activeFloatIsBusy: Bool { activeFloat?.surface.isBusy ?? false }
+
+    func endActive() {
+        guard let active = activeFloat, active.spec != nil else { return }
+        let persists = active.spec?.persist != .ephemeral
+        close()
+        guard persists, removeEntry(forSurface: active.surface) else { return }
+        release(active.surface)
         onStateChanged?()
     }
 
@@ -481,6 +521,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, titleDidChange title: String) {
         guard let id = idBySurface[ObjectIdentifier(s)] else { return }
         onTitle?(id, title)
+    }
+
+    func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
+        if activeFloat?.surface === s { refreshHeader() }
     }
 
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {

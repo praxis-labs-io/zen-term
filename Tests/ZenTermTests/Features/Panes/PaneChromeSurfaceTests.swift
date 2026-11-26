@@ -119,20 +119,22 @@ final class PaneChromeSurfaceTests: WindowTestCase {
         XCTAssertEqual(fill.redComponent, 1, accuracy: 0.001)
     }
 
-    func test_showingTheModeHeader_repaintsTheRing() throws {
+    func test_hidingThePaneHeader_repaintsTheRing() throws {
         let host = try focusedHost()
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
         host.layoutSubtreeIfNeeded()
         host.displayIfNeeded()
-        XCTAssertFalse(host.ringNeedsDisplayForTesting, "premise: nothing is queued before the header")
+        XCTAssertFalse(host.ringNeedsDisplayForTesting, "premise: nothing is queued before the header goes")
 
-        host.modeMeta = PanelMeta(title: "Scroll", action: .toggleScrollMode)
+        config.paneHeaders = false
+        GeneralConfig.setCurrentForTesting(config)
+        host.reapplyChromeLayout()
 
         XCTAssertTrue(
             host.ringNeedsDisplayForTesting,
-            "the header shrank the terminal, so the ring's hole is stale until it repaints")
+            "the header's going grew the terminal, so the ring's hole is stale until it repaints")
     }
 
     func test_togglingTheFindBar_repaintsTheRing() throws {

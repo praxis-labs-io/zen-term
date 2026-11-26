@@ -35,6 +35,7 @@ struct GeneralConfig: Equatable {
     var drawerResizeStep: CGFloat
     var maxDrawerFraction: CGFloat
     var hiddenToolbarButtons: Set<ToolbarButton> = []
+    var paneHeaders = true
 
     var reduceMotion: ReduceMotion
 

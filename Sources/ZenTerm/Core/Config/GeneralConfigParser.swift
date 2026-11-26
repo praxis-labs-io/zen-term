@@ -59,6 +59,8 @@ enum GeneralConfigParser {
                 }
             case "window-chrome":
                 if let b = parseBool(value, key, &diagnostics) { config.windowChrome = b }
+            case "pane-headers":
+                if let b = parseBool(value, key, &diagnostics) { config.paneHeaders = b }
             case "backdrop-alpha":
                 if let n = parseDouble(value, key, &diagnostics) {
                     config.backdropAlpha = CGFloat(clamp(n, 0, 1, key, &diagnostics))

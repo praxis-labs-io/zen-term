@@ -90,8 +90,6 @@ final class SearchController {
         bar?.needle = seed
         showCount()
 
-        if !scrollMode.isActive { panel.modeMeta = PanelMeta(title: "Find", action: .toggleSearch) }
-
         settleLayout()
 
         bar?.focusField()
@@ -196,7 +194,6 @@ final class SearchController {
             didStartScrollMode = false
             scrollMode.end()
         }
-        if !scrollMode.isActive { panel?.modeMeta = nil }
         panel?.setFindBarShown(false)
         settleLayout()
         bar = nil

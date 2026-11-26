@@ -312,13 +312,15 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   be read (a setuid program) is an unknown program, never the resting shell. A focused drawer does not
   change it, as it does not change the title. The title poll re-renders the tab bar when a
   tab's chip changes.
-- **A tab is named for its focused pane's job, else its folder** (`PaneCanvasController.title`):
-  a `zen pane run --name` first, then the job's program by the same reading as its chip, and back
-  at the prompt, or in a shell started from it (`zsh`, `nix develop`), the folder. The OSC
-  title is used only when there is no folder, since the shell's title is its prompt path or the command
-  line it runs. `PathDisplay.folderName` is the one name for a folder, so the home folder reads
-  as its own name, never a lone `~`. A host's tab skips the job (`readsForeground`), since its
-  foreground job is the local `ssh`. Rename Tab's `pinnedTitle` outranks all of it.
+- **A tab reads what its focused pane reports** (`PaneIdentity.tabTitle`): the terminal title,
+  which ghostty's shell integration sets to the prompt path or the command line it runs, and a
+  program may set itself. A leading status glyph or `[ ! ] ` mark an agent adds is dropped, and a
+  title that is a path reads as its folder, so a tab never shows a full path. With no title, the
+  folder. `PathDisplay.folderName` is the one name for a folder, so the home folder reads as its
+  own name, never a lone `~`. Rename Tab's `pinnedTitle` outranks all of it.
+- **A pane's header says what runs there and where** (`PaneIdentity.header`): its process chip,
+  its `zen pane run --name`, else the agent's own name, else its program, then its folder. A
+  tool float reads as its float's title with no folder; Scratch is a shell, so its folder shows.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.

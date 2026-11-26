@@ -1,11 +1,6 @@
 import AppKit
 import TerminalKit
 
-struct PanelMeta {
-    let title: String
-    let action: KeyInterceptor.ReservedChord
-}
-
 final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
@@ -14,30 +9,20 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     private let ring = RingFillView()
     // A sibling above `clip`, not inside it: a mode strip mounts into `clip` later and would land above it.
     private let veil = PaneVeilView()
-    private let baseMeta: PanelMeta?
-    private let zoomMeta: PanelMeta?
+    let header: PaneHeader?
     // Content that isn't a terminal paints no background of its own, so a translucent panel fills it whole.
     private let fillsContent: Bool
 
     private lazy var chrome = ModeChrome(
-        container: clip, content: content, padding: padding, header: baseMeta ?? zoomMeta,
+        container: clip, content: content, padding: padding, header: header,
         onStripsChanged: { [weak self] in self?.stripsMoved() })
 
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateBorder() } } }
 
-    var isZoomed: Bool = false {
-        didSet {
-            guard oldValue != isZoomed else { return }
-            updateHeader()
-        }
-    }
+    // Whether focus sits here, which the focus border shows only while panes share the screen.
+    var isActive: Bool = false { didSet { header?.isActive = isActive } }
 
-    var modeMeta: PanelMeta? {
-        didSet {
-            guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
-            updateHeader()
-        }
-    }
+    var isZoomed: Bool = false { didSet { header?.isZoomed = isZoomed } }
 
     func setScrollCursor(
         _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
@@ -69,14 +54,13 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     private static let minCornerRadius: CGFloat = ChromeMetrics.Radius.control
 
     init(
-        content: NSView, meta: PanelMeta?, zoomMeta: PanelMeta? = nil, fillsContent: Bool = false,
+        content: NSView, header: PaneHeader? = nil, fillsContent: Bool = false,
         onFocusRequest: @escaping () -> Void
     ) {
         self.onFocusRequest = onFocusRequest
         self.fillsContent = fillsContent
         self.content = content
-        self.baseMeta = meta
-        self.zoomMeta = zoomMeta
+        self.header = header
         super.init(frame: .zero)
 
         wantsLayer = true
@@ -123,7 +107,6 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
         ])
 
-        updateHeader()
         updateBorder()
     }
 
@@ -161,11 +144,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         (pane.layer?.borderColor, pane.layer?.borderWidth ?? -1)
     }
 
-    var isHeaderVisibleForTesting: Bool { chrome.isHeaderVisibleForTesting }
-
-    var headerContentForTesting: (title: String, shortcut: String)? { chrome.headerContentForTesting }
-
-    var builtHeaderKeycapForTesting: String? { chrome.builtHeaderKeycapForTesting }
+    var shownHeaderForTesting: PaneHeader? { chrome.shownHeaderForTesting }
 
     var findBarForTesting: FindBarView? { chrome.findBarForTesting }
 
@@ -177,18 +156,12 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         super.mouseDown(with: event)
     }
 
-    private func updateHeader() {
-        chrome.setHeader(modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta)
-    }
-
     private static var idleBorder: NSColor { Theme.current.chrome.fill(alpha: ChromeTheme.hairline) }
 
     func reapplyTheme() {
         applyBackground()
         updateBorder()
     }
-
-    func reapplyKeymap() { chrome.reapplyKeymap() }
 
     func reapplyTerminalBehavior() { applyBackground() }
 
@@ -198,6 +171,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         clip.layer?.cornerRadius = radius
         ring.cornerRadius = radius
         veil.cornerRadius = radius
+        chrome.applyHeaderShown()
     }
 
     /// Translucent, the clip stops filling, or it repaints the terminal background behind a see-through surface.

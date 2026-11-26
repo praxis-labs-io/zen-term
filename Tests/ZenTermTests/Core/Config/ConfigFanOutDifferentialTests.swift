@@ -35,7 +35,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
 
     private struct ChromeFingerprint: Equatable {
         var pill: String?
-        var headerKeycaps: [String]
+        var shownHeaders: [Bool]
         var keycaps: [String]
         var panelFrames: [String]
         var toastFrames: [String]
@@ -54,7 +54,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
                 diffs.append("\(label) (gated: \(lhs), ungated: \(rhs))")
             }
             note("tab bar pill", pill, other.pill)
-            note("panel header keycaps", headerKeycaps, other.headerKeycaps)
+            note("shown pane headers", shownHeaders, other.shownHeaders)
             note("mounted keycaps", keycaps, other.keycaps)
             note("panel frames", panelFrames, other.panelFrames)
             note("toast frames", toastFrames, other.toastFrames)
@@ -112,7 +112,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         let hosts = views.compactMap { $0 as? PanelHostView }
         return ChromeFingerprint(
             pill: views.compactMap { ($0 as? TabBarView)?.pillColorForTesting }.first?.description,
-            headerKeycaps: hosts.compactMap(\.builtHeaderKeycapForTesting),
+            shownHeaders: hosts.map { $0.shownHeaderForTesting != nil },
             keycaps: views.compactMap { ($0 as? KeycapView)?.shortcut },
             panelFrames: hosts.map { describe($0.convert($0.bounds, to: root)) }.sorted(),
             toastFrames: views.compactMap { $0 as? ToastView }
@@ -252,6 +252,10 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
 
     func test_windowChrome() throws {
         try assertGateSkipsNothing(Scenario(name: "window-chrome") { $0.windowChrome.toggle() })
+    }
+
+    func test_paneHeaders() throws {
+        try assertGateSkipsNothing(Scenario(name: "pane-headers") { $0.paneHeaders.toggle() })
     }
 
     func test_backdropAlpha() throws {

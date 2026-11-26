@@ -88,32 +88,8 @@ final class FloatModeInteractionTests: WindowTestCase {
         c.handle(.toggleScrollMode)
 
         XCTAssertTrue(c.scrollMode.isActive, "the gate swallowed the chord")
-        XCTAssertTrue(overlay.isHeaderVisibleForTesting, "the card wears the mode's header")
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "Scroll")
-        XCTAssertFalse(panel.isHeaderVisibleForTesting, "the pane behind is not what is being read")
-    }
-
-    func test_keymapChange_rebuildsTheFloatHeaderKeycap() throws {
-        let c = makeWindow()
-        _ = try openScratch(c)
-        let overlay = try card(c)
-        c.handle(.toggleScrollMode)
-        XCTAssertEqual(
-            overlay.builtHeaderKeycapForTesting, CommandCatalog.spec(for: .toggleScrollMode).shortcut,
-            "premise: the card wears the scroll header with its chord")
-
-        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        var config = GeneralConfig.current
-        config.rebind(.toggleScrollMode, to: rebound)
-        GeneralConfig.setCurrentForTesting(config)
-        NotificationCenter.default.post(
-            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
-        let drained = expectation(description: "main queue drained")
-        OperationQueue.main.addOperation { drained.fulfill() }
-        wait(for: [drained], timeout: 5)
-
-        XCTAssertEqual(
-            overlay.builtHeaderKeycapForTesting, rebound.displayGlyph, "the rebind never reached the float's header")
+        XCTAssertNotNil(overlay.scrollCursorForTesting.state, "the band paints on the card")
+        XCTAssertNil(panel.scrollCursorForTesting.state, "the pane behind is not what is being read")
     }
 
     func test_scrollKeysOverAFloat_moveTheBandOnTheCardsSurface() throws {
@@ -135,13 +111,12 @@ final class FloatModeInteractionTests: WindowTestCase {
         let c = makeWindow()
         let surface = try openScratch(c)
         c.handle(.toggleScrollMode)
-        let overlay = try card(c)
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "Scroll", "premise: nothing reported yet")
+        XCTAssertNil(c.scrollMode.lastPositionForTesting, "premise: nothing reported yet")
 
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 100, viewport: 24))
 
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "Scroll: 76 below")
+        XCTAssertEqual(c.scrollMode.lastPositionForTesting?.linesBelow, 76)
     }
 
     func test_closingTheCardEndsTheMode() throws {
@@ -155,7 +130,7 @@ final class FloatModeInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.scrollMode.isActive, "a mode over a card that is gone points at nothing")
         XCTAssertNil(overlay.scrollCursorForTesting.state)
-        XCTAssertFalse(overlay.isHeaderVisibleForTesting)
+        XCTAssertNil(overlay.scrollCursorForTesting.state)
     }
 
     func test_theFindChordOverAFloat_raisesTheBarInTheCard() throws {
@@ -163,11 +138,13 @@ final class FloatModeInteractionTests: WindowTestCase {
         let surface = try openScratch(c)
         let overlay = try card(c)
         XCTAssertNil(overlay.findBarForTesting, "premise: a resting card shows no bar")
+        let labelBefore = overlay.shownHeaderForTesting?.nameForTesting
 
         c.handle(.toggleSearch)
 
         let bar = try XCTUnwrap(overlay.findBarForTesting, "the gate swallowed the chord")
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "Find")
+        XCTAssertEqual(
+            overlay.shownHeaderForTesting?.nameForTesting, labelBefore, "the bar already says what is live")
         let stack = try XCTUnwrap(bar.superview)
         let barIndex = try XCTUnwrap(stack.subviews.firstIndex(of: bar))
         let gridIndex = try XCTUnwrap(stack.subviews.firstIndex(of: surface.view))

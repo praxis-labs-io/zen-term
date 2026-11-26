@@ -95,7 +95,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         connectAnywayButton = AppButton(
             title: "Connect Anyway", variant: .muted, onTap: onConnect)
         retryButton = AppButton(title: "Retry", variant: .primary, onTap: onConnect)
-        panel = PanelHostView(content: content, meta: nil, fillsContent: true, onFocusRequest: onFocusRequest)
+        panel = PanelHostView(content: content, fillsContent: true, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 

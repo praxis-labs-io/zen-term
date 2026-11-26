@@ -33,6 +33,7 @@ final class GeneralConfigParserTests: XCTestCase {
             scroll-multiplier = 4
             background-alpha = 0.7
             window-chrome = false
+            pane-headers = false
             backdrop-alpha = 0.5
             window-gutter = 16
             pane-gap = 12
@@ -55,6 +56,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.scrollMultiplier, 4)
         XCTAssertEqual(config.backgroundAlpha, 0.7)
         XCTAssertFalse(config.windowChrome)
+        XCTAssertFalse(config.paneHeaders)
         XCTAssertEqual(config.backdropAlpha, 0.5)
         XCTAssertEqual(config.windowGutter, 16)
         XCTAssertEqual(config.panelGap, 12)
