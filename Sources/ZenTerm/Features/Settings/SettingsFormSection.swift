@@ -72,7 +72,8 @@ class SettingsFormSection: SettingsSection {
 
     func addGroup(_ title: String, _ build: () -> Void) {
         guard let stack = rowsStack else { return }
-        let group = NSStackView(views: [SectionCaption(title)])
+        let caption = SectionCaption(title)
+        let group = NSStackView(views: [caption])
         group.orientation = .vertical
         group.alignment = .leading
         group.spacing = ChromeMetrics.Spacing.s10
@@ -80,8 +81,12 @@ class SettingsFormSection: SettingsSection {
         group.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if let lastGroup { stack.setCustomSpacing(ChromeMetrics.Spacing.s32, after: lastGroup) }
         groupStack = group
+        let firstRowIndex = rows.count
         build()
         groupStack = nil
+        if rows.indices.contains(firstRowIndex) {
+            group.setCustomSpacing(group.spacing - rows[firstRowIndex].spaceAboveCaption, after: caption)
+        }
         lastGroup = group
     }
 

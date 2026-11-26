@@ -67,6 +67,11 @@ final class LayoutRow: NSView, ThemeReapplying {
         return (stack, noteLabel)
     }
 
+    var spaceAboveCaption: CGFloat {
+        guard descriptionLabel == nil else { return 0 }
+        return max(0, (ChromeMetrics.Height.lg - captionLabel.intrinsicContentSize.height) / 2)
+    }
+
     func showMessage(_ text: String?, kind: MessageKind = .failure) {
         messageKind = (text == nil) ? nil : kind
         guard let text else { return messageLabel.clear() }
