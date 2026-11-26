@@ -205,7 +205,7 @@ final class DropdownTests: WindowTestCase {
         var picked: Int?
         let dropdown = filterFixture { picked = $0 }
         let rows = dropdown.rowViewsForTesting
-        let hover = Theme.current.chrome.fill(.hover).cgColor
+        let cursor = Theme.current.chrome.fill(.active).cgColor
         let enter = try XCTUnwrap(
             NSEvent.enterExitEvent(
                 with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
@@ -214,11 +214,11 @@ final class DropdownTests: WindowTestCase {
 
         rows[2].mouseEntered(with: enter)
         XCTAssertEqual(dropdown.highlightedIndexForTesting, 2)
-        XCTAssertEqual(rows.map { $0.layer?.backgroundColor == hover }, [false, false, true, false, false])
+        XCTAssertEqual(rows.map { $0.layer?.backgroundColor == cursor }, [false, false, true, false, false])
 
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
         XCTAssertEqual(
-            rows.map { $0.layer?.backgroundColor == hover }, [false, false, false, true, false], "two rows are lit")
+            rows.map { $0.layer?.backgroundColor == cursor }, [false, false, false, true, false], "two rows are lit")
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
         XCTAssertEqual(picked, 3, "Down did not continue from the pointer's row")
     }

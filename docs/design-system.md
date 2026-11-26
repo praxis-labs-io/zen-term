@@ -112,14 +112,14 @@ One ladder for every control and row:
 |---|---|
 | Rest | Rows clear. Fields, keycaps and filled buttons `fill(.rest)`. Text `ink(.normal)`, controls `ink(.subtle)` |
 | Hover | `fill(.hover)` |
-| Keyboard cursor | `fill(.hover)`. In a transient list (palette, dropdown, menu) the cursor is the focus |
-| Focused | A `focusRing` ring at `Border.width`. Fill and ink unchanged. On the primary button the ring is `onAccent`, inset by `Border.width` |
+| Keyboard cursor | `fill(.active)`. In a transient list (palette, dropdown, menu) the cursor is the focus |
+| Focused | Controls and buttons: a `focusRing` ring at `Border.width`, fill and ink unchanged; on the primary button the ring is `onAccent`, inset by `Border.width`. Rows: `fill(.hover)`, over a current row's quieter `fill(.active)` too, never a ring |
 | Current | Pick lists: a check mark only. Persistent nav, tabs and segments: `fill(.active)` |
 | Pressed | Looks like hover |
 | Disabled | `ink(.faint)` on every variant. Controls keep `fill(.rest)`; no hover, no ring |
 
 In a transient list, hover moves the keyboard cursor, so one row is lit at a time and ↑/↓
-continue from the row the pointer chose. A persistent list shows keyboard focus as the ring,
+continue from the row the pointer chose. A persistent list shows keyboard focus as the fill,
 and hover does not move it. In every row list a row activates on mouse up, and ↑/↓ stop at
 the ends. Focus changes a border's color, never its width. The one exception is the focus
 halo: the focused pane or drawer steps up to `Border.paneFocus` in accent only while another pane
@@ -232,7 +232,7 @@ A control's hover and eased fill come from `ControlView`, or from `ControlState`
 cannot subclass it (`AppButton`). A control never keeps its own tracking area. A control on that base
 takes keyboard focus and its ring from it too.
 
-A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`). A word about the row's state rides right after its title in muted caption ink (`ListRow.Content.titleSuffix`: the picker's Current, Open, Other window); a `note` sits at the trailing edge.
+A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`). A word about the row's state rides right after its title in muted caption ink (`ListRow.Content.titleSuffix`: the picker's Current, Open, Other window); a `note` sits at the trailing edge. A row's text lines up with its list's heading, and its fill bleeds `Spacing.controlInset` into the gutter: the Settings nav indents its heading, and a Settings list widens its stack (`SettingsDetail.listOutset`).
 
 The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette or workspace picker row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; the workspace picker's are all magenta, a host's included. A row's detail (the picker's branch or a host's status word, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 

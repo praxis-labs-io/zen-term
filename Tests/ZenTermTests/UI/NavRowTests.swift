@@ -4,30 +4,29 @@ import XCTest
 @testable import ZenTerm
 
 final class NavRowTests: WindowTestCase {
-    func test_focus_showsTheRingWithoutAFill() {
+    func test_focus_showsTheHoverFillWithoutARing() {
         let (row, window) = mountedRow()
 
         window.makeFirstResponder(row)
-        XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
-        XCTAssertEqual(row.layer?.borderWidth, ChromeMetrics.Border.width)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.layer?.borderWidth ?? 0, 0, "a row never wears the focus ring")
 
         window.makeFirstResponder(nil)
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
-        XCTAssertEqual(
-            row.layer?.borderWidth, ChromeMetrics.Border.width, "focus changes the ring's color, not its width")
-        XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
     }
 
-    func test_focus_keepsTheCurrentFill() {
+    func test_focus_dimsTheCurrentFillToHover_andLeavingRestoresIt() {
         let (row, window) = mountedRow()
 
         row.isCurrent = true
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
 
         window.makeFirstResponder(row)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.layer?.borderWidth ?? 0, 0)
+
+        window.makeFirstResponder(nil)
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
     }
 
     func test_hover_showsHoverFill_andClearsOnExit() {
@@ -35,7 +34,6 @@ final class NavRowTests: WindowTestCase {
 
         row.mouseEntered(with: crossing(.mouseEntered, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
-        XCTAssertEqual(row.layer?.borderColor?.alpha, 0, "hover shares focus's fill, so only focus draws the ring")
 
         row.mouseExited(with: crossing(.mouseExited, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
@@ -65,10 +63,8 @@ final class NavRowTests: WindowTestCase {
 
         window.makeFirstResponder(row)
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
 
         window.makeFirstResponder(nil)
-        XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
         row.mouseExited(with: crossing(.mouseExited, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
     }
@@ -184,8 +180,7 @@ final class NavRowTests: WindowTestCase {
         row.takeKeyboardFocus()
 
         XCTAssertTrue(window.firstResponder === row)
-        XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
     }
 
     private final class FocusHolder: NSView {

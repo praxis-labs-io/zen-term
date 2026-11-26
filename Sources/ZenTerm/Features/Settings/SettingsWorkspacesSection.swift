@@ -14,7 +14,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     func makeDetailView() -> NSView {
         let stack = NSStackView()
         stack.orientation = .vertical
-        stack.alignment = .leading
+        stack.alignment = .centerX
         stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
@@ -29,7 +29,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         addButton = button
 
         populateRows()
-        return SettingsDetail.scroll(for: stack)
+        return SettingsDetail.scroll(for: stack, outset: SettingsDetail.listOutset)
     }
 
     func detailStops() -> [NSView] { rows + [addButton].compactMap { $0 } }
@@ -62,12 +62,12 @@ final class SettingsWorkspacesSection: SettingsSection {
         reorderHint = reorderHintLabel
         let header = SettingsDetail.headerRow(caption: caption, hint: reorderHintLabel)
         stack.addArrangedSubview(header)
-        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        SettingsDetail.pinToListContent(header, in: stack)
 
         if let workspaces, workspaces.isEmpty {
             let hint = EmptyStateLabel("No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
             stack.addArrangedSubview(hint)
-            hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            SettingsDetail.pinToListContent(hint, in: stack)
         } else if let workspaces {
             for workspace in workspaces {
                 let row = WorkspaceRow(workspace: workspace)
@@ -91,7 +91,7 @@ final class SettingsWorkspacesSection: SettingsSection {
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
-        addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        SettingsDetail.pinToListContent(addRow, in: stack)
         stack.setCustomSpacing(
             ChromeMetrics.Spacing.s16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 

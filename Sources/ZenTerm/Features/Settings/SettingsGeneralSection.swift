@@ -26,27 +26,27 @@ final class SettingsGeneralSection: SettingsFormSection {
         addGroup("Notifications") {
             self.addSegmentedRow(
                 key: "attention-toast", caption: "Notice for a tab that needs you",
-                blurb: "Off shows none; sticky waits to be answered; auto clears itself",
+                blurb: nil,
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.attentionToast) },
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
                 notifiesOnReselect: false)
             self.addSegmentedRow(
                 key: "completion-toast", caption: "Notice for something that finished",
-                blurb: "Off shows none; sticky waits to be answered; auto clears itself",
+                blurb: nil,
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.completionToast) },
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
                 notifiesOnReselect: false)
             self.addNumericRow(
                 key: "toast-duration", caption: "How long a notice that clears itself stays up",
-                blurb: "Seconds, for every notice that clears itself", range: 1...60,
+                blurb: "Seconds", range: 1...60,
                 read: { CGFloat($0.toastDuration) })
         }
         addGroup("Updates") {
             self.addSegmentedRow(
                 key: "automatic-update-checks", caption: "Check for updates in the background",
-                blurb: "ZenTerm looks for a new release; you choose when to install",
+                blurb: nil,
                 options: ["On", "Off"],
                 read: { $0.automaticUpdateChecks ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
@@ -64,7 +64,7 @@ final class SettingsGeneralSection: SettingsFormSection {
             key: Self.claudeSetupKey, caption: "Teach Claude Code to use zen",
             description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)", control: control,
             focusStop: control,
-            controlNote: nil, width: nil, refresh: {})
+            width: nil, refresh: {})
         addClaudeUpdateRow()
         ClaudeCodeSetup.refresh { [weak self] in self?.showClaudeSetup($0) }
     }
@@ -76,7 +76,7 @@ final class SettingsGeneralSection: SettingsFormSection {
         claudeUpdateButton = update
         addCustomRow(
             key: Self.claudeUpdateKey, caption: "Update zen for Claude Code", description: "", control: update,
-            focusStop: update, controlNote: nil, width: nil,
+            focusStop: update, width: nil,
             refresh: { [weak self] in self?.showClaudeUpdate() })
         showClaudeUpdate()
     }

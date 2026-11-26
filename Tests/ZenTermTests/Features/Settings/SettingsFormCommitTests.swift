@@ -60,7 +60,7 @@ final class SettingsFormCommitTests: WindowTestCase {
         override func populate() {
             addGroup("Text") {
                 addNumericRow(
-                    key: "font-size", caption: "Font Size", blurb: "", range: 6...72,
+                    key: "font-size", caption: "Font Size", blurb: nil, range: 6...72,
                     read: { $0.fontSize })
             }
         }
@@ -120,7 +120,7 @@ final class SettingsFormCommitTests: WindowTestCase {
         override func populate() {
             addGroup("Cursor") {
                 addNumericRow(
-                    key: "cursor-thickness", caption: "Thickness", blurb: "", range: 1...12,
+                    key: "cursor-thickness", caption: "Thickness", blurb: nil, range: 1...12,
                     read: { CGFloat($0.cursorThickness) }, integer: true)
             }
         }
@@ -140,9 +140,9 @@ final class SettingsFormCommitTests: WindowTestCase {
         override func populate() {
             addGroup("Nums") {
                 addNumericRow(
-                    key: "font-size", caption: "Font Size", blurb: "", range: 6...72, read: { $0.fontSize })
+                    key: "font-size", caption: "Font Size", blurb: nil, range: 6...72, read: { $0.fontSize })
                 addNumericRow(
-                    key: "cursor-thickness", caption: "Thickness", blurb: "", range: 1...12,
+                    key: "cursor-thickness", caption: "Thickness", blurb: nil, range: 1...12,
                     read: { CGFloat($0.cursorThickness) }, integer: true)
             }
         }

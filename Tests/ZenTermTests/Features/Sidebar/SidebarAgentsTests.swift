@@ -909,8 +909,8 @@ final class SidebarAgentsTests: WindowTestCase {
 
         c.window.sendEvent(arrow(125, in: c))
         XCTAssertTrue(c.window.firstResponder === agentRows[0], "↓ leaves Workspaces for Agents")
-        XCTAssertEqual(agentRows[0].fillForTesting, NSColor.clear.cgColor)
-        XCTAssertEqual(agentRows[0].ringForTesting, Theme.current.chrome.focusRing.cgColor)
+        XCTAssertEqual(agentRows[0].fillForTesting, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(agentRows[0].layer?.borderWidth ?? 0, 0, "a row never wears the focus ring")
         c.window.sendEvent(arrow(125, in: c))
         XCTAssertTrue(c.window.firstResponder === agentRows[1])
         c.window.sendEvent(arrow(125, in: c))

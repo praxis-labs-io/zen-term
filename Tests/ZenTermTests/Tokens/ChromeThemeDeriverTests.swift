@@ -242,7 +242,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
 
         let active = chrome.fill(.active)
         XCTAssertEqual(active.withAlphaComponent(1), chrome.foreground.nsColor, "current is neutral, never accent")
-        XCTAssertGreaterThan(active.alphaComponent, chrome.fill(.hover).alphaComponent)
+        XCTAssertLessThan(active.alphaComponent, chrome.fill(.hover).alphaComponent)
     }
 
     func test_everyBundledTheme_keepsTheFillLadderOrdered() throws {

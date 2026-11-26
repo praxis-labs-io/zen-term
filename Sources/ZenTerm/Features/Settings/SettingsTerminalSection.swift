@@ -12,55 +12,55 @@ final class SettingsTerminalSection: SettingsFormSection {
     override func populate() {
         addGroup("Font") {
             self.addTextRow(
-                key: "font-family", caption: "Font family", blurb: "Terminal font",
+                key: "font-family", caption: "Font family", blurb: nil,
                 placeholder: GeneralConfig.builtIn.fontName, read: { $0.fontName }, width: 200)
             self.addNumericRow(
-                key: "font-size", caption: "Font size", blurb: "Point size",
+                key: "font-size", caption: "Font size", blurb: nil,
                 range: SessionFontSize.range, read: { $0.fontSize }, width: 64)
             self.addSegmentedRow(
-                key: "font-thicken", caption: "Thicken", blurb: "Heavier terminal text",
+                key: "font-thicken", caption: "Thicken", blurb: nil,
                 options: ["On", "Off"], read: { $0.fontThicken ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
         }
         addGroup("Background") {
             self.addNumericRow(
                 key: "background-alpha", caption: "Background alpha",
-                blurb: "Terminal background translucency", range: 0...1,
+                blurb: nil, range: 0...1,
                 read: { CGFloat($0.backgroundAlpha) }, width: 64)
         }
         addGroup("Cursor") {
             self.addSegmentedRow(
-                key: "cursor-style", caption: "Style", blurb: "Cursor shape",
+                key: "cursor-style", caption: "Style", blurb: nil,
                 options: ["Block", "Bar", "Underline"], read: { Self.cursorStyleIndex($0) },
                 token: { LayoutFormat.cursorStyleToken(Self.cursorStyles[$0]) }, notifiesOnReselect: false)
             self.addSegmentedRow(
-                key: "cursor-style-blink", caption: "Blink", blurb: "Blink the cursor",
+                key: "cursor-style-blink", caption: "Blink", blurb: nil,
                 options: ["On", "Off"], read: { $0.cursorBlink ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addNumericRow(
-                key: "cursor-thickness", caption: "Thickness", blurb: "Bar/underline thickness in px",
+                key: "cursor-thickness", caption: "Thickness", blurb: "Pixels",
                 range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64, integer: true)
             self.addShaderRow()
         }
         addGroup("Input") {
             self.addSegmentedRow(
-                key: "macos-option-as-alt", caption: "Option as Alt", blurb: "Send Option as Meta",
+                key: "macos-option-as-alt", caption: "Option as Alt", blurb: nil,
                 options: ["On", "Off"], read: { $0.optionAsAlt ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addNumericRow(
-                key: "scroll-multiplier", caption: "Scroll speed", blurb: "Scroll wheel multiplier",
+                key: "scroll-multiplier", caption: "Scroll speed", blurb: nil,
                 range: 0.1...10, read: { CGFloat($0.scrollMultiplier) }, width: 64)
         }
         addGroup("Shell") {
             self.addTextRow(
-                key: "shell", caption: "Shell", blurb: "Login shell (new tabs)", placeholder: "login shell",
+                key: "shell", caption: "Shell", blurb: "Applies to new tabs", placeholder: "login shell",
                 read: { $0.shell ?? "" }, width: 200)
             self.addTextRow(
-                key: "shell-args", caption: "Shell args", blurb: "Passed to the shell (new tabs)",
+                key: "shell-args", caption: "Shell args", blurb: "Applies to new tabs",
                 placeholder: "optional", read: { LayoutFormat.joinArgs($0.shellArgs) }, width: 200)
             self.addSegmentedRow(
                 key: "tab-inherit-cwd", caption: "Start directory",
-                blurb: "Where a new tab or window opens",
+                blurb: "Applies to new tabs and windows",
                 options: ["Home", "Current pane"], read: { $0.tabInheritCWD ? 1 : 0 },
                 token: { LayoutFormat.boolToken($0 == 1) }, notifiesOnReselect: false)
         }
@@ -80,8 +80,8 @@ final class SettingsTerminalSection: SettingsFormSection {
         shaderDropdown = dropdown
 
         addCustomRow(
-            key: "cursor-shader", caption: "Cursor shader", description: "Cursor animations. GPU intensive.",
-            control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
+            key: "cursor-shader", caption: "Cursor shader", description: "GPU intensive",
+            control: dropdown, focusStop: dropdown, width: 220,
             refresh: { [weak self] in self?.refreshShaderRow() })
     }
 

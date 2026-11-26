@@ -17,7 +17,8 @@ class SettingsFormSection: SettingsSection {
     private let applyDelay: TimeInterval = 0.18
 
     private var rowsStack: NSStackView?
-    private var lastArranged: NSView?
+    private var groupStack: NSStackView?
+    private var lastGroup: NSView?
 
     func makeDetailView() -> NSView {
         rows = []
@@ -26,7 +27,7 @@ class SettingsFormSection: SettingsSection {
         scalarKeys = []
         refreshers = []
         integerKeys = []
-        lastArranged = nil
+        lastGroup = nil
 
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -34,6 +35,7 @@ class SettingsFormSection: SettingsSection {
         stack.spacing = ChromeMetrics.Spacing.s10
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
+        groupStack = nil
 
         populate()
 
@@ -49,7 +51,7 @@ class SettingsFormSection: SettingsSection {
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         stack.addArrangedSubview(resetRow)
         resetRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        if let lastArranged { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastArranged) }
+        if let lastGroup { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastGroup) }
         stops.append(resetAllButton)
 
         let messageRow = SettingsDetail.trailingRow(resetAllMessage)
@@ -71,14 +73,25 @@ class SettingsFormSection: SettingsSection {
     func addGroup(_ title: String, _ build: () -> Void) {
         guard let stack = rowsStack else { return }
         let caption = SectionCaption(title)
-        stack.addArrangedSubview(caption)
-        if let lastArranged { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastArranged) }
+        let group = NSStackView(views: [caption])
+        group.orientation = .vertical
+        group.alignment = .leading
+        group.spacing = ChromeMetrics.Spacing.s10
+        stack.addArrangedSubview(group)
+        group.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        if let lastGroup { stack.setCustomSpacing(ChromeMetrics.Spacing.s32, after: lastGroup) }
+        groupStack = group
+        let firstRowIndex = rows.count
         build()
-        lastArranged = stack.arrangedSubviews.last
+        groupStack = nil
+        if rows.indices.contains(firstRowIndex) {
+            group.setCustomSpacing(group.spacing - rows[firstRowIndex].spaceAboveCaption, after: caption)
+        }
+        lastGroup = group
     }
 
     func addNumericRow(
-        key: String, caption: String, blurb: String, range: ClosedRange<CGFloat>,
+        key: String, caption: String, blurb: String?, range: ClosedRange<CGFloat>,
         read: @escaping (GeneralConfig) -> CGFloat, width: CGFloat = 64, integer: Bool = false
     ) {
         scalarKeys.append(key)
@@ -111,8 +124,8 @@ class SettingsFormSection: SettingsSection {
         }
         box.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
-            key: key, caption: caption, description: blurb, control: box, focusStop: box.field,
-            controlNote: rangeText(range), width: width,
+            key: key, caption: caption, description: blurb.map { "\($0), \(rangeText(range))" } ?? rangeText(range),
+            control: box, focusStop: box.field, width: width,
             refresh: { [weak self, weak box] in
                 guard let self, let box, box.field.currentEditor() == nil else { return }
                 box.setText(self.fieldText(for: read))
@@ -132,7 +145,7 @@ class SettingsFormSection: SettingsSection {
         }
         addRow(
             key: key, caption: caption, description: blurb, control: segmented, focusStop: segmented,
-            controlNote: nil, width: nil,
+            width: nil,
             refresh: { [weak segmented] in segmented?.setSelection(read(GeneralConfig.current)) })
     }
 
@@ -154,7 +167,7 @@ class SettingsFormSection: SettingsSection {
         box.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
             key: key, caption: caption, description: blurb, control: box, focusStop: box.field,
-            controlNote: nil, width: width,
+            width: width,
             refresh: { [weak box] in
                 guard let box, box.field.currentEditor() == nil else { return }
                 box.setText(read(GeneralConfig.current))
@@ -168,21 +181,20 @@ class SettingsFormSection: SettingsSection {
 
     func addCustomRow(
         key: String, caption: String, description: String?, control: NSView, focusStop: NSView,
-        controlNote: String?, width: CGFloat?, refresh: @escaping () -> Void
+        width: CGFloat?, refresh: @escaping () -> Void
     ) {
         addRow(
             key: key, caption: caption, description: description, control: control, focusStop: focusStop,
-            controlNote: controlNote, width: width, refresh: refresh)
+            width: width, refresh: refresh)
     }
 
     private func addRow(
         key: String, caption: String, description: String?, control: NSView, focusStop: NSView,
-        controlNote: String?, width: CGFloat?, refresh: @escaping () -> Void
+        width: CGFloat?, refresh: @escaping () -> Void
     ) {
-        guard let stack = rowsStack else { return }
+        guard let stack = groupStack ?? rowsStack else { return }
         let row = LayoutRow(
-            caption: caption, description: description, control: control, controlNote: controlNote,
-            controlWidth: width)
+            caption: caption, description: description, control: control, controlWidth: width)
         wireControlKeyboard(control)
         rows.append(row)
         stops.append(focusStop)

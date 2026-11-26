@@ -160,9 +160,9 @@ final class PaletteInteractionTests: WindowTestCase {
         let overlay = makeCommandPalette(onRun: { ran = $0 })
         let window = mount(overlay)
         window.layoutIfNeeded()
-        let hover = Theme.current.chrome.fill(.hover).cgColor
+        let cursor = Theme.current.chrome.fill(.active).cgColor
         let shown = rows(in: overlay)
-        XCTAssertEqual(shown.map { $0.layer?.backgroundColor == hover }, [true, false, false])
+        XCTAssertEqual(shown.map { $0.layer?.backgroundColor == cursor }, [true, false, false])
 
         let enter = try XCTUnwrap(
             NSEvent.enterExitEvent(
@@ -170,12 +170,12 @@ final class PaletteInteractionTests: WindowTestCase {
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
         shown[2].mouseEntered(with: enter)
         XCTAssertEqual(
-            shown.map { $0.layer?.backgroundColor == hover }, [false, false, true],
+            shown.map { $0.layer?.backgroundColor == cursor }, [false, false, true],
             "the pointer's row is not the one lit row")
 
         send(Self.moveUp, to: overlay)
         XCTAssertEqual(
-            shown.map { $0.layer?.backgroundColor == hover }, [false, true, false],
+            shown.map { $0.layer?.backgroundColor == cursor }, [false, true, false],
             "the arrow does not continue from the pointer's row")
         send(Self.insertNewline, to: overlay)
         XCTAssertEqual(ran, .closePane)
