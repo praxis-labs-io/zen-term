@@ -66,8 +66,7 @@ Accent is rare. It goes in these places only:
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
 - The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
-- Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the
-  scroll flash.
+- Role-toned `tint` surfaces: icon badges, focused text selection, the scroll flash.
 
 A control's focus or edit ring takes `chrome.focusRing`, a neutral. Never accent text, an
 accent check mark, an accent selection or state fill, or `accent.withAlphaComponent`.
@@ -217,7 +216,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `slideFill` | A row list's current, focus or cursor fill sliding straight to the next row (`RowFillSlide`) |
 | `slideSwap` | Switching workspaces |
 | `handOff` | An SSH host's Connect screen giving way to its terminal |
-| `slideFade` | The collapsed sidebar's hover reveal, the find bar, and toasts arriving from the window's trailing edge |
+| `slideFade` | The collapsed sidebar's hover reveal, the find field, and toasts arriving from the window's trailing edge |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
 | `morph` | A folded toast growing out of its plate or sinking back into it |
@@ -239,6 +238,8 @@ A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowVi
 The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette or workspace picker row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; the workspace picker's are all magenta, a host's included. A row's detail (the picker's branch or a host's status word, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
 Every terminal pane, drawer and float wears a `PaneHeader` (unless `pane-headers` is off): its process chip at `.small`, its name in `.medium` weight and its path, both in `ink(.muted)` wherever focus sits, a quiet line of context; then its controls as `IconButton`s at `Icon.xs`, resting in `ink(.muted)`. An unfocused header shows its controls only while the pointer is over it. A narrow header truncates the path from its front first, so the folder survives, then the name, then drops every control but close.
+
+Find opens a `FindField` over the header's top-right corner, `Spacing.s4` from the pane's edges, on the overlay tier (`CardChrome`). It covers the controls and may cover the title, never the process chip; with headers off it stops at the pane's padding. Its steppers are `IconButton`s, disabled while there is no match.
 
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 

@@ -39,49 +39,49 @@ final class ModeChromeMotionTests: WindowTestCase {
         return try XCTUnwrap((anim.fromValue as? NSValue)?.sizeValue)
     }
 
-    func test_theFindBar_slidesUpFromTheBottomEdgeAndBackDown() throws {
-        let bar = try XCTUnwrap(chrome.setFindBarShown(true))
-        XCTAssertLessThan(try slide(on: bar).height, 0, "the bar rises from below the pane's bottom edge")
-        XCTAssertNotNil(bar.layer?.animation(forKey: "motion.opacity"))
+    func test_theFindField_dropsInFromTheTopEdgeAndBackUp() throws {
+        let field = try XCTUnwrap(chrome.setFindFieldShown(true))
+        XCTAssertGreaterThan(try slide(on: field).height, 0, "the field drops in from above the pane's top edge")
+        XCTAssertNotNil(field.layer?.animation(forKey: "motion.opacity"))
 
-        chrome.setFindBarShown(false)
+        chrome.setFindFieldShown(false)
 
-        XCTAssertNil(chrome.findBarForTesting, "the search is over the moment the bar is dismissed")
-        XCTAssertFalse(bar.isHidden, "the bar leaves by sliding, not by vanishing")
-        XCTAssertNotNil(bar.layer?.animation(forKey: "motion.slide"))
-        waitUntil(bar.isHidden, "the bar to hide once it has slid out")
+        XCTAssertNil(chrome.findFieldForTesting, "the search is over the moment the field is dismissed")
+        XCTAssertFalse(field.isHidden, "the field leaves by sliding, not by vanishing")
+        XCTAssertNotNil(field.layer?.animation(forKey: "motion.slide"))
+        waitUntil(field.isHidden, "the field to hide once it has slid out")
     }
 
-    func test_dismissingTheBarWhileItArrives_slidesItBackOut() throws {
-        let bar = try XCTUnwrap(chrome.setFindBarShown(true))
-        chrome.setFindBarShown(false)
+    func test_dismissingTheFieldWhileItArrives_slidesItBackOut() throws {
+        let field = try XCTUnwrap(chrome.setFindFieldShown(true))
+        chrome.setFindFieldShown(false)
         let soon = Date().addingTimeInterval(Motion.pageSlideDuration / 4)
         while Date() < soon { RunLoop.main.run(mode: .default, before: soon) }
 
-        XCTAssertFalse(bar.isHidden, "the replaced arrival's completion must not cut the leaving slide short")
-        waitUntil(bar.isHidden, "the bar to hide once it has slid out")
+        XCTAssertFalse(field.isHidden, "the replaced arrival's completion must not cut the leaving slide short")
+        waitUntil(field.isHidden, "the field to hide once it has slid out")
     }
 
-    func test_aLeavingBar_takesNoClicks() throws {
-        let bar = try XCTUnwrap(chrome.setFindBarShown(true))
+    func test_aLeavingField_takesNoClicks() throws {
+        let field = try XCTUnwrap(chrome.setFindFieldShown(true))
         window.contentView?.layoutSubtreeIfNeeded()
-        let center = NSPoint(x: bar.frame.midX, y: bar.frame.midY)
-        XCTAssertNotNil(bar.hitTest(center), "premise: a shown bar takes clicks")
+        let center = NSPoint(x: field.frame.midX, y: field.frame.midY)
+        XCTAssertNotNil(field.hitTest(center), "premise: a shown field takes clicks")
 
-        chrome.setFindBarShown(false)
+        chrome.setFindFieldShown(false)
 
-        XCTAssertFalse(bar.isHidden, "premise: the bar is still sliding out")
-        XCTAssertNil(bar.hitTest(center), "a click on the leaving bar would focus a field nothing listens to")
+        XCTAssertFalse(field.isHidden, "premise: the field is still sliding out")
+        XCTAssertNil(field.hitTest(center), "a click on the leaving field would focus a field nothing listens to")
     }
 
-    func test_reopeningTheBarWhileItLeaves_keepsItUp() throws {
-        let bar = try XCTUnwrap(chrome.setFindBarShown(true))
-        chrome.setFindBarShown(false)
+    func test_reopeningTheFieldWhileItLeaves_keepsItUp() throws {
+        let field = try XCTUnwrap(chrome.setFindFieldShown(true))
+        chrome.setFindFieldShown(false)
 
-        chrome.setFindBarShown(true)
+        chrome.setFindFieldShown(true)
         let deadline = Date().addingTimeInterval(Motion.pageSlideDuration * 2)
         while Date() < deadline { RunLoop.main.run(mode: .default, before: deadline) }
 
-        XCTAssertFalse(bar.isHidden, "the leaving slide's completion must not hide a bar that came back")
+        XCTAssertFalse(field.isHidden, "the leaving slide's completion must not hide a field that came back")
     }
 }

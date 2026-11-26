@@ -93,7 +93,7 @@ final class ScrollAndFindChordTests: WindowTestCase {
         controller.handle(.searchSelection)
 
         XCTAssertFalse(controller.search.isActive)
-        XCTAssertNil(panel.findBarForTesting)
+        XCTAssertNil(panel.findFieldForTesting)
     }
 
     func test_findSelectionReadsScrollModesOwnSelectionToo() throws {

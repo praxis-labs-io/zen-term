@@ -133,25 +133,25 @@ final class FloatModeInteractionTests: WindowTestCase {
         XCTAssertNil(overlay.scrollCursorForTesting.state)
     }
 
-    func test_theFindChordOverAFloat_raisesTheBarInTheCard() throws {
+    func test_theFindChordOverAFloat_raisesTheFieldInTheCard() throws {
         let c = makeWindow()
         let surface = try openScratch(c)
         let overlay = try card(c)
-        XCTAssertNil(overlay.findBarForTesting, "premise: a resting card shows no bar")
+        XCTAssertNil(overlay.findFieldForTesting, "premise: a resting card shows no field")
         let labelBefore = overlay.shownHeaderForTesting?.nameForTesting
 
         c.handle(.toggleSearch)
 
-        let bar = try XCTUnwrap(overlay.findBarForTesting, "the gate swallowed the chord")
+        let field = try XCTUnwrap(overlay.findFieldForTesting, "the gate swallowed the chord")
         XCTAssertEqual(
-            overlay.shownHeaderForTesting?.nameForTesting, labelBefore, "the bar already says what is live")
-        let stack = try XCTUnwrap(bar.superview)
-        let barIndex = try XCTUnwrap(stack.subviews.firstIndex(of: bar))
+            overlay.shownHeaderForTesting?.nameForTesting, labelBefore, "the field already says what is live")
+        let stack = try XCTUnwrap(field.superview)
+        let fieldIndex = try XCTUnwrap(stack.subviews.firstIndex(of: field))
         let gridIndex = try XCTUnwrap(stack.subviews.firstIndex(of: surface.view))
-        XCTAssertGreaterThan(barIndex, gridIndex)
+        XCTAssertGreaterThan(fieldIndex, gridIndex)
     }
 
-    func test_theBarSearchesTheCardsSurface_notThePaneBehind() throws {
+    func test_theFieldSearchesTheCardsSurface_notThePaneBehind() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
         let float = try openScratch(c)

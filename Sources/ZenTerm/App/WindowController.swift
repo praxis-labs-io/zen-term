@@ -689,7 +689,7 @@ final class WindowController: NSObject {
 
     private func toggleScrollMode() {
         if search.isEditing {
-            search.commit()
+            search.enterScrollMode()
             return
         }
         if scrollMode.isActive {
@@ -745,7 +745,6 @@ final class WindowController: NSObject {
         }
     }
 
-    // Search ends first because taking the bar down reflows the grid scroll mode measures against.
     private func endModes() {
         search.end()
         scrollMode.end()
@@ -775,8 +774,9 @@ final class WindowController: NSObject {
                 if self.search.handle(event) { return true }
                 return self.scrollMode.handle(event)
             } : nil
-        let floatHoldsMode = active && floats.shownSurface != nil
-        let tabHoldsMode = active && !floatHoldsMode
+        let holdsKeys = scrollMode.isActive || search.isEditing
+        let floatHoldsMode = holdsKeys && floats.shownSurface != nil
+        let tabHoldsMode = holdsKeys && !floatHoldsMode
         floats.setFocusedSurfaceRendersFocused(!floatHoldsMode)
         if let previous = modeRenderTarget, previous !== activeController {
             previous.setFocusedSurfaceRendersFocused(true)

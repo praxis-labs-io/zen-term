@@ -35,17 +35,15 @@ final class SearchController {
 
     private weak var surface: (AnyObject & TerminalSurface)?
     private weak var panel: TerminalModeHost?
-    private weak var bar: FindBarView?
+    private weak var bar: FindField?
 
     private var needle = ""
     private var total: Int?
     private var selected: Int?
     private var debounce: DispatchWorkItem?
 
-    /// The needle itself rather than a work item, so a commit cannot re-send one libghostty already has.
+    /// The needle itself rather than a work item, so a step cannot re-send one libghostty already has.
     private var unsent: String?
-
-    private var hasPreviewed = false
 
     /// `selected` lags the backend, so a Return before its report would otherwise step twice.
     private var didRequestSelection = false
@@ -69,7 +67,6 @@ final class SearchController {
     func begin(surface: AnyObject & TerminalSurface, panel: TerminalModeHost, seed rawSeed: String = "") {
         let seed = Self.cleaned(rawSeed)
         guard !isActive else {
-            isEditing = true
             bar?.focusField()
             if !seed.isEmpty {
                 bar?.needle = seed
@@ -82,15 +79,14 @@ final class SearchController {
         isActive = true
         isEditing = true
 
-        let bar = panel.setFindBarShown(true)
+        let bar = panel.setFindFieldShown(true)
         self.bar = bar
         bar?.onChange = { [weak self] in self?.needleDidChange($0) }
-        bar?.onCommit = { [weak self] in self?.commit() }
+        bar?.onStep = { [weak self] in self?.step($0) }
         bar?.onCancel = { [weak self] in self?.end() }
+        bar?.onFocusChange = { [weak self] in self?.editingDidChange($0) }
         bar?.needle = seed
         showCount()
-
-        settleLayout()
 
         bar?.focusField()
         Log.info("search opened", category: .panes)
@@ -100,8 +96,21 @@ final class SearchController {
         if !seed.isEmpty { surface.search(seed) }
     }
 
-    /// Steps unless a preview already picked a match: libghostty matches eagerly but selects nothing.
-    func commit() {
+    private func editingDidChange(_ editing: Bool) {
+        guard isActive, editing != isEditing else { return }
+        isEditing = editing
+        onActiveChanged?(isActive)
+    }
+
+    /// libghostty selects nothing until asked, so the first step lands on the newest match whichever way it points.
+    func step(_ step: TerminalSearchStep) {
+        guard isActive, !needle.isEmpty else { return }
+        flushPendingNeedle()
+        navigate(didRequestSelection ? step : .next)
+    }
+
+    /// Steps unless a match is already picked: libghostty matches eagerly but selects nothing.
+    func enterScrollMode() {
         guard isActive, isEditing else { return }
         isEditing = false
         surface?.focus()
@@ -186,7 +195,6 @@ final class SearchController {
         selected = nil
         pendingStep = nil
         rowsAtStep = nil
-        hasPreviewed = false
         didRequestSelection = false
         unsent = nil
         restoreViewport()
@@ -194,8 +202,7 @@ final class SearchController {
             didStartScrollMode = false
             scrollMode.end()
         }
-        panel?.setFindBarShown(false)
-        settleLayout()
+        panel?.setFindFieldShown(false)
         bar = nil
         panel = nil
         surface = nil
@@ -207,14 +214,8 @@ final class SearchController {
 
     func isDriving(_ s: AnyObject) -> Bool { surface === (s as AnyObject) }
 
-    private func settleLayout() {
-        panel?.layoutSubtreeIfNeeded()
-        scrollMode.refreshGeometry()
-    }
-
     private func needleDidChange(_ text: String) {
         needle = text
-        hasPreviewed = false
         didRequestSelection = false
         debounce?.cancel()
         debounce = nil
@@ -254,27 +255,16 @@ final class SearchController {
         self.total = total
         showCount()
         guard (total ?? 0) > 0 else {
-            hasPreviewed = false
             restoreViewport()
             return
         }
-        previewIfNothingVisible()
+        selectNewestIfUnselected()
     }
 
-    /// Latched once per needle: `SEARCH_TOTAL` fires repeatedly as the engine works back through the buffer.
-    private func previewIfNothingVisible() {
-        guard isEditing, !hasPreviewed, (total ?? 0) > 0, !needle.isEmpty else { return }
-        hasPreviewed = true
-        guard !viewportHoldsNeedle() else { return }
+    /// Once per needle: `SEARCH_TOTAL` fires repeatedly as the engine works back through the buffer.
+    private func selectNewestIfUnselected() {
+        guard !didRequestSelection, !needle.isEmpty, unsent == nil else { return }
         navigate(.next)
-    }
-
-    private func viewportHoldsNeedle() -> Bool {
-        guard let surface else { return false }
-        let rows = 0..<(surface.cellMetrics?.rows ?? 0)
-        return rows.contains {
-            !Self.occurrenceColumns(of: needle, in: surface.text(viewportRow: $0) ?? "").isEmpty
-        }
     }
 
     func report(selected: Int?, from s: AnyObject) {
@@ -287,7 +277,7 @@ final class SearchController {
     }
 
     private func showCount() {
-        bar?.showCount(total: total, selected: isEditing ? nil : selected)
+        bar?.showCount(total: total, selected: selected)
     }
 
     private var pendingStep: TerminalSearchStep?
@@ -386,7 +376,7 @@ final class SearchController {
     }
 
     func handle(_ event: NSEvent) -> Bool {
-        guard isActive, !isEditing, let key = Self.key(for: event) else { return false }
+        guard isActive, !isEditing, scrollMode.isActive, let key = Self.key(for: event) else { return false }
         switch key {
         case .step(let step): navigate(step)
         case .end:
