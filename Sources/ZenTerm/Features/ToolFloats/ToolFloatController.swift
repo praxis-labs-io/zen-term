@@ -59,6 +59,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     // A float pane is named like any pane, from the tab that owns it.
     var paneHeaderContent: ((SurfaceID, TerminalSurface) -> PaneHeader.Content?)?
+    // A tool's program is read like a pane's, so an agent under a runtime shows as the agent.
+    var programIcon: ((SurfaceID, TerminalSurface) -> ProcessIcon?)?
     var onHeaderClose: (() -> Void)?
 
     init(
@@ -316,15 +318,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         onStateChanged?()
     }
 
-    // A tool is named by its float and has no folder worth showing; Scratch is a shell, so its folder shows.
-    // A program the catalog has no icon for reads as the shell, so the float's own icon stands in for it.
+    // A tool is named by its float, and wears its own icon while its program has none (reads as the shell).
     private func headerContent(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Content {
         let place = surface.currentDirectory
         guard let spec else {
             return pane.flatMap { paneHeaderContent?($0, surface) }
                 ?? PaneIdentity.header(named: nil, running: PaneIdentity.running(in: surface), directory: place)
         }
-        let program = PaneIdentity.running(in: surface).process
+        let program =
+            idBySurface[ObjectIdentifier(surface)].flatMap { programIcon?($0, surface) }
+            ?? PaneIdentity.running(in: surface).process
         let running = PaneIdentity.Running(
             process: program != .shell ? program : ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
         return PaneIdentity.header(named: nil, running: running, directory: spec.command.isEmpty ? place : nil)

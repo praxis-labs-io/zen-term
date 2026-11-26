@@ -243,9 +243,11 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         XCTAssertNil(header?.pathForTesting, "and its folder is not worth showing")
     }
 
-    private func openProbeFloat() throws -> (WindowController, ToolFloat, PaneHeader?, RecordingSurface) {
+    private func openProbeFloat(command: String = "true") throws
+        -> (WindowController, ToolFloat, PaneHeader?, RecordingSurface)
+    {
         let probe = ToolFloat(
-            id: "probe", order: 1, title: "Probe", icon: "hammer", command: "true", dir: nil,
+            id: "probe", order: 1, title: "Probe", icon: "hammer", command: command, dir: nil,
             widthFraction: 0.6, heightFraction: 0.6, requiresGitRepo: false, persist: .window,
             toggle: Chord(command: true, control: true, key: "p"))
         var config = GeneralConfig.builtIn
@@ -276,5 +278,14 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         c.pollTitlesForTesting()
 
         XCTAssertEqual(header?.processForTesting, tinted)
+    }
+
+    func test_aToolFloatsHeader_showsAnAgentUnderARuntime_asTheAgent() throws {
+        let (c, _, header, surface) = try openProbeFloat(command: "codex")
+
+        surface.foregroundProcessGroupID = try jobs.start(named: "node")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(header?.processForTesting, ProcessIcon.forAgent("codex"), "not Node.js, the way a pane reads it")
     }
 }
