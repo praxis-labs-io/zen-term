@@ -84,10 +84,10 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         let dock = try XCTUnwrap(
             descendants(of: controller.window.contentView!).compactMap { $0 as? ToggleDock }.first,
             "expected the footer toolbar mounted in the window")
-        XCTAssertTrue(dock.visibleLayoutForTesting.contains("Focus mode"))
+        XCTAssertTrue(dock.visibleLayoutForTesting.contains("Toggle right drawer"))
 
         var config = GeneralConfig.builtIn
-        config.hiddenToolbarButtons = [.focusMode]
+        config.hiddenToolbarButtons = [.rightDrawer]
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil,
@@ -96,7 +96,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         OperationQueue.main.addOperation { drained.fulfill() }
         wait(for: [drained], timeout: 5)
 
-        XCTAssertFalse(dock.visibleLayoutForTesting.contains("Focus mode"))
+        XCTAssertFalse(dock.visibleLayoutForTesting.contains("Toggle right drawer"))
     }
 
     func test_configDidChange_appliesWindowChromeThroughTheFanOut() throws {

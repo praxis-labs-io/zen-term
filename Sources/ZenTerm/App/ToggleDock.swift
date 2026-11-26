@@ -5,7 +5,6 @@ final class ToggleDock: NSView, ThemeReapplying {
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let scratchBtn: IconButton
-    private let zoomBtn: IconButton
     private var fixedButtons: [ToolbarButton: IconButton] = [:]
     private var hiddenButtons: Set<ToolbarButton>
     /// Held across renders, since `surface(_:busy:onScreen:)` only re-decides an off-screen button.
@@ -20,9 +19,8 @@ final class ToggleDock: NSView, ThemeReapplying {
 
     init(
         onNewTab: @escaping () -> Void,
-        onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onBottom: @escaping () -> Void,
-        onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
+        onRight: @escaping () -> Void,
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void,
         hiddenButtons: Set<ToolbarButton> = []
     ) {
@@ -37,20 +35,15 @@ final class ToggleDock: NSView, ThemeReapplying {
                 shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
         }
         let newTab = button("plus", "New tab", .newTab, onNewTab)
-        let splitH = button("rectangle.split.1x2", "Split horizontally", .splitHorizontal, onSplitH)
-        let splitV = button("rectangle.split.2x1", "Split vertically", .splitVertical, onSplitV)
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
         let scratch = ToolFloat.scratch
         scratchBtn = button(
             scratch.icon, scratch.title, .toggleToolFloat(scratch.id), { onToolFloat(scratch) })
-        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Focus mode", .toggleZoom, onZoom)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         fixedButtons = [
-            .newTab: newTab, .splitHorizontal: splitH, .splitVertical: splitV,
-            .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
-            .focusMode: zoomBtn,
+            .newTab: newTab, .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
         ]
         dividers = ToolbarButton.groups.map { _ in Self.divider() }
 
@@ -176,11 +169,9 @@ final class ToggleDock: NSView, ThemeReapplying {
 
         let floatCoversTab = floatID != nil
         if floatCoversTab {
-            zoomBtn.isActive = false
             bottomBtn.isActive = false
             rightBtn.isActive = false
         } else {
-            zoomBtn.isActive = overlay.zoomed != nil
             switch overlay.zoomed {
             case nil:
                 bottomBtn.isActive = overlay.isBottomOpen

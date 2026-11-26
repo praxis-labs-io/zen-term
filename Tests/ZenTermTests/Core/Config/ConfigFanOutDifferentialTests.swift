@@ -290,7 +290,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
     func test_hideToolbarButtons() throws {
         try assertGateSkipsNothing(
             Scenario(name: "hide-toolbar-buttons") {
-                $0.hiddenToolbarButtons = [.splitHorizontal, .focusMode]
+                $0.hiddenToolbarButtons = [.scratch, .newTab]
             })
     }
 

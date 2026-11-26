@@ -331,20 +331,19 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_hideToolbarButtons_parsesEverySlug() {
         let config = parse(
-            "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,scratch,"
-                + "focus-mode,command-palette,settings\n")
+            "hide-toolbar-buttons = new-tab,bottom-drawer,right-drawer,scratch,command-palette,settings\n")
         XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
     }
 
     func test_hideToolbarButtons_toleratesWhitespaceAndStrayCommas() {
-        let config = parse("hide-toolbar-buttons = split-h , ,focus-mode,\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .focusMode])
+        let config = parse("hide-toolbar-buttons = scratch , ,new-tab,\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.scratch, .newTab])
         XCTAssertTrue(config.configDiagnostics.isEmpty)
     }
 
     func test_hideToolbarButtons_unknownSlug_diagnosesAndKeepsKnownOnes() {
-        let config = parse("hide-toolbar-buttons = split-h,zoom,focus-mode\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .focusMode])
+        let config = parse("hide-toolbar-buttons = scratch,zoom,new-tab\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.scratch, .newTab])
         XCTAssertEqual(
             config.configDiagnostics,
             [
@@ -479,14 +478,14 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_retiredToolbarSlug_isDroppedWithoutADiagnostic() {
-        let config = parse("hide-toolbar-buttons = split-h,diff-viewer\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
+        let config = parse("hide-toolbar-buttons = scratch,diff-viewer,split-h,split-v,focus-mode\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.scratch])
         XCTAssertEqual(config.configDiagnostics, [])
     }
 
     func test_sidebarFooterSlugs_parseAsButtons() {
-        let config = parse("hide-toolbar-buttons = split-h,command-palette,settings\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette, .settings])
+        let config = parse("hide-toolbar-buttons = scratch,command-palette,settings\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.scratch, .commandPalette, .settings])
         XCTAssertEqual(config.configDiagnostics, [])
     }
 

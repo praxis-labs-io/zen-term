@@ -65,7 +65,7 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
     }
 
     func test_unknownToolbarButtonSlug_showsOnTheAppearanceRow() {
-        loadConfig("hide-toolbar-buttons = split-h,zoom\n")
+        loadConfig("hide-toolbar-buttons = scratch,zoom\n")
         let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
         let messages = rowMessages(mount(SettingsAppearanceSection()))
         XCTAssertEqual(
