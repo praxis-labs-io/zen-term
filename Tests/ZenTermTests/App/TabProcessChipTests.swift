@@ -93,15 +93,18 @@ final class TabProcessChipTests: WindowTestCase {
         XCTAssertEqual(try chipProcess(in: c)?.name, "Homebrew")
     }
 
-    func test_aProgramWhoseArgumentsCannotBeRead_isUnknown_neverTheRestingShell() throws {
+    func test_aProgramWhoseArgumentsCannotBeRead_readsAsTheShell() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
         XCTAssertNil(ProcessArguments.arguments(of: 1), "precondition: launchd's arguments are not readable")
 
+        pane.foregroundProcessGroupID = try jobs.start(named: "nvim")
+        c.pollTitlesForTesting()
+        XCTAssertEqual(try chipProcess(in: c)?.name, "Neovim", "precondition")
+
         pane.foregroundProcessGroupID = 1
         c.pollTitlesForTesting()
-
-        XCTAssertEqual(try chipProcess(in: c), .unknown)
+        XCTAssertEqual(try chipProcess(in: c), .shell)
     }
 
     func test_aTabsChip_followsTheProgramInItsFocusedPane() throws {
@@ -115,7 +118,7 @@ final class TabProcessChipTests: WindowTestCase {
 
         pane.foregroundProcessGroupID = try jobs.start(named: "fooctl")
         c.pollTitlesForTesting()
-        XCTAssertEqual(try chipProcess(in: c), .unknown, "an unknown program gets the generic chip")
+        XCTAssertEqual(try chipProcess(in: c), .shell, "an unknown program gets the shell chip")
 
         pane.foregroundProcessGroupID = nil
         c.pollTitlesForTesting()

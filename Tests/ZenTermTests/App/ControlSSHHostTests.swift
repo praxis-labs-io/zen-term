@@ -262,7 +262,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let host = try XCTUnwrap(
             Self.descendants(of: c.window.contentView!).compactMap { $0 as? PanelHostView }
                 .first { pane.view.isDescendant(of: $0) })
-        host.header?.content = PaneHeader.Content(process: .unknown, name: "stale", path: nil)
+        host.header?.content = PaneHeader.Content(process: .shell, name: "stale", path: nil)
 
         c.pollTitlesForTesting()
 

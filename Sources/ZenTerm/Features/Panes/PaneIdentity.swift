@@ -32,7 +32,7 @@ enum PaneIdentity {
         if let name = ProcessArguments.arguments(of: group)?.first.flatMap(ProcessArguments.programName(from:)) {
             return name
         }
-        return ForegroundGroup.isShell(group) ? "shell" : ProcessIcon.unknown.name.lowercased()
+        return ForegroundGroup.isShell(group) ? "shell" : "program"
     }
 
     // An agent leads its title with a word of bare symbols (`✳`, a spinner frame) or a bracketed mark; a command's `./` is its own.

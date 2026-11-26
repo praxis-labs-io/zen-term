@@ -29,16 +29,14 @@ final class ProcessIconTests: XCTestCase {
         XCTAssertEqual(ProcessIcon.forProgram(""), .shell)
     }
 
-    func test_anUnknownProgram_getsTheGenericChip() {
-        XCTAssertEqual(ProcessIcon.forProgram("fooctl"), .unknown)
-        XCTAssertEqual(ProcessIcon.unknown.look, .neutral)
+    func test_anUnknownProgram_readsAsTheShell() {
+        XCTAssertEqual(ProcessIcon.forProgram("fooctl"), .shell)
     }
 
-    func test_aWaitingCommand_isTheTimer_notAnUnknownProgram() {
+    func test_aWaitingCommand_isTheTimer_notTheShell() {
         for waiting in ["sleep", "wait", "watch"] {
             XCTAssertEqual(ProcessIcon.forProgram(waiting).mark, "hourglass", waiting)
         }
-        XCTAssertEqual(ProcessIcon.unknown.mark, "binary")
     }
 
     func test_aScript_isNamedForItself_notItsInterpreter() {
@@ -52,7 +50,7 @@ final class ProcessIconTests: XCTestCase {
         XCTAssertEqual(ProcessIcon.forCommand(["python3", "script.py"]).name, "Python")
         XCTAssertEqual(ProcessIcon.forCommand(["python3", "-c", "print(1)"]).name, "Python")
         XCTAssertEqual(ProcessIcon.forCommand(["-zsh"]), .shell)
-        XCTAssertEqual(ProcessIcon.forCommand([]), .unknown)
+        XCTAssertEqual(ProcessIcon.forCommand([]), .shell)
     }
 
     func test_aVersionedProgram_findsItsUnversionedName() {
