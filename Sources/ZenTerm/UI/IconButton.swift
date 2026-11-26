@@ -22,7 +22,6 @@ final class IconButton: ControlView, ThemeReapplying {
 
     var isActive = false { didSet { update() } }
 
-    /// A disabled button rests in faint ink and ignores clicks, presses and Return.
     var isEnabled = true {
         didSet {
             guard isEnabled != oldValue else { return }
