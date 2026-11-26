@@ -15,6 +15,7 @@ final class ListRowTests: WindowTestCase {
     }
 
     private var hover: CGColor { Theme.current.chrome.fill(.hover).cgColor }
+    private var cursor: CGColor { Theme.current.chrome.fill(.active).cgColor }
 
     private func mount(_ row: ListRow) -> ListRow {
         row.translatesAutoresizingMaskIntoConstraints = true
@@ -56,7 +57,7 @@ final class ListRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0, "a row at rest is clear")
 
         row.isHighlighted = true
-        XCTAssertEqual(row.layer?.backgroundColor, hover, "the keyboard cursor does not fill the row")
+        XCTAssertEqual(row.layer?.backgroundColor, cursor, "the keyboard cursor does not fill the row")
         row.isHighlighted = false
         XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0, "the cursor's fill stays after it moves on")
 
@@ -120,7 +121,7 @@ final class ListRowTests: WindowTestCase {
         let shown = rows(in: window.contentView)
         XCTAssertEqual(shown.map(\.title), ["feature/zen-454", "feature/zen-481"])
         XCTAssertEqual(shown.map(\.isHighlighted), [false, true], "the arrow did not move the highlight")
-        XCTAssertEqual(shown[1].layer?.backgroundColor, hover)
+        XCTAssertEqual(shown[1].layer?.backgroundColor, cursor)
         shown[0].mouseEntered(with: try crossing(.mouseEntered))
         XCTAssertEqual(shown.map(\.isHighlighted), [true, false], "the pointer did not move the highlight")
         XCTAssertEqual(shown[1].layer?.backgroundColor?.alpha, 0, "two rows are lit")
@@ -159,11 +160,11 @@ final class ListRowTests: WindowTestCase {
 
         items[1].mouseEntered(with: try crossing(.mouseEntered))
         XCTAssertEqual(menu.highlightedTitleForTesting, "Duplicate")
-        XCTAssertEqual(items.map { $0.layer?.backgroundColor == hover }, [false, true, false])
+        XCTAssertEqual(items.map { $0.layer?.backgroundColor == cursor }, [false, true, false])
 
         menu.moveHighlight(1)
         XCTAssertEqual(menu.highlightedTitleForTesting, "Close")
-        XCTAssertEqual(items.map { $0.layer?.backgroundColor == hover }, [false, false, true], "two rows are lit")
+        XCTAssertEqual(items.map { $0.layer?.backgroundColor == cursor }, [false, false, true], "two rows are lit")
         menu.moveHighlight(1)
         XCTAssertEqual(menu.highlightedTitleForTesting, "Close", "Down wrapped from the last item")
     }

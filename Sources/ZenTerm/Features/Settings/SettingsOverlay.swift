@@ -124,9 +124,8 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
             navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
             navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -ChromeMetrics.Spacing.s8),
 
-            reportButton.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             reportButton.leadingAnchor.constraint(
-                greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
+                equalTo: root.leadingAnchor, constant: Self.navTextInset - AppButton.horizontalPadding),
             reportButton.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
             reportButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
@@ -135,9 +134,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
-            footer.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
-            footer.leadingAnchor.constraint(
-                greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Self.navTextInset),
             footer.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
             footer.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -ChromeMetrics.Spacing.s6),
@@ -184,8 +181,9 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private static let footerSpacing: CGFloat = ChromeMetrics.Spacing.s6
     private static let navWidth: CGFloat = 168
     private static let footerTrailingInset: CGFloat = ChromeMetrics.Spacing.s12
+    private static let navTextInset = ChromeMetrics.Spacing.s12 + ChromeMetrics.Spacing.controlInset
     static var versionMaxWidth: CGFloat {
-        navWidth - footerTrailingInset * 2 - brandMarkSize - footerSpacing
+        navWidth - navTextInset - footerTrailingInset - brandMarkSize - footerSpacing
     }
 
     private func selectSection(_ index: Int) {

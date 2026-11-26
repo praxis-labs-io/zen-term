@@ -56,8 +56,8 @@ struct ChromeTheme: Equatable {
         var alpha: CGFloat {
             switch self {
             case .rest: return 0.06
-            case .hover: return 0.10
-            case .active: return 0.15
+            case .hover: return 0.12
+            case .active: return 0.09
             }
         }
     }

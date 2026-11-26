@@ -55,22 +55,6 @@ final class SettingsNavFooterTests: WindowTestCase {
         XCTAssertGreaterThanOrEqual(footerFrame.minX, columnFrame.minX, "nor off the card's leading edge")
     }
 
-    func test_navFooter_isCenteredInTheNavColumn() throws {
-        let overlay = mountedOverlay()
-        let mark = try XCTUnwrap(
-            descendants(of: overlay).compactMap { $0 as? NSImageView }.first, "no brand mark mounted")
-        let footer = try XCTUnwrap(mark.superview, "the mark should sit in the footer stack")
-        overlay.layoutSubtreeIfNeeded()
-
-        let column = try XCTUnwrap(
-            descendants(of: overlay).compactMap { $0 as? NSScrollView }
-                .first { $0.contentView is FlippedClipView }, "no nav column")
-        let footerCenter = footer.convert(footer.bounds, to: overlay).midX
-        let columnCenter = column.convert(column.bounds, to: overlay).midX
-
-        XCTAssertEqual(footerCenter, columnCenter, accuracy: 0.5, "the footer must centre on the nav column")
-    }
-
     private func mountedOverlay() -> SettingsOverlay {
         let overlay = SettingsOverlay(
             sections: [], capturer: nil,
