@@ -114,7 +114,7 @@ One ladder for every control and row:
 | Rest | Rows clear. Fields, keycaps and filled buttons `fill(.rest)`. Text `ink(.normal)`, controls `ink(.subtle)` |
 | Hover | `fill(.hover)` |
 | Keyboard cursor | `fill(.active)`. In a transient list (palette, dropdown, menu) the cursor is the focus |
-| Focused | Controls and buttons: a `focusRing` ring at `Border.width`, fill and ink unchanged; on the primary button the ring is `onAccent`, inset by `Border.width`. Rows: `fill(.hover)`, over a current row's quieter `fill(.active)` too, never a ring |
+| Focused | Controls and buttons: a `focusRing` ring at `Border.width`, fill and ink unchanged; on the primary button the ring is `onAccent`, inset by `Border.width`. Rows: `fill(.hover)`, over a current row's `fill(.active)` too, never a ring |
 | Current | Pick lists: a check mark only. Persistent nav, tabs and segments: `fill(.active)` |
 | Pressed | Looks like hover |
 | Disabled | `ink(.faint)` on every variant. Controls keep `fill(.rest)`; no hover, no ring |
