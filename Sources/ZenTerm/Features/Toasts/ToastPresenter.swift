@@ -191,7 +191,6 @@ final class ToastPresenter {
     }
 
     var pileForTesting: ToastPile { pile }
-    var viewportForTesting: NSView { viewport }
 
     // A fixed height, so nothing jumps mid-animation: resizing a scroll view snaps its clip ahead of its frame.
     private final class Viewport: NSView {

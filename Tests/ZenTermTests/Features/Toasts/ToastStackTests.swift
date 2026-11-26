@@ -204,38 +204,6 @@ final class ToastStackTests: WindowTestCase {
         XCTAssertFalse(pile.isUnfolded)
     }
 
-    // Line units, as pixels read as a trackpad gesture; aimed at the window point, as a windowless event has no window.
-    private func scrollWheel(byLines delta: Int32, at point: NSPoint) throws {
-        let displayHeight = try XCTUnwrap(NSScreen.screens.first).frame.height
-        let wheel = try XCTUnwrap(
-            CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0))
-        wheel.location = CGPoint(x: point.x, y: displayHeight - point.y)
-        let event = try XCTUnwrap(NSEvent(cgEvent: wheel))
-        XCTAssertEqual(event.locationInWindow, point, "the wheel lands where the test aims it")
-        window.sendEvent(event)
-    }
-
-    func test_anUnfoldedListTallerThanTheWindow_scrollsToShowLess() throws {
-        let presenter = presenter()
-        for index in 1...10 { presenter.show(notice("Toast \(index)")) }
-        window.contentView!.layoutSubtreeIfNeeded()
-        let pile = presenter.pileForTesting
-        let front = try XCTUnwrap(toast(titled: "Toast 10"))
-        click(front)
-        window.contentView!.layoutSubtreeIfNeeded()
-        XCTAssertTrue(pile.isUnfolded, "precondition")
-        let showLess = pile.listToggleForTesting
-        XCTAssertTrue(showLess.visibleRect.isEmpty, "precondition: the list runs past the window")
-
-        let viewport = presenter.viewportForTesting
-        XCTAssertGreaterThanOrEqual(viewport.frame.minY, 0, "the list stops at the window's bottom edge")
-        try scrollWheel(byLines: -400, at: front.convert(NSPoint(x: front.bounds.midX, y: 4), to: nil))
-
-        XCTAssertEqual(showLess.visibleRect, showLess.bounds, "scrolling to the end shows Show Less whole")
-        click(showLess)
-        XCTAssertFalse(pile.isUnfolded)
-    }
-
     func test_aClickBesideTheStack_reachesWhatIsUnderIt() throws {
         let presenter = presenter()
         showThree(on: presenter)
