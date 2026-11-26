@@ -4920,10 +4920,8 @@ final class WindowController: NSObject {
         return programIcon(of: surface)
     }
 
-    // Unreadable arguments are a program that runs, never the resting shell.
     private func programIcon(of surface: TerminalSurface) -> ProcessIcon {
-        guard let group = surface.foregroundProcessGroupID else { return .shell }
-        return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
+        surface.foregroundProcessGroupID.flatMap(ProcessArguments.arguments(of:)).map(ProcessIcon.forCommand) ?? .shell
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {

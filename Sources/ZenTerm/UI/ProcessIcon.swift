@@ -27,7 +27,6 @@ struct ProcessIcon: Equatable {
     }
 
     static let shell = neutral("Shell", "terminal")
-    static let unknown = neutral("Program", "binary")
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
 
@@ -57,11 +56,11 @@ struct ProcessIcon: Equatable {
 
     static func forProgram(_ program: String?) -> ProcessIcon {
         guard let program = program?.lowercased(), !program.isEmpty else { return shell }
-        return byProgram[program] ?? byProgram[ProcessArguments.withoutVersion(program)] ?? unknown
+        return byProgram[program] ?? byProgram[ProcessArguments.withoutVersion(program)] ?? shell
     }
 
     static func forCommand(_ arguments: [String]) -> ProcessIcon {
-        guard let program = arguments.first.flatMap(ProcessArguments.programName(from:)) else { return unknown }
+        guard let program = arguments.first.flatMap(ProcessArguments.programName(from:)) else { return shell }
         if let script = ProcessArguments.scriptName(in: arguments), let icon = byProgram[script.lowercased()] {
             return icon
         }
@@ -163,7 +162,7 @@ struct ProcessIcon: Equatable {
         uniquingKeysWith: { first, _ in first })
 
     static var allForTesting: [ProcessIcon] {
-        [shell, unknown, unknownAgent, worktree] + agents.map(\.icon) + programs.map(\.icon)
+        [shell, unknownAgent, worktree] + agents.map(\.icon) + programs.map(\.icon)
     }
 
     static var programNamesForTesting: [String] { agents.map(\.program) + programs.flatMap(\.names) }
