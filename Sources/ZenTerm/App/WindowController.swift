@@ -478,8 +478,6 @@ final class WindowController: NSObject {
             onClose: { onClose($0) },
             onRename: { onRename($0) },
             directory: { directoryOf($0) })
-        var onSplitH: () -> Void = {}
-        var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
         var onSettings: () -> Void = {}
         var onToggleSidebar: () -> Void = {}
@@ -490,13 +488,11 @@ final class WindowController: NSObject {
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
-        var onZoom: () -> Void = {}
         var onToolFloat: (ToolFloat) -> Void = { _ in }
         dock = ToggleDock(
             onNewTab: { onNewTab() },
-            onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onBottom: { onBottom() },
-            onRight: { onRight() }, onZoom: { onZoom() },
+            onRight: { onRight() },
             toolFloats: ToolFloatCatalog.userDefined, onToolFloat: { onToolFloat($0) },
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         sidebar = SidebarController(
@@ -512,8 +508,6 @@ final class WindowController: NSObject {
         onRename = { [weak self] in self?.openRenameTab($0) }
         directoryOf = { [weak self] id in self?.workspace(of: id)?.controller(id)?.focusedCWD }
         onNewTab = { [weak self] in self?.newTab() }
-        onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
-        onSplitV = { [weak self] in self?.handle(.splitVertical) }
         onPalette = { [weak self] in self?.handle(.toggleCommandPalette) }
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
@@ -547,7 +541,6 @@ final class WindowController: NSObject {
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
-        onZoom = { [weak self] in self?.handle(.toggleZoom) }
         onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
         firstWorkspace.setController(makeController(cwd: initialCWD), for: firstID)

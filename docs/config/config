@@ -111,10 +111,9 @@
 # or scratch button comes back while its shell is busy out of sight, or while
 # something there needs you, so work you cannot see keeps a handle in the toolbar.
 # Buttons, in toolbar order, then the sidebar footer's:
-#   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
-#   command-palette, settings
+#   new-tab, bottom-drawer, right-drawer, scratch, command-palette, settings
 # In-app Settings edit: applies live.
-# hide-toolbar-buttons =              # e.g. split-h,split-v
+# hide-toolbar-buttons =              # e.g. new-tab,scratch
 
 # Opacity of the on-brand tint over the behind-window blur. 1 = solid shell,
 # 0 = raw system blur showing your desktop through the whole window.
