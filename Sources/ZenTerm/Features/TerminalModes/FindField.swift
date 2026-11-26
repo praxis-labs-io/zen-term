@@ -6,7 +6,9 @@ final class FindField: NSView, ThemeReapplying {
     private let glyph = NSImageView()
     private let field = FocusReportingField()
     private let count = NSTextField(labelWithString: "")
-    private let divider = Divider(.vertical)
+    private let divider = ToolbarDivider()
+    private let queryFade = EdgeFade(axis: .horizontal)
+    private weak var observedEditorClip: NSClipView?
     private lazy var olderButton = stepButton(
         symbol: "chevron.up", label: "Older Match", shortcut: "↩", step: .next)
     private lazy var newerButton = stepButton(
@@ -24,13 +26,17 @@ final class FindField: NSView, ThemeReapplying {
     /// Setting it doesn't fire `onChange`, so a seed from a selection doesn't re-run its search.
     var needle: String {
         get { field.stringValue }
-        set { field.stringValue = newValue }
+        set {
+            field.stringValue = newValue
+            refreshQueryFade()
+        }
     }
 
     static let height: CGFloat = ChromeMetrics.Height.control
     // The board's width: no token holds a field this wide, and the pane can always shrink it.
     static let width: CGFloat = 300
     private static let buttonSize = NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs)
+    private static let queryFadeDepth: CGFloat = ChromeMetrics.Spacing.s16
 
     // The copy is English throughout, so the grouping follows it rather than the system region.
     private static let countFormat = IntegerFormatStyle<Int>.number.locale(Locale(identifier: "en_US"))
@@ -47,9 +53,17 @@ final class FindField: NSView, ThemeReapplying {
         field.drawsBackground = false
         field.focusRingType = .none
         field.makeSingleLine()
-        field.lineBreakMode = .byTruncatingTail
+        field.lineBreakMode = .byClipping
+        field.wantsLayer = true
         field.delegate = self
-        field.onFocus = { [weak self] in self?.onFocusChange?(true) }
+        field.onFocus = { [weak self] in
+            self?.observeEditorScroll()
+            self?.onFocusChange?(true)
+        }
+        field.onEditorDetached = { [weak self] in
+            self?.stopObservingEditorScroll()
+            self?.refreshQueryFade()
+        }
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -82,7 +96,6 @@ final class FindField: NSView, ThemeReapplying {
             heightAnchor.constraint(equalToConstant: Self.height),
             widthAnchor.constraint(lessThanOrEqualToConstant: Self.width),
             preferredWidth,
-            divider.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
         ])
 
         CardChrome.apply(to: self, tier: .overlay)
@@ -126,6 +139,50 @@ final class FindField: NSView, ThemeReapplying {
 
     override func hitTest(_ point: NSPoint) -> NSView? { isDismissed ? nil : super.hitTest(point) }
 
+    override func layout() {
+        super.layout()
+        refreshQueryFade()
+    }
+
+    // The field editor is shared by the window, so its clip view is watched only while it edits this field.
+    private func observeEditorScroll() {
+        guard let clip = (field.currentEditor() as? NSTextView)?.superview as? NSClipView,
+            clip !== observedEditorClip
+        else { return }
+        stopObservingEditorScroll()
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshQueryFade), name: NSView.boundsDidChangeNotification, object: clip)
+        observedEditorClip = clip
+    }
+
+    private func stopObservingEditorScroll() {
+        guard let clip = observedEditorClip else { return }
+        NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: clip)
+        observedEditorClip = nil
+    }
+
+    @objc private func refreshQueryFade() {
+        if field.layer?.mask !== queryFade.layer { field.layer?.mask = queryFade.layer }
+        let hidden = queryOverflow
+        queryFade.update(
+            frame: field.bounds, start: hidden.start ? Self.queryFadeDepth : 0,
+            end: hidden.end ? Self.queryFadeDepth : 0)
+    }
+
+    private var queryOverflow: (start: Bool, end: Bool) {
+        let visibleWidth = field.cell?.drawingRect(forBounds: field.bounds).width ?? field.bounds.width
+        guard let editor = field.currentEditor() as? NSTextView, let container = editor.textContainer,
+            let layout = editor.layoutManager
+        else {
+            return (false, field.attributedStringValue.size().width - visibleWidth > 0.5)
+        }
+        layout.ensureLayout(for: container)
+        let textWidth = layout.usedRect(for: container).width
+        let shown = editor.visibleRect
+        return (shown.minX > 0.5, textWidth - shown.maxX > 0.5)
+    }
+
     var isFieldFirstResponder: Bool {
         guard let editor = window?.firstResponder as? NSTextView else { return false }
         return editor.delegate === field
@@ -135,6 +192,11 @@ final class FindField: NSView, ThemeReapplying {
     var olderButtonForTesting: IconButton { olderButton }
     var newerButtonForTesting: IconButton { newerButton }
     var closeButtonForTesting: IconButton { closeButton }
+
+    var fadedQueryEdgesForTesting: (start: Bool, end: Bool) {
+        let colors = (queryFade.layer.colors as? [CGColor]) ?? []
+        return (colors.first?.alpha == 0, colors.last?.alpha == 0)
+    }
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
@@ -152,6 +214,7 @@ final class FindField: NSView, ThemeReapplying {
 extension FindField: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         onChange?(field.stringValue)
+        refreshQueryFade()
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
@@ -179,10 +242,17 @@ extension FindField: NSTextFieldDelegate {
 // `controlTextDidBeginEditing` waits for the first keystroke, so a click into the field reports here instead.
 private final class FocusReportingField: NSTextField {
     var onFocus: (() -> Void)?
+    var onEditorDetached: (() -> Void)?
 
     override func becomeFirstResponder() -> Bool {
         let took = super.becomeFirstResponder()
         if took { onFocus?() }
         return took
+    }
+
+    // The delegate hears about the end of editing while the field editor is still attached.
+    override func textDidEndEditing(_ notification: Notification) {
+        super.textDidEndEditing(notification)
+        onEditorDetached?()
     }
 }

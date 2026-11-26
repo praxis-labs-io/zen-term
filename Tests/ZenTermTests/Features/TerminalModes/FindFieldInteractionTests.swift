@@ -149,4 +149,42 @@ final class FindFieldInteractionTests: WindowTestCase {
         XCTAssertFalse(opened.controller.search.isActive)
         XCTAssertEqual(opened.surface.endSearchCount, 1)
     }
+
+    private func type(_ text: String, in window: NSWindow) throws {
+        for character in text { try press(0, String(character), in: window) }
+        window.contentView?.layoutSubtreeIfNeeded()
+    }
+
+    func test_aQueryThatFits_fadesNeitherEdge() throws {
+        let opened = try openFind(needle: "")
+
+        try type("error", in: opened.controller.window)
+
+        XCTAssertTrue(opened.field.isFieldFirstResponder, "premise: the keys reached the field")
+        XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.start, false)
+        XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.end, false)
+    }
+
+    func test_typingPastTheFieldsWidth_fadesTheLeadingEdgeTheTextScrolledUnder() throws {
+        let opened = try openFind(needle: "")
+
+        try type(String(repeating: "a", count: 80), in: opened.controller.window)
+
+        XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.start, true)
+        XCTAssertEqual(
+            opened.field.fadedQueryEdgesForTesting.end, false, "the caret sits at the end, so nothing hides there")
+    }
+
+    func test_anOverflowingQuery_fadesItsTrailingEdgeOnceFocusLeaves() throws {
+        let opened = try openFind(needle: "")
+        let window = opened.controller.window
+        try type(String(repeating: "a", count: 80), in: window)
+
+        window.makeFirstResponder(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(opened.field.isFieldFirstResponder, "premise: focus left the field")
+        XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.start, false)
+        XCTAssertEqual(opened.field.fadedQueryEdgesForTesting.end, true)
+    }
 }
