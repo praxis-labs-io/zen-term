@@ -11,13 +11,16 @@ final class AgentPickerOverlay: PaletteOverlay {
     static let noAgentsText = "No agents running"
 
     private let onFocus: (SurfaceID) -> Void
+    private let onScreen: SurfaceID?
     private var items: [SidebarAgentItem]
     private var rows: [Row] = []
 
     init(
-        items: [SidebarAgentItem], onFocus: @escaping (SurfaceID) -> Void, onDismiss: @escaping () -> Void
+        items: [SidebarAgentItem], onScreen: SurfaceID? = nil, onFocus: @escaping (SurfaceID) -> Void,
+        onDismiss: @escaping () -> Void
     ) {
         self.items = items
+        self.onScreen = onScreen
         self.onFocus = onFocus
         super.init(placeholder: "Search agents", emptyText: "No matching agents", onDismiss: onDismiss)
         applyFilter(query: "")
@@ -46,7 +49,7 @@ final class AgentPickerOverlay: PaletteOverlay {
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
         case .header(let place): return PaletteSectionHeader(title: place.name)
-        case .agent(let item): return AgentRowView(item)
+        case .agent(let item): return AgentRowView(item, isOnScreen: item.id == onScreen)
         }
     }
 
@@ -63,6 +66,17 @@ final class AgentPickerOverlay: PaletteOverlay {
     }
 
     override func returnAction(at index: Int) -> String? { Self.returnAction }
+
+    override func defaultSelectionIndex() -> Int {
+        let selectable = rows.indices.filter { isSelectable(at: $0) }
+        guard currentQuery.trimmingCharacters(in: .whitespaces).isEmpty else { return selectable.first ?? 0 }
+        return selectable.first { !isOnScreen(at: $0) } ?? selectable.first ?? 0
+    }
+
+    private func isOnScreen(at index: Int) -> Bool {
+        guard case .agent(let item) = rows[index] else { return false }
+        return item.id == onScreen
+    }
 
     override func emptyText(for query: String) -> String {
         query.trimmingCharacters(in: .whitespaces).isEmpty ? Self.noAgentsText : super.emptyText(for: query)
@@ -127,13 +141,17 @@ final class AgentPickerOverlay: PaletteOverlay {
     }
 
     final class AgentRowView: SelectableRowView {
+        static let currentLabel = RepoPickerOverlay.State.current.rawValue
+
         private let stateGlyph = AgentStateGlyph()
         private(set) var item: SidebarAgentItem
+        let isOnScreen: Bool
         var surface: SurfaceID { item.id }
 
-        init(_ item: SidebarAgentItem) {
+        init(_ item: SidebarAgentItem, isOnScreen: Bool = false) {
             self.item = item
-            super.init(Self.content(item))
+            self.isOnScreen = isOnScreen
+            super.init(Self.content(item, isOnScreen: isOnScreen))
             accessories = [stateGlyph]
             centerOnTitleLine(stateGlyph.marks)
             apply(item)
@@ -144,7 +162,7 @@ final class AgentPickerOverlay: PaletteOverlay {
         func render(_ next: SidebarAgentItem) {
             guard next != item else { return }
             item = next
-            render(Self.content(next))
+            render(Self.content(next, isOnScreen: isOnScreen))
             apply(next)
         }
 
@@ -152,17 +170,22 @@ final class AgentPickerOverlay: PaletteOverlay {
             stateGlyph.isHidden = !item.showsState
             stateGlyph.show(item.state)
             setAccessibilityLabel(item.message.map { "\(item.summary), \($0)" } ?? item.summary)
-            let speaks = [item.showsState ? item.state.accessibilityName : nil, item.agentLabel, item.place.name]
+            let speaks = [
+                item.showsState ? item.state.accessibilityName : nil, item.agentLabel, item.place.name,
+                isOnScreen ? Self.currentLabel : nil,
+            ]
             setAccessibilityValue(speaks.compactMap { $0 }.joined(separator: ", "))
         }
 
-        private static func content(_ item: SidebarAgentItem) -> Content {
+        private static func content(_ item: SidebarAgentItem, isOnScreen: Bool) -> Content {
+            let qualifiers = [item.agentLabel, isOnScreen ? currentLabel : nil].compactMap { $0 }
+            let suffix = qualifiers.isEmpty ? nil : qualifiers.joined(separator: " · ")
             switch item.role {
             case .agent:
-                return Content(title: item.summary, titleSuffix: item.agentLabel, leading: .process(item.process))
+                return Content(title: item.summary, titleSuffix: suffix, leading: .process(item.process))
             case .helper, .process:
                 return Content(
-                    title: item.summary, titleSuffix: item.agentLabel, leading: .process(item.process), ink: .subtle,
+                    title: item.summary, titleSuffix: suffix, leading: .process(item.process), ink: .subtle,
                     nesting: .underTitle)
             }
         }

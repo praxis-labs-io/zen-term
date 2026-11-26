@@ -286,6 +286,32 @@ final class AgentPickerTests: WindowTestCase {
         XCTAssertEqual(picker.selected, selectedBefore)
     }
 
+    private func suffix(of row: AgentPickerOverlay.AgentRowView) -> String? {
+        descendants(of: row).compactMap { $0 as? NSTextField }
+            .first { $0.stringValue.hasSuffix(AgentPickerOverlay.AgentRowView.currentLabel) }?.stringValue
+    }
+
+    func test_theAgentOnScreen_readsCurrent_andTheSelectionStartsPastIt() throws {
+        let c = makeWindow()
+        let rootAgent = try populate(c).root
+        let first = try openPicker(in: c)
+        try type("Fix the login", into: first)
+        try sendKeys([.returnKey], to: c)
+        XCTAssertEqual(c.focusedSurfaceIDForTesting, rootAgent.id, "precondition: the root agent is showing")
+
+        let picker = try openPicker(in: c)
+
+        let rows = agentRows(in: picker)
+        XCTAssertEqual(rows.filter { suffix(of: $0) != nil }.map(\.surface), [rootAgent.id])
+        let current = try XCTUnwrap(rows.first { $0.surface == rootAgent.id })
+        let spoken = try XCTUnwrap(current.accessibilityValue() as? String)
+        XCTAssertTrue(spoken.hasSuffix(AgentPickerOverlay.AgentRowView.currentLabel), "VoiceOver hears Current")
+        XCTAssertEqual(picker.rowsForTesting[picker.selected], "  Review the token store")
+
+        try type("Fix the login", into: picker)
+        XCTAssertEqual(picker.rowsForTesting[picker.selected], "Fix the login bug", "a query can land on it")
+    }
+
     func test_anAgentsName_sitsRightAfterItsTitle_notInTheTrailingColumn() throws {
         var item = SidebarAgentItem(
             id: SurfaceID(raw: 1), state: .working, summary: "Fix the login bug", detail: "zen-term", message: nil)
