@@ -187,6 +187,7 @@ final class WindowController: NSObject {
         }
         controller.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         controller.paneHeaderContent = { [weak self] id, surface in self?.floatPaneHeader(id, surface) }
+        controller.programIcon = { [weak self] id, surface in self?.program(id, surface).process }
         controller.onHeaderClose = { [weak self] in self?.requestCloseFloat() }
         return controller
     }()
@@ -4948,13 +4949,17 @@ final class WindowController: NSObject {
         return running(surfaceID, surface).process
     }
 
-    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
     // A host's pane runs the local `ssh`, which says nothing about the host, so it is named for the host.
     private func running(_ surfaceID: SurfaceID, _ surface: TerminalSurface) -> PaneIdentity.Running {
         if let host = workspace(holding: surfaceID)?.host {
             return PaneIdentity.Running(
                 process: ProcessIcon.forProgram("ssh"), name: GeneralConfig.current.displayName(of: host))
         }
+        return program(surfaceID, surface)
+    }
+
+    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
+    private func program(_ surfaceID: SurfaceID, _ surface: TerminalSurface) -> PaneIdentity.Running {
         if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
             return PaneIdentity.Running(process: ProcessIcon.forAgent(name), name: name)
         }

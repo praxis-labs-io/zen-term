@@ -59,6 +59,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     // A float pane is named like any pane, from the tab that owns it.
     var paneHeaderContent: ((SurfaceID, TerminalSurface) -> PaneHeader.Content?)?
+    // A tool's program is read like a pane's, so an agent under a runtime shows as the agent.
+    var programIcon: ((SurfaceID, TerminalSurface) -> ProcessIcon?)?
     var onHeaderClose: (() -> Void)?
 
     init(
@@ -316,16 +318,28 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         onStateChanged?()
     }
 
-    // A tool is named by its float and has no folder worth showing; Scratch is a shell, so its folder shows.
+    // A tool is named by its float; its chip is the program in front, else its command's, else its own icon.
     private func headerContent(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Content {
         let place = surface.currentDirectory
         guard let spec else {
             return pane.flatMap { paneHeaderContent?($0, surface) }
                 ?? PaneIdentity.header(named: nil, running: PaneIdentity.running(in: surface), directory: place)
         }
+        let program =
+            idBySurface[ObjectIdentifier(surface)].flatMap { programIcon?($0, surface) }
+            ?? PaneIdentity.running(in: surface).process
         let running = PaneIdentity.Running(
-            process: ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
+            process: [program, Self.launchingProgram(spec, surface)].first { $0 != .shell }
+                ?? ProcessIcon.toolFloat(spec) ?? .tool,
+            name: spec.title)
         return PaneIdentity.header(named: nil, running: running, directory: spec.command.isEmpty ? place : nil)
+    }
+
+    // The launch shell is in front until it starts the command; a prompt in front means the command is done.
+    private static func launchingProgram(_ spec: ToolFloat, _ surface: TerminalSurface) -> ProcessIcon {
+        let front = surface.foregroundProcessGroupID.flatMap(ProcessArguments.arguments(of:))
+        guard front.map(ProcessArguments.isInteractiveShell) != true else { return .shell }
+        return ProcessIcon.forProgram(AgentRoster.program(of: spec.command))
     }
 
     func refreshHeader() {
