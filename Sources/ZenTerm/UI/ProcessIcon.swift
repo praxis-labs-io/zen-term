@@ -56,8 +56,7 @@ struct ProcessIcon: Equatable {
 
     private static func brandChip(picked mark: String) -> ProcessIcon? {
         guard IconCatalog.brands.contains(mark) else { return nil }
-        let drawn = pickerArtwork[mark] ?? mark
-        return (agents.map(\.icon) + programs.map(\.icon)).first { $0.mark == drawn }
+        return byMark[pickerArtwork[mark] ?? mark]
     }
 
     // The picker offers Gemini as a one-color mark; its chip draws the mark in Gemini's own colors.
@@ -178,6 +177,9 @@ struct ProcessIcon: Equatable {
     private static let byProgram: [String: ProcessIcon] = Dictionary(
         agents.map { ($0.program, $0.icon) } + programs.flatMap { entry in entry.names.map { ($0, entry.icon) } },
         uniquingKeysWith: { first, _ in first })
+
+    private static let byMark: [String: ProcessIcon] = Dictionary(
+        (agents.map(\.icon) + programs.map(\.icon)).map { ($0.mark, $0) }, uniquingKeysWith: { first, _ in first })
 
     static var allForTesting: [ProcessIcon] {
         [shell, unknownAgent, worktree] + agents.map(\.icon) + programs.map(\.icon)

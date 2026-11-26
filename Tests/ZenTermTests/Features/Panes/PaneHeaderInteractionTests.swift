@@ -305,4 +305,13 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         XCTAssertEqual(header?.processForTesting.look, ProcessIcon.forProgram("linear").look)
         XCTAssertEqual(header?.processForTesting.name, "Probe")
     }
+
+    func test_aToolFloatsHeader_returnsToItsOwnIcon_onceItsCommandLeavesAPrompt() throws {
+        let (c, probe, header, surface) = try openProbeFloat(command: "lazygit")
+
+        surface.foregroundProcessGroupID = try jobs.startWithoutArguments(named: "zsh")
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(header?.processForTesting, ProcessIcon.toolFloat(probe), "not Git after lazygit quits")
+    }
 }
