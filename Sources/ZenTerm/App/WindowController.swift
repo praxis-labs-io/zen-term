@@ -558,6 +558,7 @@ final class WindowController: NSObject {
             MainActor.assumeIsolated {
                 self?.renderTabBar()
                 self?.refreshConnectView()
+                (self?.modal?.overlay as? RepoPickerOverlay)?.refreshHostStatuses()
             }
         }
 
@@ -1721,8 +1722,11 @@ final class WindowController: NSObject {
                 open: self.runningWorkspaces(),
                 elsewhere: self.openWorkspacesElsewhere?() ?? [],
                 current: self.activeWorkspaceID,
+                hosts: GeneralConfig.current.sshHostAliases.map(SSHHostID.init),
+                currentHost: self.selection.host,
                 removals: self.worktreeRemovals,
                 openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
+                hostOpenState: { [weak self] host in self?.hostOpenState(host) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
                 onSwitch: { [weak self] id in
                     self?.closeModal()
@@ -1735,6 +1739,10 @@ final class WindowController: NSObject {
                 },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onNewWorkspace: { [weak self] in self?.newWorkspace(named: $0) },
+                onActivateHost: { [weak self] host in
+                    self?.closeModal()
+                    self?.activate(host)
+                },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(picker, kind: .repoPicker)
@@ -3011,6 +3019,12 @@ final class WindowController: NSObject {
             } + children.listings,
             floats: tabs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
+    }
+
+    // A login still behind Connect is no session yet, but ↩ reveals it in another window all the same.
+    private func hostOpenState(_ host: SSHHostID) -> WorkspaceOpenState {
+        if workspaces.contains(where: { $0.host == host && !isBehindConnect($0) }) { return .here }
+        return appWindows?().contains { $0 !== self && $0.holdsHost(host) } == true ? .elsewhere : .closed
     }
 
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {

@@ -184,7 +184,8 @@
 
 # A host listed in the sidebar's Remote hosts section, one per line, in
 # sidebar order. Each is a Host alias from ~/.ssh/config or a user@host.
-# Settings > Remote hosts lists these hosts, and adds or removes them.
+# Settings > Remote hosts lists these hosts, and adds or removes them. The
+# ⌘P picker lists them after your workspaces.
 # In-app Settings edit: applies live.
 # ssh-host = devbox
 # ssh-host = deploy@10.0.0.5
