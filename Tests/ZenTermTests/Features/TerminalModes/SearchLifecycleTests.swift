@@ -398,14 +398,14 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
 
-        let labelBefore = try XCTUnwrap(panel.shownHeaderForTesting?.labelForTesting)
+        let labelBefore = try XCTUnwrap(panel.shownHeaderForTesting?.nameForTesting)
 
         controller.handle(.toggleSearch)
-        XCTAssertEqual(panel.shownHeaderForTesting?.labelForTesting, labelBefore, "the find bar says what is live")
+        XCTAssertEqual(panel.shownHeaderForTesting?.nameForTesting, labelBefore, "the find bar says what is live")
 
         controller.search.commit()
         XCTAssertTrue(controller.scrollMode.isActive)
-        XCTAssertEqual(panel.shownHeaderForTesting?.labelForTesting, labelBefore, "and so does the scroll cursor")
+        XCTAssertEqual(panel.shownHeaderForTesting?.nameForTesting, labelBefore, "and so does the scroll cursor")
     }
 
     func test_aReaderOwnedScrollModeKeepsItsHeaderWhenTheBarCloses() throws {

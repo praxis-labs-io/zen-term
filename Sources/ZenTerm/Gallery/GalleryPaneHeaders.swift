@@ -4,7 +4,7 @@
     @MainActor
     enum GalleryPaneHeaders {
         private static let paneControls: [PaneHeader.Control] = [.splitHorizontal, .splitVertical, .focusMode, .close]
-        private static let shell = PaneHeader.Label(text: "~/Dev/zen-term", isPath: true)
+        private static let shell = PaneHeader.Content(process: .shell, name: "zsh", path: "~/dev/zen-term")
 
         static func sections() -> [GallerySection] {
             let hovered = header(shell)
@@ -19,15 +19,20 @@
                         GallerySection.Row(label: "Unfocused", samples: [header(shell)]),
                         GallerySection.Row(label: "Unfocused, hover", samples: [hovered]),
                         GallerySection.Row(
-                            label: "Path at rest, or under a running program",
-                            samples: [
-                                header(PaneHeader.Label(text: "~/Dev/zen-term/Sources", isPath: true), active: true)
-                            ]),
-                        GallerySection.Row(
-                            label: "Title the program sets",
+                            label: "Program",
                             samples: [
                                 header(
-                                    PaneHeader.Label(text: "✳ Pane headers"),
+                                    PaneHeader.Content(
+                                        process: ProcessIcon.forProgram("nvim"), name: "nvim", path: "~/dev/zen-term"),
+                                    active: true)
+                            ]),
+                        GallerySection.Row(
+                            label: "Agent",
+                            samples: [
+                                header(
+                                    PaneHeader.Content(
+                                        process: ProcessIcon.forAgent("claude"), name: "Claude Code",
+                                        path: "~/dev/zen-term"),
                                     active: true)
                             ]),
                         GallerySection.Row(label: "Focus mode", samples: [zoomed]),
@@ -37,25 +42,26 @@
                             label: "Tool float",
                             samples: [
                                 header(
-                                    PaneHeader.Label(text: "Linear"),
+                                    PaneHeader.Content(process: .tool, name: "Zen Octo", path: nil),
                                     controls: [.minimize, .close], active: true)
                             ]),
                         GallerySection.Row(
                             label: "Narrow pane",
                             samples: [
                                 header(
-                                    PaneHeader.Label(text: "~/Dev/zen-term/Sources/ZenTerm", isPath: true),
-                                    active: true, width: 200)
+                                    PaneHeader.Content(
+                                        process: .shell, name: "zsh", path: "~/dev/zen-term/Sources/ZenTerm/UI"),
+                                    active: true, width: 220)
                             ]),
                     ])
             ]
         }
 
         private static func header(
-            _ label: PaneHeader.Label, controls: [PaneHeader.Control] = paneControls, active: Bool = false,
+            _ content: PaneHeader.Content, controls: [PaneHeader.Control] = paneControls, active: Bool = false,
             width: CGFloat = 480
         ) -> PaneHeader {
-            let header = PaneHeader(label: label, controls: controls, onControl: { _ in })
+            let header = PaneHeader(content: content, controls: controls, onControl: { _ in })
             header.isActive = active
             header.widthAnchor.constraint(equalToConstant: width).isActive = true
             return header

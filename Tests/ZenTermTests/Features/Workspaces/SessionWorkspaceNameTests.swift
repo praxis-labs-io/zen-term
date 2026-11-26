@@ -110,9 +110,10 @@ final class SessionWorkspaceNameTests: WindowTestCase {
         let pane = try XCTUnwrap(spawned.first)
 
         pane.foregroundProcessGroupID = try jobs.start(named: "nvim")
+        pane.title = "nvim notes.md"
         c.pollTitlesForTesting()
 
-        XCTAssertEqual(c.tabTitlesForTesting.first, "nvim", "precondition: the tab follows the job")
+        XCTAssertEqual(c.tabTitlesForTesting.first, "nvim notes.md", "precondition: the tab follows the job")
         XCTAssertEqual(sidebarTitles(c), [PathDisplay.homeName])
     }
 

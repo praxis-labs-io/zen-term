@@ -138,13 +138,13 @@ final class FloatModeInteractionTests: WindowTestCase {
         let surface = try openScratch(c)
         let overlay = try card(c)
         XCTAssertNil(overlay.findBarForTesting, "premise: a resting card shows no bar")
-        let labelBefore = overlay.shownHeaderForTesting?.labelForTesting
+        let labelBefore = overlay.shownHeaderForTesting?.nameForTesting
 
         c.handle(.toggleSearch)
 
         let bar = try XCTUnwrap(overlay.findBarForTesting, "the gate swallowed the chord")
         XCTAssertEqual(
-            overlay.shownHeaderForTesting?.labelForTesting, labelBefore, "the bar already says what is live")
+            overlay.shownHeaderForTesting?.nameForTesting, labelBefore, "the bar already says what is live")
         let stack = try XCTUnwrap(bar.superview)
         let barIndex = try XCTUnwrap(stack.subviews.firstIndex(of: bar))
         let gridIndex = try XCTUnwrap(stack.subviews.firstIndex(of: surface.view))

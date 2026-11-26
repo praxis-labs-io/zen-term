@@ -1,11 +1,11 @@
 import AppKit
 
-// The strip atop a terminal pane, drawer or float: its label, then its controls.
+// The strip atop a terminal pane, drawer or float: its process chip, name and path, then its controls.
 final class PaneHeader: ControlView, ThemeReapplying {
-    struct Label: Equatable {
-        var text: String
-        // A path loses its front instead of its end, so the folder it names survives truncation.
-        var isPath = false
+    struct Content: Equatable {
+        var process: ProcessIcon
+        var name: String
+        var path: String?
     }
 
     enum Control: CaseIterable {
@@ -42,10 +42,11 @@ final class PaneHeader: ControlView, ThemeReapplying {
         }
     }
 
-    var label: Label {
+    var content: Content {
         didSet {
-            guard label != oldValue else { return }
-            applyLabel()
+            guard content != oldValue else { return }
+            if content.process != oldValue.process { chip.show(content.process) }
+            applyText()
         }
     }
 
@@ -60,21 +61,25 @@ final class PaneHeader: ControlView, ThemeReapplying {
         didSet { buttons[.focusMode]?.isActive = isZoomed }
     }
 
-    // The label's capitals center on the strip, which a label's line box, descent and all, would not.
-    private static var labelFont: NSFont { ChromeType.font(.small, weight: .medium) }
+    // The header reads mostly in lowercase (`claude`, a path), so the name's x-height centers on the chip, not its line box.
+    private static var nameFont: NSFont { ChromeType.font(.small, weight: .medium) }
+    private static var pathFont: NSFont { ChromeType.font(.small) }
 
     private let controls: [Control]
     private let onControl: (Control) -> Void
-    private let labelField = NSTextField(labelWithString: "")
+    private let chip: IconBadge
+    private let nameField = NSTextField(labelWithString: "")
+    private let pathField = NSTextField(labelWithString: "")
     private let controlStack = NSStackView()
     private var buttons: [Control: IconButton] = [:]
     private var isCollapsed = false
     private var controlsShown = false
 
-    init(label: Label, controls: [Control], onControl: @escaping (Control) -> Void) {
-        self.label = label
+    init(content: Content, controls: [Control], onControl: @escaping (Control) -> Void) {
+        self.content = content
         self.controls = controls
         self.onControl = onControl
+        chip = IconBadge(process: content.process, size: .small)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -82,12 +87,16 @@ final class PaneHeader: ControlView, ThemeReapplying {
         NotificationCenter.default.addObserver(
             self, selector: #selector(frameDidChange), name: NSView.frameDidChangeNotification, object: self)
 
-        labelField.makeSingleLine()
-        labelField.lineBreakMode = .byTruncatingTail
-        labelField.maximumNumberOfLines = 1
-        labelField.translatesAutoresizingMaskIntoConstraints = false
-        labelField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        labelField.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        for field in [nameField, pathField] {
+            field.makeSingleLine()
+            field.maximumNumberOfLines = 1
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        }
+        nameField.lineBreakMode = .byTruncatingTail
+        pathField.lineBreakMode = .byTruncatingHead
+        nameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pathField.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
 
         controlStack.orientation = .horizontal
         controlStack.spacing = ChromeMetrics.Spacing.s2
@@ -104,18 +113,27 @@ final class PaneHeader: ControlView, ThemeReapplying {
             controlStack.addArrangedSubview(button)
         }
 
-        [labelField, controlStack].forEach(addSubview)
+        chip.translatesAutoresizingMaskIntoConstraints = false
+        [chip, nameField, pathField, controlStack].forEach(addSubview)
         let gap = ChromeMetrics.Spacing.s8
+        // An empty path still holds its gap, so in a header too narrow for both gaps it is the one that gives.
+        let pathGap = pathField.leadingAnchor.constraint(equalTo: nameField.trailingAnchor, constant: gap)
+        pathGap.priority = .defaultHigh
         NSLayoutConstraint.activate([
+            pathGap,
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
-            labelField.leadingAnchor.constraint(equalTo: leadingAnchor),
-            labelField.firstBaselineAnchor.constraint(
-                equalTo: centerYAnchor, constant: Self.labelFont.capHeight / 2),
-            labelField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
+            chip.leadingAnchor.constraint(equalTo: leadingAnchor),
+            chip.centerYAnchor.constraint(equalTo: centerYAnchor),
+            nameField.leadingAnchor.constraint(equalTo: chip.trailingAnchor, constant: gap),
+            nameField.firstBaselineAnchor.constraint(
+                equalTo: chip.centerYAnchor, constant: Self.nameFont.xHeight / 2),
+            pathField.firstBaselineAnchor.constraint(equalTo: nameField.firstBaselineAnchor),
+            nameField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
+            pathField.trailingAnchor.constraint(lessThanOrEqualTo: controlStack.leadingAnchor, constant: -gap),
             controlStack.trailingAnchor.constraint(equalTo: trailingAnchor),
             controlStack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
-        applyLabel()
+        applyText()
         applyControlsShown(animated: false)
     }
 
@@ -126,40 +144,51 @@ final class PaneHeader: ControlView, ThemeReapplying {
 
     override func hoverDidChange() { applyControlsShown(animated: true) }
 
-    func reapplyTheme() { applyLabel() }
+    func reapplyTheme() { applyText() }
 
-    var labelForTesting: String { labelField.stringValue }
-    var labelTruncationForTesting: NSLineBreakMode? { labelParagraphStyleForTesting?.lineBreakMode }
+    var nameForTesting: String { nameField.stringValue }
+    var pathForTesting: String? { pathField.isHidden ? nil : pathField.stringValue }
+    var processForTesting: ProcessIcon { content.process }
     var controlsForTesting: [Control] { controls }
     var visibleControlsForTesting: [Control] {
         controls.filter { buttons[$0]?.isHidden == false }
     }
     var controlsShownForTesting: Bool { controlsShown }
     func buttonForTesting(_ control: Control) -> IconButton? { buttons[control] }
-    var labelInkForTesting: NSColor? {
-        labelField.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
-    }
-    var labelParagraphStyleForTesting: NSParagraphStyle? {
-        guard labelField.attributedStringValue.length > 0 else { return nil }
-        return labelField.attributedStringValue.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
-            as? NSParagraphStyle
-    }
+    var inksForTesting: (name: NSColor?, path: NSColor?) { (ink(of: nameField), ink(of: pathField)) }
+    var pathTruncationForTesting: NSLineBreakMode? { paragraphStyle(of: pathField)?.lineBreakMode }
 
     #if DEBUG
         func forceHoverForGallery() { setHovered(true) }
     #endif
 
-    private func applyLabel() {
-        let truncating = NSMutableParagraphStyle()
-        truncating.lineBreakMode = label.isPath ? .byTruncatingHead : .byTruncatingTail
-        labelField.attributedStringValue = NSAttributedString(
-            string: label.text,
-            attributes: [
-                .font: Self.labelFont,
-                .foregroundColor: Theme.current.chrome.ink(.muted),
-                .paragraphStyle: truncating,
-            ])
+    private func ink(of field: NSTextField) -> NSColor? {
+        guard field.attributedStringValue.length > 0 else { return nil }
+        return field.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+    }
+
+    private func paragraphStyle(of field: NSTextField) -> NSParagraphStyle? {
+        guard field.attributedStringValue.length > 0 else { return nil }
+        return field.attributedStringValue.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+    }
+
+    private func applyText() {
+        let ink = Theme.current.chrome.ink(.muted)
+        nameField.attributedStringValue = Self.text(
+            content.name, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
+        pathField.isHidden = content.path == nil
+        pathField.attributedStringValue = Self.text(
+            content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
         needsUpdateConstraints = true
+    }
+
+    private static func text(_ string: String, font: NSFont, ink: NSColor, truncation: NSLineBreakMode)
+        -> NSAttributedString
+    {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = truncation
+        return NSAttributedString(
+            string: string, attributes: [.font: font, .foregroundColor: ink, .paragraphStyle: style])
     }
 
     private func applyControlsShown(animated: Bool) {
@@ -176,14 +205,14 @@ final class PaneHeader: ControlView, ThemeReapplying {
 
     @objc private func frameDidChange() { needsUpdateConstraints = true }
 
-    // The label truncates first; every control but close drops out once the label would get less room than they take.
+    // The path truncates first, then the name; every control but close drops out once the name would get less room than they take.
     override func updateConstraints() {
         let gap = ChromeMetrics.Spacing.s8
         let fullControls =
             ChromeMetrics.Height.xs * CGFloat(controls.count)
             + ChromeMetrics.Spacing.s2 * CGFloat(max(controls.count - 1, 0))
-        let labelFloor = min(labelField.intrinsicContentSize.width, fullControls)
-        let needed = labelFloor + gap + fullControls
+        let nameFloor = min(nameField.intrinsicContentSize.width, fullControls)
+        let needed = IconBadge.Size.small.side + gap + nameFloor + gap + fullControls
         let collapsed = bounds.width > 0 && bounds.width < needed
         if collapsed != isCollapsed {
             isCollapsed = collapsed

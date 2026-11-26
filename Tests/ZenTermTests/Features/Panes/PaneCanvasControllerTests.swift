@@ -295,7 +295,7 @@ final class PaneCanvasControllerTests: WindowTestCase {
     }
 
     func test_aHostPane_isNeverNamedForTheLocalSsh() throws {
-        let host = PaneCanvasController(readsForeground: false, makeSurface: { RecordingSurface() })
+        let host = PaneCanvasController(makeSurface: { RecordingSurface() })
         host.start()
         defer { host.shutdown() }
         let surface = try XCTUnwrap(host.surface(for: host.focusedLeafID) as? RecordingSurface)
@@ -310,13 +310,14 @@ final class PaneCanvasControllerTests: WindowTestCase {
         XCTAssertEqual(host.title, "api")
     }
 
-    func test_aPaneRunName_outranksTheProgramRunningInIt() throws {
+    func test_aTab_readsWhatThePaneReports_andLeavesAPaneRunNameToTheHeader() throws {
         let token = try XCTUnwrap(controller.focusedPaneToken)
         let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
         surface.foregroundProcessGroupID = try jobs.start(named: "python3")
+        surface.title = "python3 server.py"
         controller.updateRecord(token: token) { $0.name = "server" }
 
-        XCTAssertEqual(controller.title, "server")
+        XCTAssertEqual(controller.title, "python3 server.py")
     }
 
     func test_aShellStartedAtThePrompt_readsAsTheFolder() throws {

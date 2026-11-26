@@ -58,7 +58,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
 
     // A float pane is named like any pane, from the tab that owns it.
-    var paneLabel: ((SurfaceID, TerminalSurface) -> PaneHeader.Label?)?
+    var paneHeaderContent: ((SurfaceID, TerminalSurface) -> PaneHeader.Content?)?
     var onHeaderClose: (() -> Void)?
 
     init(
@@ -291,7 +291,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             dismissingOverlay = nil
         }
         let header = PaneHeader(
-            label: headerLabel(spec, surface, pane: pane),
+            content: headerContent(spec, surface, pane: pane),
             controls: spec?.persist == .ephemeral ? [.close] : [.minimize, .close],
             onControl: { [weak self] control in
                 if control == .minimize { self?.close() } else { self?.onHeaderClose?() }
@@ -316,17 +316,21 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         onStateChanged?()
     }
 
-    private func headerLabel(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Label {
-        guard let spec, !spec.command.isEmpty else {
-            return pane.flatMap { paneLabel?($0, surface) }
-                ?? PaneIdentity.label(of: surface, named: nil, directory: surface.currentDirectory)
+    // A tool is named by its float and has no folder worth showing; Scratch is a shell, so its folder shows.
+    private func headerContent(_ spec: ToolFloat?, _ surface: TerminalSurface, pane: SurfaceID?) -> PaneHeader.Content {
+        let place = surface.currentDirectory
+        guard let spec else {
+            return pane.flatMap { paneHeaderContent?($0, surface) }
+                ?? PaneIdentity.header(named: nil, running: PaneIdentity.running(in: surface), directory: place)
         }
-        return PaneIdentity.label(of: surface, named: nil, directory: nil, otherwise: spec.title)
+        let running = PaneIdentity.Running(
+            process: ProcessIcon.toolFloat(spec) ?? .tool, name: spec.title)
+        return PaneIdentity.header(named: nil, running: running, directory: spec.command.isEmpty ? place : nil)
     }
 
     func refreshHeader() {
         guard let active = activeFloat else { return }
-        active.overlay.header?.label = headerLabel(active.spec, active.surface, pane: shownPane)
+        active.overlay.header?.content = headerContent(active.spec, active.surface, pane: shownPane)
     }
 
     func applyHeaderShown() { activeFloat?.overlay.applyHeaderShown() }
@@ -517,6 +521,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, titleDidChange title: String) {
         guard let id = idBySurface[ObjectIdentifier(s)] else { return }
         onTitle?(id, title)
+    }
+
+    func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
+        if activeFloat?.surface === s { refreshHeader() }
     }
 
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {

@@ -69,7 +69,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         }
     }
 
-    func test_theLabel_isATitleTheRunningProgramSets_elseThePath() throws {
+    func test_theHeaderNamesWhatRunsAndWhere_whileTheTabReadsTheTitle() throws {
         let c = makeWindow()
         let host = try XCTUnwrap(paneHosts(c).first)
         let surface = try XCTUnwrap(surface(of: host))
@@ -78,18 +78,19 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         let path = PathDisplay.abbreviatingHome(root.path)
 
         surface.foregroundProcessGroupID = try runJob(["/bin/sleep", "60"])
-        surface.title = "sleep 60"
+        surface.title = "✳ Deploying staging"
         surface.delegate?.surface(surface, titleDidChange: surface.title)
-        XCTAssertEqual(
-            header.labelForTesting, path, "the echoed command line is the program's name, which the tab shows")
 
-        surface.title = "Deploying staging"
-        surface.delegate?.surface(surface, titleDidChange: surface.title)
-        XCTAssertEqual(header.labelForTesting, "Deploying staging", "a title the program sets is the label")
+        XCTAssertEqual(header.nameForTesting, "sleep", "the header names the program")
+        XCTAssertEqual(header.pathForTesting, path, "and where it runs")
+        XCTAssertEqual(c.tabTitleForTesting(index: 0), "Deploying staging", "the tab reads its title, status dropped")
 
         surface.foregroundProcessGroupID = nil
+        surface.title = root.path
         surface.delegate?.surface(surface, titleDidChange: surface.title)
-        XCTAssertEqual(header.labelForTesting, path, "back at the prompt, the path")
+
+        XCTAssertEqual(header.nameForTesting, "shell")
+        XCTAssertEqual(c.tabTitleForTesting(index: 0), root.lastPathComponent, "a tab never shows a full path")
     }
 
     private func runJob(_ arguments: [String]) throws -> pid_t {
@@ -167,6 +168,20 @@ final class PaneHeaderInteractionTests: WindowTestCase {
         XCTAssertFalse(surface.terminated, "minimize hides; the program keeps running")
     }
 
+    func test_scratchShowsItsFolder_theMomentItsShellReportsOne() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let header = try floatCard(c).shownHeaderForTesting
+        let surface = try XCTUnwrap(spawned.last)
+        XCTAssertNil(header?.pathForTesting, "premise: the shell has not reported a folder yet")
+
+        surface.currentDirectory = root
+        surface.delegate?.surface(surface, cwdDidChange: root)
+
+        XCTAssertEqual(header?.nameForTesting, "Scratch")
+        XCTAssertEqual(header?.pathForTesting, PathDisplay.abbreviatingHome(root.path), "without waiting for a poll")
+    }
+
     func test_aKeptFloatsClose_endsItsProgram() throws {
         let c = makeWindow()
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
@@ -208,6 +223,7 @@ final class PaneHeaderInteractionTests: WindowTestCase {
 
         let header = try floatCard(c).shownHeaderForTesting
         XCTAssertEqual(header?.controlsForTesting, [.close], "minimize would end it too, so it is not offered")
-        XCTAssertEqual(header?.labelForTesting, "Probe", "a tool float that sets no title is its own name")
+        XCTAssertEqual(header?.nameForTesting, "Probe", "a tool float is named by its float")
+        XCTAssertNil(header?.pathForTesting, "and its folder is not worth showing")
     }
 }

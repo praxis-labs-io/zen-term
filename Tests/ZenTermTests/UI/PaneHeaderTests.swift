@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class PaneHeaderTests: WindowTestCase {
-    private let shell = PaneHeader.Label(text: "~/Dev/zen-term", isPath: true)
+    private let shell = PaneHeader.Content(process: .shell, name: "zsh", path: "~/Dev/zen-term")
     private var chosen: [PaneHeader.Control] = []
 
     override func setUp() {
@@ -19,7 +19,7 @@ final class PaneHeaderTests: WindowTestCase {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: width + 40, height: 80),
             styleMask: [.borderless], backing: .buffered, defer: false)
-        let header = PaneHeader(label: shell, controls: controls) { [weak self] in self?.chosen.append($0) }
+        let header = PaneHeader(content: shell, controls: controls) { [weak self] in self?.chosen.append($0) }
         window.contentView?.addSubview(header)
         NSLayoutConstraint.activate([
             header.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 20),
@@ -50,13 +50,16 @@ final class PaneHeaderTests: WindowTestCase {
         view.mouseEntered(with: event)
     }
 
-    func test_theLabel_staysMuted_whereverFocusSits() {
+    func test_nameAndPath_stayMuted_whereverFocusSits() {
         let (header, _) = mounted()
-        XCTAssertEqual(header.labelInkForTesting, Theme.current.chrome.ink(.muted))
+        let muted = Theme.current.chrome.ink(.muted)
+        XCTAssertEqual(header.inksForTesting.name, muted)
+        XCTAssertEqual(header.inksForTesting.path, muted)
 
         header.isActive = true
 
-        XCTAssertEqual(header.labelInkForTesting, Theme.current.chrome.ink(.muted), "a quiet place for context")
+        XCTAssertEqual(header.inksForTesting.name, muted, "a quiet place for context")
+        XCTAssertEqual(header.inksForTesting.path, muted)
     }
 
     func test_anUnfocusedHeader_showsItsControlsOnlyUnderThePointer() throws {
@@ -95,12 +98,15 @@ final class PaneHeaderTests: WindowTestCase {
         XCTAssertEqual(mounted(width: 120).0.visibleControlsForTesting, [.close])
     }
 
-    func test_aPathTruncatesFromItsFront_aTitleFromItsEnd() {
+    func test_thePathTruncatesFromItsFront_soItsFolderSurvives() {
         let (header, _) = mounted()
-        XCTAssertEqual(header.labelTruncationForTesting, .byTruncatingHead, "the folder you are in survives")
+        XCTAssertEqual(header.pathTruncationForTesting, .byTruncatingHead)
+    }
 
-        header.label = PaneHeader.Label(text: "✳ A long task title")
-
-        XCTAssertEqual(header.labelTruncationForTesting, .byTruncatingTail)
+    func test_aToolFloatsHeader_hasNoPath() {
+        let (header, _) = mounted(controls: [.minimize, .close])
+        header.content = PaneHeader.Content(process: .tool, name: "Zen Octo", path: nil)
+        XCTAssertEqual(header.nameForTesting, "Zen Octo")
+        XCTAssertNil(header.pathForTesting)
     }
 }

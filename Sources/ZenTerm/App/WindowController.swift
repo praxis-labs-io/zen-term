@@ -185,14 +185,15 @@ final class WindowController: NSObject {
             self?.floatNotified(surface: surface, n, from: spec, owner: owner)
         }
         controller.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
-        controller.paneLabel = { [weak self] id, surface in self?.floatPaneLabel(id, surface) }
+        controller.paneHeaderContent = { [weak self] id, surface in self?.floatPaneHeader(id, surface) }
         controller.onHeaderClose = { [weak self] in self?.requestCloseFloat() }
         return controller
     }()
 
-    private func floatPaneLabel(_ id: SurfaceID, _ surface: TerminalSurface) -> PaneHeader.Label? {
+    private func floatPaneHeader(_ id: SurfaceID, _ surface: TerminalSurface) -> PaneHeader.Content? {
         guard let found = pane(where: { $0.surfaceID == id }) else { return nil }
-        return PaneIdentity.label(of: surface, named: found.pane.record.name, directory: found.pane.cwd)
+        return PaneIdentity.header(
+            named: found.pane.record.name, running: running(id, surface), directory: found.pane.cwd)
     }
 
     private func requestCloseFloat() {
@@ -816,7 +817,8 @@ final class WindowController: NSObject {
         floats.refreshHeader()
         if refreshWorkspaceNames() { changed = true }
         if changed { renderTabBar() }
-        if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(programIcon) != shown }) {
+        if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(ProcessIcon.running(in:)) != shown })
+        {
             renderAgents()
         }
 
@@ -917,7 +919,7 @@ final class WindowController: NSObject {
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             backingScale: window.backingScaleFactor,
-            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false }, readsForeground: connection == nil,
+            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
             startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
@@ -3614,6 +3616,7 @@ final class WindowController: NSObject {
             self?.helperExited(exit)
         }
         c.onPaneTokensReleased = { [weak self] tokens in self?.familyWindows.forEach { $0.closeChildren(of: tokens) } }
+        c.running = { [weak self] id, surface in self?.running(id, surface) ?? PaneIdentity.running(in: surface) }
         c.onHeaderControl = { [weak self, weak c] chord in
             guard let self, c === self.activeController else { return }
             self.handle(chord)
@@ -4526,7 +4529,7 @@ final class WindowController: NSObject {
             let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
             var item = SidebarAgentItem(
                 id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
-            item.process = programIcon(of: pane.surface)
+            item.process = ProcessIcon.running(in: pane.surface)
             item.place = place.listed
             item.canClose = pane.drawer == nil
             return AgentFamilies.Member(
@@ -4925,21 +4928,19 @@ final class WindowController: NSObject {
         tabBar.render(items)
     }
 
-    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
     private func processIcon(of id: TabID) -> ProcessIcon? {
         guard let controller = workspace(of: id)?.controller(id), let surfaceID = controller.focusedPaneSurfaceID,
             let surface = controller.surface(surfaceID)
         else { return nil }
-        if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
-            return ProcessIcon.forAgent(name)
-        }
-        return programIcon(of: surface)
+        return running(surfaceID, surface).process
     }
 
-    // Unreadable arguments are a program that runs, never the resting shell.
-    private func programIcon(of surface: TerminalSurface) -> ProcessIcon {
-        guard let group = surface.foregroundProcessGroupID else { return .shell }
-        return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
+    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
+    private func running(_ surfaceID: SurfaceID, _ surface: TerminalSurface) -> PaneIdentity.Running {
+        if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
+            return PaneIdentity.Running(process: ProcessIcon.forAgent(name), name: name)
+        }
+        return PaneIdentity.running(in: surface)
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {
