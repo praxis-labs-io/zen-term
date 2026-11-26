@@ -67,7 +67,7 @@ final class SearchController {
     func begin(surface: AnyObject & TerminalSurface, panel: TerminalModeHost, seed rawSeed: String = "") {
         let seed = Self.cleaned(rawSeed)
         guard !isActive else {
-            bar?.focusField()
+            if bar?.isFieldFirstResponder != true { bar?.focusField() }
             if !seed.isEmpty {
                 bar?.needle = seed
                 needleDidChange(seed)
@@ -142,7 +142,6 @@ final class SearchController {
     func navigate(_ step: TerminalSearchStep) {
         guard isActive, !needle.isEmpty else { return }
         pendingStep = step
-        didMoveViewport = true
         didRequestSelection = true
         rowsAtStep = surface.map(Self.viewportRows(of:))
         surface?.stepSearch(step)
@@ -271,6 +270,7 @@ final class SearchController {
         guard isActive, isDriving(s) else { return }
         self.selected = selected
         showCount()
+        noteViewportMove()
         guard let step = pendingStep, selected != nil else { return }
         pendingStep = nil
         land(after: step)
@@ -278,6 +278,12 @@ final class SearchController {
 
     private func showCount() {
         bar?.showCount(total: total, selected: selected)
+    }
+
+    /// A selection already on screen moves nothing, and putting the viewport "back" would throw the reader to the bottom.
+    private func noteViewportMove() {
+        guard let surface, let before = rowsAtStep, before != Self.viewportRows(of: surface) else { return }
+        didMoveViewport = true
     }
 
     private var pendingStep: TerminalSearchStep?

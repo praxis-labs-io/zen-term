@@ -594,7 +594,7 @@
 # is the same thing except that with nothing selected it does nothing at all.
 #
 # In the field, Enter steps to the older match and shift+Enter to the newer one, and
-# so do the field's up and down arrows. Esc or the field's close button closes it.
+# so do the field's up and down buttons. Esc or the field's close button closes it.
 # Click back into the pane and the search stays open with its highlights, while
 # every key goes to the pane again.
 #

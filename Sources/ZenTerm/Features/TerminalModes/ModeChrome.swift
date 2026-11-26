@@ -24,6 +24,10 @@ final class ModeChrome {
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
+    // Below required: a pane too narrow for the count and steppers lets the field over the chip, not break layout.
+    private static let findFieldLimitPriority = NSLayoutConstraint.Priority(
+        NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
+
     // What a shown header takes from the content's height, above the padding it would have anyway.
     static var headerRoom: CGFloat {
         GeneralConfig.current.paneHeaders ? stripInset + ChromeMetrics.Height.xs : 0
@@ -165,6 +169,7 @@ final class ModeChrome {
         }
         findFieldPastPadding = field.leadingAnchor.constraint(
             greaterThanOrEqualTo: container.leadingAnchor, constant: padding)
+        for limit in [findFieldPastChip, findFieldPastPadding] { limit?.priority = Self.findFieldLimitPriority }
         applyFindFieldLimit()
         findField = field
         return field

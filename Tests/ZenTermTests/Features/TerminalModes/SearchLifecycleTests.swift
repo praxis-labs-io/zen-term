@@ -251,6 +251,35 @@ final class SearchLifecycleTests: WindowTestCase {
         }
     }
 
+    func test_theStepChordsShareTheFieldsFirstStepAndFlush() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("ls")
+
+        controller.handle(.findPrevious)
+
+        XCTAssertEqual(surface.searches, ["ls"], "the debounced needle goes down before the chord steps it")
+        XCTAssertEqual(surface.searchSteps, [.next], "and the first step lands on the newest, as the field's does")
+    }
+
+    func test_theChordOverAFocusedFieldLeavesTheEditingStateAlone() throws {
+        let controller = makeWindow()
+        controller.handle(.toggleSearch)
+        XCTAssertTrue(controller.search.isEditing, "precondition")
+        var changes = 0
+        let previous = controller.search.onActiveChanged
+        controller.search.onActiveChanged = { active in
+            changes += 1
+            previous?(active)
+        }
+
+        controller.handle(.toggleSearch)
+
+        XCTAssertEqual(changes, 0, "refocusing a focused field flickers the pane's render through unfocused")
+        XCTAssertTrue(controller.search.isEditing)
+    }
+
     func test_returnInTheFieldStepsOlderAndShiftReturnNewer() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -314,6 +343,8 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
+        surface.rows[0] = "an error from history"
+        controller.search.report(selected: 0, from: surface)
         XCTAssertEqual(surface.scrolls, [], "precondition: the step moved it, not a scroll")
 
         controller.search.end()
@@ -328,6 +359,8 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
+        surface.rows[0] = "an error from history"
+        controller.search.report(selected: 0, from: surface)
 
         controller.search.beginNeedleForTesting("errorx")
         controller.search.report(total: 0, from: surface)
@@ -339,16 +372,15 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows[5] = "an error happened"
-        let resting = TerminalScrollPosition(total: 5000, offset: 4976, viewport: 24)
         controller.handle(.toggleSearch)
-        controller.search.report(position: resting, from: surface)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 1, from: surface)
-        controller.search.report(position: resting, from: surface)
+        controller.search.report(selected: 0, from: surface)
+        XCTAssertEqual(surface.searchSteps, [.next], "precondition: the newest was selected where it sat")
 
         controller.search.end()
 
-        XCTAssertEqual(surface.scrolls, [])
+        XCTAssertEqual(surface.scrolls, [], "a reader scrolled up must not be thrown to the bottom")
     }
 
     func test_aReaderInTheirOwnScrollModeIsLeftWhereTheSearchTookThem() throws {
@@ -629,6 +661,8 @@ final class SearchLifecycleTests: WindowTestCase {
             position: TerminalScrollPosition(total: 5000, offset: 500, viewport: 24), from: surface)
         controller.search.typeForTesting("error")
         controller.search.report(total: 3, from: surface)
+        surface.rows[0] = "an error from history"
+        controller.search.report(selected: 0, from: surface)
         controller.search.report(
             position: TerminalScrollPosition(total: 5000, offset: 120, viewport: 24), from: surface)
 
