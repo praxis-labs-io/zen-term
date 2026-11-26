@@ -15,15 +15,18 @@ final class NavRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
     }
 
-    func test_focus_keepsTheCurrentFill() {
+    func test_focus_dimsTheCurrentFillToHover_andLeavingRestoresIt() {
         let (row, window) = mountedRow()
 
         row.isCurrent = true
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
 
         window.makeFirstResponder(row)
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
         XCTAssertEqual(row.layer?.borderWidth ?? 0, 0)
+
+        window.makeFirstResponder(nil)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
     }
 
     func test_hover_showsHoverFill_andClearsOnExit() {
