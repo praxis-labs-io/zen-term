@@ -76,33 +76,33 @@ final class SearchLifecycleTests: WindowTestCase {
         try XCTUnwrap(controller.focusedScrollTargetForTesting?.surface as? RecordingSurface)
     }
 
-    func test_theChordOpensTheBarAndInstallsTheKeyHandler() throws {
+    func test_theChordOpensTheFieldAndInstallsTheKeyHandler() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        XCTAssertNil(panel.findBarForTesting, "a resting pane shows no find bar")
+        XCTAssertNil(panel.findFieldForTesting, "a resting pane shows no find field")
 
         controller.handle(.toggleSearch)
 
         XCTAssertTrue(controller.search.isActive)
-        XCTAssertNotNil(panel.findBarForTesting)
+        XCTAssertNotNil(panel.findFieldForTesting)
         XCTAssertTrue(host.isInstalled, "without the handler installed no bare `n` ever reaches the mode")
     }
 
-    func test_theChordAgainRefocusesRatherThanOpeningASecondBar() throws {
+    func test_theChordAgainRefocusesRatherThanOpeningASecondField() throws {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
 
         controller.handle(.toggleSearch)
-        let first = try XCTUnwrap(panel.findBarForTesting)
-        controller.search.commit()
+        let first = try XCTUnwrap(panel.findFieldForTesting)
+        controller.search.enterScrollMode()
         XCTAssertFalse(controller.search.isEditing)
 
         controller.handle(.toggleSearch)
 
         XCTAssertTrue(controller.search.isEditing, "the chord puts the caret back in the field")
-        XCTAssertIdentical(panel.findBarForTesting, first, "a second bar would stack on the first")
+        XCTAssertIdentical(panel.findFieldForTesting, first, "a second field would stack on the first")
     }
 
     func test_theChordSeedsTheBarFromScrollModesOwnSelection() throws {
@@ -138,7 +138,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
 
         XCTAssertEqual(surface.searches.last, "first line")
-        XCTAssertEqual(try XCTUnwrap(panel.findBarForTesting).needle, "first line")
+        XCTAssertEqual(try XCTUnwrap(panel.findFieldForTesting).needle, "first line")
     }
 
     func test_theChordOpensEmptyWithNothingSelected() throws {
@@ -151,7 +151,7 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searches, [], "an empty needle is not a search")
     }
 
-    func test_aSeedArrivingOverAnOpenBarReplacesTheNeedle() throws {
+    func test_aSeedArrivingOverAnOpenFieldReplacesTheNeedle() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -175,53 +175,194 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertFalse(handler(try keyDown("n")), "including the keys phase two claims")
     }
 
-    func test_afterCommitTheModeHandlerTakesTheKeysBack() throws {
+    func test_inScrollModeTheModeHandlerTakesTheKeysBack() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.toggleSearch)
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         let handler = try XCTUnwrap(host.modeHandler)
-        XCTAssertTrue(handler(try keyDown("n")), "phase two owns n")
+        XCTAssertTrue(handler(try keyDown("n")), "scroll mode's search owns n")
         XCTAssertFalse(
             handler(try keyDown("n", flags: .command)),
-            "and still declines ⌘N, or the menu item dies while the bar is up")
+            "and still declines ⌘N, or the menu item dies while the field is up")
     }
 
-    func test_committingStepsOntoTheFirstMatch() throws {
+    func test_withTheCaretBackInALivePaneTheHandlerLeavesEveryKeyToThePrompt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        XCTAssertTrue(controller.search.isEditing, "precondition: the caret is in the field")
+
+        surface.focus()
+
+        XCTAssertFalse(controller.search.isEditing, "the click into the pane took the caret")
+        XCTAssertTrue(controller.search.isActive, "and find stays open")
+        let handler = try XCTUnwrap(host.modeHandler)
+        for key in ["n", "N", "\r", "\u{1b}"] {
+            XCTAssertFalse(handler(try keyDown(key)), "\(key) belongs to the prompt, not the search")
+        }
+    }
+
+    func test_leavingTheFieldStopsHoldingThePanesRenderUnfocused() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        XCTAssertEqual(surface.focusRenders.last, false, "precondition: editing holds the render unfocused")
+        let before = surface.focusRenders.count
+
+        surface.focus()
+
+        let pushed = surface.focusRenders[before...]
+        XCTAssertFalse(pushed.contains(false), "a prompt typed into must show its live cursor")
+        XCTAssertTrue(pushed.contains(true))
+    }
+
+    func test_enteringScrollModeStepsOntoTheFirstMatch() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         XCTAssertEqual(surface.searchSteps, [.next])
     }
 
-    func test_aMatchOnlyInHistoryIsPreviewedWhileTyping() throws {
+    func test_theFirstTotalSelectsTheNewestMatch_onlyWhenNoneIsOnScreen() throws {
+        for (name, rows, steps) in [
+            ("only in history", Array(repeating: "", count: 24), [TerminalSearchStep.next]),
+            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23), []),
+        ] {
+            let controller = makeWindow()
+            let surface = try focusedSurface(controller)
+            surface.rows = rows
+            controller.handle(.toggleSearch)
+            controller.search.beginNeedleForTesting("error")
+
+            controller.search.report(total: 3, from: surface)
+            controller.search.report(total: 3, from: surface)
+
+            XCTAssertEqual(
+                surface.searchSteps, steps, "\(name): opening find never scrolls away from a match the reader sees")
+        }
+    }
+
+    func test_theStepChordsShareTheFieldsFirstStepAndFlush() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("ls")
+
+        controller.handle(.findPrevious)
+
+        XCTAssertEqual(surface.searches, ["ls"], "the debounced needle goes down before the chord steps it")
+        XCTAssertEqual(surface.searchSteps, [.next], "and the first step lands on the newest, as the field's does")
+    }
+
+    func test_theChordOverAFocusedFieldLeavesTheEditingStateAlone() throws {
+        let controller = makeWindow()
+        controller.handle(.toggleSearch)
+        XCTAssertTrue(controller.search.isEditing, "precondition")
+        var changes = 0
+        let previous = controller.search.onActiveChanged
+        controller.search.onActiveChanged = { active in
+            changes += 1
+            previous?(active)
+        }
+
+        controller.handle(.toggleSearch)
+
+        XCTAssertEqual(changes, 0, "refocusing a focused field flickers the pane's render through unfocused")
+        XCTAssertTrue(controller.search.isEditing)
+    }
+
+    func test_handingOffAfterSteppingInTheFieldLandsOnTheSelectedMatch() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
+        for row in [5, 10, 15] { surface.rows[row] = "an error here" }
+        surface.rows[23] = "❯ "
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
-
         controller.search.report(total: 3, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 0, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 1, from: surface)
 
-        XCTAssertEqual(surface.searchSteps, [.next], "one step brings the match into view")
+        controller.search.enterScrollMode()
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 10, "the match the count names, not the newest on screen")
     }
 
-    func test_aMatchAlreadyOnScreenIsNotChasedWhileTyping() throws {
+    func test_handingOffAfterTheRowsMoved_landsWhereTheMatchIsNow() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        for row in [5, 10, 15] { surface.rows[row] = "an error here" }
+        surface.rows[23] = "❯ "
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 0, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 1, from: surface)
+        surface.rows = Array(surface.rows.dropFirst(2)) + ["", ""]
+
+        controller.search.enterScrollMode()
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 8, "output moved the match up two rows since the step landed")
+    }
+
+    func test_aSelectionReportedWithNoStepPending_neverCountsAsTheSearchMovingTheViewport() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows[5] = "an error happened"
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 1, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 0, from: surface)
+        surface.rows = Array(surface.rows.dropFirst(3)) + ["", "", ""]
 
+        controller.search.report(selected: 0, from: surface)
+        controller.search.end()
+
+        XCTAssertEqual(surface.scrolls, [], "the reader's own scroll or new output is not the search's to undo")
+    }
+
+    func test_returnInTheFieldStepsOlderAndShiftReturnNewer() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
+        controller.search.report(selected: 0, from: surface)
 
-        XCTAssertEqual(surface.searchSteps, [], "the viewport already holds one")
+        controller.search.step(.next)
+        controller.search.step(.previous)
+
+        XCTAssertEqual(surface.searchSteps, [.next, .next, .previous])
+        XCTAssertTrue(controller.search.isEditing, "stepping keeps the caret in the field")
+        XCTAssertFalse(controller.scrollMode.isActive, "and no longer hands off to scroll mode")
+    }
+
+    func test_aStepBeforeAnyMatchIsSelectedLandsOnTheNewestWhicheverWayItPoints() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("ls")
+
+        controller.search.step(.previous)
+
+        XCTAssertEqual(surface.searches, ["ls"], "the debounced needle goes down first")
+        XCTAssertEqual(surface.searchSteps, [.next])
     }
 
     func test_theCountClimbingDoesNotStepOncePerReport() throws {
@@ -238,7 +379,7 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next], "once per needle, not once per report")
     }
 
-    func test_committingAfterAPreviewStaysOnTheMatchItShowed() throws {
+    func test_enteringScrollModeAfterTheNewestIsSelectedStaysOnIt() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -247,9 +388,9 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.report(total: 3, from: surface)
         controller.search.report(selected: 0, from: surface)
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
-        XCTAssertEqual(surface.searchSteps, [.next], "the preview's step is the only one")
+        XCTAssertEqual(surface.searchSteps, [.next], "the first total's step is the only one")
     }
 
     func test_leavingPutsTheViewportBackAtTheBottom() throws {
@@ -259,6 +400,8 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
+        surface.rows[0] = "an error from history"
+        controller.search.report(selected: 0, from: surface)
         XCTAssertEqual(surface.scrolls, [], "precondition: the step moved it, not a scroll")
 
         controller.search.end()
@@ -273,6 +416,8 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
+        surface.rows[0] = "an error from history"
+        controller.search.report(selected: 0, from: surface)
 
         controller.search.beginNeedleForTesting("errorx")
         controller.search.report(total: 0, from: surface)
@@ -287,10 +432,12 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 1, from: surface)
+        controller.search.report(selected: 0, from: surface)
+        XCTAssertEqual(surface.searchSteps, [], "precondition: a match on screen selects nothing")
 
         controller.search.end()
 
-        XCTAssertEqual(surface.scrolls, [])
+        XCTAssertEqual(surface.scrolls, [], "a reader scrolled up must not be thrown to the bottom")
     }
 
     func test_aReaderInTheirOwnScrollModeIsLeftWhereTheSearchTookThem() throws {
@@ -308,11 +455,11 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.scrollMode.isActive)
     }
 
-    func test_escapeLeavesTheScrollModeThatCommittingStarted() throws {
+    func test_escapeLeavesTheScrollModeThatFindStarted() throws {
         let controller = makeWindow()
         controller.handle(.toggleSearch)
-        controller.search.commit()
-        XCTAssertTrue(controller.scrollMode.isActive, "commit brings it up")
+        controller.search.enterScrollMode()
+        XCTAssertTrue(controller.scrollMode.isActive, "the hand-off brings it up")
 
         controller.search.end()
 
@@ -323,14 +470,14 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         controller.handle(.toggleSearch)
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         controller.search.end()
 
         XCTAssertTrue(controller.scrollMode.isActive, "they put themselves there and keep it")
     }
 
-    func test_focusModeTakesTheFindBarDownWithIt() throws {
+    func test_focusModeTakesTheFindFieldDownWithIt() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -343,12 +490,12 @@ final class SearchLifecycleTests: WindowTestCase {
 
         controller.handle(.toggleZoom)
 
-        XCTAssertFalse(controller.search.isEditing, "a bar left editing declines every key")
+        XCTAssertFalse(controller.search.isEditing, "a field left editing declines every key")
         XCTAssertFalse(controller.search.isActive)
-        XCTAssertNil(panel.findBarForTesting)
+        XCTAssertNil(panel.findFieldForTesting)
     }
 
-    func test_everyWayOutOfScrollModeTakesTheBarWithIt() throws {
+    func test_everyWayOutOfScrollModeTakesTheFieldWithIt() throws {
         let exits: [(String, (WindowController, ModeHostSpy) throws -> Void)] = [
             ("q", { _, host in _ = try XCTUnwrap(host.modeHandler)(try self.keyDown("q")) }),
             ("i", { _, host in _ = try XCTUnwrap(host.modeHandler)(try self.keyDown("i")) }),
@@ -363,21 +510,21 @@ final class SearchLifecycleTests: WindowTestCase {
             let panel = try XCTUnwrap(controller.focusedPanelForTesting)
             controller.handle(.toggleSearch)
             controller.search.beginNeedleForTesting("error")
-            controller.search.commit()
+            controller.search.enterScrollMode()
             XCTAssertTrue(controller.scrollMode.isActive, "\(name): precondition")
 
             try leave(controller, host)
 
             XCTAssertFalse(controller.scrollMode.isActive, "\(name) must leave the mode")
             XCTAssertFalse(controller.search.isActive, "\(name) must end the search")
-            XCTAssertNil(panel.findBarForTesting, "\(name) must take the bar down")
+            XCTAssertNil(panel.findFieldForTesting, "\(name) must take the field down")
             XCTAssertEqual(surface.endSearchCount, 1, "\(name) must stop the engine, exactly once")
             XCTAssertFalse(
                 host.isInstalled, "\(name) must give the prompt every key back, n and N included")
         }
     }
 
-    func test_leavingAReaderOwnedScrollModeAlsoTakesTheBarDown() throws {
+    func test_leavingAReaderOwnedScrollModeAlsoTakesTheFieldDown() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -385,12 +532,12 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleScrollMode)
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         _ = try XCTUnwrap(host.modeHandler)(try keyDown("q"))
 
         XCTAssertFalse(controller.search.isActive)
-        XCTAssertNil(panel.findBarForTesting)
+        XCTAssertNil(panel.findFieldForTesting)
         XCTAssertFalse(host.isInstalled)
     }
 
@@ -401,14 +548,14 @@ final class SearchLifecycleTests: WindowTestCase {
         let labelBefore = try XCTUnwrap(panel.shownHeaderForTesting?.nameForTesting)
 
         controller.handle(.toggleSearch)
-        XCTAssertEqual(panel.shownHeaderForTesting?.nameForTesting, labelBefore, "the find bar says what is live")
+        XCTAssertEqual(panel.shownHeaderForTesting?.nameForTesting, labelBefore, "the find field says what is live")
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
         XCTAssertTrue(controller.scrollMode.isActive)
         XCTAssertEqual(panel.shownHeaderForTesting?.nameForTesting, labelBefore, "and so does the scroll cursor")
     }
 
-    func test_aReaderOwnedScrollModeKeepsItsHeaderWhenTheBarCloses() throws {
+    func test_aReaderOwnedScrollModeKeepsItsHeaderWhenTheFieldCloses() throws {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         controller.handle(.toggleScrollMode)
@@ -422,14 +569,14 @@ final class SearchLifecycleTests: WindowTestCase {
             "stripping the cursor off a live mode would leave it running unmarked")
     }
 
-    func test_committingOverAnOpenScrollModeStillReassertsTheUnfocusedRender() throws {
+    func test_handingOffOverAnOpenScrollModeStillReassertsTheUnfocusedRender() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleScrollMode)
         controller.handle(.toggleSearch)
         let before = surface.focusRenders.count
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         XCTAssertGreaterThan(
             surface.focusRenders.count, before, "no push at all means nothing reconciled the render")
@@ -447,18 +594,18 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.focusCount, before + 1)
     }
 
-    func test_committingBeforeThePreviewsAnswerArrivesDoesNotStepTwice() throws {
+    func test_handingOffBeforeTheSelectionArrivesDoesNotStepTwice() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
-        XCTAssertEqual(surface.searchSteps, [.next], "the preview asked for a match")
+        XCTAssertEqual(surface.searchSteps, [.next], "the first total asked for a match")
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
-        XCTAssertEqual(surface.searchSteps, [.next], "committing must not ask for another")
+        XCTAssertEqual(surface.searchSteps, [.next], "the hand-off must not ask for another")
     }
 
     func test_typingPastTheDebounceLeavesNothingPendingBehindIt() throws {
@@ -471,11 +618,11 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searches, ["line"], "precondition: one send, the immediate one")
         controller.search.report(total: 3, from: surface)
         controller.search.report(selected: 0, from: surface)
-        XCTAssertEqual(surface.searchSteps, [.next], "the preview stepped onto match 0")
+        XCTAssertEqual(surface.searchSteps, [.next], "the first total stepped onto match 0")
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
-        XCTAssertEqual(surface.searches, ["line"], "committing must not re-send the needle")
+        XCTAssertEqual(surface.searches, ["line"], "the hand-off must not re-send the needle")
         XCTAssertEqual(surface.searchSteps, [.next], "nor step past the match already selected")
     }
 
@@ -493,22 +640,22 @@ final class SearchLifecycleTests: WindowTestCase {
 
         controller.search.report(total: 3, from: surface)
         controller.search.report(selected: 0, from: surface)
-        XCTAssertEqual(surface.searchSteps, [.next], "the preview stepped onto match 0")
+        XCTAssertEqual(surface.searchSteps, [.next], "the first total stepped onto match 0")
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
-        XCTAssertEqual(surface.searches, ["ls"], "committing must not re-send it")
+        XCTAssertEqual(surface.searches, ["ls"], "the hand-off must not re-send it")
         XCTAssertEqual(surface.searchSteps, [.next], "nor step past the match already selected")
     }
 
-    func test_committingSendsAShortNeedleBeforeSteppingIt() throws {
+    func test_handingOffSendsAShortNeedleBeforeSteppingIt() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleSearch)
         controller.search.typeForTesting("ls")
         XCTAssertEqual(surface.searches, [], "precondition: the debounce is holding it")
 
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         XCTAssertEqual(surface.searches, ["ls"], "the needle goes down first")
         XCTAssertEqual(surface.searchSteps, [.next], "and only then does it step")
@@ -532,7 +679,7 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [], "nor scroll a second time")
     }
 
-    func test_theScrollChordDuringTypingCommitsRatherThanStartingADeadMode() throws {
+    func test_theScrollChordDuringTypingHandsOffRatherThanStartingADeadMode() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -540,18 +687,18 @@ final class SearchLifecycleTests: WindowTestCase {
 
         controller.handle(.toggleScrollMode)
 
-        XCTAssertFalse(controller.search.isEditing, "the chord commits")
+        XCTAssertFalse(controller.search.isEditing, "the chord hands the keys to the pane")
         XCTAssertTrue(controller.scrollMode.isActive)
         let handler = try XCTUnwrap(host.modeHandler)
         XCTAssertTrue(handler(try keyDown("j")), "and the mode it left up actually takes keys")
     }
 
-    func test_escapeGivesASelectionBackBeforeItClosesTheBar() throws {
+    func test_escapeGivesASelectionBackBeforeItClosesTheField() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.toggleSearch)
-        controller.search.commit()
+        controller.search.enterScrollMode()
         let handler = try XCTUnwrap(host.modeHandler)
         _ = handler(try keyDown("v"))
         XCTAssertNotNil(controller.scrollMode.selection, "precondition")
@@ -559,7 +706,7 @@ final class SearchLifecycleTests: WindowTestCase {
         _ = handler(try keyDown("\u{1b}", keyCode: 53))
 
         XCTAssertNil(controller.scrollMode.selection, "the selection goes")
-        XCTAssertTrue(controller.search.isActive, "the bar stays")
+        XCTAssertTrue(controller.search.isActive, "the field stays")
     }
 
     func test_theViewportGoesBackWhereTheReaderHadItNotToTheBottom() throws {
@@ -571,6 +718,8 @@ final class SearchLifecycleTests: WindowTestCase {
             position: TerminalScrollPosition(total: 5000, offset: 500, viewport: 24), from: surface)
         controller.search.typeForTesting("error")
         controller.search.report(total: 3, from: surface)
+        surface.rows[0] = "an error from history"
+        controller.search.report(selected: 0, from: surface)
         controller.search.report(
             position: TerminalScrollPosition(total: 5000, offset: 120, viewport: 24), from: surface)
 
@@ -579,7 +728,7 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.lines(380)], "back by exactly what the search moved")
     }
 
-    func test_everyRetractionTakesTheBarDownAndStopsTheEngine() throws {
+    func test_everyRetractionTakesTheFieldDownAndStopsTheEngine() throws {
         let retractions: [(String, (WindowController) -> Void)] = [
             (
                 "a close confirm",
@@ -615,13 +764,13 @@ final class SearchLifecycleTests: WindowTestCase {
             retract(controller)
 
             XCTAssertFalse(controller.search.isActive, "\(name) must end the search")
-            XCTAssertNil(panel.findBarForTesting, "\(name) must take the bar down")
+            XCTAssertNil(panel.findFieldForTesting, "\(name) must take the field down")
             XCTAssertEqual(surface.endSearchCount, 1, "\(name) must stop the engine")
             XCTAssertFalse(host.isInstalled, "\(name) must uninstall the app-global handler")
         }
     }
 
-    func test_theBackendEndingTheSearchClosesTheBarWithoutCallingBack() throws {
+    func test_theBackendEndingTheSearchClosesTheFieldWithoutCallingBack() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -630,7 +779,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.backendEnded(from: surface)
 
         XCTAssertFalse(controller.search.isActive)
-        XCTAssertNil(panel.findBarForTesting)
+        XCTAssertNil(panel.findFieldForTesting)
         XCTAssertEqual(surface.endSearchCount, 0)
     }
 
@@ -642,23 +791,38 @@ final class SearchLifecycleTests: WindowTestCase {
 
         controller.search.backendEnded(from: other)
 
-        XCTAssertTrue(controller.search.isActive, "a background pane must not close the focused bar")
+        XCTAssertTrue(controller.search.isActive, "a background pane must not close the focused field")
     }
 
-    func test_theBarShowsATotalWhileTypingAndAnIndexAfterCommit() throws {
+    func test_theCountReadsAnIndexWithTheCaretStillInTheField() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         controller.handle(.toggleSearch)
-        let bar = try XCTUnwrap(panel.findBarForTesting)
+        let field = try XCTUnwrap(panel.findFieldForTesting)
         controller.search.beginNeedleForTesting("error")
 
         controller.search.report(total: 17, from: surface)
-        XCTAssertEqual(bar.countTextForTesting, "17 matches")
+        controller.search.report(selected: 0, from: surface)
+        XCTAssertEqual(field.countTextForTesting, "17 / 17", "opening lands on the newest")
 
-        controller.search.commit()
         controller.search.report(selected: 2, from: surface)
-        XCTAssertEqual(bar.countTextForTesting, "15 / 17", "zero-based, and newest-first")
+        XCTAssertEqual(field.countTextForTesting, "15 / 17", "zero-based, and newest-first")
+        XCTAssertTrue(controller.search.isEditing)
+    }
+
+    func test_aLargeCountGroupsItsThousands() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleSearch)
+        let field = try XCTUnwrap(panel.findFieldForTesting)
+        controller.search.beginNeedleForTesting("error")
+
+        controller.search.report(total: 1204, from: surface)
+        controller.search.report(selected: 1086, from: surface)
+
+        XCTAssertEqual(field.countTextForTesting, "118 / 1,204")
     }
 
     func test_theCountReadsInBufferOrderNotTheBackendsWalkOrder() throws {
@@ -666,16 +830,16 @@ final class SearchLifecycleTests: WindowTestCase {
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         controller.handle(.toggleSearch)
-        let bar = try XCTUnwrap(panel.findBarForTesting)
+        let field = try XCTUnwrap(panel.findFieldForTesting)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
-        controller.search.commit()
+        controller.search.enterScrollMode()
 
         controller.search.report(selected: 0, from: surface)
-        XCTAssertEqual(bar.countTextForTesting, "3 / 3", "the newest match is the last one down")
+        XCTAssertEqual(field.countTextForTesting, "3 / 3", "the newest match is the last one down")
 
         controller.search.report(selected: 2, from: surface)
-        XCTAssertEqual(bar.countTextForTesting, "1 / 3", "the oldest is the one nearest the top")
+        XCTAssertEqual(field.countTextForTesting, "1 / 3", "the oldest is the one nearest the top")
     }
 
     func test_noMatchesReadsAsWordsRatherThanAZero() throws {
@@ -683,10 +847,10 @@ final class SearchLifecycleTests: WindowTestCase {
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         controller.handle(.toggleSearch)
-        let bar = try XCTUnwrap(panel.findBarForTesting)
+        let field = try XCTUnwrap(panel.findFieldForTesting)
 
         controller.search.report(total: 0, from: surface)
 
-        XCTAssertEqual(bar.countTextForTesting, "No matches")
+        XCTAssertEqual(field.countTextForTesting, "No matches")
     }
 }

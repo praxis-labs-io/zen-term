@@ -767,7 +767,7 @@ Bundled themes carry an `nvim-colorscheme` key.
 
 ⌘⇧S. `ScrollModeController`, one per window, targets the `TerminalModeHost` that
 `modeTarget` resolves (a shown float, else the focused panel) and does not follow focus.
-`ModeChrome` hangs the header, find bar and cursor off the host.
+`ModeChrome` hangs the header, find field and cursor off the host.
 
 - `ScrollKeymap.key(for:pending:hasSelection:)` is a pure decode; counts and two-key
   commands arrive as `Pending`. Every key is consumed except unmapped ⌘ and ⌥ keys.
@@ -794,23 +794,29 @@ Bundled themes carry an `nvim-colorscheme` key.
   rows skip it. `rowText` trims trailing blanks.
 - **Retractions:** the mode ends on pane focus change, float or card taking the keyboard,
   and window resign. Zoom refocuses with `focus(_:announces: false)` and must end the
-  find bar itself. The stand-down is lifted off the controller it was pushed at.
+  find field itself. The stand-down is lifted off the controller it was pushed at.
 
 ### Find
 
 ⌘F. **Searching is libghostty's**: matching, counts, selection and highlights.
-`SearchController` owns the bar, needle and keys. Binding actions go down (`search:`,
+`SearchController` owns the field, needle and keys. Binding actions go down (`search:`,
 `navigate_search:`, `end_search`) and the `SEARCH_*` actions come back as
 `TerminalSurfaceDelegate` search events.
 
-- **Two keyboard phases.** While the field has focus the mode handler claims nothing.
-  ⏎ hands focus back, starts scroll mode, and `SearchController.key(for:)` takes
-  `n`/`N`/⏎/⇧⏎/Esc.
-- **After ⏎ the bar never outlives scroll mode:** `WindowController.wireModes` ends search
-  whenever scroll mode ends. Esc ends scroll mode only if search started it
-  (`didStartScrollMode`), and restores the viewport only if search moved it
-  (`didMoveViewport`) and the reader does not own the mode.
-- **A match only in history is previewed once per needle** when none is on screen.
+- **The field takes the header's row.** A pane with headers off shows its header while
+  find is open, which resizes the terminal like turning headers on does.
+- **Keys follow the caret.** While the field has focus the mode handler claims nothing,
+  and ⏎/⇧⏎ step (`FindField` reads Shift off `NSApp.currentEvent`). With the caret back
+  in a live pane every key reaches the prompt. Only in scroll mode does
+  `SearchController.key(for:)` take `n`/`N`/⏎/⇧⏎/Esc. `isEditing` tracks the field's
+  focus, and the pane renders unfocused only while editing or in scroll mode.
+- **⌘⇧S while editing hands off** (`enterScrollMode`): focus goes back to the pane and
+  scroll mode starts on the match. From then on the field never outlives scroll mode:
+  `WindowController.wireModes` ends search whenever scroll mode ends. Esc ends scroll
+  mode only if search started it (`didStartScrollMode`), and restores the viewport only
+  if search moved it (`didMoveViewport`) and the reader does not own the mode.
+- **The first total selects the newest match**, once per needle, so the count always
+  has an index. The viewport moves only if that match is off screen.
 - **The match cell is inferred.** `SEARCH_SELECTED` carries only an index. `matchCell`
   scans the viewport by direction (libghostty walks newest to oldest), checks whether
   the viewport moved by comparing rows (`rowsAtStep`), not the scroll offset, which lags
@@ -964,9 +970,6 @@ Sixty-six themes ship; a user file shadows a bundled one. `accent-color` repoint
 - **Shadow strength is solved per theme:** each `FloatShadow` tier's (`overlay`, `float`,
   `modal`) black alpha hits a target CIELAB darkening of the background, capped at the
   tier's `maxAlpha`.
-- **A strip inside a pane paints on the pane's fill** (`ChromeTheme.surface(tint:over:)`),
-  because below `background-alpha` 1 a tint alone composites over the window backdrop.
-  Showing a strip must mark the padding ring for redisplay.
 
 ## Worktrees
 

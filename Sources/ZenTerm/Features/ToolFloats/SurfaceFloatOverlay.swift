@@ -13,6 +13,7 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
     private var dismiss = DismissGate()
     let header: PaneHeader?
 
+    // Lazy only so its callback can capture self: `init` builds it, since it pins the content and mounts the header.
     private lazy var chrome = ModeChrome(
         container: card, content: content, padding: contentInset, header: header,
         onStripsChanged: { [weak self] in self?.stripsMoved() })
@@ -114,6 +115,7 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -contentInset),
         ])
 
+        chrome.applyHeaderShown()
         applyBackground()
     }
 
@@ -133,7 +135,6 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         ring.isHidden = isSolid
         blur.isHidden = isSolid
         ring.color = background.withAlphaComponent(alpha)
-        chrome.findBarFill = isSolid ? background : ring.color
     }
 
     var borderForTesting: (color: CGColor?, width: CGFloat) {
@@ -157,14 +158,14 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
     }
 
     @discardableResult
-    func setFindBarShown(_ shown: Bool) -> FindBarView? { chrome.setFindBarShown(shown) }
+    func setFindFieldShown(_ shown: Bool) -> FindField? { chrome.setFindFieldShown(shown) }
 
     private func stripsMoved() {
         applyBackground()
         ring.needsDisplay = true
     }
 
-    var findBarForTesting: FindBarView? { chrome.findBarForTesting }
+    var findFieldForTesting: FindField? { chrome.findFieldForTesting }
     var scrollCursorForTesting: ScrollCursorView { chrome.scrollCursorForTesting }
     var shownHeaderForTesting: PaneHeader? { chrome.shownHeaderForTesting }
 

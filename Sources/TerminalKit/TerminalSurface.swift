@@ -253,9 +253,9 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?)
     /// The selected match, zero-based, or nil. A fresh needle stays nil until the first `stepSearch`.
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?)
-    /// The backend ended its search on its own. Close the find bar without calling `endSearch()`.
+    /// The backend ended its search on its own. Close the find field without calling `endSearch()`.
     func surfaceDidEndSearch(_ s: TerminalSurface)
-    /// The backend asks the chrome to open its find bar, seeded with `needle`.
+    /// The backend asks the chrome to open its find field, seeded with `needle`.
     func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String)
 }
 

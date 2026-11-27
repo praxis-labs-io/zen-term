@@ -39,61 +39,6 @@ final class PaneChromeSurfaceTests: WindowTestCase {
         return try XCTUnwrap(controller.hostsForTesting.values.first { surface.view.isDescendant(of: $0) })
     }
 
-    private func barFill(_ host: PanelHostView) throws -> NSColor {
-        let bar = try XCTUnwrap(host.setFindBarShown(true))
-        host.layoutSubtreeIfNeeded()
-        let painted = try XCTUnwrap(bar.paintedFillForTesting)
-        return try XCTUnwrap(NSColor(cgColor: painted)?.usingColorSpace(.sRGB))
-    }
-
-    private var tintAlpha: CGFloat { FindBarView.tintAlphaForTesting }
-
-    func test_findBar_paintsAtThePanesAlpha_notItsTintAlone() throws {
-        var config = GeneralConfig.builtIn
-        config.backgroundAlpha = 0.5
-        GeneralConfig.setCurrentForTesting(config)
-        let host = try focusedHost()
-        controller.surface(
-            try XCTUnwrap(controller.allSurfaces.first),
-            backgroundDidChange: TerminalColor(red: 0, green: 0, blue: 0))
-
-        let fill = try barFill(host)
-
-        let expectedAlpha = tintAlpha + 0.5 * (1 - tintAlpha)
-        XCTAssertEqual(
-            fill.alphaComponent, expectedAlpha, accuracy: 0.01,
-            "the bar carries the pane's fill under its tint, so it is more opaque than either")
-        let accent = try XCTUnwrap(Theme.current.chrome.accent.nsColor.usingColorSpace(.sRGB))
-        let share = tintAlpha / expectedAlpha
-        XCTAssertEqual(fill.redComponent, accent.redComponent * share, accuracy: 0.02)
-        XCTAssertEqual(fill.greenComponent, accent.greenComponent * share, accuracy: 0.02)
-        XCTAssertEqual(fill.blueComponent, accent.blueComponent * share, accuracy: 0.02)
-    }
-
-    func test_findBar_isOpaqueWhileTheBackgroundIsSolid() throws {
-        let host = try focusedHost()
-
-        let fill = try barFill(host)
-
-        XCTAssertEqual(
-            fill.alphaComponent, 1, accuracy: 0.01,
-            "on a solid pane the bar is the pane's fill plus its tint, which is opaque")
-    }
-
-    func test_findBar_isNeverFainterThanThePaddingRing() throws {
-        var config = GeneralConfig.builtIn
-        config.backgroundAlpha = 0.3
-        GeneralConfig.setCurrentForTesting(config)
-        let host = try focusedHost()
-
-        let fill = try barFill(host)
-        let ring = try XCTUnwrap(host.paintedBackgroundForTesting.ring.usingColorSpace(.sRGB))
-
-        XCTAssertGreaterThan(
-            fill.alphaComponent, ring.alphaComponent,
-            "a bar fainter than the ring it sits on is the grey wash this ticket is about")
-    }
-
     func test_surface_compositesTintOverBase() throws {
         let opaque = ChromeTheme.surface(
             tint: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.5),
@@ -137,25 +82,15 @@ final class PaneChromeSurfaceTests: WindowTestCase {
             "the header's going grew the terminal, so the ring's hole is stale until it repaints")
     }
 
-    func test_togglingTheFindBar_repaintsTheRing() throws {
-        var config = GeneralConfig.builtIn
-        config.backgroundAlpha = 0.5
-        GeneralConfig.setCurrentForTesting(config)
+    func test_openingFind_leavesTheTerminalsFrameAlone() throws {
         let host = try focusedHost()
+        let terminal = try XCTUnwrap(controller.allSurfaces.first).view
         host.layoutSubtreeIfNeeded()
-        host.displayIfNeeded()
-        XCTAssertFalse(host.ringNeedsDisplayForTesting, "premise: nothing is queued before the toggle")
+        let before = terminal.frame
 
-        _ = host.setFindBarShown(true)
-
-        XCTAssertTrue(
-            host.ringNeedsDisplayForTesting,
-            "showing the bar shrank the terminal, so the ring's hole is stale until it repaints")
-
+        _ = host.setFindFieldShown(true)
         host.layoutSubtreeIfNeeded()
-        host.displayIfNeeded()
-        _ = host.setFindBarShown(false)
 
-        XCTAssertTrue(host.ringNeedsDisplayForTesting, "and hiding it moves the hole back")
+        XCTAssertEqual(terminal.frame, before, "the field floats over the header, so the grid must not reflow")
     }
 }

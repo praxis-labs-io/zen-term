@@ -52,7 +52,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
     var content: Content {
         didSet {
             guard content != oldValue else { return }
-            if content.process != oldValue.process { chip.show(content.process) }
+            if content.process != oldValue.process, !isFinding { chip.show(content.process) }
             applyText()
         }
     }
@@ -63,6 +63,19 @@ final class PaneHeader: ControlView, ThemeReapplying {
             applyControlsShown(animated: true)
         }
     }
+
+    // Find takes the row: the chip turns to find's, and the name, path and controls step aside for the field.
+    var isFinding = false {
+        didSet {
+            guard isFinding != oldValue else { return }
+            chip.show(isFinding ? .find : content.process)
+            nameField.isHidden = isFinding
+            controlStack.isHidden = isFinding
+            applyText()
+        }
+    }
+
+    var chipTrailingAnchor: NSLayoutXAxisAnchor { chip.trailingAnchor }
 
     var isZoomed = false {
         didSet { buttons[.focusMode]?.isActive = isZoomed }
@@ -161,6 +174,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
     var nameForTesting: String { nameField.stringValue }
     var pathForTesting: String? { pathField.isHidden ? nil : pathField.stringValue }
     var processForTesting: ProcessIcon { content.process }
+    var chipForTesting: ProcessIcon? { chip.shownProcessForTesting }
+    var showsTitleAndControlsForTesting: Bool { !nameField.isHidden && !controlStack.isHidden }
     var controlsForTesting: [Control] { controls }
     var visibleControlsForTesting: [Control] {
         controls.filter { buttons[$0]?.isHidden == false }
@@ -188,7 +203,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
         let ink = Theme.current.chrome.ink(.muted)
         nameField.attributedStringValue = Self.text(
             content.name, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
-        pathField.isHidden = content.path == nil
+        pathField.isHidden = isFinding || content.path == nil
         pathField.attributedStringValue = Self.text(
             content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
         needsUpdateConstraints = true
