@@ -48,6 +48,10 @@ final class PiSetupTests: XCTestCase {
         XCTAssertEqual(try setup.state(), .current)
     }
 
+    func test_placementsFollowTheFilesContentsOrder() {
+        XCTAssertEqual(setup.placements.map(\.contents), files.contents)
+    }
+
     func test_installWritesNoSettings() throws {
         _ = try setup.install()
 
