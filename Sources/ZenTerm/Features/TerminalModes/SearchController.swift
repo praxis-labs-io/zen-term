@@ -283,8 +283,20 @@ final class SearchController {
     }
 
     private func viewportHoldsNeedle() -> Bool {
-        guard let surface else { return false }
-        return Self.viewportRows(of: surface).contains { !Self.occurrenceColumns(of: needle, in: $0).isEmpty }
+        guard let surface, let grid = surface.grid, let metrics = surface.cellMetrics, grid.rowCount > 0 else {
+            return false
+        }
+        let top = grid.viewportTop
+        let bottom = min(top + metrics.rows, grid.rowCount) - 1
+        guard
+            bottom >= top,
+            let text = grid.text(
+                from: TerminalGridPoint(row: top, column: 0),
+                to: TerminalGridPoint(row: bottom, column: max(metrics.columns - 1, 0)))
+        else { return false }
+        return text.split(whereSeparator: \.isNewline).contains {
+            !Self.occurrenceColumns(of: needle, in: String($0)).isEmpty
+        }
     }
 
     func report(selected: Int?, from s: AnyObject) {
