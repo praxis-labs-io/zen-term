@@ -60,6 +60,10 @@ final class CodexSetupTests: XCTestCase {
         XCTAssertEqual(try setup.state(), .current)
     }
 
+    func test_placementsFollowTheFilesContentsOrder() {
+        XCTAssertEqual(setup.placements.map(\.contents), files.contents)
+    }
+
     func test_installKeepsEveryEntryItDidNotWrite() throws {
         try writeSettings(unrelated)
 
