@@ -4368,7 +4368,7 @@ final class WindowController: NSObject {
 
     private func presentClaudeSetupPrompt(
         _ prompt: ClaudeSetupPrompt,
-        onConfirmed: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void,
+        onConfirmed: @escaping (Result<ClaudeSetup.State, SetupError>) -> Void,
         onDeclined: @escaping () -> Void
     ) {
         weak var toast: ToastView?
@@ -4394,7 +4394,7 @@ final class WindowController: NSObject {
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
     static let claudeUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
 
-    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, SetupError>) {
         switch result {
         case .success:
             toasts.show(Self.claudeSetUpToast)
@@ -4403,7 +4403,7 @@ final class WindowController: NSObject {
         }
     }
 
-    private func showClaudeUpdateResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+    private func showClaudeUpdateResult(_ result: Result<ClaudeSetup.State, SetupError>) {
         switch result {
         case .success: showClaudeUpdated()
         case .failure(let error): showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
@@ -4416,7 +4416,7 @@ final class WindowController: NSObject {
         toasts.show(Self.claudeUpdatedToast)
     }
 
-    private func showClaudeSetupFailure(_ error: ClaudeSetupError, title: String) {
+    private func showClaudeSetupFailure(_ error: SetupError, title: String) {
         let shown = toasts.showSticky(
             Self.claudeSetupFailureToast(title: title, reason: error.message), actions: [], showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }

@@ -95,7 +95,7 @@ final class SettingsGeneralSection: SettingsFormSection {
         ClaudeCodeSetup.refresh(applying: change) { [weak self] in self?.showClaudeSetup($0) }
     }
 
-    private func showClaudeSetup(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+    private func showClaudeSetup(_ result: Result<ClaudeSetup.State, SetupError>) {
         let row = rowFor(Self.claudeSetupKey)
         switch result {
         case .success(let state):

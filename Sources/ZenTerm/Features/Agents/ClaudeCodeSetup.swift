@@ -25,15 +25,15 @@ enum ClaudeCodeSetup {
     enum Startup: Equatable {
         case notInstalled
         case updated
-        case updateFailed(ClaudeSetupError)
+        case updateFailed(SetupError)
         case edited(version: String)
         case current
     }
 
     static func refresh(
-        applying change: Change? = nil, completion: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void
+        applying change: Change? = nil, completion: @escaping (Result<ClaudeSetup.State, SetupError>) -> Void
     ) {
-        perform(completion: completion) { setup throws(ClaudeSetupError) in
+        perform(completion: completion) { setup throws(SetupError) in
             switch change {
             case .install: _ = try setup.install()
             case .remove: _ = try setup.remove()
@@ -43,14 +43,14 @@ enum ClaudeCodeSetup {
         }
     }
 
-    static func claudeStarted(completion: @escaping (Result<Startup, ClaudeSetupError>) -> Void) {
-        perform(completion: completion) { setup throws(ClaudeSetupError) in
+    static func claudeStarted(completion: @escaping (Result<Startup, SetupError>) -> Void) {
+        perform(completion: completion) { setup throws(SetupError) in
             switch try setup.state() {
             case .notInstalled: return .notInstalled
             case .edited: return .edited(version: setup.files.version)
             case .current, .newer: return .current
             case .outdated:
-                do throws(ClaudeSetupError) {
+                do throws(SetupError) {
                     _ = try setup.install()
                     return .updated
                 } catch {
@@ -61,8 +61,8 @@ enum ClaudeCodeSetup {
     }
 
     private static func perform<Outcome>(
-        completion: @escaping (Result<Outcome, ClaudeSetupError>) -> Void,
-        _ work: @escaping (ClaudeSetup) throws(ClaudeSetupError) -> Outcome
+        completion: @escaping (Result<Outcome, SetupError>) -> Void,
+        _ work: @escaping (ClaudeSetup) throws(SetupError) -> Outcome
     ) {
         let configRoot = configRoot
         var files: ClaudeSetupFiles?
@@ -70,9 +70,9 @@ enum ClaudeCodeSetup {
             files = filesOverrideForTesting
         #endif
         queue.async {
-            let result = Result { () throws(ClaudeSetupError) -> Outcome in
+            let result = Result { () throws(SetupError) -> Outcome in
                 guard let files = files ?? ClaudeSetupFiles.bundled() else {
-                    throw ClaudeSetupError(message: "ZenTerm can't find the skill it ships with. Reinstall ZenTerm.")
+                    throw SetupError(message: "ZenTerm can't find the skill it ships with. Reinstall ZenTerm.")
                 }
                 return try work(ClaudeSetup(configRoot: configRoot, files: files))
             }

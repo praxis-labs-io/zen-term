@@ -240,7 +240,7 @@ final class ClaudeSetupTests: XCTestCase {
         try writeSettings(broken)
 
         XCTAssertThrowsError(try setup.install()) { error in
-            XCTAssertTrue((error as? ClaudeSetupError)?.message.contains(self.setup.settingsURL.path) == true)
+            XCTAssertTrue((error as? SetupError)?.message.contains(self.setup.settingsURL.path) == true)
         }
         XCTAssertThrowsError(try setup.remove())
         XCTAssertThrowsError(try setup.state())
