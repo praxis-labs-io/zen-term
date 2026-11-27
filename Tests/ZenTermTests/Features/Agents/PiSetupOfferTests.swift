@@ -121,6 +121,17 @@ final class PiSetupOfferTests: WindowTestCase {
         XCTAssertNil(toast(titled: "Teach Claude Code to use zen?", in: c), "Pi's offer is Pi's alone")
     }
 
+    func test_piTypedAtAShellPromptOffersIt() throws {
+        let c = makeWindow(offer: newOffer())
+        let tab = try XCTUnwrap(c.tabOrderForTesting.first)
+        let surface = try XCTUnwrap(c.controllerForTesting(tab: tab)?.allSurfaces.first as? RecordingSurface)
+
+        surface.delegate?.surface(surface, titleDidChange: "π - zen-term")
+
+        waitUntil(offerToast(in: c) != nil, "the setup offer")
+        XCTAssertEqual(c.agentNameForTesting(try XCTUnwrap(c.focusedSurfaceIDForTesting)), "pi")
+    }
+
     func test_anotherAgentStartingOffersNothing() throws {
         let c = makeWindow(offer: newOffer())
 

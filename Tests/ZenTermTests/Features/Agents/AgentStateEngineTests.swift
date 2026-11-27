@@ -277,6 +277,18 @@ final class AgentIdentificationTests: XCTestCase {
         }
     }
 
+    func test_pisTitle_identifiesPi() {
+        for title in ["π - zen-term", "π - Refactor auth - zen-term"] {
+            XCTAssertEqual(AgentRules.agentName(matching: title), "pi", title)
+        }
+    }
+
+    func test_aPiTitleFromAnotherProgram_identifiesNobody() {
+        for title in ["π", "π calculator", "π-day.md", "π - ", "notes on π - math", "pi - zen-term"] {
+            XCTAssertNil(AgentRules.agentName(matching: title), title)
+        }
+    }
+
     func test_aTitleThatProvesNothing_identifiesNobody() {
         let cases = [
             AgentTitleFixtures.codexIdle, AgentTitleFixtures.codexBareIdle,

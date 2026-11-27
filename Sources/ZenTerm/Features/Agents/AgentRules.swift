@@ -40,7 +40,11 @@ enum AgentRules {
             ])
         ),
         ("claude", .regex(claudeLaunchTitle)),
+        ("pi", .regex(piTitle)),
     ]
+
+    // Pi titles its pane `π - <folder>`, or `π - <session> - <folder>` once the session is named.
+    private static let piTitle = "^π - \\S"
 
     // Claude's later titles carry only the tool name, so the one that names it is the one it opens with.
     private static let claudeLaunchTitle = "^[✳◐◑◒◓] Claude Code$"
