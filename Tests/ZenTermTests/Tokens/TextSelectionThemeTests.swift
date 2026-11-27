@@ -246,7 +246,7 @@ final class TextSelectionThemeTests: WindowTestCase {
         chip.reapplyThemeTree()
 
         XCTAssertEqual(editor.selectedTextAttributes[.backgroundColor] as? NSColor, focusedTint)
-        XCTAssertEqual(editor.insertionPointColor, Theme.current.chrome.ink(.normal))
+        XCTAssertEqual(editor.insertionPointColor, Theme.current.chrome.cursor.nsColor)
         window.orderOut(nil)
     }
 
@@ -266,7 +266,7 @@ final class TextSelectionThemeTests: WindowTestCase {
                 view.selectedTextAttributes[.backgroundColor] as? NSColor, focusedTint,
                 "the \(name) kept the old theme's selection")
             XCTAssertEqual(
-                view.insertionPointColor, Theme.current.chrome.ink(.normal), "the \(name) kept the old caret")
+                view.insertionPointColor, Theme.current.chrome.cursor.nsColor, "the \(name) kept the old caret")
         }
     }
 }

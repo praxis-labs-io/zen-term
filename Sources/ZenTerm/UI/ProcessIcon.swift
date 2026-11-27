@@ -29,6 +29,7 @@ struct ProcessIcon: Equatable {
     static let shell = neutral("Shell", "terminal")
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
+    static let find = neutral("Find", "search")
 
     static let workspace = purpose("Workspace", "folder", .magenta)
     static let workspaceWorktree = purpose("Worktree", "git-branch", .magenta)

@@ -72,6 +72,56 @@ final class IconButtonTests: WindowTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func test_aDisabledButton_ignoresAClickUntilItIsEnabledAgain() throws {
+        var count = 0
+        let button = IconButton(symbol: "chevron.up", accessibilityLabel: "Older Match") { count += 1 }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(button)
+        button.isEnabled = false
+
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: .zero))
+        XCTAssertFalse(button.accessibilityPerformPress(), "VoiceOver's press is a click too")
+        XCTAssertEqual(count, 0)
+
+        button.isEnabled = true
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: .zero))
+        XCTAssertEqual(count, 1)
+    }
+
+    func test_aDisabledReleaseButton_ignoresAFullClick() throws {
+        let (button, window, fired) = releaseButton()
+        let inside = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+        button.isEnabled = false
+
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: inside))
+        button.mouseUp(with: try mouse(.leftMouseUp, in: window, at: inside))
+
+        XCTAssertEqual(fired(), 0)
+    }
+
+    @MainActor
+    func test_aDisabledButton_restsFaintAndTakesNoHoverFill() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let button = IconButton(symbol: "chevron.up", accessibilityLabel: "Older Match", onClick: {})
+        window.contentView?.addSubview(button)
+        button.isEnabled = false
+        let hover = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
+                userData: nil))
+
+        button.mouseEntered(with: hover)
+
+        XCTAssertEqual(button.iconTintForTesting, Theme.current.chrome.ink(.faint))
+        let fill = button.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }
+        XCTAssertEqual(fill?.alphaComponent ?? 0, 0, "a hover fill promises a click that does nothing")
+    }
+
     func test_movedOutFromUnderAStillPointer_clearsHover() throws {
         let window = KeyedWindow(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),

@@ -162,48 +162,55 @@ guard() {
 
 # ---------------------------------------------------------------- commands
 
+# Probe UI-element access, not the process list. Reading `name of first process whose
+# frontmost is true` succeeds WITHOUT assistive access, so it reported "granted" while
+# every keystroke failed with error 1002. Touching a UI element needs the same permission
+# sending input does, and fails with -25211 when it is missing.
+has_accessibility() {
+    osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to count of windows' >/dev/null 2>&1
+}
+
+has_screen_recording() {
+    local tmp; tmp=$(mktemp -t ztshot).png
+    screencapture -x -o "$tmp" >/dev/null 2>&1 && [ -s "$tmp" ]
+    local got=$?
+    rm -f "$tmp"
+    return $got
+}
+
 cmd_preflight() {
     local ok=0
-    # Probe UI-element access, not the process list. Reading `name of first process whose
-    # frontmost is true` succeeds WITHOUT assistive access, so it reported "granted" while
-    # every keystroke failed with error 1002. Touching a UI element needs the same permission
-    # sending input does, and fails with -25211 when it is missing.
-    if osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to count of windows' >/dev/null 2>&1; then
+    if has_accessibility; then
         note "Accessibility: granted (UI elements reachable)"
     else
         echo "✗ Accessibility: DENIED — keystrokes fail with error 1002, nothing is driven." >&2
         ok=1
     fi
-    local tmp; tmp=$(mktemp -t ztshot).png
-    if screencapture -x -o "$tmp" >/dev/null 2>&1 && [ -s "$tmp" ]; then
+    if has_screen_recording; then
         note "Screen Recording: granted"
     else
         echo "✗ Screen Recording: DENIED — screenshots fail, so a failed step cannot be diagnosed." >&2
         ok=1
     fi
-    rm -f "$tmp"
-
-    if [ "$ok" -ne 0 ]; then
-        cat >&2 <<'ASK'
-
-  ── ACTION NEEDED FROM DREW ──────────────────────────────────────────────
-  macOS will NOT prompt for these. TCC asks once per responsible process;
-  after a decision (especially a revoke) it fails silently forever. Waiting
-  for a dialog will wait forever. Grant by hand, tick the entry for the
-  terminal hosting this session, then re-run preflight:
-
-    open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-    open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-
-  A toggle may need to be switched off and on again to take effect, and the
-  host app usually has to be restarted before the new grant applies.
-  ─────────────────────────────────────────────────────────────────────────
-ASK
-    fi
+    [ "$ok" -ne 0 ] && echo "  Grant each missing one in turn: zt-drive.sh grant accessibility, then grant screen-recording." >&2
     if t=$(target_pid 2>/dev/null); then note "target: pid $t ($(ps -o comm= -p "$t"))"; else note "target: none running"; fi
     note "other ZenTerm instances (never targeted):"
     ps -Ao pid,comm | grep -E "MacOS/ZenTerm" | grep -v grep | sed 's/^/    /' || echo "    none"
     return $ok
+}
+
+# macOS never prompts for these, so open the one pane and leave the approval to Drew.
+cmd_grant() {
+    local pane
+    case "${1:-}" in
+        accessibility)    has_accessibility && { note "Accessibility: already granted"; return 0; }; pane=Privacy_Accessibility ;;
+        screen-recording) has_screen_recording && { note "Screen Recording: already granted"; return 0; }; pane=Privacy_ScreenCapture ;;
+        *) die "usage: zt-drive.sh grant accessibility|screen-recording" ;;
+    esac
+    open "x-apple.systempreferences:com.apple.preference.security?$pane"
+    note "opened System Settings > Privacy & Security for $1."
+    note "if it lands elsewhere (macOS moves these panes), search Settings for the permission's name."
+    note "turn on the app hosting this pane (ZenTerm Dev), then reply done. A toggle may need off and on again."
 }
 
 # A pane closes on any exit, and `zen wait <token>` still reads how it ended; a zen without `pane run` gets a tab.
@@ -263,8 +270,9 @@ cmd_verify_symbol() {
 # Clipboard paste, never per-character `keystroke`: System Events drops characters
 # on long strings (observed turning `python3` into `nepython3`). The clipboard is
 # saved and restored so this does not clobber the user's.
-cmd_run() {
-    local text="${1:?usage: run <command>}" t saved
+# Pastes validated text into whatever has focus; `run` adds Return, `paste` leaves the line unsent.
+paste_text() {
+    local text="$1" submit="$2" t saved
     validate_text "$text"
     count_action
     t=$(require_target)
@@ -273,15 +281,20 @@ cmd_run() {
     guard "$t"
     osa -e 'tell application "System Events" to keystroke "v" using {command down}' >/dev/null
     sleep 0.4
-    osa -e 'tell application "System Events" to key code 36' >/dev/null
+    [ "$submit" = submit ] && osa -e 'tell application "System Events" to key code 36' >/dev/null
     sleep 0.3
     printf '%s' "$saved" | pbcopy
-    note "sent: $text"
+    if [ "$submit" = submit ]; then note "sent: $text"; else note "pasted: $text"; fi
 }
 
-# chord <key> [comma-separated mods]   e.g. chord w command   |   chord '\' command,shift
+cmd_run() { paste_text "${1:?usage: run <command>}" submit; }
+
+cmd_paste() { paste_text "${1:?usage: paste <text>}" ""; }
+
+# chord <key> <comma-separated mods>   e.g. chord w command   |   chord '\' command,shift
+# No default modifier: a bare letter read as a ⌘ chord once sent ⌘W where text was meant.
 cmd_chord() {
-    local key="${1:?usage: chord <key> [mods]}" mods="${2:-command}" t applemods=""
+    local key="${1:?usage: chord <key> <mods>}" mods="${2:?chord needs its modifiers, e.g. chord f command; type text with paste}" t applemods=""
     # A chord is a single key plus modifiers. Anything longer is text trying to
     # arrive through the path that skips validate_text.
     [ ${#key} -eq 1 ] || die "chord takes a single key, got: $key"
@@ -446,9 +459,11 @@ cmd_sweep() {
 
 case "${1:-}" in
     preflight)      shift; cmd_preflight "$@" ;;
+    grant)          shift; cmd_grant "$@" ;;
     launch)         shift; cmd_launch "$@" ;;
     verify-symbol)  shift; cmd_verify_symbol "$@" ;;
     run)            shift; cmd_run "$@" ;;
+    paste)          shift; cmd_paste "$@" ;;
     chord)          shift; cmd_chord "$@" ;;
     key)            shift; cmd_key "$@" ;;
     window)         shift; cmd_window "$@" ;;
@@ -466,12 +481,14 @@ case "${1:-}" in
 usage: zt-drive.sh <command>
 
   preflight              check TCC permissions and list instances
+  grant <permission>     open Settings for accessibility|screen-recording, unless already granted
   launch                 start bin/run in a ZenTerm pane (else the background), wait for it
   verify-symbol <sym>    prove the RUNNING binary contains your change
   target                 print the target pid (refuses bundle apps)
 
-  run <command>          paste a command line into the focused pane
-  chord <key> [mods]     e.g. chord w command | chord '\\' command,shift
+  run <command>          paste a command line into the focused pane and press Return
+  paste <text>           paste validated text into the focused field, no Return
+  chord <key> <mods>     e.g. chord w command | chord '\\' command,shift (mods required)
   key <name> [mods]      return|escape|tab|space|up|down|left|right, e.g. key return command
   click <x> <y>          click at a point in the dev window (window-relative points)
   hover <x> <y>          move the pointer there

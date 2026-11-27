@@ -59,7 +59,7 @@ final class EditMenuRoutingTests: WindowTestCase {
         return editor
     }
 
-    func test_selectAll_inTheFindBar_selectsTheField_notTheBuffer() throws {
+    func test_selectAll_inTheFindField_selectsTheField_notTheBuffer() throws {
         let c = makeWindow()
         let paneSurface = try XCTUnwrap(spawned.first, "the first tab spawns one pane surface")
 
@@ -76,7 +76,7 @@ final class EditMenuRoutingTests: WindowTestCase {
             "and must not reach the buffer behind a field that holds the keyboard")
     }
 
-    func test_copy_inTheFindBar_takesTheField_notTheTerminalSelection() throws {
+    func test_copy_inTheFindField_takesTheField_notTheTerminalSelection() throws {
         let c = makeWindow()
         let paneSurface = try XCTUnwrap(spawned.first)
         paneSurface.selectionText = "TERMINAL-SELECTION"
@@ -93,7 +93,7 @@ final class EditMenuRoutingTests: WindowTestCase {
             "⌘C must copy the field's selection, not the terminal's")
     }
 
-    func test_paste_inTheFindBar_landsInTheField_notTheTerminal() throws {
+    func test_paste_inTheFindField_landsInTheField_notTheTerminal() throws {
         let c = makeWindow()
         let paneSurface = try XCTUnwrap(spawned.first)
 

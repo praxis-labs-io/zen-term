@@ -282,7 +282,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor.column, 8, "a WORD crosses it to `baz`")
     }
 
-    func test_starOpensTheFindBarOnTheWordUnderTheBand() throws {
+    func test_starOpensTheFindFieldOnTheWordUnderTheBand() throws {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let host = ModeHostSpy()
@@ -295,7 +295,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 8, "precondition")
         XCTAssertTrue(handler(try keyDown("*", unshifted: "8", flags: .shift)))
 
-        XCTAssertEqual(panel.findBarForTesting?.needle, "hi")
+        XCTAssertEqual(panel.findFieldForTesting?.needle, "hi")
     }
 
     func test_aYankPastAWideCharacterTakesTheWholeOfIt() throws {

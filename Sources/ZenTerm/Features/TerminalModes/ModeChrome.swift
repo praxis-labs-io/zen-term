@@ -16,11 +16,9 @@ final class ModeChrome {
     private var contentTopToHeader: NSLayoutConstraint?
     private let contentTopToContainer: NSLayoutConstraint
 
-    private var findBar: FindBarView?
-    private var isFindBarShown = false
-    private var slideRuns: [ObjectIdentifier: Int] = [:]
-    private var contentBottomToFindBar: NSLayoutConstraint?
-    private let contentBottomToContainer: NSLayoutConstraint
+    private var findField: FindField?
+    private var isFindFieldShown = false
+    private var fadeRun = 0
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
@@ -40,9 +38,10 @@ final class ModeChrome {
         self.onStripsChanged = onStripsChanged
         contentTopToContainer = content.topAnchor.constraint(
             equalTo: container.topAnchor, constant: padding)
-        contentBottomToContainer = content.bottomAnchor.constraint(
-            equalTo: container.bottomAnchor, constant: -padding)
-        NSLayoutConstraint.activate([contentTopToContainer, contentBottomToContainer])
+        NSLayoutConstraint.activate([
+            contentTopToContainer,
+            content.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -padding),
+        ])
 
         cursor.translatesAutoresizingMaskIntoConstraints = false
         cursor.isHidden = true
@@ -54,18 +53,18 @@ final class ModeChrome {
             cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         if let header { mount(header) }
-        setHeaderShown(Self.showsHeader(header))
+        setHeaderShown(showsHeader)
     }
 
     func applyHeaderShown() {
-        let shown = Self.showsHeader(header)
-        guard shown != isHeaderShown else { return }
-        setHeaderShown(shown)
+        guard showsHeader != isHeaderShown else { return }
+        setHeaderShown(showsHeader)
         onStripsChanged()
     }
 
-    private static func showsHeader(_ header: PaneHeader?) -> Bool {
-        header != nil && GeneralConfig.current.paneHeaders
+    /// Find lives in the header, so a pane with headers off shows its header while a search runs.
+    private var showsHeader: Bool {
+        header != nil && (GeneralConfig.current.paneHeaders || isFindFieldShown)
     }
 
     private func setHeaderShown(_ shown: Bool) {
@@ -96,48 +95,46 @@ final class ModeChrome {
     }
 
     @discardableResult
-    func setFindBarShown(_ shown: Bool) -> FindBarView? {
-        defer { onStripsChanged() }
+    func setFindFieldShown(_ shown: Bool) -> FindField? {
         guard shown else {
-            guard isFindBarShown, let findBar, let contentBottomToFindBar else { return nil }
-            isFindBarShown = false
-            findBar.isDismissed = true
-            contentBottomToFindBar.isActive = false
-            contentBottomToContainer.isActive = true
-            slide(findBar, appearing: false)
+            guard isFindFieldShown, let findField else { return nil }
+            isFindFieldShown = false
+            findField.isDismissed = true
+            header?.isFinding = false
+            if GeneralConfig.current.paneHeaders {
+                fade(findField, appearing: false)
+            } else {
+                findField.isHidden = true
+            }
+            applyHeaderShown()
             return nil
         }
-        let bar = findBar ?? makeFindBar()
-        guard !isFindBarShown else { return bar }
-        isFindBarShown = true
-        bar.isDismissed = false
-        contentBottomToContainer.isActive = false
-        contentBottomToFindBar?.isActive = true
-        slide(bar, appearing: true)
-        return bar
+        guard let field = findField ?? makeFindField() else { return nil }
+        guard !isFindFieldShown else { return field }
+        isFindFieldShown = true
+        field.isDismissed = false
+        applyHeaderShown()
+        header?.isFinding = true
+        fade(field, appearing: true)
+        return field
     }
 
-    var findBarFill: NSColor = .clear {
-        didSet { findBar?.paneFill = findBarFill }
+    // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the field.
+    private func fade(_ field: FindField, appearing: Bool) {
+        fadeRun += 1
+        let run = fadeRun
+        field.isHidden = false
+        field.wantsLayer = true
+        if appearing { field.layer?.opacity = 0 }
+        Motion.fade(field, to: appearing ? 1 : 0) { [weak self] in
+            guard !appearing, self?.fadeRun == run else { return }
+            field.isHidden = true
+        }
     }
 
     var scrollCursorForTesting: ScrollCursorView { cursor }
-    var findBarForTesting: FindBarView? { isFindBarShown ? findBar : nil }
+    var findFieldForTesting: FindField? { isFindFieldShown ? findField : nil }
     var shownHeaderForTesting: PaneHeader? { isHeaderShown ? header : nil }
-
-    // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the strip.
-    private func slide(_ strip: NSView, appearing: Bool) {
-        let key = ObjectIdentifier(strip)
-        let run = (slideRuns[key] ?? 0) + 1
-        slideRuns[key] = run
-        let depth = strip.fittingSize.height + Self.stripInset
-        strip.isHidden = false
-        Motion.slideFade(strip, appearing: appearing, from: CGVector(dx: 0, dy: -depth)) {
-            [weak self] in
-            guard !appearing, self?.slideRuns[key] == run else { return }
-            strip.isHidden = true
-        }
-    }
 
     private func mount(_ view: PaneHeader) {
         view.isHidden = true
@@ -151,20 +148,18 @@ final class ModeChrome {
             equalTo: view.bottomAnchor, constant: padding)
     }
 
-    private func makeFindBar() -> FindBarView {
-        let bar = FindBarView()
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        bar.isHidden = true
-        container.addSubview(bar)
+    private func makeFindField() -> FindField? {
+        guard let header else { return nil }
+        let field = FindField()
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.isHidden = true
+        container.addSubview(field)
         NSLayoutConstraint.activate([
-            bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: padding),
-            bar.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -padding),
-            bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Self.stripInset),
+            field.leadingAnchor.constraint(equalTo: header.chipTrailingAnchor, constant: ChromeMetrics.Spacing.s8),
+            field.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            field.centerYAnchor.constraint(equalTo: header.centerYAnchor),
         ])
-        contentBottomToFindBar = content.bottomAnchor.constraint(
-            equalTo: bar.topAnchor, constant: -padding)
-        findBar = bar
-        bar.paneFill = findBarFill
-        return bar
+        findField = field
+        return field
     }
 }

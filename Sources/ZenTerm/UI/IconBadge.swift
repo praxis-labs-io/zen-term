@@ -150,6 +150,7 @@ final class IconBadge: NSView, ThemeReapplying {
     }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
+    var shownProcessForTesting: ProcessIcon? { shown }
     var edgeForTesting: CGColor? { (layer?.borderWidth ?? 0) > 0 ? layer?.borderColor : nil }
     var hasSheenForTesting: Bool {
         sheen.superview === self && sheenLayer.colors?.count == ChipSheen.colors(.chip).count

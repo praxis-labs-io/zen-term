@@ -13,6 +13,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     // Content that isn't a terminal paints no background of its own, so a translucent panel fills it whole.
     private let fillsContent: Bool
 
+    // Lazy only so its callback can capture self: `init` builds it, since it pins the content and mounts the header.
     private lazy var chrome = ModeChrome(
         container: clip, content: content, padding: padding, header: header,
         onStripsChanged: { [weak self] in self?.stripsMoved() })
@@ -31,7 +32,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     }
 
     @discardableResult
-    func setFindBarShown(_ shown: Bool) -> FindBarView? { chrome.setFindBarShown(shown) }
+    func setFindFieldShown(_ shown: Bool) -> FindField? { chrome.setFindFieldShown(shown) }
 
     /// Background first: below alpha 1 that unhides the ring, and a hidden view drops a redisplay request.
     private func stripsMoved() {
@@ -83,6 +84,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         veil.translatesAutoresizingMaskIntoConstraints = false
         veil.cornerRadius = Self.cornerRadius
         pane.addSubview(veil)
+        chrome.applyHeaderShown()
         applyBackground()
 
         pane.translatesAutoresizingMaskIntoConstraints = false
@@ -146,7 +148,7 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
 
     var shownHeaderForTesting: PaneHeader? { chrome.shownHeaderForTesting }
 
-    var findBarForTesting: FindBarView? { chrome.findBarForTesting }
+    var findFieldForTesting: FindField? { chrome.findFieldForTesting }
 
     var isHitTransparent = false
     override func hitTest(_ point: NSPoint) -> NSView? { isHitTransparent ? nil : super.hitTest(point) }
@@ -183,7 +185,6 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         clip.layer?.backgroundColor = isSolid ? background.cgColor : (fillsContent ? translucent.cgColor : nil)
         ring.isHidden = isSolid || fillsContent
         ring.color = translucent
-        chrome.findBarFill = isSolid ? background : ring.color
         veil.color = background
     }
 

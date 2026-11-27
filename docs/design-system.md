@@ -27,7 +27,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
 | `info` | A neutral notice |
-| `cursor` | The accent, painted onto the terminal cursor too, and chrome that marks where the cursor or focus will land |
+| `cursor` | The accent, painted onto the terminal cursor too, a text field's caret, and chrome that marks where the cursor or focus will land |
 
 Agent state roles are their own and never borrow `info`, `positive`, `warning` or `destructive`.
 
@@ -66,8 +66,7 @@ Accent is rare. It goes in these places only:
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
 - The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
-- Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the
-  scroll flash.
+- Role-toned `tint` surfaces: icon badges, focused text selection, the scroll flash.
 
 A control's focus or edit ring takes `chrome.focusRing`, a neutral. Never accent text, an
 accent check mark, an accent selection or state fill, or `accent.withAlphaComponent`.
@@ -209,15 +208,15 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `hoverIntent` | The delay before a tooltip or hover card shows |
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
 | `springScaleFade` | Modals and floats appearing and leaving, toasts leaving |
-| `fade` | Plain opacity changes, tooltips and the link preview |
-| `crossfade` | A process chip swapping its mark when its program changes; with `whenReduced`, a dissolve that stands in for movement |
+| `fade` | Plain opacity changes, tooltips, the link preview, and find in the header |
+| `crossfade` | A process chip swapping its mark when its program changes or find takes its header; with `whenReduced`, a dissolve that stands in for movement |
 | `HostConnect` | The SSH host Connect screen's choreography: the emblem's rain and answer, the words after it, and the hand-off to the terminal |
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
 | `slideFill` | A row list's current, focus or cursor fill sliding straight to the next row (`RowFillSlide`) |
 | `slideSwap` | Switching workspaces |
 | `handOff` | An SSH host's Connect screen giving way to its terminal |
-| `slideFade` | The collapsed sidebar's hover reveal, the find bar, and toasts arriving from the window's trailing edge |
+| `slideFade` | The collapsed sidebar's hover reveal and toasts arriving from the window's trailing edge |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
 | `morph` | A folded toast growing out of its plate or sinking back into it |
@@ -239,6 +238,8 @@ A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowVi
 The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette or workspace picker row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; the workspace picker's are all magenta, a host's included. A row's detail (the picker's branch or a host's status word, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
 Every terminal pane, drawer and float wears a `PaneHeader` (unless `pane-headers` is off): its process chip at `.small`, its name in `.medium` weight and its path, both in `ink(.muted)` wherever focus sits, a quiet line of context; then its controls as `IconButton`s at `Icon.xs`, resting in `ink(.muted)`. An unfocused header shows its controls only while the pointer is over it. A narrow header truncates the path from its front first, so the folder survives, then the name, then drops every control but close.
+
+Find takes the header's row: the chip turns to `ProcessIcon.find`, the name, path and controls step aside, and a flat `FindField` (no fill, edge or shadow) fills the row after the chip. A pane with headers off shows its header while find is open. The field's buttons match the header's (`Icon.xs`, resting in `ink(.muted)`), close is `escape`, not the pane's `xmark`, and the steppers are disabled while there is no match. A query wider than the field fades on the side its hidden text is on (`EdgeFade`).
 
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
