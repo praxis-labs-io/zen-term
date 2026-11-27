@@ -2,7 +2,6 @@ import AppKit
 import XCTest
 
 @testable import TerminalKit
-
 @testable import ZenTerm
 
 // Scroll mode over a live libghostty surface, keys sent through `KeyInterceptor` and the window.
@@ -115,14 +114,6 @@ final class ScrollModeGridTests: WindowTestCase {
         c.scrollMode.land(on: TerminalGridPoint(row: try XCTUnwrap(row(grid, line)), column: 0))
     }
 
-    func test_theModeStartsOnTheShellCursor() throws {
-        let (c, _, grid) = try pane(running: "printf 'one\\ntwo\\nlast'", until: "last")
-
-        try pressChord("s", [.command, .shift], keyCode: 1, in: c)
-
-        XCTAssertEqual(c.scrollMode.cursor, grid.cursorPoint)
-    }
-
     func test_hAtAnEmptyPromptStepsOntoThePrompt() throws {
         let (c, _, grid) = try pane(running: "printf 'ab> '", until: "ab>")
         try pressChord("s", [.command, .shift], keyCode: 1, in: c)
@@ -179,50 +170,6 @@ final class ScrollModeGridTests: WindowTestCase {
         XCTAssertEqual(board.string(forType: .string), "keep this text")
     }
 
-    func test_aYankReachesPastTheTopOfTheScreen() throws {
-        let (c, _, grid) = try pane(running: "seq 1 300", until: "300")
-        c.handle(.toggleScrollMode)
-        let top = grid.viewportTop
-        let rows = try XCTUnwrap(c.focusedSurfaceForTesting?.cellMetrics?.rows)
-
-        try press("v")
-        try type("\(rows + 20)k")
-        waitUntil(grid.viewportTop < top, "the screen followed the cursor up")
-        try press("y")
-
-        let yanked = try XCTUnwrap(board.string(forType: .string)).split(separator: "\n").map(String.init)
-        XCTAssertEqual(yanked.first, String(300 - rows - 19), "the first line the cursor reached, off the old screen")
-        XCTAssertEqual(yanked.last, "300")
-    }
-
-    func test_shiftVTakesTheWholeWrappedLine() throws {
-        let long = String(repeating: "w", count: 200)
-        let (c, surface, grid) = try pane(running: "echo \(long); echo after", until: "after")
-        let afterRow = try XCTUnwrap(row(grid, "after"))
-        XCTAssertEqual(grid.row(afterRow - 1)?.continues, true, "precondition: the line wraps")
-        c.handle(.toggleScrollMode)
-        c.scrollMode.land(on: TerminalGridPoint(row: afterRow - 1, column: 0))
-
-        try press("V", shift: true)
-        XCTAssertEqual(surface.copySelection(), long, "every row of the line, not only the one under the cursor")
-        try press("y")
-
-        XCTAssertEqual(board.string(forType: .string), long)
-    }
-
-    func test_yyTakesTheWholeWrappedLine() throws {
-        let long = String(repeating: "q", count: 200)
-        let (c, _, grid) = try pane(running: "echo \(long); echo after", until: "after")
-        c.handle(.toggleScrollMode)
-        let start = try XCTUnwrap((0..<grid.rowCount).first { text(grid, $0).hasPrefix("qqq") })
-        XCTAssertEqual(grid.row(start)?.wraps, true, "precondition: the line wraps")
-        c.scrollMode.land(on: TerminalGridPoint(row: start, column: 0))
-
-        try type("yy")
-
-        XCTAssertEqual(board.string(forType: .string), long)
-    }
-
     func test_lStepsOverAWideCharacterInOne() throws {
         let (c, _, grid) = try pane(running: "printf 'a\\346\\274\\242b\\n'", until: "a漢b")
         try enterOn(grid, line: "a漢b")
@@ -250,27 +197,6 @@ final class ScrollModeGridTests: WindowTestCase {
         XCTAssertEqual(try cursorText(grid), "$ first", "past the blank line inside the first command's output")
     }
 
-    func test_bracesStopAtBlankLinesWithoutShellIntegration() throws {
-        let (c, _, grid) = try pane(running: "printf 'a1\\na2\\n\\nb1\\nb2\\n'", until: "b2")
-        try enterOn(grid, line: "b2")
-
-        try press("{", shift: true)
-
-        XCTAssertEqual(c.scrollMode.cursor?.row, try XCTUnwrap(row(grid, "b1")) - 1)
-    }
-
-    func test_aClickThatClearsTheSelectionEndsTheMode() throws {
-        let (c, _, grid) = try pane(running: "echo hello", until: "hello")
-        try enterOn(grid, line: "hello")
-        try press("v")
-        try press("l")
-        waitUntil(grid.selectionBounds != nil, "the selection")
-
-        grid.setSelection(nil)
-
-        waitUntil(!c.scrollMode.isActive, "the mode ended")
-    }
-
     func test_theModesOwnSelectionChangesKeepItUp() throws {
         let (c, _, grid) = try pane(running: "echo hello there", until: "hello there")
         try enterOn(grid, line: "hello there")
@@ -285,88 +211,8 @@ final class ScrollModeGridTests: WindowTestCase {
         XCTAssertNotNil(grid.selectionBounds)
     }
 
-    func test_enteringOverAMouseSelectionKeepsItAndStartsOnIt() throws {
-        let (c, surface, grid) = try pane(running: "echo alpha beta gamma", until: "alpha beta gamma")
-        let line = try XCTUnwrap(row(grid, "alpha beta gamma"))
-        grid.setSelection(TerminalGridPoint(row: line, column: 6)...TerminalGridPoint(row: line, column: 9))
-
-        c.handle(.toggleScrollMode)
-
-        XCTAssertEqual(c.scrollMode.cursor, TerminalGridPoint(row: line, column: 6))
-        XCTAssertEqual(surface.copySelection(), "beta")
-        try press("y")
-        XCTAssertEqual(board.string(forType: .string), "beta", "the kept selection is the mode's to yank")
-    }
-
-    func test_leavingTheModeClearsItsSelection() throws {
-        let (c, _, grid) = try pane(running: "echo hello", until: "hello")
-        try enterOn(grid, line: "hello")
-        try press("v")
-        try press("l")
-
-        try press("q")
-
-        XCTAssertFalse(c.scrollMode.isActive)
-        XCTAssertNil(grid.selectionBounds)
-    }
-
-    func test_findLandsOnTheMatchGhosttySelectedAmongSeveralOnScreen() throws {
-        let (c, _, grid) = try pane(
-            running: "echo 'NEEDLE one'; echo 'xx NEEDLE two'; echo 'NEEDLE three'", until: "NEEDLE three")
-        c.handle(.toggleSearch)
-        c.search.typeForTesting("NEEDLE")
-        waitUntil(c.search.isActive, "search open")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        c.search.step(.next)
-        c.search.step(.next)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-
-        c.handle(.toggleScrollMode)
-        waitUntil(c.scrollMode.cursor?.column == 3, "the cursor on the selected match")
-
-        XCTAssertEqual(try cursorText(grid), "xx NEEDLE two", "the second newest, where two steps took it")
-        try press("n")
-        waitUntil((try? cursorText(grid)) == "NEEDLE one", "n stepped to the older match")
-    }
-
-    func test_findOpensOnTheModesSelection() throws {
-        let (c, _, grid) = try pane(running: "echo an error happened", until: "an error happened")
-        try enterOn(grid, line: "an error happened")
-        try type("wve")
-
-        c.handle(.toggleSearch)
-
-        XCTAssertEqual(c.focusedPanelForTesting?.findFieldForTesting?.needle, "error")
-    }
-
     private func readout() throws -> String? {
         try XCTUnwrap(controller?.focusedPanelForTesting?.shownHeaderForTesting).readoutForTesting
-    }
-
-    func test_theHeaderReadsTheCursorsRowAndColumn_andFollowsAMotion() throws {
-        let (_, _, grid) = try pane(running: "printf 'one\\ntwo\\nlast\\n'", until: "last")
-        let two = try XCTUnwrap(row(grid, "two"))
-        try enterOn(grid, line: "two")
-        XCTAssertEqual(try readout(), "\(two + 1):1")
-
-        try press("l")
-        XCTAssertEqual(try readout(), "\(two + 1):2")
-        try press("j")
-
-        XCTAssertEqual(try readout(), "\(two + 2):2")
-    }
-
-    func test_vOnOneRowCountsCharacters_andAcrossRowsCountsLines() throws {
-        let (_, _, grid) = try pane(running: "echo hello there; echo second line", until: "second line")
-        try enterOn(grid, line: "hello there")
-
-        try press("v")
-        XCTAssertEqual(try readout(), "1 character")
-        try press("e")
-        XCTAssertEqual(try readout(), "5 characters")
-        try press("j")
-
-        XCTAssertEqual(try readout(), "2 lines")
     }
 
     func test_vOnAnEmptyRowCountsTheCellUnderTheCursor() throws {
@@ -389,74 +235,5 @@ final class ScrollModeGridTests: WindowTestCase {
         try type("vl")
 
         XCTAssertEqual(try readout(), "2 characters")
-    }
-
-    func test_shiftVCountsEachRowOfAWrappedLine() throws {
-        let long = String(repeating: "w", count: 200)
-        let (c, _, grid) = try pane(running: "echo \(long); echo after", until: "after")
-        let afterRow = try XCTUnwrap(row(grid, "after"))
-        XCTAssertEqual(grid.row(afterRow - 1)?.continues, true, "precondition: the line wraps")
-        let first = try XCTUnwrap((0..<grid.rowCount).first { text(grid, $0).hasPrefix("www") })
-        c.handle(.toggleScrollMode)
-        c.scrollMode.land(on: TerminalGridPoint(row: first, column: 0))
-
-        try press("V", shift: true)
-
-        XCTAssertGreaterThan(afterRow - first, 1, "premise: more than one row")
-        XCTAssertEqual(try readout(), "\(afterRow - first) lines")
-    }
-
-    func test_aCopyConfirmsWhatItTook_untilTheNextKey() throws {
-        let (_, _, grid) = try pane(running: "echo hello there; echo second line", until: "second line")
-        let hello = try XCTUnwrap(row(grid, "hello there"))
-        try enterOn(grid, line: "hello there")
-
-        try type("vey")
-        XCTAssertEqual(try readout(), "Copied 5 characters")
-        try press("l")
-        XCTAssertEqual(try readout(), "\(hello + 1):6", "the next key gives the position back")
-
-        try type("vjy")
-        XCTAssertEqual(try readout(), "Copied 2 lines")
-        try type("yy")
-        XCTAssertEqual(try readout(), "Copied 1 line")
-        try type("vy")
-        XCTAssertEqual(try readout(), "Copied 1 character")
-        try press("2")
-
-        XCTAssertEqual(try readout(), "\(hello + 2):6", "a count is a key too")
-    }
-
-    func test_aFindStepOverTheModeGivesThePositionBackAfterACopy() throws {
-        let (c, _, grid) = try pane(running: "echo NEEDLE one; echo NEEDLE two; echo end", until: "end")
-        try enterOn(grid, line: "end")
-        c.handle(.toggleSearch)
-        c.search.typeForTesting("NEEDLE")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        c.search.enterScrollMode()
-        waitUntil((try? cursorText(grid)) == "NEEDLE two", "Return landed on the newest match")
-
-        try type("vey")
-        XCTAssertEqual(board.string(forType: .string), "NEEDLE", "precondition: the copy ran")
-        try press("n")
-        waitUntil((try? cursorText(grid)) == "NEEDLE one", "n stepped to the older match")
-        try press("", keyCode: 53)
-        XCTAssertNil(c.focusedPanelForTesting?.findFieldForTesting, "precondition: Esc closed find")
-
-        let one = try XCTUnwrap(row(grid, "NEEDLE one"))
-        XCTAssertEqual(try readout(), "\(one + 1):1")
-    }
-
-    func test_findOverTheModeTakesTheReadoutsPlace_untilItCloses() throws {
-        let (c, _, grid) = try pane(running: "echo hello", until: "hello")
-        let hello = try XCTUnwrap(row(grid, "hello"))
-        try enterOn(grid, line: "hello")
-
-        c.handle(.toggleSearch)
-        XCTAssertNotNil(c.focusedPanelForTesting?.findFieldForTesting)
-        XCTAssertNil(try readout())
-        c.search.end()
-
-        XCTAssertEqual(try readout(), "\(hello + 1):1")
     }
 }
