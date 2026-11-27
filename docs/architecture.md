@@ -13,6 +13,13 @@ started, and the background its program last reported. It takes `start`, `focus`
 wrapped rows split), a span at a time (`text(in:)`, wrapped rows joined), or as its last
 lines, scrollback included (`text(lastLines:)`).
 
+`grid` (`TerminalGrid`) reads the screen and scrollback as cells: rows with their wrap and
+prompt flags, text between two `TerminalGridPoint`s, the cursor, the viewport's top row and the
+selection, which it can also set. A point's row counts from the oldest scrollback row, so it
+renumbers when the scrollback drops rows: it is good for one read. Anything kept is a
+`TerminalGridMark`, which follows its cell through output and reflow and reads `.gone` once the
+scrollback drops it.
+
 Types that travel with it: `TerminalSurfaceConfig`, `TerminalSurfaceDelegate` (events
 out, defaulted to no-ops), `TerminalTheme`, `TerminalBehavior`.
 
@@ -94,7 +101,12 @@ input and `wait-after-command` when its config is rebuilt at birth for a color s
 differs from the one the app config was built with. `ghostty-surface-message-id.patch` tags
 each surface message with the surface's id and drops one whose id no longer matches: a freed
 surface's address is reused by the next one, so a pointer alone would hand a closed pane's queued
-exit to a new pane.
+exit to a new pane. `ghostty-grid-access.patch` adds the calls behind `TerminalGrid`
+(tracked marks, row reads, the grid's state, setting the selection), lets screen points reach past
+the viewport's height, puts the selected match's start on `GHOSTTY_ACTION_SEARCH_SELECTED`, and
+sends `GHOSTTY_ACTION_SELECTION_CHANGED` when a screen clear or a screen switch hides the
+selection. libghostty sends that action holding the terminal lock, so the surface relays it a
+turn later.
 
 **Never call `Bundle.module` in shippable code.** In a real `.app` it checks the
 bundle root and a build-machine path, then `fatalError`s, so it works on the build

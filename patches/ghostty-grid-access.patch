@@ -1,0 +1,534 @@
+diff --git i/include/ghostty.h w/include/ghostty.h
+index 9a12b9cad..bdcf9359e 100644
+--- i/include/ghostty.h
++++ w/include/ghostty.h
+@@ -481,6 +481,53 @@ typedef struct {
+   bool rectangle;
+ } ghostty_selection_s;
+ 
++typedef struct ghostty_mark_s* ghostty_mark_t;
++
++typedef enum {
++  GHOSTTY_MARK_LIVE,
++  GHOSTTY_MARK_PRUNED,
++  GHOSTTY_MARK_ASIDE,
++} ghostty_mark_state_e;
++
++typedef enum {
++  GHOSTTY_CELL_OUTPUT,
++  GHOSTTY_CELL_INPUT,
++  GHOSTTY_CELL_PROMPT,
++} ghostty_cell_content_e;
++
++typedef enum {
++  GHOSTTY_ROW_PROMPT_NONE,
++  GHOSTTY_ROW_PROMPT,
++  GHOSTTY_ROW_PROMPT_CONTINUATION,
++} ghostty_row_prompt_e;
++
++typedef struct {
++  uint32_t text_offset;
++  uint32_t text_len;
++  uint8_t width;
++  ghostty_cell_content_e content;
++} ghostty_cell_s;
++
++typedef struct {
++  ghostty_cell_s* cells;
++  uintptr_t cells_len;
++  char* text;
++  uintptr_t text_len;
++  bool wrap;
++  bool wrap_continuation;
++  ghostty_row_prompt_e prompt;
++} ghostty_row_s;
++
++typedef struct {
++  uint32_t columns;
++  uint32_t rows;
++  uint32_t total_rows;
++  uint32_t viewport_top;
++  ghostty_point_s cursor;
++  bool has_selection;
++  ghostty_selection_s selection;
++} ghostty_grid_s;
++
+ typedef struct {
+   const char* key;
+   const char* value;
+@@ -935,6 +982,9 @@ typedef struct {
+ // apprt.action.SearchSelected
+ typedef struct {
+   ssize_t selected;
++  bool has_start;
++  uint32_t start_x;
++  uint32_t start_y;
+ } ghostty_action_search_selected_s;
+ 
+ // terminal.Scrollbar
+@@ -1240,6 +1290,16 @@ GHOSTTY_API bool ghostty_surface_read_text(ghostty_surface_t,
+                                               ghostty_selection_s,
+                                               ghostty_text_s*);
+ GHOSTTY_API void ghostty_surface_free_text(ghostty_surface_t, ghostty_text_s*);
++GHOSTTY_API ghostty_mark_t ghostty_surface_mark_new(ghostty_surface_t, ghostty_point_s);
++GHOSTTY_API ghostty_mark_state_e ghostty_surface_mark_read(ghostty_surface_t,
++                                                          ghostty_mark_t,
++                                                          ghostty_point_s*);
++GHOSTTY_API void ghostty_surface_mark_free(ghostty_surface_t, ghostty_mark_t);
++GHOSTTY_API bool ghostty_surface_read_row(ghostty_surface_t, uint32_t, ghostty_row_s*);
++GHOSTTY_API void ghostty_surface_free_row(ghostty_surface_t, ghostty_row_s*);
++GHOSTTY_API bool ghostty_surface_grid(ghostty_surface_t, ghostty_grid_s*);
++GHOSTTY_API bool ghostty_surface_set_selection(ghostty_surface_t, ghostty_selection_s);
++GHOSTTY_API void ghostty_surface_clear_selection(ghostty_surface_t);
+ 
+ #ifdef __APPLE__
+ GHOSTTY_API void ghostty_surface_set_display_id(ghostty_surface_t, uint32_t);
+diff --git i/src/Surface.zig w/src/Surface.zig
+index 369bb2399..13d31e4ed 100644
+--- i/src/Surface.zig
++++ w/src/Surface.zig
+@@ -1234,7 +1234,15 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
+             _ = try self.rt_app.performAction(
+                 .{ .surface = self },
+                 .search_selected,
+-                .{ .selected = v },
++                if (v) |sel| .{ .selected = sel.idx, .start = sel.start } else .{ .selected = null },
++            );
++        },
++
++        .selection_changed => {
++            _ = try self.rt_app.performAction(
++                .{ .surface = self },
++                .selection_changed,
++                {},
+             );
+         },
+     }
+@@ -1482,6 +1490,17 @@ fn passwordInput(self: *Surface, v: bool) !void {
+     try self.queueRender();
+ }
+ 
++/// The screen point of a search match's start, or null once its rows are gone.
++/// Locks the renderer mutex: the search thread notifies without it.
++fn searchMatchStart(self: *Surface, start: terminal.Pin) ?terminal.point.Coordinate {
++    self.renderer_state.mutex.lockUncancelable(global.io());
++    defer self.renderer_state.mutex.unlock(global.io());
++    const pages = &self.io.terminal.screens.active.pages;
++    const pt = pages.pointFromPin(.screen, start) orelse return null;
++    if (start.y >= start.node.rows()) return null;
++    return pt.screen;
++}
++
+ fn searchCallback(event: terminal.search.Thread.Event, ud: ?*anyopaque) void {
+     // IMPORTANT: This function is run on the SEARCH THREAD! It is NOT SAFE
+     // to access anything other than values that never change on the surface.
+@@ -1538,7 +1557,10 @@ fn searchCallback_(
+ 
+                 // Send the selected index to the surface mailbox
+                 _ = self.surfaceMailbox().push(
+-                    .{ .search_selected = sel.idx },
++                    .{ .search_selected = .{
++                        .idx = sel.idx,
++                        .start = self.searchMatchStart(sel.highlight.startPin()),
++                    } },
+                     .forever,
+                 );
+             } else {
+@@ -2448,7 +2470,7 @@ fn copySelectionToClipboards(
+ /// also copy per `copy_on_select`, use `setSelectionAndCopy`.
+ ///
+ /// This must be called with the renderer mutex held.
+-fn setSelection(self: *Surface, sel_: ?terminal.Selection) !void {
++pub fn setSelection(self: *Surface, sel_: ?terminal.Selection) !void {
+     // Compute the transition before `select` below, which untracks (frees)
+     // the previous selection's tracked pins; reading them after would be a
+     // use-after-free.
+@@ -2574,7 +2596,7 @@ pub fn setFontSize(self: *Surface, size: font.face.DesiredSize) !void {
+ /// This queues a render operation with the renderer thread. The render
+ /// isn't guaranteed to happen immediately but it will happen as soon as
+ /// practical.
+-fn queueRender(self: *Surface) !void {
++pub fn queueRender(self: *Surface) !void {
+     try self.renderer_thread.wakeup.notify();
+ }
+ 
+diff --git i/src/apprt/action.zig w/src/apprt/action.zig
+index 708898e76..1329c395d 100644
+--- i/src/apprt/action.zig
++++ w/src/apprt/action.zig
+@@ -1058,15 +1058,23 @@ pub const SearchTotal = struct {
+ 
+ pub const SearchSelected = struct {
+     selected: ?usize,
++    /// The selected match's first cell as a screen point, when known.
++    start: ?terminal.point.Coordinate = null,
+ 
+     // Sync with: ghostty_action_search_selected_s
+     pub const C = extern struct {
+         selected: isize,
++        has_start: bool,
++        start_x: u32,
++        start_y: u32,
+     };
+ 
+     pub fn cval(self: SearchSelected) C {
+         return .{
+             .selected = if (self.selected) |s| @intCast(s) else -1,
++            .has_start = self.start != null,
++            .start_x = if (self.start) |p| p.x else 0,
++            .start_y = if (self.start) |p| p.y else 0,
+         };
+     }
+ };
+diff --git i/src/apprt/embedded.zig w/src/apprt/embedded.zig
+index 697f0a786..ed4313fdc 100644
+--- i/src/apprt/embedded.zig
++++ w/src/apprt/embedded.zig
+@@ -1644,7 +1644,10 @@ pub const CAPI = struct {
+ 
+             // Clamp our point to the screen bounds.
+             const clamped_x = @min(self.x, screen.pages.cols -| 1);
+-            const clamped_y = @min(self.y, screen.pages.rows -| 1);
++            const clamped_y = switch (self.tag) {
++                .active, .viewport => @min(self.y, screen.pages.rows -| 1),
++                .screen, .history => self.y,
++            };
+ 
+             return switch (self.coord_tag) {
+                 // Exact coordinates require a specific pin.
+@@ -1980,6 +1983,236 @@ pub const CAPI = struct {
+         ptr.deinit();
+     }
+ 
++    // ghostty_mark_t: a screen cell that follows its content through
++    // output, scrolling and reflow.
++    const Mark = struct {
++        key: terminal.ScreenSet.Key,
++        generation: usize,
++        pin: *terminal.Pin,
++    };
++
++    // ghostty_mark_state_e
++    const MarkState = enum(c_int) {
++        live = 0,
++        pruned = 1,
++        aside = 2,
++    };
++
++    // ghostty_cell_s
++    const GridCell = extern struct {
++        text_offset: u32,
++        text_len: u32,
++        width: u8,
++        content: c_int,
++    };
++
++    // ghostty_row_s
++    const GridRow = extern struct {
++        cells: ?[*]GridCell,
++        cells_len: usize,
++        text: ?[*]u8,
++        text_len: usize,
++        wrap: bool,
++        wrap_continuation: bool,
++        prompt: c_int,
++    };
++
++    // ghostty_grid_s
++    const Grid = extern struct {
++        columns: u32,
++        rows: u32,
++        total_rows: u32,
++        viewport_top: u32,
++        cursor: Point,
++        has_selection: bool,
++        selection: Selection,
++    };
++
++    fn screenPoint(pages: *const terminal.PageList, p: terminal.Pin) ?Point {
++        const pt = pages.pointFromPin(.screen, p) orelse return null;
++        return .{ .tag = .screen, .coord_tag = .exact, .x = pt.screen.x, .y = pt.screen.y };
++    }
++
++    /// Tracks the cell at `point` on the active screen. Null if the point is
++    /// outside the screen. Free it with ghostty_surface_mark_free.
++    export fn ghostty_surface_mark_new(surface: *Surface, point: Point) ?*Mark {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        const screens = &core_surface.io.terminal.screens;
++        const p = point.pin(screens.active) orelse return null;
++        const mark = global.alloc().create(Mark) catch return null;
++        const tracked = screens.active.pages.trackPin(p) catch {
++            global.alloc().destroy(mark);
++            return null;
++        };
++        mark.* = .{
++            .key = screens.active_key,
++            .generation = screens.generation(screens.active_key),
++            .pin = tracked,
++        };
++        return mark;
++    }
++
++    /// Reads where a mark is now as a screen point. Pruned once its row
++    /// leaves the scrollback; aside while the other screen is active.
++    export fn ghostty_surface_mark_read(
++        surface: *Surface,
++        mark: *Mark,
++        result: *Point,
++    ) MarkState {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        const screens = &core_surface.io.terminal.screens;
++        if (screens.get(mark.key) == null or
++            screens.generation(mark.key) != mark.generation) return .pruned;
++        if (mark.pin.garbage) return .pruned;
++        if (screens.active_key != mark.key) return .aside;
++        result.* = screenPoint(&screens.active.pages, mark.pin.*) orelse return .pruned;
++        return .live;
++    }
++
++    export fn ghostty_surface_mark_free(surface: *Surface, mark: *Mark) void {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        const screens = &core_surface.io.terminal.screens;
++        if (screens.get(mark.key)) |screen| {
++            if (screens.generation(mark.key) == mark.generation) {
++                screen.pages.untrackPin(mark.pin);
++            }
++        }
++        global.alloc().destroy(mark);
++    }
++
++    /// Reads one row of the active screen, `y` counted from the oldest
++    /// scrollback row, as cells. Free it with ghostty_surface_free_row.
++    export fn ghostty_surface_read_row(
++        surface: *Surface,
++        y: u32,
++        result: *GridRow,
++    ) bool {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        const screen = core_surface.io.terminal.screens.active;
++        const p = screen.pages.pin(.{ .screen = .{ .y = y } }) orelse return false;
++        const rac = p.rowAndCell();
++        const cells = p.cells(.all);
++
++        var text_len: usize = 0;
++        for (cells) |*cell| {
++            if (!cell.hasText()) continue;
++            text_len += std.unicode.utf8CodepointSequenceLength(cell.codepoint()) catch 0;
++            if (cell.hasGrapheme()) if (p.grapheme(cell)) |cps| for (cps) |cp| {
++                text_len += std.unicode.utf8CodepointSequenceLength(cp) catch 0;
++            };
++        }
++
++        const alloc = global.alloc();
++        const out_cells = alloc.alloc(GridCell, cells.len) catch return false;
++        const text = alloc.alloc(u8, text_len) catch {
++            alloc.free(out_cells);
++            return false;
++        };
++
++        var offset: usize = 0;
++        for (cells, 0..) |*cell, i| {
++            const start = offset;
++            if (cell.hasText()) {
++                offset += std.unicode.utf8Encode(cell.codepoint(), text[offset..]) catch 0;
++                if (cell.hasGrapheme()) if (p.grapheme(cell)) |cps| for (cps) |cp| {
++                    offset += std.unicode.utf8Encode(cp, text[offset..]) catch 0;
++                };
++            }
++            out_cells[i] = .{
++                .text_offset = @intCast(start),
++                .text_len = @intCast(offset - start),
++                .width = switch (cell.wide) {
++                    .narrow, .spacer_head => 1,
++                    .wide => 2,
++                    .spacer_tail => 0,
++                },
++                .content = @intFromEnum(cell.semantic_content),
++            };
++        }
++
++        result.* = .{
++            .cells = out_cells.ptr,
++            .cells_len = out_cells.len,
++            .text = text.ptr,
++            .text_len = text.len,
++            .wrap = rac.row.wrap,
++            .wrap_continuation = rac.row.wrap_continuation,
++            .prompt = @intFromEnum(rac.row.semantic_prompt),
++        };
++        return true;
++    }
++
++    export fn ghostty_surface_free_row(_: *Surface, row: *GridRow) void {
++        const alloc = global.alloc();
++        if (row.cells) |ptr| alloc.free(ptr[0..row.cells_len]);
++        if (row.text) |ptr| alloc.free(ptr[0..row.text_len]);
++        row.* = std.mem.zeroes(GridRow);
++    }
++
++    /// The active screen's size, viewport, cursor and selection, in screen
++    /// points, read under one lock.
++    export fn ghostty_surface_grid(surface: *Surface, result: *Grid) bool {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        const screen = core_surface.io.terminal.screens.active;
++        const pages = &screen.pages;
++        const top = screenPoint(pages, pages.getTopLeft(.viewport)) orelse return false;
++        const cursor = screenPoint(pages, screen.cursor.page_pin.*) orelse return false;
++
++        var grid: Grid = .{
++            .columns = pages.cols,
++            .rows = pages.rows,
++            .total_rows = std.math.cast(u32, pages.total_rows) orelse return false,
++            .viewport_top = top.y,
++            .cursor = cursor,
++            .has_selection = false,
++            .selection = std.mem.zeroes(Selection),
++        };
++        if (screen.selection) |sel| selection: {
++            const tl = screenPoint(pages, sel.topLeft(screen)) orelse break :selection;
++            const br = screenPoint(pages, sel.bottomRight(screen)) orelse break :selection;
++            grid.has_selection = true;
++            grid.selection = .{ .tl = tl, .br = br, .rectangle = sel.rectangle };
++        }
++        result.* = grid;
++        return true;
++    }
++
++    /// Sets the selection as a drag would end, without copy-on-select.
++    export fn ghostty_surface_set_selection(surface: *Surface, sel: Selection) bool {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        const core_sel = sel.core(core_surface.io.terminal.screens.active) orelse return false;
++        core_surface.setSelection(core_sel) catch return false;
++        core_surface.queueRender() catch {};
++        return true;
++    }
++
++    export fn ghostty_surface_clear_selection(surface: *Surface) void {
++        const core_surface = &surface.core_surface;
++        core_surface.renderer_state.mutex.lockUncancelable(global.io());
++        defer core_surface.renderer_state.mutex.unlock(global.io());
++
++        core_surface.setSelection(null) catch return;
++        core_surface.queueRender() catch {};
++    }
++
+     /// Tell the surface that it needs to schedule a render
+     export fn ghostty_surface_refresh(surface: *Surface) void {
+         surface.refresh();
+diff --git i/src/apprt/surface.zig w/src/apprt/surface.zig
+index 3b1a04d8a..e9f64ba0d 100644
+--- i/src/apprt/surface.zig
++++ w/src/apprt/surface.zig
+@@ -11,6 +11,13 @@ const Config = @import("../config.zig").Config;
+ const MessageData = @import("../datastruct/main.zig").MessageData;
+ 
+ /// The message types that can be sent to a single surface.
++/// The selected search match, for `Message.search_selected`.
++pub const SearchSelected = struct {
++    idx: usize,
++    /// The match's first cell as a screen point, or null if unknown.
++    start: ?terminal.point.Coordinate = null,
++};
++
+ pub const Message = union(enum) {
+     /// Represents a write request. Magic number comes from the max size
+     /// we want this union to be.
+@@ -155,7 +162,11 @@ pub const Message = union(enum) {
+     search_total: ?usize,
+ 
+     /// Selected search index change
+-    search_selected: ?usize,
++    search_selected: ?SearchSelected,
++
++    /// The selection was cleared outside setSelection, such as by a screen
++    /// clear or a switch to the other screen.
++    selection_changed,
+ 
+     /// Renderer pushed a new frame, redraw this surface.
+     redraw,
+diff --git i/src/termio/Termio.zig w/src/termio/Termio.zig
+index 49bd6e0cd..19b1a2024 100644
+--- i/src/termio/Termio.zig
++++ w/src/termio/Termio.zig
+@@ -603,6 +603,11 @@ pub fn resetSynchronizedOutput(self: *Termio) void {
+ 
+ /// Clear the screen.
+ pub fn clearScreen(self: *Termio, td: *ThreadData, history: bool) !void {
++    var cleared_selection = false;
++    defer if (cleared_selection) {
++        _ = self.surface_mailbox.push(.selection_changed, .{ .forever = {} });
++    };
++
+     {
+         self.renderer_state.mutex.lockUncancelable(global.io());
+         defer self.renderer_state.mutex.unlock(global.io());
+@@ -614,6 +619,7 @@ pub fn clearScreen(self: *Termio, td: *ThreadData, history: bool) !void {
+         if (self.terminal.screens.active_key == .alternate) return;
+ 
+         // Clear our selection
++        cleared_selection = self.terminal.screens.active.selection != null;
+         self.terminal.screens.active.clearSelection();
+ 
+         // Clear our scrollback
+diff --git i/src/termio/stream_handler.zig w/src/termio/stream_handler.zig
+index 0f1ee50f7..8fc852d77 100644
+--- i/src/termio/stream_handler.zig
++++ w/src/termio/stream_handler.zig
+@@ -135,6 +135,20 @@ pub const StreamHandler = struct {
+         // sending to it here would deadlock if the mailbox were full.
+     }
+ 
++    /// Switches screens and tells the surface when that hid a selection.
++    fn switchScreenMode(
++        self: *StreamHandler,
++        mode: terminal.Terminal.SwitchScreenMode,
++        enabled: bool,
++    ) !void {
++        const key = self.terminal.screens.active_key;
++        const had_selection = self.terminal.screens.active.selection != null;
++        try self.terminal.switchScreenMode(mode, enabled);
++        if (had_selection and self.terminal.screens.active_key != key) {
++            self.surfaceMessageWriter(.selection_changed);
++        }
++    }
++
+     inline fn surfaceMessageWriter(
+         self: *StreamHandler,
+         msg: apprt.surface.Message,
+@@ -697,15 +711,15 @@ pub const StreamHandler = struct {
+             },
+ 
+             .alt_screen_legacy => {
+-                try self.terminal.switchScreenMode(.@"47", enabled);
++                try self.switchScreenMode(.@"47", enabled);
+             },
+ 
+             .alt_screen => {
+-                try self.terminal.switchScreenMode(.@"1047", enabled);
++                try self.switchScreenMode(.@"1047", enabled);
+             },
+ 
+             .alt_screen_save_cursor_clear_enter => {
+-                try self.terminal.switchScreenMode(.@"1049", enabled);
++                try self.switchScreenMode(.@"1049", enabled);
+             },
+ 
+             // Mode 1048 is xterm's conditional save cursor depending
