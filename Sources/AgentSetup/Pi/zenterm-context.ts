@@ -1,4 +1,4 @@
-// Pi extension installed by `zen setup pi`: in a live ZenTerm pane, say so, name a helper's parent, point at the zen skill, and report each turn.
+// Pi extension installed by `zen setup pi`: in a live ZenTerm pane, say so, name a helper's parent, point at the zen skill, and report each turn and compaction.
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -67,6 +67,7 @@ function reportTurn(pi: ExtensionAPI, terminal: Terminal | undefined, active: bo
 export default function (pi: ExtensionAPI) {
   let zenContext: Promise<string | undefined> = Promise.resolve(undefined);
   let terminal: Terminal | undefined;
+  let running = false;
   const report = (active: boolean) => reportTurn(pi, terminal, active);
   pi.on("session_start", (_event, ctx) => {
     zenContext = context(pi).catch(() => undefined);
@@ -76,7 +77,16 @@ export default function (pi: ExtensionAPI) {
     const text = await zenContext;
     if (text) event.systemPromptOptions.sections.zenterm = text;
   });
-  pi.on("turn_start", () => report(true));
-  pi.on("agent_end", () => report(false));
+  pi.on("turn_start", () => {
+    running = true;
+    report(true);
+  });
+  pi.on("agent_end", () => {
+    running = false;
+    report(false);
+  });
+  pi.on("session_before_compact", () => report(true));
+  pi.on("session_compact", (event) => report(running || event.willRetry));
+  pi.on("session_compact_failed", (event) => report(running || event.willRetry));
   pi.on("session_shutdown", () => report(false));
 }

@@ -46,8 +46,8 @@ final class PiExtensionTests: XCTestCase {
         await fire("session_start", { reason: "startup" });
         const start = { systemPromptOptions: { sections: {} } };
         await fire("before_agent_start", start);
-        await fire("turn_start", {});
-        await fire("agent_end", {});
+        const events = JSON.parse(process.env.PI_TEST_EVENTS ?? '[["turn_start", {}], ["agent_end", {}]]');
+        for (const [event, payload] of events) await fire(event, payload);
         console.log(JSON.stringify({ context: start.systemPromptOptions.sections.zenterm ?? null, progress }));
         """
 
@@ -176,6 +176,43 @@ final class PiExtensionTests: XCTestCase {
         let outcome = try runExtension(try zenPaneEnvironment(pane: 31, answering: nil))
 
         XCTAssertEqual(outcome.progress, ["on", "off"])
+    }
+
+    private func progress(during events: String) throws -> [String] {
+        var environment = try zenPaneEnvironment(pane: 31, answering: nil)
+        environment["PI_TEST_EVENTS"] = events
+        return try runExtension(environment).progress
+    }
+
+    func test_reportsACompactionBetweenTurns() throws {
+        let events = #"[["session_before_compact", {"willRetry": false}], ["session_compact", {"willRetry": false}]]"#
+
+        XCTAssertEqual(try progress(during: events), ["on", "off"])
+    }
+
+    func test_reportsAFailedCompaction() throws {
+        let events =
+            #"[["session_before_compact", {"willRetry": false}], ["session_compact_failed", {"willRetry": false}]]"#
+
+        XCTAssertEqual(try progress(during: events), ["on", "off"])
+    }
+
+    func test_keepsTheTurnWorkingThroughACompactionInsideIt() throws {
+        let events = """
+            [["turn_start", {}], ["session_before_compact", {"willRetry": false}],
+             ["session_compact", {"willRetry": false}], ["agent_end", {}]]
+            """
+
+        XCTAssertEqual(try progress(during: events), ["on", "on", "on", "off"])
+    }
+
+    func test_staysWorkingFromACompactionIntoTheTurnItRetries() throws {
+        let events = """
+            [["turn_start", {}], ["agent_end", {}], ["session_before_compact", {"willRetry": true}],
+             ["session_compact", {"willRetry": true}], ["turn_start", {}], ["agent_end", {}]]
+            """
+
+        XCTAssertEqual(try progress(during: events), ["on", "off", "on", "on", "on", "off"])
     }
 
     func test_leavesTurnsToPiWhenItReportsThemItself() throws {
