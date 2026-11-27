@@ -65,7 +65,7 @@ final class GhosttyPaneTextTests: XCTestCase {
         surface.paste("echo AA$((40+2))\necho BB$((40+3))")
         surface.submit()
 
-        let screen = lines(of: surface) { $0.contains("BB43") }
+        let screen = lines(of: surface) { $0.contains("BB43") && $0.last?.hasSuffix("% ") == true }
         XCTAssertEqual(screen.filter { $0 == "AA42" }.count, 1, "\(screen)")
         XCTAssertEqual(screen.filter { $0 == "BB43" }.count, 1, "\(screen)")
         XCTAssertEqual(screen.filter { $0.contains("%") }.count, 2, "the block ran per line: \(screen)")
@@ -119,6 +119,7 @@ final class GhosttyPaneTextTests: XCTestCase {
     func test_theActiveScreenIsTheBottomRowsEvenWhenScrolledBack() throws {
         let surface = try mounted("/bin/sh", ["-c", "seq 5000; sleep 100"])
         _ = lines(of: surface) { $0.contains("5000") }
+        _ = try settledColumns(surface, try XCTUnwrap(surface.grid))
         let rows = try XCTUnwrap(surface.cellMetrics?.rows)
         surface.scroll(.top)
         _ = lines(of: surface) { _ in !(0..<rows).contains { surface.text(viewportRow: $0) == "5000" } }
