@@ -34,7 +34,9 @@ final class HintFooter: NSView, ThemeReapplying {
     private let pairs = NSStackView()
     private(set) var hints: [Hint] = []
 
-    init(_ hints: [Hint], trailingInset: CGFloat = ChromeMetrics.Spacing.modalInsets.right) {
+    enum Side { case leading, trailing }
+
+    init(_ hints: [Hint], inset: CGFloat = ChromeMetrics.Spacing.modalInsets.right, side: Side = .trailing) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -56,8 +58,11 @@ final class HintFooter: NSView, ThemeReapplying {
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
             heightAnchor.constraint(equalToConstant: Self.height),
-            pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
-            pairs.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: trailingInset),
+            side == .trailing
+                ? pairs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset)
+                : pairs.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+            pairs.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: inset),
+            pairs.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -inset),
             pairs.centerYAnchor.constraint(
                 equalTo: centerYAnchor, constant: ChromeMetrics.Border.width / 2),
         ])
@@ -71,6 +76,8 @@ final class HintFooter: NSView, ThemeReapplying {
         pairs.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hints.forEach { pairs.addArrangedSubview(Item($0)) }
     }
+
+    var hintsWidth: CGFloat { pairs.fittingSize.width.rounded(.up) }
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome

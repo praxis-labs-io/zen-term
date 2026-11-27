@@ -3,7 +3,8 @@ import TerminalKit
 
 enum ChromeThemeDeriver {
     static func derive(from terminal: TerminalTheme, accent: AccentSlot? = nil) -> ChromeTheme {
-        let accent = (accent ?? .themeDefault).color(in: terminal)
+        let accentSlot = accent ?? .themeDefault
+        let accent = accentSlot.color(in: terminal)
         return ChromeTheme(
             background: terminal.background,
             foreground: terminal.foreground,
@@ -11,6 +12,7 @@ enum ChromeThemeDeriver {
             warning: AccentSlot.yellow.color(in: terminal),
             destructive: AccentSlot.red.color(in: terminal),
             accent: accent,
+            accentSlot: accentSlot,
             onAccent: onAccent(for: accent, in: terminal),
             working: AccentSlot.yellow.color(in: terminal),
             done: AccentSlot.blue.color(in: terminal),

@@ -7,9 +7,27 @@ struct ProcessIcon: Equatable {
         case brand(fill: TerminalColor, glyph: TerminalColor)
         case artwork(fill: TerminalColor)
         case neutral
-        case purpose(AccentSlot)
+        case muted
+        case purpose(Purpose)
         // The one look that may draw an SF Symbol: a tool float's own icon picker name.
-        case catalog(AccentSlot)
+        case catalog
+    }
+
+    enum Purpose: Equatable {
+        case workspace, tab, pane, window
+
+        func hue(beside accent: AccentSlot) -> AccentSlot? {
+            switch self {
+            case .workspace: return [.black, .white].contains(Self.family(of: accent)) ? nil : accent
+            case .tab: return Self.family(of: accent) == .cyan ? .magenta : .cyan
+            case .pane: return Self.family(of: accent) == .yellow ? .green : .yellow
+            case .window: return Self.family(of: accent) == .blue ? .magenta : .blue
+            }
+        }
+
+        private static func family(of slot: AccentSlot) -> AccentSlot {
+            AccentSlot.allCases.first { $0.ansiIndex == slot.ansiIndex % 8 } ?? slot
+        }
     }
 
     let name: String
@@ -22,7 +40,7 @@ struct ProcessIcon: Equatable {
         switch look {
         case .artwork: return BrandMark.artwork(mark)
         case .catalog: return IconCatalog.image(mark, weight: .regular)
-        case .brand, .neutral, .purpose: return BrandMark.image(mark)
+        case .brand, .neutral, .muted, .purpose: return BrandMark.image(mark)
         }
     }
 
@@ -30,29 +48,30 @@ struct ProcessIcon: Equatable {
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
 
-    static let workspace = purpose("Workspace", "folder", .magenta)
-    static let workspaceWorktree = purpose("Worktree", "git-branch", .magenta)
-    static let newWorkspace = purpose("New Workspace", "plus", .magenta)
-    static let addWorkspace = purpose("Add Workspace", "folder-plus", .magenta)
-    static let host = purpose("Host", "server", .magenta)
-    static let tab = purpose("Tab", "panel-top", .cyan)
-    static let pane = purpose("Pane", "columns-2", .yellow)
-    static let terminal = purpose("Terminal", "terminal", .green)
-    static let find = purpose("Find", "search", .green)
-    static let scrollMode = purpose("Scroll Mode", "arrow-up-down", .green)
-    static let window = purpose("Window", "app-window", .blue)
-    static let tool = purpose("Tool", "hammer", toolTint)
+    static let workspace = purpose("Workspace", "folder", .workspace)
+    static let closedWorkspace = muted("Workspace", "folder")
+    static let closedWorktree = muted("Worktree", "git-branch")
+    static let workspaceWorktree = purpose("Worktree", "git-branch", .workspace)
+    static let newWorkspace = purpose("New Workspace", "plus", .workspace)
+    static let addWorkspace = purpose("Add Workspace", "folder-plus", .workspace)
+    static let host = purpose("Host", "server", .workspace)
+    static let unconnectedHost = muted("Host", "server")
+    static let offlineHost = muted("Host", "server-off")
+    static let tab = purpose("Tab", "panel-top", .tab)
+    static let pane = purpose("Pane", "columns-2", .pane)
+    static let window = purpose("Window", "app-window", .window)
+    static let terminal = neutral("Terminal", "terminal")
+    static let find = neutral("Find", "search")
+    static let scrollMode = neutral("Scroll Mode", "arrow-up-down")
+    static let tool = neutral("Tool", "hammer")
     static let app = neutral("App", "settings")
-
-    // Floats are terminals too, so the Tools group shares the Terminal hue.
-    private static let toolTint = AccentSlot.green
 
     // Nil for an icon name nothing draws, such as a typo in config, so the row falls back to its group's chip.
     static func toolFloat(_ float: ToolFloat) -> ProcessIcon? {
         if let brand = brandChip(picked: float.icon) {
             return ProcessIcon(name: float.title, mark: brand.mark, look: brand.look, scale: brand.scale)
         }
-        let icon = ProcessIcon(name: float.title, mark: float.icon, look: .catalog(toolTint), scale: 1)
+        let icon = ProcessIcon(name: float.title, mark: float.icon, look: .catalog, scale: 1)
         return icon.image == nil ? nil : icon
     }
 
@@ -64,8 +83,8 @@ struct ProcessIcon: Equatable {
     // The picker offers Gemini as a one-color mark; its chip draws the mark in Gemini's own colors.
     private static let pickerArtwork: [String: String] = ["gemini": "gemini-color"]
 
-    private static func purpose(_ name: String, _ mark: String, _ hue: AccentSlot) -> ProcessIcon {
-        ProcessIcon(name: name, mark: mark, look: .purpose(hue), scale: lucideScale)
+    private static func purpose(_ name: String, _ mark: String, _ purpose: Purpose) -> ProcessIcon {
+        ProcessIcon(name: name, mark: mark, look: .purpose(purpose), scale: lucideScale)
     }
 
     static func forProgram(_ program: String?) -> ProcessIcon {
@@ -98,6 +117,10 @@ struct ProcessIcon: Equatable {
 
     private static func neutral(_ name: String, _ mark: String) -> ProcessIcon {
         ProcessIcon(name: name, mark: mark, look: .neutral, scale: lucideScale)
+    }
+
+    private static func muted(_ name: String, _ mark: String) -> ProcessIcon {
+        ProcessIcon(name: name, mark: mark, look: .muted, scale: lucideScale)
     }
 
     private static func brand(_ name: String, _ mark: String, _ fill: UInt32, _ glyph: UInt32, scale: CGFloat = 1)

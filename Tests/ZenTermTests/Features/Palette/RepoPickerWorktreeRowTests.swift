@@ -172,7 +172,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
 
-    func test_everyRow_leadsWithALucideChip_inTheWorkspacesTint() throws {
+    func test_everyRow_leadsWithALucideChip_mutedUntilItIsOpen() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -183,12 +183,23 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let rows = overlay.rowViews.compactMap { $0 as? ListRow }
         XCTAssertEqual(
             rows.map(\.content.leading),
-            [.process(.newWorkspace), .process(.workspace), .process(.workspaceWorktree), .process(.addWorkspace)])
+            [
+                .process(.newWorkspace), .process(.closedWorkspace), .process(.closedWorktree),
+                .process(.addWorkspace),
+            ], "an action leads in the Workspaces tint, and a row nothing has opened leads muted")
         for row in rows {
             let badge = try XCTUnwrap(row.processBadgeForTesting, "\(row.title) leads with no chip")
-            XCTAssertEqual(badge.process?.look, .purpose(.magenta), "\(row.title) is not in the Workspaces tint")
             XCTAssertNotNil(badge.process?.image, "\(row.title)'s Lucide mark is not in the bundle")
         }
+    }
+
+    func test_aRowsChip_isInTheWorkspacesTintOnlyWhileOpen() {
+        typealias Style = RepoPickerOverlay.RowView.Style
+        XCTAssertEqual(Style.workspace.icon(isOpen: true), .workspace)
+        XCTAssertEqual(Style.workspace.icon(isOpen: false), .closedWorkspace)
+        XCTAssertEqual(Style.openChild.icon(isOpen: true), .workspaceWorktree)
+        XCTAssertEqual(Style.closedChild.icon(isOpen: false), .closedWorktree)
+        XCTAssertEqual(Style.ghost.icon(isOpen: false), .closedWorkspace)
     }
 
     func test_theState_followsTheLabel_whileTheBranchStaysTrailing() throws {

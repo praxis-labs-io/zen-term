@@ -102,7 +102,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         self.emptyLabel = EmptyStateLabel(emptyText)
         self.defaultEmptyText = emptyText
         self.searchPlaceholder = placeholder
-        self.footer = HintFooter([], trailingInset: Self.searchInset)
+        self.footer = HintFooter([], inset: Self.searchInset)
         let doc = FlippedView()
         self.scrollView = FadingScrollView(document: doc)
         super.init(width: Self.width, placement: .pinnedTop(fullHeight: Self.fullHeight), onCancel: onDismiss)

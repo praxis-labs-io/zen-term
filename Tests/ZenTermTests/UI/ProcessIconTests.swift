@@ -111,7 +111,44 @@ final class ProcessIconTests: XCTestCase {
         XCTAssertEqual(icon.look, ProcessIcon.forAgent("gemini").look)
     }
 
-    func test_aPickedSymbol_keepsTheToolsTint() throws {
+    func test_workspaceChips_takeTheAccent_unlessItIsBlackOrWhite() {
+        for accent in [AccentSlot.red, .green, .blue, .brightMagenta] {
+            XCTAssertEqual(ProcessIcon.Purpose.workspace.hue(beside: accent), accent, accent.rawValue)
+        }
+        for accent in [AccentSlot.black, .white, .brightBlack, .brightWhite] {
+            XCTAssertNil(ProcessIcon.Purpose.workspace.hue(beside: accent), accent.rawValue)
+        }
+    }
+
+    func test_aGroupSharingTheAccentsHueFamily_movesToItsFallback() {
+        let fallbacks: [(ProcessIcon.Purpose, AccentSlot, AccentSlot, AccentSlot)] = [
+            (.tab, .cyan, .brightCyan, .magenta),
+            (.pane, .yellow, .brightYellow, .green),
+            (.window, .blue, .brightBlue, .magenta),
+        ]
+        for (purpose, family, bright, fallback) in fallbacks {
+            XCTAssertEqual(purpose.hue(beside: family), fallback, "\(purpose) beside \(family)")
+            XCTAssertEqual(purpose.hue(beside: bright), fallback, "\(purpose) beside \(bright)")
+            XCTAssertEqual(purpose.hue(beside: .red), family, "\(purpose) keeps its hue beside red")
+        }
+    }
+
+    func test_noTwoTintedGroups_shareAHue_onAnyAccent() {
+        for accent in AccentSlot.allCases {
+            let hues = [ProcessIcon.Purpose.workspace, .tab, .pane, .window].compactMap {
+                $0.hue(beside: accent).map { $0.ansiIndex % 8 }
+            }
+            XCTAssertEqual(Set(hues).count, hues.count, "two groups share a hue beside \(accent)")
+        }
+    }
+
+    func test_everyMutedChipsMark_isBundled() {
+        for icon in [ProcessIcon.closedWorkspace, .closedWorktree, .unconnectedHost, .offlineHost] {
+            XCTAssertNotNil(icon.image, "\(icon.mark) is not in the bundle")
+        }
+    }
+
+    func test_aPickedSymbol_drawsAsACatalogChip() throws {
         let icon = try XCTUnwrap(ProcessIcon.toolFloat(probe(icon: "hammer")))
         guard case .catalog = icon.look else { return XCTFail("a symbol draws as \(icon.look)") }
     }
