@@ -17,7 +17,9 @@ struct ClaudeSettings {
         } catch {
             throw .unreadable(url, error)
         }
-        if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) { return ClaudeSettings(root: [:], hookFileName: hookFileName) }
+        if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) {
+            return ClaudeSettings(root: [:], hookFileName: hookFileName)
+        }
         guard let object = try? JSONSerialization.jsonObject(with: data), let root = object as? [String: Any] else {
             throw .malformed(url, "isn't a JSON object")
         }
