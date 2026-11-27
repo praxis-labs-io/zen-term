@@ -70,9 +70,15 @@ final class ClaudeSetupTests: XCTestCase {
         let installed = try String(contentsOf: codex.settingsURL, encoding: .utf8)
         XCTAssertTrue(installed.contains("zenterm-codex-context.sh' codex"))
         XCTAssertTrue(installed.contains("say done"))
-        XCTAssertEqual(try codex.remove().count, 3)
+        let otherCodexHome = root.appendingPathComponent("other-codex")
+        let otherCodex = ClaudeSetup.Client.codex.setup(
+            files: files, environment: ["HOME": root.path, "CODEX_HOME": otherCodexHome.path])
+        XCTAssertEqual(try otherCodex.state(), .notInstalled)
+        _ = try otherCodex.install()
+        XCTAssertEqual(try codex.remove().count, 2)
+        XCTAssertEqual(try otherCodex.state(), .current)
         XCTAssertEqual(try claude.state(), .current)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: codex.skillURL.path))
+        XCTAssertEqual(try Data(contentsOf: codex.skillURL), files.skill)
         XCTAssertEqual(try codex.state(), .notInstalled)
         let remaining = try JSONSerialization.jsonObject(with: Data(contentsOf: codex.settingsURL)) as? NSDictionary
         let original = try JSONSerialization.jsonObject(with: Data(unrelated.utf8)) as? NSDictionary
@@ -160,7 +166,7 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)
 
         _ = try setup.install()
-        var settings = try ClaudeSettings.read(at: setup.settingsURL)
+        var settings = try ClaudeSettings.read(at: setup.settingsURL, hookCommands: [setup.hookCommand])
         _ = settings.unregister()
         try settings.write(to: setup.settingsURL)
         XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)
@@ -219,7 +225,7 @@ final class ClaudeSetupTests: XCTestCase {
         try writeSettings(
             """
             {"hooks": {"SessionStart": [
-              {"hooks": [{"type": "command", "command": "bash $HOME/.claude/hooks/zenterm-context.sh"}]},
+              {"hooks": [{"type": "command", "command": "bash \(setup.hookURL.path)"}]},
               {"hooks": [{"type": "command", "command": "bash $HOME/.claude/hooks/other.sh"}]}
             ]}}
             """)
@@ -228,6 +234,24 @@ final class ClaudeSetupTests: XCTestCase {
         _ = try setup.install()
 
         XCTAssertEqual(try sessionStartCommands(), [setup.hookCommand, "bash $HOME/.claude/hooks/other.sh"])
+    }
+
+    func test_installAndRemovePreserveSimilarHookCommands() throws {
+        let backup = "bash \(setup.hookURL.path).backup"
+        let other = "bash /other/hooks/zenterm-context.sh"
+        try writeSettings(
+            """
+            {"hooks": {"SessionStart": [{"hooks": [
+              {"type": "command", "command": "\(backup)"},
+              {"type": "command", "command": "\(other)"}
+            ]}]}}
+            """)
+
+        XCTAssertEqual(try setup.state(), .notInstalled)
+        _ = try setup.install()
+        XCTAssertEqual(try sessionStartCommands(), [backup, other, setup.hookCommand])
+        _ = try setup.remove()
+        XCTAssertEqual(try sessionStartCommands(), [backup, other])
     }
 
     func test_removeLeavesEveryOtherEntry() throws {

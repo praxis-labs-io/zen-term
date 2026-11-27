@@ -79,12 +79,30 @@ public struct ClaudeSetup: Sendable {
 
     private var registeredCommand: String { client == .codex ? hookCommand + " codex" : hookCommand }
 
+    private var hookCommands: Set<String> {
+        let suffix = client == .codex ? " codex" : ""
+        var commands: Set<String> = [registeredCommand]
+        let shellSpecial = CharacterSet.whitespacesAndNewlines.union(
+            CharacterSet(charactersIn: "'\"\\$`;&|<>()*?[]{}!"))
+        if hookURL.path.rangeOfCharacter(from: shellSpecial) == nil {
+            commands.insert("bash \(hookURL.path)\(suffix)")
+            commands.insert("bash \"\(hookURL.path)\"\(suffix)")
+        }
+        let defaultClaudeHook = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".claude/hooks/\(Self.hookFileName)")
+        if client == .claude, hookURL.standardizedFileURL == defaultClaudeHook.standardizedFileURL {
+            commands.insert("bash $HOME/.claude/hooks/\(Self.hookFileName)")
+            commands.insert("bash \"$HOME/.claude/hooks/\(Self.hookFileName)\"")
+        }
+        return commands
+    }
+
     /// Reads what is installed; throws when settings.json cannot be read or is not the shape Claude Code reads.
     public func state() throws(ClaudeSetupError) -> State {
-        let settings = try ClaudeSettings.read(at: settingsURL, hookFileName: hookFileName)
+        let settings = try ClaudeSettings.read(at: settingsURL, hookCommands: hookCommands)
         let skill = try contents(of: skillURL)
         let hook = try contents(of: hookURL)
-        if skill == nil, hook == nil, !settings.hasOwnEntry() { return .notInstalled }
+        if (client == .codex || skill == nil), hook == nil, !settings.hasOwnEntry() { return .notInstalled }
         guard let skill, let hook, settings.isRegistered(command: registeredCommand) else { return .edited }
         if skill == files.skill, hook == files.hook { return .current }
         if try isFromNewerBuild(skill: skill, hook: hook) { return .newer }
@@ -95,7 +113,7 @@ public struct ClaudeSetup: Sendable {
     /// Writes what is missing or out of date and returns one line per change, none when it was already current.
     /// Refuses before writing anything when settings.json is malformed.
     public func install() throws(ClaudeSetupError) -> [String] {
-        var settings = try ClaudeSettings.read(at: settingsURL, hookFileName: hookFileName)
+        var settings = try ClaudeSettings.read(at: settingsURL, hookCommands: hookCommands)
         var changes: [String] = []
         if let verb = try place(files.skill, at: skillURL) {
             changes.append("\(verb) the zen skill at \(skillURL.path)")
@@ -118,18 +136,13 @@ public struct ClaudeSetup: Sendable {
     /// Deletes what setup installed, keeping every other entry, and returns one line per change.
     /// Refuses before deleting anything when settings.json is malformed.
     public func remove() throws(ClaudeSetupError) -> [String] {
-        var settings = try ClaudeSettings.read(at: settingsURL, hookFileName: hookFileName)
-        if client == .codex, !settings.hasOwnEntry(), try contents(of: stampURL) == nil,
-            try contents(of: hookURL) == nil
-        {
-            return []
-        }
+        var settings = try ClaudeSettings.read(at: settingsURL, hookCommands: hookCommands)
         var changes: [String] = []
         if settings.unregister() {
             try settings.write(to: settingsURL)
             changes.append("Removed the SessionStart entry from \(settingsURL.path)")
         }
-        if try delete(skillURL) {
+        if client == .claude, try delete(skillURL) {
             _ = rmdir(skillURL.deletingLastPathComponent().path)
             changes.append("Removed the zen skill from \(skillURL.path)")
         }

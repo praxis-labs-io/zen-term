@@ -12,7 +12,7 @@ struct SetupCommands: ParsableCommand {
             abstract: "Install or update the zen skill and session hook for Codex.",
             discussion: "After setup, open /hooks in Codex to review and trust the ZenTerm hook.")
 
-        @Flag(help: "Remove what setup installed instead.")
+        @Flag(help: "Remove the hook for this Codex profile and keep the shared skill.")
         var remove = false
 
         func run() throws {

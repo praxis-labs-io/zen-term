@@ -4,26 +4,26 @@ import Foundation
 struct ClaudeSettings {
     private(set) var root: [String: Any]
 
-    private let hookFileName: String
+    private let hookCommands: Set<String>
 
     static func read(
-        at url: URL, hookFileName: String = ClaudeSetup.hookFileName
+        at url: URL, hookCommands: Set<String>
     ) throws(ClaudeSetupError) -> ClaudeSettings {
         let data: Data
         do {
             data = try Data(contentsOf: url)
         } catch CocoaError.fileReadNoSuchFile {
-            return ClaudeSettings(root: [:], hookFileName: hookFileName)
+            return ClaudeSettings(root: [:], hookCommands: hookCommands)
         } catch {
             throw .unreadable(url, error)
         }
         if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) {
-            return ClaudeSettings(root: [:], hookFileName: hookFileName)
+            return ClaudeSettings(root: [:], hookCommands: hookCommands)
         }
         guard let object = try? JSONSerialization.jsonObject(with: data), let root = object as? [String: Any] else {
             throw .malformed(url, "isn't a JSON object")
         }
-        let settings = ClaudeSettings(root: root, hookFileName: hookFileName)
+        let settings = ClaudeSettings(root: root, hookCommands: hookCommands)
         _ = try settings.sessionStart(at: url)
         return settings
     }
@@ -95,9 +95,11 @@ struct ClaudeSettings {
         return replaceSessionStart(with: groups)
     }
 
-    // Recognized by the script's file name, so an entry wired by hand before `zen setup` is adopted, not duplicated.
     private func isOwn(_ hook: Any) -> Bool {
-        ((hook as? [String: Any])?["command"] as? String)?.contains("/\(hookFileName)") == true
+        guard let fields = hook as? [String: Any], fields["type"] as? String == "command",
+            let command = fields["command"] as? String
+        else { return false }
+        return hookCommands.contains(command)
     }
 
     private static let timeout = 5

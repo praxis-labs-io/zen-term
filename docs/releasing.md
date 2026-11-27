@@ -26,13 +26,18 @@ symlink resolves. Moving or renaming the binary breaks every installed link.
 
 `zen setup claude` and `zen setup codex` read the same skill and hook from
 `Contents/Resources/ZenTerm_AgentSetup.bundle`, found the same way, so an app update ships
-new copies. The app refreshes them when the corresponding agent next starts.
-Codex uses `~/.agents/skills/zen/` and `$CODEX_HOME/hooks.json` (defaulting to
-`~/.codex/hooks.json`). The user reviews and trusts its hook in `/hooks`. When a part is missing, the
-SessionStart entry is not the one setup writes, or an installed file matches no digest in
-`shipped-digests.txt` beside them, that is the user's edit, so the app asks first. Setup
-stamps `hooks/zenterm-context.build` with the `CFBundleVersion` that wrote the files, so an
-older build leaves a newer build's untouched copies alone.
+new copies. The app checks for Claude updates when Claude starts. For Codex, run
+`zen setup codex` from the shell that launches it, then review and trust the hook
+in `/hooks`. Codex uses `~/.agents/skills/zen/` and `$CODEX_HOME/hooks.json`
+(defaulting to `~/.codex/hooks.json`). Removing a Codex profile's hook preserves
+the shared skill.
+
+If an installed Claude file is missing, has an unknown digest, or has a changed
+SessionStart entry, the app asks before replacing it. Known file digests are
+listed in `shipped-digests.txt`. Setup records the `CFBundleVersion` and file
+version in `hooks/zenterm-context.build` for Claude and
+`hooks/zenterm-codex-context.build` for Codex. Claude automatic updates use the
+stamp to preserve untouched files installed by a newer build.
 
 ## zen-term-releases stays archived
 
