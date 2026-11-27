@@ -260,6 +260,8 @@ final class SearchController {
             bar?.needle = text
             needleDidChange(text)
         }
+
+        var didRequestSelectionForTesting: Bool { didRequestSelection }
     #endif
 
     func report(total: Int?, from s: AnyObject) {
@@ -289,10 +291,10 @@ final class SearchController {
         let top = grid.viewportTop
         let bottom = min(top + metrics.rows, grid.rowCount) - 1
         guard
-            bottom >= top,
+            bottom >= top, let lastRow = grid.row(bottom),
             let text = grid.text(
                 from: TerminalGridPoint(row: top, column: 0),
-                to: TerminalGridPoint(row: bottom, column: max(metrics.columns - 1, 0)))
+                to: TerminalGridPoint(row: bottom, column: max(lastRow.cells.count - 1, 0)))
         else { return false }
         return text.split(whereSeparator: \.isNewline).contains {
             !Self.occurrenceColumns(of: needle, in: String($0)).isEmpty

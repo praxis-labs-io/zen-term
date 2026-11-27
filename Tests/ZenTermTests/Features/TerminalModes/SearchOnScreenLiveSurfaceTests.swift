@@ -82,9 +82,9 @@ final class SearchOnScreenLiveSurfaceTests: WindowTestCase {
         let field = try XCTUnwrap(controller.focusedPanelForTesting?.findFieldForTesting)
         controller.search.beginNeedleForTesting("zqxjwk")
         waitUntil(field.countTextForTesting.contains("2"), "the engine's count", timeout: 5)
-        RunLoop.current.run(until: Date().addingTimeInterval(1))
 
-        XCTAssertEqual(field.countTextForTesting, "2 matches", "a match on screen selects nothing")
+        XCTAssertFalse(controller.search.didRequestSelectionForTesting, "a match on screen selects nothing")
+        XCTAssertEqual(field.countTextForTesting, "2 matches")
         XCTAssertEqual(grid.viewportTop, top, "opening find never scrolls away from a match the reader sees")
     }
 }

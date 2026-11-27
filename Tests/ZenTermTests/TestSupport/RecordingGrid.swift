@@ -1,6 +1,6 @@
 import TerminalKit
 
-// A grid over `RecordingSurface.rows` with no scrollback, so a grid row is a viewport row.
+// A grid over `RecordingSurface.rows` with no scrollback and one cell per character.
 final class RecordingGrid: TerminalGrid {
     private let rows: () -> [String]
 
@@ -15,7 +15,13 @@ final class RecordingGrid: TerminalGrid {
     var cursorPoint: TerminalGridPoint? { nil }
     var selectionBounds: ClosedRange<TerminalGridPoint>? { nil }
 
-    func row(_ index: Int) -> TerminalGridRow? { nil }
+    func row(_ index: Int) -> TerminalGridRow? {
+        let rows = rows()
+        guard rows.indices.contains(index) else { return nil }
+        return TerminalGridRow(
+            cells: rows[index].map { TerminalGridCell(text: String($0), width: 1, kind: .output) },
+            wraps: wrappingRows.contains(index), continues: wrappingRows.contains(index - 1), prompt: .none)
+    }
 
     func text(from start: TerminalGridPoint, to end: TerminalGridPoint) -> String? {
         let rows = rows()
