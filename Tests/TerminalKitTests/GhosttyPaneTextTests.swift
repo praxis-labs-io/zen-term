@@ -84,6 +84,7 @@ final class GhosttyPaneTextTests: XCTestCase {
     func test_theActiveScreenIsTheBottomRowsEvenWhenScrolledBack() throws {
         let surface = try mounted("/bin/sh", ["-c", "seq 5000; sleep 100"])
         _ = lines(of: surface) { $0.contains("5000") }
+        _ = try settledColumns(surface, try XCTUnwrap(surface.grid))
         let rows = try XCTUnwrap(surface.cellMetrics?.rows)
         surface.scroll(.top)
         _ = lines(of: surface) { _ in !(0..<rows).contains { surface.text(viewportRow: $0) == "5000" } }
