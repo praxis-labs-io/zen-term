@@ -440,6 +440,22 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor?.row, limit, "the walk stops at the cap, not the top")
     }
 
+    func test_outputAfterAFontStepIsStillHeld() throws {
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.grid = nil
+        controller.handle(.toggleScrollMode)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        surface.cellMetrics = TerminalCellMetrics(columns: 60, rows: 24, cellWidth: 11, cellHeight: 22, gridInset: 2)
+
+        controller.applySessionFontSize()
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3)], "the step already took the new size, so this is output")
+    }
+
     func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)

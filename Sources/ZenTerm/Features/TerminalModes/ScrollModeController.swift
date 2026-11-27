@@ -94,7 +94,18 @@ final class ScrollModeController {
     /// A font step changes the cell size without a resize report.
     func refreshGeometry() {
         guard isActive else { return }
+        let size = Self.gridSize(of: surface)
+        if size != lastGridSize {
+            lastGridSize = size
+            followResize()
+        }
         refreshCursor()
+    }
+
+    private func followResize() {
+        if cursor == nil { keepCursorInView() }
+        reveal()
+        applySelection()
     }
 
     func isDriving(_ s: AnyObject) -> Bool { surface === (s as AnyObject) }
@@ -592,9 +603,7 @@ final class ScrollModeController {
         if let last = lastPosition, position.offset != last.offset { holdsViewport = false }
         lastPosition = position
         if resized {
-            if cursor == nil { keepCursorInView() }
-            reveal()
-            applySelection()
+            followResize()
         } else {
             keepCursorInView()
         }
