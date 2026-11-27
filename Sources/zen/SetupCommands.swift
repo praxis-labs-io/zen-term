@@ -7,7 +7,10 @@ struct SetupCommands: ParsableCommand {
         commandName: "setup", abstract: "Teach a coding agent to use zen.",
         subcommands: [Claude.self])
 
-    struct Claude: ParsableCommand {
+    struct Claude: AgentSetupCommand {
+        typealias Installer = ClaudeSetup
+        static let agentName = "Claude Code"
+
         static let configuration = CommandConfiguration(
             abstract: "Install or update the zen skill and session hook for Claude Code, and print what changed.",
             discussion: """
@@ -19,30 +22,5 @@ struct SetupCommands: ParsableCommand {
 
         @Flag(help: "Remove what setup installed instead.")
         var remove = false
-
-        func run() throws {
-            let lines = try changes(
-                environment: ProcessInfo.processInfo.environment, files: ClaudeSetupFiles.bundled())
-            lines.forEach { print($0) }
-        }
-
-        func changes(environment: [String: String], files: ClaudeSetupFiles?) throws(ZenFailure) -> [String] {
-            guard let files else {
-                throw .app(
-                    "zen can't find the skill it ships with. Run the zen inside ZenTerm, at "
-                        + "ZenTerm.app/Contents/MacOS/zen.")
-            }
-            let setup = ClaudeSetup(configRoot: ClaudeSetup.configRoot(environment: environment), files: files)
-            do {
-                if remove {
-                    let removed = try setup.remove()
-                    return removed.isEmpty ? ["Nothing to remove: zen isn't set up for Claude Code."] : removed
-                }
-                let changed = try setup.install()
-                return changed.isEmpty ? ["Nothing to change: zen is set up for Claude Code."] : changed
-            } catch {
-                throw .app(error.message)
-            }
-        }
     }
 }
