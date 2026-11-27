@@ -315,6 +315,7 @@ final class ScrollModeController {
             return
         }
         guard cursor.row < top || cursor.row > bottom else { return }
+        copied = nil
         seat(at: textPoint(column: cursor.column, row: min(max(cursor.row, top), bottom)))
         applySelection()
     }

@@ -536,6 +536,33 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(header.readoutForTesting, "141:1")
     }
 
+    func test_aScrollThatCarriesTheCursorOffscreenGivesThePositionBackAfterACopy() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = Array(repeating: "x", count: 200)
+        let grid = surface.recordingGrid
+        grid.viewportTop = 176
+        grid.cursorPoint = TerminalGridPoint(row: 190, column: 0)
+        let board = NSPasteboard(name: NSPasteboard.Name("zenterm-scroll-mode-\(UUID().uuidString)"))
+        defer { board.releaseGlobally() }
+        controller.scrollMode.yankPasteboard = board
+        let header = try XCTUnwrap(controller.focusedPanelForTesting?.shownHeaderForTesting)
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertTrue(handler(try keyDown("y")))
+        XCTAssertTrue(handler(try keyDown("y")))
+        XCTAssertEqual(header.readoutForTesting, "Copied 1 line", "precondition")
+
+        grid.viewportTop = 100
+        surface.delegate?.surface(
+            surface, scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 100, viewport: 24))
+
+        XCTAssertEqual(controller.scrollMode.cursor?.row, 123, "premise: the scroll carried the cursor")
+        XCTAssertEqual(header.readoutForTesting, "124:1")
+    }
+
     func test_withHeadersOff_theModeLeavesTheHeaderHidden() throws {
         var config = GeneralConfig.current
         config.paneHeaders = false
