@@ -397,6 +397,45 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(try error(send(.paneRead, ControlArgs(lines: 0), from: token(of: target))).code, .badRequest)
     }
 
+    func test_readSinceTaskReadsFromTheLastSendWithEnter_andTheNextSendMovesIt() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+        let pane = try token(of: target)
+        target.rows = ["before"] + Array(repeating: "", count: 23)
+        XCTAssertEqual(try error(send(.paneRead, ControlArgs(pane: .token(pane), since: .task))).code, .failed)
+
+        _ = try send(.paneSend, ControlArgs(pane: .token(pane), text: "first", enter: true))
+        target.rows[1...2] = ["first", "out 1"]
+        let first = try result(send(.paneRead, ControlArgs(pane: .token(pane), since: .task)), as: PaneText.self)
+        XCTAssertEqual(first, PaneText(text: "first\nout 1", truncated: false))
+
+        _ = try send(.paneSend, ControlArgs(pane: .token(pane), text: "second", enter: true))
+        target.rows[3...4] = ["second", "out 2"]
+        let second = try result(send(.paneRead, ControlArgs(pane: .token(pane), since: .task)), as: PaneText.self)
+        XCTAssertEqual(second.text, "second\nout 2")
+        XCTAssertEqual(target.recordingGrid.liveMarks, 1, "the second send replaced the first mark")
+
+        _ = try send(.paneSend, ControlArgs(pane: .token(pane), text: "typed"))
+        XCTAssertEqual(
+            try result(send(.paneRead, ControlArgs(pane: .token(pane), since: .task)), as: PaneText.self).text,
+            "second\nout 2", "a send without enter leaves the mark")
+        XCTAssertEqual(
+            try error(send(.paneRead, ControlArgs(pane: .token(pane), lines: 5, since: .task))).code, .badRequest)
+    }
+
+    func test_closingAPaneFreesItsTaskMark() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let opened = try result(send(.paneSplit, ControlArgs(dir: .right), from: caller), as: PaneResult.self).pane
+        let target = try XCTUnwrap(spawned.last)
+        _ = try send(.paneSend, ControlArgs(pane: .token(opened), text: "go", enter: true))
+        XCTAssertEqual(target.recordingGrid.liveMarks, 1)
+
+        XCTAssertEqual(try send(.paneClose, ControlArgs(pane: .token(opened))).isSuccess, true)
+
+        XCTAssertEqual(target.recordingGrid.liveMarks, 0)
+    }
+
     func test_aScreenThatCannotBeReadAnswersFailedRatherThanEmptyText() throws {
         _ = makeWindow()
         let target = try XCTUnwrap(spawned.first)

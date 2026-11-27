@@ -2,7 +2,8 @@ import Foundation
 import ObjectiveC
 import TerminalKit
 
-// RecordingSurface's scrollback and rows as a grid. A row never wraps, and a mark keeps its row index.
+// RecordingSurface's scrollback and rows as a grid. A row never wraps, a mark keeps its row index, and the cursor
+// sits at the start of the row after the last one written.
 final class RecordingSurfaceGrid: TerminalGrid {
     private unowned let surface: RecordingSurface
     private(set) var liveMarks = 0
@@ -17,7 +18,10 @@ final class RecordingSurfaceGrid: TerminalGrid {
 
     var rowCount: Int { lines.count }
     var viewportTop: Int { surface.scrollback.count }
-    var cursorPoint: TerminalGridPoint? { nil }
+    var cursorPoint: TerminalGridPoint? {
+        let written = lines.lastIndex { !$0.isEmpty }.map { $0 + 1 } ?? 0
+        return TerminalGridPoint(row: min(written, max(rowCount - 1, 0)), column: 0)
+    }
     var selectionBounds: ClosedRange<TerminalGridPoint>? { nil }
 
     func row(_ index: Int) -> TerminalGridRow? {

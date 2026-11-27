@@ -82,6 +82,20 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         return answer
     }
 
+    private func request(_ cmd: ControlCommand, _ args: ControlArgs) throws -> ControlReply {
+        var reply: ControlReply?
+        ControlResponder(
+            windows: { [unowned self] in controller.map { [$0] } ?? [] }, keyWindow: { [unowned self] in controller },
+            paneWaits: waits
+        ).respond(to: ControlRequest(id: 2, cmd: cmd, args: args)) { reply = $0 }
+        return try XCTUnwrap(reply, "\(cmd.rawValue) never answered")
+    }
+
+    private func readSinceTask(_ pane: Int) throws -> PaneText {
+        let reply = try request(.paneRead, ControlArgs(pane: .token(pane), since: .task))
+        return try XCTUnwrap(try reply.get() as? PaneText, "\(reply)")
+    }
+
     private func run(_ command: String, in surface: GhosttySurface) {
         surface.paste(command)
         surface.submit()
@@ -152,6 +166,35 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         run("seq 3; sleep 0.5; (exit 0)", in: surface)
 
         XCTAssertEqual(try result(answer).reason, .exited)
+    }
+
+    func test_readSinceTaskReturnsOnlyWhatThePanePrintedSinceTheTask() throws {
+        let (surface, token) = try shellPane()
+        run("echo zen-before-$((40+2))", in: surface)
+        waitUntil((surface.activeScreenText ?? "").contains("zen-before-42"), "the earlier output", timeout: 10)
+        waitUntil(atPrompt(surface), "the prompt after it", timeout: 10)
+
+        _ = try request(.paneSend, ControlArgs(pane: .token(token), text: "echo zen-after-$((40+2))", enter: true))
+        waitUntil((surface.activeScreenText ?? "").contains("zen-after-42"), "the task's output", timeout: 10)
+
+        let read = try readSinceTask(token)
+        XCTAssertTrue(read.text.hasPrefix("echo zen-after-$((40+2))"), read.text)
+        XCTAssertTrue(read.text.contains("\nzen-after-42"), read.text)
+        XCTAssertFalse(read.text.contains("zen-before"), read.text)
+        XCTAssertEqual(read.truncated, false)
+    }
+
+    func test_readSinceTaskOnTheAlternateScreenReadsThatScreen_andSaysSo() throws {
+        let (surface, token) = try shellPane()
+        let task = #"printf '\033[?1049h'; echo zen-alt-$((40+2)); sleep 30"#
+
+        _ = try request(.paneSend, ControlArgs(pane: .token(token), text: task, enter: true))
+        waitUntil((surface.activeScreenText ?? "").contains("zen-alt-42"), "the alternate screen", timeout: 10)
+
+        let read = try readSinceTask(token)
+        XCTAssertEqual(
+            read.text.trimmingCharacters(in: .whitespacesAndNewlines), "zen-alt-42", "only the screen showing")
+        XCTAssertEqual(read.truncated, true)
     }
 
     func test_aCommandThatExitsAnswersExited_withTheShellsExitCode() throws {

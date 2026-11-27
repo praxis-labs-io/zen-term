@@ -265,7 +265,9 @@ struct PaneCommands: ParsableCommand {
 
     struct Read: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Print a pane's text: the rows on screen, or its last lines with --lines.")
+            abstract:
+                "Print a pane's text: the rows on screen, its last lines with --lines, or what it printed since its "
+                + "last task with --since-task.")
 
         @OptionGroup var connection: ConnectionOptions
 
@@ -275,13 +277,26 @@ struct PaneCommands: ParsableCommand {
         @Option(help: "Print the last this many lines, scrollback included.")
         var lines: Int?
 
+        @Flag(
+            help: ArgumentHelp(
+                "Print from where the pane's last task or message sent with --enter began, its echo included. "
+                    + "Cells as they stand, not a log: a full-screen program reads as its screen now."))
+        var sinceTask = false
+
         func validate() throws {
             if let lines, lines < 1 { throw ValidationError("--lines must be 1 or more.") }
+            if lines != nil, sinceTask { throw ValidationError("--lines and --since-task do not go together.") }
         }
 
         func run() throws {
-            let args = ControlArgs(pane: pane, lines: lines)
-            print(try connection.client().send(.paneRead, args, expecting: PaneText.self).text)
+            let args = ControlArgs(pane: pane, lines: lines, since: sinceTask ? .task : nil)
+            let read = try connection.client().send(.paneRead, args, expecting: PaneText.self)
+            print(read.text)
+            guard read.truncated == true else { return }
+            var standardError = StandardError()
+            print(
+                "zen: where the task began is no longer readable, so this reads from the oldest row or the screen showing.",
+                to: &standardError)
         }
     }
 

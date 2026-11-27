@@ -342,6 +342,22 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(helper.inputs.count, 2, "a later report sent the task again")
     }
 
+    func test_readSinceTaskReadsFromWhereTheFirstTaskWasSent() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let reply = send(.paneRun, ControlArgs(cmd: "claude", name: "review", task: "Review x.swift"), from: caller)
+        let helper = try XCTUnwrap(spawned.last)
+        let read = { [self] in send(.paneRead, ControlArgs(pane: .name("review"), since: .task), from: caller)() }
+        XCTAssertEqual(error(try XCTUnwrap(read()))?.code, .failed, "nothing was sent yet")
+
+        report(.idle, from: helper)
+        waitUntil(reply() != nil, "the run's answer")
+        helper.rows[12...13] = ["Review x.swift", "looks fine"]
+
+        XCTAssertEqual(
+            try XCTUnwrap(read()).get() as? PaneText, PaneText(text: "Review x.swift\nlooks fine", truncated: false))
+    }
+
     func test_aBlockedOrBusyFirstReportHoldsTheTaskAndSaysWhy() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))

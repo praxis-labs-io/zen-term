@@ -477,7 +477,7 @@ prompt. A remote host's pane gets Ctrl-C as a key, so the host's terminal sends 
 
 ### `pane.read`
 
-`args`: `pane`, `lines`.
+`args`: `pane`, `lines`, `since` (`task`).
 
 Returns the rows on screen, or with `lines` the last that many lines of the screen and its
 scrollback, a prompt included. Trailing blank lines are dropped. `failed` when the pane has
@@ -485,6 +485,19 @@ not started or its screen cannot be read.
 
 ```json
 {"text":"$ seq 3\n1\n2\n3"}
+```
+
+- With `since: "task"` it returns what the pane printed since its last task or message: a
+  `pane.run` `task` or a `pane.send` with `enter`, read from where the cursor was as it arrived,
+  so the text starts with its echo. Each such send replaces the last. The answer carries
+  `truncated`, true when the scrollback dropped that spot, so the text starts at the oldest
+  row, or when a full-screen program shows, so the text is that screen.
+- It reads the cells as they stand, not a log: a program that redraws reads as it shows now.
+- `lines` and `since` together are a `bad_request`. `failed` when the pane has had no task or
+  message.
+
+```json
+{"text":"$ make test\n1 test failed","truncated":false}
 ```
 
 ### `pane.get`
@@ -663,7 +676,8 @@ or 3 without an instance, and prints neither prompt nor answer.
 `zen setup claude` and `zen setup claude --remove` edit Claude Code's config, not the app,
 and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
-rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
+rest print nothing. `zen pane read --since-task` sends `since: "task"`, and says on stderr when the
+answer is `truncated`. `zen pane get` takes the pane as its argument, this pane by default.
 `zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
 `zen wait` does. `zen pane send` without `--wait` prints `{"queued":true}` when the send was queued,
 and nothing when it arrived. `zen pane run --wait` also takes `--output`.
