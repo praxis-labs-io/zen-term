@@ -23,6 +23,7 @@ final class WindowController: NSObject {
     private let agentStates = AgentStateTracker()
     private let firstTasks: FirstTaskDelivery
     private let taskPickups = TaskPickups()
+    private let taskMarks = TaskMarks()
     private(set) var launchedPaneExits = LaunchedPaneExits()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
@@ -2655,6 +2656,12 @@ final class WindowController: NSObject {
         if case .blocked = agentStates.status(of: surface)?.state { blocksParentsAnswered.insert(surface) }
     }
 
+    func markTask(on pane: PaneHandle) { taskMarks.mark(pane.surfaceID, at: pane.surface) }
+
+    func readSinceTask(of pane: PaneHandle) -> TaskMarks.Read {
+        taskMarks.read(since: pane.surfaceID, in: pane.surface)
+    }
+
     // Only an agent that reports its status shows when it picks a task up.
     func noteTaskSubmitted(to pane: PaneHandle) {
         guard runsAgent(pane), let status = agentStates.status(of: pane.surfaceID), TaskPickups.isReady(status)
@@ -2696,6 +2703,7 @@ final class WindowController: NSObject {
         firstTasks.await(
             surfaceID,
             send: { [weak self, weak surface] in
+                if let surface { self?.taskMarks.mark(surfaceID, at: surface) }
                 surface?.paste(task)
                 surface?.submit()
                 self?.taskPickups.submitted(to: surfaceID)
@@ -3688,6 +3696,7 @@ final class WindowController: NSObject {
             ids.forEach {
                 self?.firstTasks.release($0)
                 self?.taskPickups.release($0)
+                self?.taskMarks.release($0)
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)

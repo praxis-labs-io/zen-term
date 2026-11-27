@@ -46,7 +46,7 @@ final class PaneWait {
         self.reply = reply
         lastPane = pane
         if let needle {
-            output = OutputWatch(needle: needle, baseline: Self.screen(of: watched.surface) ?? "")
+            output = OutputWatch(needle: needle, surface: watched.surface)
         }
         ranJob = Self.foregroundIsJob(watched)
     }
@@ -103,8 +103,7 @@ final class PaneWait {
 
     // A program that prints the text and exits before the next check still answers with the text.
     private func sawOutput() -> Bool {
-        guard output != nil, let screen = Self.screen(of: watched.surface) else { return false }
-        return output?.sawNeedle(in: screen) == true
+        output?.sawNeedle(in: watched.surface) == true
     }
 
     private func answer(_ reason: WaitReason, exitCode: Int? = nil, text: String? = nil) {
@@ -119,17 +118,13 @@ final class PaneWait {
         reply = nil
         ticker?.invalidate()
         ticker = nil
+        output = nil
         onAnswered?()
     }
 
     private static func foregroundIsJob(_ watched: Watched) -> Bool {
         guard watched.readsForeground, let group = watched.surface?.foregroundProcessGroupID else { return false }
         return !ForegroundGroup.isShell(group)
-    }
-
-    private static func screen(of surface: TerminalSurface?) -> String? {
-        guard let surface, surface.isStarted else { return nil }
-        return surface.activeScreenText
     }
 
     private static func lastLines(of surface: TerminalSurface?) -> String? {

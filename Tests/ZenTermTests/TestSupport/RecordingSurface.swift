@@ -113,8 +113,12 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
 
-    lazy var recordingGrid = RecordingGrid { [unowned self] in self.rows }
-    lazy var grid: TerminalGrid? = recordingGrid
+    lazy var recordingGrid = RecordingGrid(surface: self)
+    private var gridRemoved = false
+    var grid: TerminalGrid? {
+        get { isStarted && !terminated && !gridRemoved ? recordingGrid : nil }
+        set { gridRemoved = newValue == nil }
+    }
 
     var rows: [String] = {
         var rows = Array(repeating: "", count: 24)
@@ -153,7 +157,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
 
     static let unwritten: Character = "\0"
 
-    private static func width(_ character: Character) -> Int {
+    static func width(_ character: Character) -> Int {
         guard let scalar = character.unicodeScalars.first else { return 1 }
         switch scalar.value {
         case 0x1100...0x115F, 0x2E80...0x303E, 0x3041...0x33FF, 0x3400...0x4DBF, 0x4E00...0x9FFF,

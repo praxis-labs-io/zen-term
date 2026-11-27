@@ -13,8 +13,9 @@ started, and the background its program last reported. It takes `start`, `focus`
 wrapped rows split) or as its last lines, scrollback included (`text(lastLines:)`).
 
 `grid` (`TerminalGrid`) reads the screen and scrollback as cells: rows with their wrap and
-prompt flags, text between two `TerminalGridPoint`s, the cursor, the viewport's top row and the
-selection, which it can also set. A point's row counts from the oldest scrollback row, so it
+prompt flags, text between two `TerminalGridPoint`s, the cursor, the viewport's top row, the
+top row of the screen showing (`screenTop`, which stays put while the viewport scrolls back) and
+the selection, which it can also set. A point's row counts from the oldest scrollback row, so it
 renumbers when the scrollback drops rows: it is good for one read. Anything kept is a
 `TerminalGridMark`, which follows its cell through output and reflow and reads `.gone` once the
 scrollback drops it.
@@ -735,8 +736,9 @@ replies when the read lands, holding only its own connection. A command that can
 app-wide since a caller and the pane it waits on can sit in different windows: `WindowController`
 feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
 `pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
-without OSC 133 are checked on a timer while a wait holds: the screen's own rows, lined up with the
-last read (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). The
+without OSC 133 are checked on a timer while a wait holds: the text from a grid mark at the screen
+the last check read down to the bottom row (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). A task or message sent with `enter` drops a grid mark at the start of the cursor's row, one per pane and replaced by the
+next (`TaskMarks`), which `pane.read` with `since` reads from. The
 connection's thread checks for a hangup while it waits and drops the hold. A hangup is the write
 side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `shutdown(SHUT_WR)`.
 A wait on the caller's children (`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes

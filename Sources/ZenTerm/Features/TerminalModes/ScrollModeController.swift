@@ -220,13 +220,13 @@ final class ScrollModeController {
         switch scroll {
         case .pageFraction(let fraction): page(fraction)
         case .top:
-            surface?.scroll(.top)
+            scrollScreen(.top)
             if let cursor { move(to: textPoint(column: cursor.column, row: 0)) }
         case .bottom:
-            surface?.scroll(.bottom)
+            scrollScreen(.bottom)
             if let cursor { move(to: textPoint(column: cursor.column, row: lastWrittenRow)) }
         default:
-            surface?.scroll(scroll)
+            scrollScreen(scroll)
             keepCursorInView()
             refreshCursor()
         }
@@ -300,9 +300,9 @@ final class ScrollModeController {
         let top = grid.viewportTop
         let bottom = top + screenRows - 1
         if cursor.row < top {
-            surface?.scroll(.lines(cursor.row - top))
+            scrollScreen(.lines(cursor.row - top))
         } else if cursor.row > bottom {
-            surface?.scroll(.lines(cursor.row - bottom))
+            scrollScreen(.lines(cursor.row - bottom))
         }
     }
 
@@ -472,6 +472,12 @@ final class ScrollModeController {
         yankPasteboard.setString(text, forType: .string)
     }
 
+    /// The mode's own move ends a hold, so a later report does not pull it back.
+    private func scrollScreen(_ command: TerminalScroll) {
+        holdsViewport = false
+        surface?.scroll(command)
+    }
+
     @discardableResult
     private func page(_ fraction: Double) -> Bool {
         guard let grid, let cursor else { return true }
@@ -483,7 +489,7 @@ final class ScrollModeController {
         let centered = min(max(target - rows / 2, 0), maxTop)
         let shift = centered - grid.viewportTop
         let taken = advance > 0 ? max(shift, 0) : min(shift, 0)
-        if taken != 0 { surface?.scroll(.lines(taken)) }
+        if taken != 0 { scrollScreen(.lines(taken)) }
         move(to: textPoint(column: cursor.column, row: target))
         return true
     }
@@ -607,13 +613,15 @@ final class ScrollModeController {
         surface?.cellMetrics.map { GridSize(columns: $0.columns, rows: $0.rows) }
     }
 
-    /// libghostty pins a viewport above the active area, so one pull holds the whole visit.
+    /// A report trails the terminal, so a pull can land short while output streams; the next one pulls the rest.
+    /// A view above the held one is the reader's own scroll, so it stands.
     private func holdViewport(against position: TerminalScrollPosition) -> Bool {
-        guard position.linesBelow == 0, let last = lastPosition else { return false }
-        let growth = position.total - last.total
-        guard growth > 0, position.offset - last.offset == growth else { return false }
+        guard let last = lastPosition, position.total > last.total else { return false }
+        let pushed = position.linesBelow == 0 && position.offset - last.offset == position.total - last.total
+        guard pushed || (holdsViewport && position.offset > last.offset) else { return false }
         holdsViewport = true
-        surface?.scroll(.lines(-growth))
+        surface?.scroll(.lines(last.offset - position.offset))
+        lastPosition = TerminalScrollPosition(total: position.total, offset: last.offset, viewport: position.viewport)
         return true
     }
 

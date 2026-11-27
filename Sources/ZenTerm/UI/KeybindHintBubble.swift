@@ -7,7 +7,6 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
 
     private let previewHost = NSView()
     private let previewBox = NSView()
-    private let header = ModalHeader(title: "Record a shortcut")
     private var previewGlyph = ""
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
     private var isShowingError = false
@@ -55,7 +54,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
         previewGroup.alignment = .leading
         previewGroup.spacing = ChromeMetrics.Spacing.s4
 
-        let content = NSStackView(views: [header, previewGroup])
+        let content = NSStackView(views: [previewGroup])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = ChromeMetrics.Spacing.modalSectionGap
@@ -74,7 +73,6 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
             footer.widthAnchor.constraint(equalTo: card.widthAnchor),
             widthAnchor.constraint(equalToConstant: Self.insets.left + footer.hintsWidth + Self.insets.right),
             inputRow.widthAnchor.constraint(equalToConstant: footer.hintsWidth),
-            header.widthAnchor.constraint(equalTo: inputRow.widthAnchor),
             previewGroup.widthAnchor.constraint(equalTo: inputRow.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             noteLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
