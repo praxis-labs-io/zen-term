@@ -111,7 +111,8 @@ final class CodexSetupRowsTests: WindowTestCase {
 
         XCTAssertTrue(texts.contains("Teach Codex to use zen"), "\(texts)")
         XCTAssertTrue(
-            texts.contains("The zen skill and a session hook, in \(PathDisplay.abbreviatingHome(codexRoot.path))"),
+            texts.contains(
+                "The zen skill and a hook Codex asks to trust, in \(PathDisplay.abbreviatingHome(codexRoot.path))"),
             "\(texts)")
     }
 

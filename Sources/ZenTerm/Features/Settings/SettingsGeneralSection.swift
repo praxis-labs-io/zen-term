@@ -27,7 +27,7 @@ final class SettingsGeneralSection: SettingsFormSection {
                 updateCaption: "Update zen for Claude Code")
             self.codexRows.add(
                 to: self, caption: "Teach Codex to use zen",
-                description: "The zen skill and a session hook, in \(CodexAgentSetup.folderName)",
+                description: "The zen skill and a hook Codex asks to trust, in \(CodexAgentSetup.folderName)",
                 updateCaption: "Update zen for Codex")
         }
         addGroup("Notifications") {
