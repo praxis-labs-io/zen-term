@@ -1,40 +1,64 @@
-// libghostty reports no output, so new text is found by lining each read of a pane's tail up with the one before it.
-struct OutputWatch {
+import TerminalKit
+
+// libghostty reports no output, so each check reads from a mark at the screen the last check read, down to the bottom.
+final class OutputWatch {
+    private struct Spot {
+        let mark: TerminalGridMark
+        let counted: Int
+    }
+
     let needle: String
-    private var previous: [String]
+    private var spots: [Spot] = []
+    // A surface with no grid yet has printed nothing, so its first readable screen is all new output.
+    private let startsBlank: Bool
 
-    init(needle: String, baseline: String) {
+    init(needle: String, surface: TerminalSurface?) {
         self.needle = needle
-        previous = Self.lines(baseline)
+        startsBlank = surface?.grid == nil
+        _ = sawNeedle(in: surface)
     }
 
-    mutating func sawNeedle(in tail: String) -> Bool {
-        let current = Self.lines(tail)
-        defer { previous = current }
-        let (fresh, before) = Self.arrived(current, since: previous)
-        return Self.count(needle, in: fresh) > Self.count(needle, in: before)
-    }
-
-    // The top line of a read can be the cut-off end of a wrapped line, and the last is where the cursor writes.
-    private static func arrived(_ current: [String], since previous: [String]) -> (fresh: [String], before: [String]) {
-        guard previous.count >= 3, current.count >= 2 else { return (current, previous) }
-        let settled = previous.dropFirst().dropLast()
-        let body = current.dropFirst()
-        for scrolled in 0..<settled.count {
-            let kept = settled.dropFirst(scrolled)
-            guard kept.contains(where: { !$0.allSatisfy(\.isWhitespace) }) else { break }
-            if body.starts(with: kept) { return (Array(body.dropFirst(kept.count)), [previous[previous.count - 1]]) }
+    // Rows above the screen are settled, so the screen alone is read in one go and becomes the next check's baseline.
+    func sawNeedle(in surface: TerminalSurface?) -> Bool {
+        guard let grid = surface?.grid, grid.rowCount > 0, let screenTop = lineStart(grid, at: grid.screenTop)
+        else { return false }
+        let (start, counted) = baseline(screenTop: screenTop)
+        guard let mark = grid.mark(TerminalGridPoint(row: max(screenTop, start), column: 0)),
+            case .at(let from) = mark.place, let end = grid.lastCell(of: grid.rowCount - 1),
+            let screen = grid.text(from: from, to: end)
+        else { return false }
+        var settled = ""
+        if from.row > start {
+            guard let end = grid.lastCell(of: from.row - 1),
+                let text = grid.text(from: TerminalGridPoint(row: start, column: 0), to: end)
+            else { return false }
+            settled = text
         }
-        return (current, previous)
+        spots = spots.filter { $0.mark.place == .aside } + [Spot(mark: mark, counted: count(screen))]
+        return count(settled) + count(screen) > counted
     }
 
-    private static func count(_ needle: String, in lines: [String]) -> Int {
-        lines.joined(separator: "\n").components(separatedBy: needle).count - 1
+    // A mark on the screen not showing keeps its place for when that screen returns, and the showing one starts fresh.
+    private func baseline(screenTop: Int) -> (row: Int, counted: Int) {
+        guard !spots.isEmpty else { return startsBlank ? (0, 0) : (screenTop, .max) }
+        for spot in spots {
+            if case .at(let point) = spot.mark.place { return (point.row, spot.counted) }
+        }
+        if spots.contains(where: { $0.mark.place == .aside }) { return (0, 0) }
+        return (0, spots.last?.counted ?? 0)
     }
 
-    private static func lines(_ text: String) -> [String] {
-        var lines = text.components(separatedBy: "\n")
-        while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
-        return lines
+    private func lineStart(_ grid: TerminalGrid, at row: Int) -> Int? {
+        var row = row
+        while row > 0 {
+            guard let current = grid.row(row) else { return nil }
+            guard current.continues else { break }
+            row -= 1
+        }
+        return row
+    }
+
+    private func count(_ text: String) -> Int {
+        text.components(separatedBy: needle).count - 1
     }
 }

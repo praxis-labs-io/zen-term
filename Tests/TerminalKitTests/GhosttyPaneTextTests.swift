@@ -65,7 +65,7 @@ final class GhosttyPaneTextTests: XCTestCase {
         surface.paste("echo AA$((40+2))\necho BB$((40+3))")
         surface.submit()
 
-        let screen = lines(of: surface) { $0.contains("BB43") }
+        let screen = lines(of: surface) { $0.contains("BB43") && $0.last?.hasSuffix("% ") == true }
         XCTAssertEqual(screen.filter { $0 == "AA42" }.count, 1, "\(screen)")
         XCTAssertEqual(screen.filter { $0 == "BB43" }.count, 1, "\(screen)")
         XCTAssertEqual(screen.filter { $0.contains("%") }.count, 2, "the block ran per line: \(screen)")
@@ -78,6 +78,41 @@ final class GhosttyPaneTextTests: XCTestCase {
         let tail = surface.text(lastLines: 100)?.components(separatedBy: "\n")
 
         XCTAssertEqual(tail, (4901...5000).map(String.init))
+    }
+
+    func test_theLastLinesMatchAWholeScreenReadAndTouchOnlyTheRowsTheyReturn() throws {
+        let script =
+            #"awk 'BEGIN { for (i = 1; i <= 3000; i++) if (i % 7) print i; else printf "L%d-%0250d\n", i, 0 }'"#
+        let surface = try mounted("/bin/sh", ["-c", script + "; printf '  \\n\\n'; sleep 100"])
+        _ = lines(of: surface) { $0.last == "3000" }
+        let grid = RecordingGrid(try XCTUnwrap(surface.grid))
+        XCTAssertTrue((0..<grid.rowCount).contains { grid.row($0)?.wraps == true }, "no line wrapped")
+
+        for count in [1, 6, 40] {
+            grid.rowsRead = []
+            let tail = grid.text(lastLines: count)
+            let read = try XCTUnwrap(grid.textRead, "\(count) lines")
+            let rowsRead = grid.rowsRead
+
+            XCTAssertEqual(tail, wholeScreenTail(grid, count), "\(count) lines")
+            XCTAssertEqual(tail?.components(separatedBy: "\n").count, count)
+            XCTAssertEqual(rowsRead.min(), read.lowerBound.row, "\(count) lines read a row above the first")
+            XCTAssertEqual(
+                grid.text(from: read.lowerBound, to: read.upperBound)?.components(separatedBy: "\n").count, count,
+                "\(count) lines read more lines than they return")
+        }
+    }
+
+    private func wholeScreenTail(_ grid: TerminalGrid, _ count: Int) -> String? {
+        let last = grid.rowCount - 1
+        let columns = grid.row(last)?.cells.count ?? 0
+        guard
+            let screen = grid.text(
+                from: TerminalGridPoint(row: 0, column: 0), to: TerminalGridPoint(row: last, column: columns - 1))
+        else { return nil }
+        var lines = screen.components(separatedBy: "\n")
+        while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
+        return lines.suffix(count).joined(separator: "\n")
     }
 
     // `cellMetrics` moves before libghostty's io thread resizes the grid, so the screen is read once it spans the grid.
@@ -94,4 +129,32 @@ final class GhosttyPaneTextTests: XCTestCase {
         XCTAssertEqual(screen.last, "5000")
         XCTAssertEqual(screen.first, String(5000 - rows + 2), "the screen's rows, not the scrollback above them")
     }
+}
+
+private final class RecordingGrid: TerminalGrid {
+    private let grid: TerminalGrid
+    var rowsRead: [Int] = []
+    var textRead: ClosedRange<TerminalGridPoint>?
+
+    init(_ grid: TerminalGrid) { self.grid = grid }
+
+    var rowCount: Int { grid.rowCount }
+    var viewportTop: Int { grid.viewportTop }
+    var screenTop: Int { grid.screenTop }
+    var cursorPoint: TerminalGridPoint? { grid.cursorPoint }
+    var selectionBounds: ClosedRange<TerminalGridPoint>? { grid.selectionBounds }
+
+    func row(_ index: Int) -> TerminalGridRow? {
+        rowsRead.append(index)
+        return grid.row(index)
+    }
+
+    func text(from start: TerminalGridPoint, to end: TerminalGridPoint) -> String? {
+        textRead = start...end
+        return grid.text(from: start, to: end)
+    }
+
+    func mark(_ point: TerminalGridPoint) -> TerminalGridMark? { grid.mark(point) }
+
+    func setSelection(_ range: ClosedRange<TerminalGridPoint>?) { grid.setSelection(range) }
 }

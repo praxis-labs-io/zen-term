@@ -5,6 +5,8 @@ public protocol TerminalGrid: AnyObject {
     var rowCount: Int { get }
     /// The row at the top of the viewport.
     var viewportTop: Int { get }
+    /// The first row of the screen showing, wherever the viewport is scrolled.
+    var screenTop: Int { get }
     /// The terminal's own cursor.
     var cursorPoint: TerminalGridPoint? { get }
     /// The selection, whoever made it, or nil. A block selection reports its corners.

@@ -192,6 +192,20 @@ final class GhosttyGridTests: XCTestCase {
         XCTAssertTrue(waitFor(5) { recorder.changes == 2 }, "a reset drops the selection")
     }
 
+    func test_theScreensTopStaysPutWhileTheViewportScrollsBack() throws {
+        let (surface, grid) = try mounted("seq 500")
+        let row = try awaitRow(grid, "500")
+        XCTAssertTrue(waitFor { grid.row(row)?.cells.count == surface.cellMetrics?.columns })
+        let top = grid.screenTop
+        XCTAssertGreaterThan(top, 0)
+        XCTAssertEqual(top, grid.viewportTop)
+
+        surface.scroll(.top)
+
+        XCTAssertTrue(waitFor(5) { grid.viewportTop == 0 }, "the viewport never scrolled back")
+        XCTAssertEqual(grid.screenTop, top)
+    }
+
     func test_aColumnPastTheRightEdgeIsOutsideTheGrid() throws {
         let (surface, grid) = try mounted("echo HERE")
         let row = try awaitRow(grid, "HERE")

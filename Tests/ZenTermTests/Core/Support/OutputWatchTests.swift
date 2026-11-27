@@ -1,45 +1,97 @@
+import ControlProtocol
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
 
 final class OutputWatchTests: XCTestCase {
-    private func screen(_ lines: ClosedRange<Int>, then extra: [String] = []) -> String {
-        (lines.map { "line \($0)" } + extra).joined(separator: "\n")
+    private func surface(_ rows: [String]) -> RecordingSurface {
+        let surface = RecordingSurface()
+        surface.start(TerminalSurfaceConfig())
+        surface.rows = rows
+        return surface
     }
 
     func test_textAlreadyOnScreenWhenTheWaitBeganIsNotAMatch() {
-        var watch = OutputWatch(needle: "ready", baseline: screen(1...5, then: ["server ready", "$ "]))
-        XCTAssertFalse(watch.sawNeedle(in: screen(1...5, then: ["server ready", "$ "])))
-        XCTAssertFalse(watch.sawNeedle(in: screen(1...5, then: ["server ready", "$ ls"])))
+        let pane = surface(["server ready", "$ "])
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        XCTAssertFalse(watch.sawNeedle(in: pane))
+        pane.rows = ["server ready", "$ ls"]
+        XCTAssertFalse(watch.sawNeedle(in: pane))
     }
 
-    func test_textPrintedOnAScreenThatHasNotScrolledIsAMatch() {
-        var watch = OutputWatch(needle: "ready", baseline: "$ npm run dev")
-        XCTAssertFalse(watch.sawNeedle(in: "$ npm run dev\ncompiling"))
-        XCTAssertTrue(watch.sawNeedle(in: "$ npm run dev\ncompiling\nserver ready"))
+    func test_textPrintedAfterTheWaitBeganIsAMatch() {
+        let pane = surface(["$ npm run dev"])
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        pane.rows = ["$ npm run dev", "compiling"]
+        XCTAssertFalse(watch.sawNeedle(in: pane))
+        pane.rows = ["$ npm run dev", "compiling", "server ready"]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
     }
 
-    func test_aNewMatchIsSeenWhileAnOldOneScrollsOffTheTop() {
-        var watch = OutputWatch(
-            needle: "ready",
-            baseline: screen(1...20, then: ["ready", "$ "]).replacingOccurrences(of: "line 1\n", with: "ready\n"))
-        XCTAssertTrue(watch.sawNeedle(in: screen(3...20, then: ["ready", "$ ", "again ready"])))
+    func test_textAPaneStartingAfterTheWaitBeganPrintsIsAMatch() {
+        let pane = RecordingSurface()
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        XCTAssertFalse(watch.sawNeedle(in: pane))
+        pane.start(TerminalSurfaceConfig())
+        pane.rows = ["server ready", "$ "]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
     }
 
-    func test_scrollingPastOldTextFindsNothingNew() {
-        var watch = OutputWatch(needle: "ready", baseline: screen(1...20, then: ["ready at 1"]))
-        XCTAssertFalse(watch.sawNeedle(in: screen(2...20, then: ["ready at 1", "line 21"])))
-        XCTAssertFalse(watch.sawNeedle(in: screen(4...20, then: ["ready at 1", "line 21", "line 22", "line 23"])))
+    func test_textPrintedAfterAWaitThatBeganMidResizeIsAMatch() {
+        let pane = surface(["$ npm run dev"])
+        pane.recordingGrid.widthBeforeResize = 40
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        pane.recordingGrid.widthBeforeResize = nil
+        pane.rows = ["$ npm run dev", "server ready"]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
+    }
+
+    func test_textAtTheScreensTopWhileAResizeHasNotReachedTheGridIsAMatch() {
+        let pane = surface(["$ npm run dev", "", "", ""])
+        pane.scrollback = ["earlier"]
+        pane.cellMetrics = TerminalCellMetrics(columns: 80, rows: 2, cellWidth: 8, cellHeight: 16, gridInset: 2)
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        pane.rows = ["$ npm run dev", "server ready", "", ""]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
     }
 
     func test_theCursorLineGrowingIntoTheNeedleIsAMatch() {
-        var watch = OutputWatch(needle: "done", baseline: screen(1...10, then: ["building... "]))
-        XCTAssertTrue(watch.sawNeedle(in: screen(1...10, then: ["building... done"])))
+        let pane = surface(["building... "])
+        let watch = OutputWatch(needle: "done", surface: pane)
+        pane.rows = ["building... done"]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
     }
 
     func test_aRedrawnScreenOnlyMatchesWhenTheNeedleShowsUpMoreOften() {
-        var watch = OutputWatch(needle: "ready", baseline: "a\nb ready\nc\nd")
-        XCTAssertFalse(watch.sawNeedle(in: "x\nb ready\ny\nz"))
-        XCTAssertTrue(watch.sawNeedle(in: "x\nb ready\nready\nz"))
+        let pane = surface(["a", "b ready", "c"])
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        pane.rows = ["x", "b ready", "y"]
+        XCTAssertFalse(watch.sawNeedle(in: pane))
+        pane.rows = ["x", "b ready", "ready"]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
+    }
+
+    func test_anAnsweredWaitFreesItsMark() throws {
+        let pane = surface(["$ npm run dev"])
+        let listing = ListResult.Pane(
+            token: 1, drawer: nil, title: "", cwd: nil, busy: false, agent: nil, name: nil, parent: nil,
+            firstTask: nil)
+        var answered = false
+        let wait = try XCTUnwrap(
+            PaneWait(
+                PaneWait.Watched(
+                    surfaceID: SurfaceID(raw: 1), surface: pane, readsForeground: false, pane: { listing },
+                    exit: { nil }, awaitsQueuedTask: { false }),
+                caller: nil, output: "ready"
+            ) { _ in answered = true })
+        wait.start(timeout: nil)
+        XCTAssertEqual(pane.recordingGrid.liveMarks, 1, "the wait holds a mark while it watches")
+
+        pane.rows = ["$ npm run dev", "server ready"]
+        waitUntil(answered, "the wait to answer")
+
+        XCTAssertEqual(pane.recordingGrid.liveMarks, 0)
+        XCTAssertFalse(wait.isWatching)
     }
 }

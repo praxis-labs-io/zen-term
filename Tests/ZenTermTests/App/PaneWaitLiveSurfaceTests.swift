@@ -55,6 +55,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         let surface = try XCTUnwrap(surfaces.first)
         try XCTSkipIf(!surface.isStarted, "ghostty_surface_new failed")
         let token = try XCTUnwrap(c.listing().workspaces.first?.tabs.first?.panes.first?.token)
+        _ = try settledColumns(surface, try XCTUnwrap(surface.grid))
         waitUntil(atPrompt(surface), "the shell's first prompt", timeout: 15)
         return (surface, token)
     }
@@ -68,16 +69,30 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         var reply: ControlReply?
     }
 
-    private func wait(on pane: Int) -> Answer {
+    private func wait(on pane: Int, output: String? = nil) -> Answer {
         let answer = Answer()
         let responder = ControlResponder(
             windows: { [unowned self] in controller.map { [$0] } ?? [] }, keyWindow: { [unowned self] in controller },
             paneWaits: waits)
         responder.respond(
             to: ControlRequest(
-                id: 1, cmd: .paneWait, args: ControlArgs(pane: .token(pane), timeout: 30))
+                id: 1, cmd: .paneWait, args: ControlArgs(pane: .token(pane), output: output, timeout: 30))
         ) { answer.reply = $0 }
         return answer
+    }
+
+    private func request(_ cmd: ControlCommand, _ args: ControlArgs) throws -> ControlReply {
+        var reply: ControlReply?
+        ControlResponder(
+            windows: { [unowned self] in controller.map { [$0] } ?? [] }, keyWindow: { [unowned self] in controller },
+            paneWaits: waits
+        ).respond(to: ControlRequest(id: 2, cmd: cmd, args: args)) { reply = $0 }
+        return try XCTUnwrap(reply, "\(cmd.rawValue) never answered")
+    }
+
+    private func readSinceTask(_ pane: Int) throws -> PaneText {
+        let reply = try request(.paneRead, ControlArgs(pane: .token(pane), since: .task))
+        return try XCTUnwrap(try reply.get() as? PaneText, "\(reply)")
     }
 
     private func run(_ command: String, in surface: GhosttySurface) {
@@ -89,6 +104,101 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         waitUntil(answer.reply != nil, "the wait to answer", timeout: 10)
         let reply = try XCTUnwrap(answer.reply)
         return try XCTUnwrap(try reply.get() as? WaitResult, "\(reply)")
+    }
+
+    func test_textThatScrollsMoreThanAScreenPastBetweenChecksAnswersOutput() throws {
+        let (surface, token) = try shellPane()
+        let rows = try XCTUnwrap(surface.cellMetrics?.rows)
+        let answer = wait(on: token, output: "zen-mid-42")
+
+        run("sleep 0.5; seq \(rows * 4); echo zen-mid-$((40+2)); seq \(rows * 4); sleep 30", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+    }
+
+    func test_textAcrossASoftWrapAnswersOutput() throws {
+        let (surface, token) = try shellPane()
+        let columns = try settledColumns(surface, try XCTUnwrap(surface.grid))
+        let answer = wait(on: token, output: "zen-wrap-42")
+
+        run("sleep 0.5; printf '%0\(columns - 4)d' 0; echo zen-wrap-$((40+2)); sleep 30", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+        let grid = try XCTUnwrap(surface.grid)
+        XCTAssertTrue((0..<grid.rowCount).contains { grid.row($0)?.wraps == true }, "the needle never wrapped")
+    }
+
+    func test_textAlreadyOnScreenWhenTheWaitBeganDoesNotAnswerOutput() throws {
+        let (surface, token) = try shellPane()
+        run("echo zen-old-$((40+2))", in: surface)
+        waitUntil((surface.activeScreenText ?? "").contains("zen-old-42"), "the old text", timeout: 10)
+        waitUntil(atPrompt(surface), "the prompt after it", timeout: 10)
+        let answer = wait(on: token, output: "zen-old-42")
+
+        run("seq 3; sleep 0.5; (exit 0)", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .exited)
+    }
+
+    func test_aFullScreenProgramDrawingTheNeedleAfterTheWaitBeganAnswersOutput() throws {
+        let (surface, token) = try shellPane()
+        let answer = wait(on: token, output: "zen-full-42")
+
+        run(#"printf '\033[?1049h'; echo zen-full-$((40+2)); sleep 30"#, in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+    }
+
+    func test_twoFullScreenSessionsEachDrawingTheNeedleOnceAnswerOutput() throws {
+        let (surface, token) = try shellPane()
+        let answer = wait(on: token, output: "zen-again-42")
+        let session = #"printf '\033[?1049h'; echo zen-again-$((40+2)); sleep 1; printf '\033[?1049l'; sleep 1"#
+
+        run("\(session); \(session); sleep 30", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+    }
+
+    func test_readSinceTaskReturnsOnlyWhatThePanePrintedSinceTheTask() throws {
+        let (surface, token) = try shellPane()
+        run("echo zen-before-$((40+2))", in: surface)
+        waitUntil((surface.activeScreenText ?? "").contains("zen-before-42"), "the earlier output", timeout: 10)
+        waitUntil(atPrompt(surface), "the prompt after it", timeout: 10)
+
+        _ = try request(.paneSend, ControlArgs(pane: .token(token), text: "echo zen-after-$((40+2))", enter: true))
+        waitUntil((surface.activeScreenText ?? "").contains("zen-after-42"), "the task's output", timeout: 10)
+
+        let read = try readSinceTask(token)
+        let firstLine = read.text.split(separator: "\n", omittingEmptySubsequences: false).first ?? ""
+        XCTAssertTrue(firstLine.contains("echo zen-after-$((40+2))"), read.text)
+        XCTAssertTrue(read.text.contains("\nzen-after-42"), read.text)
+        XCTAssertFalse(read.text.contains("zen-before"), read.text)
+        XCTAssertEqual(read.truncated, false)
+    }
+
+    func test_readSinceTaskReadsTheTasksRowFromItsFirstColumn() throws {
+        let (surface, token) = try shellPane()
+        run("printf 'zen-lead-%s ' 42; read -r _; sleep 30", in: surface)
+        waitUntil((surface.activeScreenText ?? "").contains("zen-lead-42 "), "the text before the cursor", timeout: 10)
+
+        _ = try request(.paneSend, ControlArgs(pane: .token(token), text: "zen-typed", enter: true))
+        waitUntil((surface.activeScreenText ?? "").contains("zen-typed"), "the task's echo", timeout: 10)
+
+        let read = try readSinceTask(token)
+        XCTAssertTrue(read.text.hasPrefix("zen-lead-42 zen-typed"), read.text)
+    }
+
+    func test_readSinceTaskOnTheAlternateScreenReadsThatScreen_andSaysSo() throws {
+        let (surface, token) = try shellPane()
+        let task = #"printf '\033[?1049h'; echo zen-alt-$((40+2)); sleep 30"#
+
+        _ = try request(.paneSend, ControlArgs(pane: .token(token), text: task, enter: true))
+        waitUntil((surface.activeScreenText ?? "").contains("zen-alt-42"), "the alternate screen", timeout: 10)
+
+        let read = try readSinceTask(token)
+        XCTAssertEqual(
+            read.text.trimmingCharacters(in: .whitespacesAndNewlines), "zen-alt-42", "only the screen showing")
+        XCTAssertEqual(read.truncated, true)
     }
 
     func test_aCommandThatExitsAnswersExited_withTheShellsExitCode() throws {

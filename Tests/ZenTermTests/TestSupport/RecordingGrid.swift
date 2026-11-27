@@ -1,50 +1,91 @@
 import TerminalKit
 
-// A grid over `RecordingSurface.rows`: one cell per character, a movable viewport, marks that follow dropped rows.
+// `RecordingSurface`'s scrollback and rows as a grid, with a viewport and cursor a test can move and marks that follow dropped rows.
 final class RecordingGrid: TerminalGrid {
-    private let rows: () -> [String]
+    private unowned let surface: RecordingSurface
+    private(set) var liveMarks = 0
 
     var wrappingRows: Set<Int> = []
+    var widthBeforeResize: Int?
 
-    init(rows: @escaping () -> [String]) {
-        self.rows = rows
+    init(surface: RecordingSurface) {
+        self.surface = surface
     }
 
-    var rowCount: Int { rows().count }
-    var viewportTop = 0
+    private var lines: [String] { surface.scrollback + surface.rows }
+
+    private var columns: Int { widthBeforeResize ?? surface.cellMetrics?.columns ?? 80 }
+
+    private var movedViewportTop: Int?
+    private var placedCursor: TerminalGridPoint?
+
+    var rowCount: Int { lines.count }
+
+    var viewportTop: Int {
+        get { movedViewportTop ?? surface.scrollback.count }
+        set { movedViewportTop = newValue }
+    }
+
+    var cursorPoint: TerminalGridPoint? {
+        get {
+            if let placedCursor { return placedCursor }
+            let written = lines.lastIndex { !$0.isEmpty }.map { $0 + 1 } ?? 0
+            return TerminalGridPoint(row: min(written, max(rowCount - 1, 0)), column: 0)
+        }
+        set { placedCursor = newValue }
+    }
+
+    var screenTop: Int { surface.scrollback.count }
+
     var droppedRows = 0
-    var cursorPoint: TerminalGridPoint? = TerminalGridPoint(row: 0, column: 0)
+
     private(set) var selectionBounds: ClosedRange<TerminalGridPoint>?
 
     func row(_ index: Int) -> TerminalGridRow? {
-        let rows = rows()
-        guard rows.indices.contains(index) else { return nil }
+        let lines = lines
+        guard !surface.screenIsUnreadable, lines.indices.contains(index) else { return nil }
+        var cells: [TerminalGridCell] = []
+        for character in lines[index] {
+            let width = RecordingSurface.width(character)
+            cells.append(
+                TerminalGridCell(
+                    text: character == RecordingSurface.unwritten ? "" : String(character), width: width,
+                    kind: .output))
+            if width == 2 { cells.append(TerminalGridCell(text: "", width: 0, kind: .output)) }
+        }
+        cells += Array(
+            repeating: TerminalGridCell(text: "", width: 1, kind: .output), count: max(columns - cells.count, 0))
         return TerminalGridRow(
-            cells: rows[index].map { TerminalGridCell(text: String($0), width: 1, kind: .output) },
-            wraps: wrappingRows.contains(index), continues: wrappingRows.contains(index - 1), prompt: .none)
+            cells: cells, wraps: wrappingRows.contains(index), continues: wrappingRows.contains(index - 1),
+            prompt: .none)
     }
 
     func text(from start: TerminalGridPoint, to end: TerminalGridPoint) -> String? {
-        let rows = rows()
         let first = min(start, end)
         let last = max(start, end)
-        guard rows.indices.contains(first.row), rows.indices.contains(last.row) else { return nil }
-        return (first.row...last.row).reduce(into: "") { text, row in
-            let line = Array(rows[row])
-            let from = row == first.row ? min(first.column, line.count) : 0
-            let through = row == last.row ? min(last.column + 1, line.count) : line.count
-            text += String(line[from..<max(from, through)])
-            if row < last.row, !wrappingRows.contains(row) { text += "\n" }
+        var text = ""
+        guard first.column < columns, last.column < columns else { return nil }
+        for index in first.row...last.row {
+            guard let row = row(index) else { return nil }
+            let from = index == first.row ? first.column : 0
+            let through = min(index == last.row ? last.column : Int.max, row.cells.count - 1)
+            let cells = from <= through ? Array(row.cells[from...through]) : []
+            let written = cells.lastIndex { !$0.text.isEmpty }.map { cells[...$0] } ?? []
+            text += written.filter { $0.width > 0 }.map { $0.text.isEmpty ? " " : $0.text }.joined()
+            if index < last.row, !row.wraps { text += "\n" }
         }
+        return text
     }
 
     func mark(_ point: TerminalGridPoint) -> TerminalGridMark? {
+        guard lines.indices.contains(point.row), point.column < columns else { return nil }
+        liveMarks += 1
         let droppedAtMark = droppedRows
         return TerminalGridMark(
             read: { [weak self] in
                 let dropped = (self?.droppedRows ?? droppedAtMark) - droppedAtMark
                 return .at(TerminalGridPoint(row: point.row - dropped, column: point.column))
-            }, release: {})
+            }, release: { [weak self] in self?.liveMarks -= 1 })
     }
 
     func setSelection(_ range: ClosedRange<TerminalGridPoint>?) { selectionBounds = range }

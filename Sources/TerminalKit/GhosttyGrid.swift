@@ -26,6 +26,8 @@ final class GhosttyGrid: TerminalGrid {
 
     var viewportTop: Int { state.map { Int($0.viewport_top) } ?? 0 }
 
+    var screenTop: Int { state.map { max(Int($0.total_rows) - Int($0.rows), 0) } ?? 0 }
+
     var cursorPoint: TerminalGridPoint? { state.map { Self.point($0.cursor) } }
 
     var selectionBounds: ClosedRange<TerminalGridPoint>? {

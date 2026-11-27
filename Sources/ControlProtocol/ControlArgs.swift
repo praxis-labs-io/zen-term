@@ -17,6 +17,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     /// `PaneKey` names, pressed in order.
     public var keys: [String]?
     public var lines: Int?
+    public var since: PaneReadSince?
     public var branch: String?
     /// The commit a new branch starts from: `default` or `current`.
     public var base: String?
@@ -54,6 +55,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
         title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: ControlAddress.Pane? = nil,
         dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil,
+        since: PaneReadSince? = nil,
         branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
         output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
         float: Bool? = nil, keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil,
@@ -73,6 +75,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.enter = enter
         self.keys = keys
         self.lines = lines
+        self.since = since
         self.branch = branch
         self.base = base
         self.existing = existing
@@ -93,8 +96,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, branch, base
-        case existing, open, name, output, timeout, task, split, float, keep, wait, children, token, prompt
+        case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, since, branch
+        case base, existing, open, name, output, timeout, task, split, float, keep, wait, children, token, prompt
         case outliveParent = "outlive_parent"
         case sshPID = "ssh_pid"
     }

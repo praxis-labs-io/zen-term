@@ -248,6 +248,7 @@ extension ControlResponder {
 
     func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool, overDraft: Bool = false) {
         let surface = place.pane.surface
+        if enter { place.window.markTask(on: place.pane) }
         if overDraft, let stash = place.window.draftStash(of: place.pane) { surface.press(stash) }
         if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
         if enter { surface.submit() }
@@ -329,9 +330,13 @@ extension ControlResponder {
         if let lines = request.args.lines, lines < 1 {
             return .failure(ControlError(.badRequest, "lines must be 1 or more."))
         }
+        if request.args.lines != nil, request.args.since != nil {
+            return .failure(ControlError(.badRequest, "pane.read takes lines or since, not both."))
+        }
         return pane(request.args.pane, for: request).flatMap { place in
             let surface = place.pane.surface
             guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
+            if request.args.since == .task { return Self.sinceTask(place) }
             let text: String?
             if let lines = request.args.lines {
                 text = surface.text(lastLines: lines)
@@ -342,6 +347,18 @@ extension ControlResponder {
                 return .failure(ControlError(.failed, "Pane \(place.pane.token) could not be read."))
             }
             return .success(PaneText(text: text))
+        }
+    }
+
+    private static func sinceTask(_ place: PanePlace) -> ControlReply {
+        switch place.window.readSinceTask(of: place.pane) {
+        case .noTask:
+            return .failure(
+                ControlError(.failed, "Pane \(place.pane.token) has had no task or message sent with enter."))
+        case .unreadable:
+            return .failure(ControlError(.failed, "Pane \(place.pane.token) could not be read."))
+        case .text(let text, let truncated):
+            return .success(PaneText(text: text, truncated: truncated))
         }
     }
 
@@ -478,10 +495,16 @@ extension ControlResponder {
         ControlError(.failed, "Pane \(token) has not started.")
     }
 
-    private static func viewport(of surface: TerminalSurface) -> String? {
-        guard let rows = surface.cellMetrics?.rows else { return nil }
-        var lines = (0..<rows).map { surface.text(viewportRow: $0) ?? "" }
+    static func viewport(of surface: TerminalSurface) -> String? {
+        guard let rows = surface.cellMetrics?.rows, let grid = surface.grid else { return nil }
+        let top = grid.viewportTop
+        var lines = (top..<top + rows).map { grid.row($0).map(text(of:)) ?? "" }
         while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
         return lines.joined(separator: "\n")
+    }
+
+    private static func text(of row: TerminalGridRow) -> String {
+        let written = row.cells.lastIndex { !$0.text.isEmpty }.map { row.cells[...$0] } ?? []
+        return written.filter { $0.width > 0 }.map { $0.text.isEmpty ? " " : $0.text }.joined()
     }
 }
