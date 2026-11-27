@@ -90,9 +90,13 @@ final class GhosttyGrid: TerminalGrid {
             surfacePtr, ghostty_selection_s(top_left: first, bottom_right: last, rectangle: false))
     }
 
-    // Runs before the surface is freed: a mark's pin lives in the surface's pages.
-    func releaseMarks() {
-        for handle in handles.values { free(handle) }
+    // Takes the pointer because it runs in the surface's deinit too, where the weak surface already reads nil.
+    func releaseMarks(_ surfacePtr: ghostty_surface_t) {
+        for handle in handles.values {
+            guard let pointer = handle.pointer else { continue }
+            handle.pointer = nil
+            ghostty_surface_mark_free(surfacePtr, pointer)
+        }
         handles = [:]
     }
 

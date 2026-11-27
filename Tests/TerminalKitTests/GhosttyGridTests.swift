@@ -175,6 +175,59 @@ final class GhosttyGridTests: XCTestCase {
         XCTAssertNil(grid.selectionBounds)
     }
 
+    func test_aFullResetDroppingTheSelectionTellsTheDelegate() throws {
+        let (surface, grid) = try mounted("seq 50; sleep 2; printf '\\033c'; echo AFTER")
+        let recorder = SelectionRecorder()
+        surface.delegate = recorder
+        let row = try awaitRow(grid, "10")
+
+        grid.setSelection(TerminalGridPoint(row: row, column: 0)...TerminalGridPoint(row: row, column: 1))
+        XCTAssertTrue(waitFor(5) { recorder.changes == 1 })
+        _ = try awaitRow(grid, "AFTER")
+
+        XCTAssertNil(grid.selectionBounds)
+        XCTAssertTrue(waitFor(5) { recorder.changes == 2 }, "a reset drops the selection")
+    }
+
+    func test_aColumnPastTheRightEdgeIsOutsideTheGrid() throws {
+        let (surface, grid) = try mounted("echo HERE")
+        let row = try awaitRow(grid, "HERE")
+        let columns = try XCTUnwrap(surface.cellMetrics?.columns)
+        let past = TerminalGridPoint(row: row, column: columns)
+
+        XCTAssertNil(grid.mark(past))
+        XCTAssertNil(grid.text(from: TerminalGridPoint(row: row, column: 0), to: past))
+        XCTAssertNotNil(grid.mark(TerminalGridPoint(row: row, column: columns - 1)))
+    }
+
+    func test_aSurfaceReleasedWithoutTerminatingLeavesItsMarksGone() throws {
+        var surface: GhosttySurface? = GhosttySurface()
+        surface?.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "echo HERE; sleep 100"]))
+        try XCTSkipIf(surface?.surfacePtr == nil, "ghostty_surface_new failed")
+        surface?.view.frame = NSRect(x: 0, y: 0, width: 780, height: 560)
+        window.contentView?.addSubview(try XCTUnwrap(surface?.view))
+        let grid = try XCTUnwrap(surface?.grid)
+        let mark = try XCTUnwrap(grid.mark(TerminalGridPoint(row: try awaitRow(grid, "HERE"), column: 0)))
+        weak let released = surface
+
+        surface?.view.removeFromSuperview()
+        surface = nil
+
+        XCTAssertNil(released, "the test kept the surface alive, so deinit never ran")
+        XCTAssertEqual(mark.place, .gone)
+    }
+
+    func test_aSurfaceNeverAskedForItsGridReleasesWithoutTerminating() throws {
+        var surface: GhosttySurface? = GhosttySurface()
+        surface?.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
+        try XCTSkipIf(surface?.surfacePtr == nil, "ghostty_surface_new failed")
+        weak let released = surface
+
+        surface = nil
+
+        XCTAssertNil(released)
+    }
+
     func test_theSelectedSearchMatchCarriesItsStart() throws {
         let (surface, grid) = try mounted("seq 50; echo 'xx NEEDLE'")
         let recorder = SelectionRecorder()

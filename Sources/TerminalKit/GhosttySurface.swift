@@ -48,9 +48,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public var currentDirectory: URL? { lastCwd }
     public var isStarted: Bool { surfacePtr != nil }
 
-    private lazy var ghosttyGrid = GhosttyGrid(surface: self)
+    private var ghosttyGrid: GhosttyGrid?
 
-    public var grid: TerminalGrid? { surfacePtr == nil ? nil : ghosttyGrid }
+    public var grid: TerminalGrid? {
+        guard surfacePtr != nil else { return nil }
+        if let ghosttyGrid { return ghosttyGrid }
+        let grid = GhosttyGrid(surface: self)
+        ghosttyGrid = grid
+        return grid
+    }
 
     // Reads OSC 133 prompt marks: a shell without integration reads busy, a background job does not.
     public var isBusy: Bool {
@@ -375,7 +381,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         removeAppActiveObservers()
         guard let surfacePtr else { return }
         ShellSessionLedger.shared.record(ShellSession.leaderChildren())
-        ghosttyGrid.releaseMarks()
+        ghosttyGrid?.releaseMarks(surfacePtr)
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
         hostView.surfacePtr = nil
@@ -388,7 +394,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         removeAppActiveObservers()
         if let surfacePtr {
             ShellSessionLedger.shared.record(ShellSession.leaderChildren())
-            ghosttyGrid.releaseMarks()
+            ghosttyGrid?.releaseMarks(surfacePtr)
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
             ShellSessionReaper.shared.reapOrphans()

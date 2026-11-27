@@ -84,7 +84,7 @@ index 9a12b9cad..bdcf9359e 100644
  #ifdef __APPLE__
  GHOSTTY_API void ghostty_surface_set_display_id(ghostty_surface_t, uint32_t);
 diff --git i/src/Surface.zig w/src/Surface.zig
-index 369bb2399..13d31e4ed 100644
+index 369bb2399..350a4bb91 100644
 --- i/src/Surface.zig
 +++ w/src/Surface.zig
 @@ -1234,7 +1234,15 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
@@ -104,17 +104,22 @@ index 369bb2399..13d31e4ed 100644
              );
          },
      }
-@@ -1482,6 +1490,17 @@ fn passwordInput(self: *Surface, v: bool) !void {
+@@ -1482,6 +1490,22 @@ fn passwordInput(self: *Surface, v: bool) !void {
      try self.queueRender();
  }
  
-+/// The screen point of a search match's start, or null once its rows are gone.
++/// The screen point of a search match's start, or null once its page is gone.
 +/// Locks the renderer mutex: the search thread notifies without it.
-+fn searchMatchStart(self: *Surface, start: terminal.Pin) ?terminal.point.Coordinate {
++fn searchMatchStart(
++    self: *Surface,
++    match: terminal.highlight.Flattened,
++) ?terminal.point.Coordinate {
 +    self.renderer_state.mutex.lockUncancelable(global.io());
 +    defer self.renderer_state.mutex.unlock(global.io());
 +    const pages = &self.io.terminal.screens.active.pages;
++    const start = match.startPin();
 +    const pt = pages.pointFromPin(.screen, start) orelse return null;
++    if (start.node.serial != match.chunks.slice().items(.serial)[0]) return null;
 +    if (start.y >= start.node.rows()) return null;
 +    return pt.screen;
 +}
@@ -122,19 +127,19 @@ index 369bb2399..13d31e4ed 100644
  fn searchCallback(event: terminal.search.Thread.Event, ud: ?*anyopaque) void {
      // IMPORTANT: This function is run on the SEARCH THREAD! It is NOT SAFE
      // to access anything other than values that never change on the surface.
-@@ -1538,7 +1557,10 @@ fn searchCallback_(
+@@ -1538,7 +1562,10 @@ fn searchCallback_(
  
                  // Send the selected index to the surface mailbox
                  _ = self.surfaceMailbox().push(
 -                    .{ .search_selected = sel.idx },
 +                    .{ .search_selected = .{
 +                        .idx = sel.idx,
-+                        .start = self.searchMatchStart(sel.highlight.startPin()),
++                        .start = self.searchMatchStart(sel.highlight),
 +                    } },
                      .forever,
                  );
              } else {
-@@ -2448,7 +2470,7 @@ fn copySelectionToClipboards(
+@@ -2448,7 +2475,7 @@ fn copySelectionToClipboards(
  /// also copy per `copy_on_select`, use `setSelectionAndCopy`.
  ///
  /// This must be called with the renderer mutex held.
@@ -143,7 +148,7 @@ index 369bb2399..13d31e4ed 100644
      // Compute the transition before `select` below, which untracks (frees)
      // the previous selection's tracked pins; reading them after would be a
      // use-after-free.
-@@ -2574,7 +2596,7 @@ pub fn setFontSize(self: *Surface, size: font.face.DesiredSize) !void {
+@@ -2574,7 +2601,7 @@ pub fn setFontSize(self: *Surface, size: font.face.DesiredSize) !void {
  /// This queues a render operation with the renderer thread. The render
  /// isn't guaranteed to happen immediately but it will happen as soon as
  /// practical.
@@ -181,14 +186,19 @@ index 708898e76..1329c395d 100644
      }
  };
 diff --git i/src/apprt/embedded.zig w/src/apprt/embedded.zig
-index 697f0a786..ed4313fdc 100644
+index 697f0a786..c43e76061 100644
 --- i/src/apprt/embedded.zig
 +++ w/src/apprt/embedded.zig
-@@ -1644,7 +1644,10 @@ pub const CAPI = struct {
+@@ -1643,8 +1643,14 @@ pub const CAPI = struct {
+             };
  
              // Clamp our point to the screen bounds.
-             const clamped_x = @min(self.x, screen.pages.cols -| 1);
+-            const clamped_x = @min(self.x, screen.pages.cols -| 1);
 -            const clamped_y = @min(self.y, screen.pages.rows -| 1);
++            const clamped_x = switch (self.tag) {
++                .active, .viewport => @min(self.x, screen.pages.cols -| 1),
++                .screen, .history => self.x,
++            };
 +            const clamped_y = switch (self.tag) {
 +                .active, .viewport => @min(self.y, screen.pages.rows -| 1),
 +                .screen, .history => self.y,
@@ -196,7 +206,7 @@ index 697f0a786..ed4313fdc 100644
  
              return switch (self.coord_tag) {
                  // Exact coordinates require a specific pin.
-@@ -1980,6 +1983,236 @@ pub const CAPI = struct {
+@@ -1980,6 +1986,236 @@ pub const CAPI = struct {
          ptr.deinit();
      }
  
@@ -489,7 +499,7 @@ index 49bd6e0cd..19b1a2024 100644
  
          // Clear our scrollback
 diff --git i/src/termio/stream_handler.zig w/src/termio/stream_handler.zig
-index 0f1ee50f7..8fc852d77 100644
+index 0f1ee50f7..f5e49ef83 100644
 --- i/src/termio/stream_handler.zig
 +++ w/src/termio/stream_handler.zig
 @@ -135,6 +135,20 @@ pub const StreamHandler = struct {
@@ -532,3 +542,15 @@ index 0f1ee50f7..8fc852d77 100644
              },
  
              // Mode 1048 is xterm's conditional save cursor depending
+@@ -930,7 +944,11 @@ pub const StreamHandler = struct {
+     pub fn fullReset(
+         self: *StreamHandler,
+     ) !void {
++        const had_selection = self.terminal.screens.active.selection != null;
+         self.terminal.fullReset();
++        if (had_selection and self.terminal.screens.active.selection == null) {
++            self.surfaceMessageWriter(.selection_changed);
++        }
+         try self.setMouseShape(.text);
+ 
+         // Full reset clears Kitty clipboard session grants.

@@ -7,7 +7,7 @@ public protocol TerminalGrid: AnyObject {
     var viewportTop: Int { get }
     /// The terminal's own cursor.
     var cursorPoint: TerminalGridPoint? { get }
-    /// The selection, whoever made it, or nil.
+    /// The selection, whoever made it, or nil. A block selection reports its corners.
     var selectionBounds: ClosedRange<TerminalGridPoint>? { get }
 
     func row(_ index: Int) -> TerminalGridRow?
