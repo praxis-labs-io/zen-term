@@ -631,9 +631,10 @@ New modal surfaces compose the existing primitives.
   Animation durations, on-screen lingers and hover intent live on `Motion`. Behavior
   debounces, polls, timeouts and a gesture's tuned delay stay with their owner, and a
   control's own loop period (a spinner step, a progress sweep) stays local to it.
-- **Every `Spinner` steps on one shared clock.** Each starts its loop on the next tick of a
-  grid shared by all of them, so a window redraws at the spinner's frame rate however many
-  spin.
+- **Every `Spinner` steps on one shared clock.** One main-thread timer moves every spinning
+  `Spinner` to its next dot together, and runs only while a spinner in a window spins, so a
+  window redraws at the spinner's step rate however many spin. A Core Animation keyframe
+  animation here redraws the window far more often than its keyframes change.
 
 ## Key handling
 

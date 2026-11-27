@@ -6,6 +6,12 @@ import XCTest
 
 final class SpinnerTests: WindowTestCase {
     private var windows: [NSWindow] = []
+    private var spinners: [Spinner] = []
+
+    override func tearDown() {
+        spinners.forEach { $0.isSpinning = false }
+        super.tearDown()
+    }
 
     private func mountedSpinner(role: KeyPath<ChromeTheme, TerminalColor> = \.accent) -> Spinner {
         let window = NSWindow(
@@ -18,47 +24,58 @@ final class SpinnerTests: WindowTestCase {
         spinner.frame = NSRect(x: 0, y: 0, width: 13, height: 13)
         spinner.layoutSubtreeIfNeeded()
         windows.append(window)
+        spinners.append(spinner)
         return spinner
     }
 
-    private func stepTicks(of spinner: Spinner) throws -> [Double] {
-        let arc = spinner.arcForTesting
-        let keys = try XCTUnwrap(arc.animationKeys(), "the arc steps")
-        XCTAssertEqual(keys.count, 2, "it turns and it stretches")
-        return keys.compactMap { arc.animation(forKey: $0)?.beginTime }.map { $0 / Spinner.frameInterval }
+    private func litDot(of spinner: Spinner) -> Int? {
+        spinner.dotsForTesting.firstIndex { $0.opacity == 1 }
     }
 
-    func test_spinnersStartedAtDifferentMoments_stepOnTheSameClockTicks() throws {
+    func test_spinnersStartedAtDifferentMoments_lightTheSameDot() {
         Motion.isReduceMotionEnabled = { false }
         let first = mountedSpinner()
-        let firstStarted = CACurrentMediaTime() / Spinner.frameInterval
         first.isSpinning = true
-        RunLoop.current.run(until: Date().addingTimeInterval(Spinner.frameInterval * 1.5))
+        Spinner.tickForTesting()
         let second = mountedSpinner()
         second.isSpinning = true
 
-        for tick in try stepTicks(of: first) + stepTicks(of: second) {
-            XCTAssertEqual(tick, tick.rounded(), accuracy: 0.001, "a step lands on a shared clock tick")
-            XCTAssertGreaterThanOrEqual(tick + 0.001, firstStarted.rounded(.up), "the step starts on the next tick")
-        }
+        XCTAssertNotNil(litDot(of: first))
+        XCTAssertEqual(litDot(of: first), litDot(of: second))
+        Spinner.tickForTesting()
+        XCTAssertEqual(litDot(of: first), litDot(of: second))
     }
 
-    func test_theLoop_alwaysShowsAnArc_andOnlyEverTurnsOneWay() {
-        let frames = Spinner.frames
-        XCTAssertTrue(frames.allSatisfy { $0.arcLength > 0 && $0.arcLength < 1 })
-        var largestStep: CGFloat = 0
-        for (index, frame) in frames.enumerated().dropFirst() {
-            let step = frames[index - 1].rotation - frame.rotation
-            XCTAssertGreaterThan(step, 0, "frame \(index) turns back")
-            largestStep = max(largestStep, step)
-        }
-        var seam = (frames[frames.count - 1].rotation - frames[0].rotation).truncatingRemainder(dividingBy: 2 * .pi)
-        if seam < 0 { seam += 2 * .pi }
-        XCTAssertGreaterThan(seam, 0)
-        XCTAssertLessThanOrEqual(seam, largestStep + 0.001, "the loop's seam jumps further than any other step")
+    func test_aTick_movesASpinningSpinnersLitDotOneForward_andLeavesAStoppedOneStill() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let spinning = mountedSpinner()
+        let stopped = mountedSpinner()
+        spinning.isSpinning = true
+        stopped.isSpinning = true
+        stopped.isSpinning = false
+        let before = try XCTUnwrap(litDot(of: spinning))
+        let stoppedBefore = stopped.dotsForTesting.map(\.opacity)
+
+        Spinner.tickForTesting()
+
+        XCTAssertEqual(litDot(of: spinning), (before + 1) % spinning.dotsForTesting.count)
+        XCTAssertEqual(stopped.dotsForTesting.map(\.opacity), stoppedBefore)
     }
 
-    func test_underReduceMotion_aSpinningSpinnerShowsItsRolesStillDot_andAnimatesNothing() {
+    func test_aSpinner_isOnTheClockOnlyWhileItSpinsInAWindow() {
+        Motion.isReduceMotionEnabled = { false }
+        let loose = Spinner()
+        loose.isSpinning = true
+        XCTAssertFalse(loose.isOnClockForTesting)
+
+        let mounted = mountedSpinner()
+        mounted.isSpinning = true
+        XCTAssertTrue(mounted.isOnClockForTesting)
+        mounted.isSpinning = false
+        XCTAssertFalse(mounted.isOnClockForTesting)
+    }
+
+    func test_underReduceMotion_aSpinningSpinnerShowsItsRolesStillDot_andStaysOffTheClock() {
         Motion.isReduceMotionEnabled = { true }
         let working = mountedSpinner(role: \.working)
         let loading = mountedSpinner()
@@ -68,20 +85,19 @@ final class SpinnerTests: WindowTestCase {
         XCTAssertEqual(working.stillDotStateForTesting, .working)
         XCTAssertEqual(loading.stillDotStateForTesting, .live)
         for spinner in [working, loading] {
-            XCTAssertNil(spinner.arcForTesting.animationKeys())
-            XCTAssertTrue(spinner.arcForTesting.isHidden)
+            XCTAssertFalse(spinner.isOnClockForTesting)
+            XCTAssertTrue(spinner.dotsForTesting.allSatisfy(\.isHidden))
         }
     }
 
-    func test_withMotion_aSpinningSpinnerShowsTheRing_notTheDot() {
+    func test_withMotion_aSpinningSpinnerShowsTheDots_notTheStillDot() {
         Motion.isReduceMotionEnabled = { false }
         let spinner = mountedSpinner(role: \.working)
         spinner.isSpinning = true
 
         XCTAssertNil(spinner.stillDotStateForTesting)
         XCTAssertNil(spinner.subviews.compactMap { ($0 as? StateDot)?.state }.first, "a hidden dot reports no state")
-        XCTAssertNotNil(spinner.arcForTesting.path, "the ring is drawn")
-        XCTAssertFalse(spinner.arcForTesting.isHidden)
-        XCTAssertNotNil(spinner.arcForTesting.animationKeys())
+        XCTAssertTrue(spinner.dotsForTesting.allSatisfy { !$0.isHidden && $0.backgroundColor != nil })
+        XCTAssertTrue(spinner.isOnClockForTesting)
     }
 }

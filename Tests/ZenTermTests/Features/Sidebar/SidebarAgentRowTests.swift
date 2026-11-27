@@ -35,7 +35,7 @@ final class SidebarAgentRowTests: WindowTestCase {
 
     private func spinnerColor(of row: NSView) throws -> NSColor? {
         let spinner = try XCTUnwrap(descendants(row).compactMap { $0 as? Spinner }.first)
-        return spinner.arcForTesting.strokeColor.flatMap(NSColor.init)
+        return spinner.dotsForTesting.first?.backgroundColor.flatMap(NSColor.init)
     }
 
     private func descendants(_ view: NSView) -> [NSView] {
