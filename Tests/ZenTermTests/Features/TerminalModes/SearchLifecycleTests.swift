@@ -105,20 +105,6 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertIdentical(panel.findFieldForTesting, first, "a second field would stack on the first")
     }
 
-    func test_theChordSeedsTheBarFromScrollModesOwnSelection() throws {
-        let controller = makeWindow()
-        let surface = try focusedSurface(controller)
-        surface.rows[5] = "an error happened"
-        controller.handle(.toggleScrollMode)
-        controller.scrollMode.land(on: ScrollCell(row: 5, column: 3))
-        _ = controller.scrollMode.handle(try keyDown("v"))
-        let selected = try XCTUnwrap(controller.scrollMode.selectedText)
-
-        controller.handle(.toggleSearch)
-
-        XCTAssertEqual(surface.searches.last, selected)
-    }
-
     func test_theChordSeedsTheBarFromAMouseSelectionToo() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -284,45 +270,6 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.search.isEditing)
     }
 
-    func test_handingOffAfterSteppingInTheFieldLandsOnTheSelectedMatch() throws {
-        let controller = makeWindow()
-        let surface = try focusedSurface(controller)
-        surface.rows = Array(repeating: "", count: 24)
-        for row in [5, 10, 15] { surface.rows[row] = "an error here" }
-        surface.rows[23] = "❯ "
-        controller.handle(.toggleSearch)
-        controller.search.beginNeedleForTesting("error")
-        controller.search.report(total: 3, from: surface)
-        controller.search.step(.next)
-        controller.search.report(selected: 0, from: surface)
-        controller.search.step(.next)
-        controller.search.report(selected: 1, from: surface)
-
-        controller.search.enterScrollMode()
-
-        XCTAssertEqual(controller.scrollMode.cursorRow, 10, "the match the count names, not the newest on screen")
-    }
-
-    func test_handingOffAfterTheRowsMoved_landsWhereTheMatchIsNow() throws {
-        let controller = makeWindow()
-        let surface = try focusedSurface(controller)
-        surface.rows = Array(repeating: "", count: 24)
-        for row in [5, 10, 15] { surface.rows[row] = "an error here" }
-        surface.rows[23] = "❯ "
-        controller.handle(.toggleSearch)
-        controller.search.beginNeedleForTesting("error")
-        controller.search.report(total: 3, from: surface)
-        controller.search.step(.next)
-        controller.search.report(selected: 0, from: surface)
-        controller.search.step(.next)
-        controller.search.report(selected: 1, from: surface)
-        surface.rows = Array(surface.rows.dropFirst(2)) + ["", ""]
-
-        controller.search.enterScrollMode()
-
-        XCTAssertEqual(controller.scrollMode.cursorRow, 8, "output moved the match up two rows since the step landed")
-    }
-
     func test_aSelectionReportedWithNoStepPending_neverCountsAsTheSearchMovingTheViewport() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -331,10 +278,10 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 1, from: surface)
         controller.search.step(.next)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         surface.rows = Array(surface.rows.dropFirst(3)) + ["", "", ""]
 
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         controller.search.end()
 
         XCTAssertEqual(surface.scrolls, [], "the reader's own scroll or new output is not the search's to undo")
@@ -346,7 +293,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
 
         controller.search.step(.next)
         controller.search.step(.previous)
@@ -389,22 +336,43 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
 
         controller.search.enterScrollMode()
 
         XCTAssertEqual(surface.searchSteps, [.next], "the first total's step is the only one")
     }
 
+    func test_aSelectionWithNoStartLeavesNoEarlierMatchForTheHandOff() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows[5] = "an error happened"
+        surface.recordingGrid.cursorPoint = TerminalGridPoint(row: 11, column: 0)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.step(.next)
+        controller.search.report(selected: 0, start: TerminalGridPoint(row: 5, column: 3), from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 1, start: nil, from: surface)
+
+        controller.search.enterScrollMode()
+
+        XCTAssertEqual(
+            controller.scrollMode.cursor, TerminalGridPoint(row: 11, column: 0),
+            "on the shell cursor, not the match the step before")
+    }
+
     func test_leavingPutsTheViewportBackAtTheBottom() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
+        let grid = surface.recordingGrid
+        grid.viewportTop = 500
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
-        surface.rows[0] = "an error from history"
-        controller.search.report(selected: 0, from: surface)
+        grid.viewportTop = 0
+        controller.search.report(selected: 0, start: nil, from: surface)
         XCTAssertEqual(surface.scrolls, [], "precondition: the step moved it, not a scroll")
 
         controller.search.end()
@@ -416,11 +384,13 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
+        let grid = surface.recordingGrid
+        grid.viewportTop = 500
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
-        surface.rows[0] = "an error from history"
-        controller.search.report(selected: 0, from: surface)
+        grid.viewportTop = 0
+        controller.search.report(selected: 0, start: nil, from: surface)
 
         controller.search.beginNeedleForTesting("errorx")
         controller.search.report(total: 0, from: surface)
@@ -435,7 +405,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 1, from: surface)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         XCTAssertEqual(surface.searchSteps, [], "precondition: a match on screen selects nothing")
 
         controller.search.end()
@@ -620,7 +590,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.typeForTesting("line")
         XCTAssertEqual(surface.searches, ["line"], "precondition: one send, the immediate one")
         controller.search.report(total: 3, from: surface)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         XCTAssertEqual(surface.searchSteps, [.next], "the first total stepped onto match 0")
 
         controller.search.enterScrollMode()
@@ -642,7 +612,7 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searches, ["ls"], "precondition: the timer sent it")
 
         controller.search.report(total: 3, from: surface)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         XCTAssertEqual(surface.searchSteps, [.next], "the first total stepped onto match 0")
 
         controller.search.enterScrollMode()
@@ -716,13 +686,15 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
+        let grid = surface.recordingGrid
+        grid.viewportTop = 500
         controller.handle(.toggleSearch)
         controller.search.report(
             position: TerminalScrollPosition(total: 5000, offset: 500, viewport: 24), from: surface)
         controller.search.typeForTesting("error")
         controller.search.report(total: 3, from: surface)
-        surface.rows[0] = "an error from history"
-        controller.search.report(selected: 0, from: surface)
+        grid.viewportTop = 120
+        controller.search.report(selected: 0, start: nil, from: surface)
         controller.search.report(
             position: TerminalScrollPosition(total: 5000, offset: 120, viewport: 24), from: surface)
 
@@ -806,10 +778,10 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.beginNeedleForTesting("error")
 
         controller.search.report(total: 17, from: surface)
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         XCTAssertEqual(field.countTextForTesting, "17 / 17", "opening lands on the newest")
 
-        controller.search.report(selected: 2, from: surface)
+        controller.search.report(selected: 2, start: nil, from: surface)
         XCTAssertEqual(field.countTextForTesting, "15 / 17", "zero-based, and newest-first")
         XCTAssertTrue(controller.search.isEditing)
     }
@@ -823,7 +795,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.beginNeedleForTesting("error")
 
         controller.search.report(total: 1204, from: surface)
-        controller.search.report(selected: 1086, from: surface)
+        controller.search.report(selected: 1086, start: nil, from: surface)
 
         XCTAssertEqual(field.countTextForTesting, "118 / 1,204")
     }
@@ -838,10 +810,10 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.report(total: 3, from: surface)
         controller.search.enterScrollMode()
 
-        controller.search.report(selected: 0, from: surface)
+        controller.search.report(selected: 0, start: nil, from: surface)
         XCTAssertEqual(field.countTextForTesting, "3 / 3", "the newest match is the last one down")
 
-        controller.search.report(selected: 2, from: surface)
+        controller.search.report(selected: 2, start: nil, from: surface)
         XCTAssertEqual(field.countTextForTesting, "1 / 3", "the oldest is the one nearest the top")
     }
 

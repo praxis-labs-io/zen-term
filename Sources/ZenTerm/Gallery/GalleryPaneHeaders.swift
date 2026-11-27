@@ -13,6 +13,9 @@
             hovered.forceHoverForGallery()
             let zoomed = header(shell, active: true)
             zoomed.isZoomed = true
+            let scrolling = header(shell, active: true)
+            scrolling.isScrolling = true
+            scrolling.scrollReadout = "1284:17"
             return [
                 GallerySection(
                     title: "PaneHeader",
@@ -38,6 +41,7 @@
                                     active: true)
                             ]),
                         GallerySection.Row(label: "Focus mode", samples: [zoomed]),
+                        GallerySection.Row(label: "Scroll mode", samples: [scrolling]),
                         GallerySection.Row(
                             label: "Drawer", samples: [header(shell, controls: [.focusMode, .close], active: true)]),
                         GallerySection.Row(

@@ -1,3 +1,4 @@
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
@@ -5,12 +6,20 @@ import XCTest
 final class ScrollWordMotionTests: XCTestCase {
     private func screen(_ rows: [String]) -> ScrollWordMotion.Screen {
         ScrollWordMotion.Screen(lastRow: rows.count - 1) { row in
-            rows.indices.contains(row) ? rows[row] : ""
+            rows.indices.contains(row) ? Self.cells(rows[row]) : []
         }
     }
 
-    private func cell(_ row: Int, _ column: Int) -> ScrollCell {
-        ScrollCell(row: row, column: column)
+    private static func cells(_ text: String) -> [TerminalGridCell] {
+        text.flatMap { character -> [TerminalGridCell] in
+            let isWide = character.unicodeScalars.first.map { $0.value >= 0x1100 } ?? false
+            let cell = TerminalGridCell(text: String(character), width: isWide ? 2 : 1, kind: .output)
+            return isWide ? [cell, TerminalGridCell(text: "", width: 0, kind: .output)] : [cell]
+        }
+    }
+
+    private func cell(_ row: Int, _ column: Int) -> TerminalGridPoint {
+        TerminalGridPoint(row: row, column: column)
     }
 
     func test_aRunOfPunctuationIsItsOwnWord() {
@@ -109,5 +118,14 @@ final class ScrollWordMotionTests: XCTestCase {
         let sut = screen(["one"])
 
         XCTAssertEqual(ScrollWordMotion.wordEnd(from: cell(0, 2), on: sut), cell(0, 2))
+    }
+
+    func test_aWideCharacterIsOneStepAndTheColumnAfterItIsItsTrueCell() {
+        let sut = screen(["漢字 next"])
+
+        XCTAssertEqual(
+            ScrollWordMotion.nextWordStart(from: cell(0, 0), on: sut), cell(0, 5),
+            "two wide characters fill four cells, so the word after the space starts on cell five")
+        XCTAssertEqual(ScrollWordMotion.wordEnd(from: cell(0, 5), on: sut), cell(0, 8))
     }
 }

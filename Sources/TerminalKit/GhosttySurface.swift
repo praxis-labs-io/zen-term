@@ -206,7 +206,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         hostView.scrollMultiplier = behavior.scrollMultiplier
         syncColorScheme()
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
-        adoptGridBaseline()
     }
 
     private func syncColorScheme() {
@@ -240,7 +239,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func setFontSize(_ points: CGFloat) {
         lastFontSize = points
         performBindingAction("set_font_size:\(points)")
-        adoptGridBaseline()
     }
 
     // `logsFailure` is off for actions whose false means "nothing to do", not a rejection.
@@ -476,23 +474,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
-    // libghostty reports the top-left as the text baseline in points, and -1 once scrolled out of view.
-    public var selectionOrigin: TerminalViewportCell? {
-        guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
-        guard let metrics = cellMetrics, metrics.cellWidth > 0, metrics.cellHeight > 0 else {
-            return nil
-        }
-        var text = ghostty_text_s()
-        guard ghostty_surface_read_selection(surfacePtr, &text) else { return nil }
-        defer { ghostty_surface_free_text(surfacePtr, &text) }
-        guard text.tl_px_x >= 0, text.tl_px_y >= 0 else { return nil }
-        let x = (CGFloat(text.tl_px_x) - metrics.gridInset) / metrics.cellWidth
-        let y = (CGFloat(text.tl_px_y) - metrics.gridInset) / metrics.cellHeight
-        return TerminalViewportCell(
-            row: min(max(Int(y.rounded(.down)), 0), max(metrics.rows - 1, 0)),
-            column: min(max(Int(x.rounded(.down)), 0), max(metrics.columns - 1, 0)))
-    }
-
     public var cellMetrics: TerminalCellMetrics? {
         guard let surfacePtr else { return nil }
         let size = ghostty_surface_size(surfacePtr)
@@ -514,11 +495,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 startRow: row, startColumn: 0, endRow: row,
                 endColumn: max(metrics.columns - 1, 0)),
             metrics: metrics)
-    }
-
-    public func text(in range: TerminalViewportRange) -> String? {
-        guard let metrics = cellMetrics else { return nil }
-        return text(in: range, metrics: metrics)
     }
 
     public func text(lastLines count: Int) -> String? {
@@ -605,24 +581,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     func reportFocusWanted() { delegate?.surfaceWantsFocus(self) }
-
-    private var lastGrid: (columns: Int, rows: Int)?
-
-    // libghostty sets the grid synchronously but rewraps text later. The first sizing is not a reflow.
-    func reportGridIfChanged() {
-        guard let metrics = cellMetrics else { return }
-        let grid = (columns: metrics.columns, rows: metrics.rows)
-        let previous = lastGrid
-        lastGrid = grid
-        guard let previous, previous != grid else { return }
-        delegate?.surfaceGridDidReflow(self)
-    }
-
-    // A font step reshapes the grid outside a size push; a stale baseline would announce a false reflow.
-    private func adoptGridBaseline() {
-        guard let metrics = cellMetrics else { return }
-        lastGrid = (columns: metrics.columns, rows: metrics.rows)
-    }
 
     // Child exit and selection changes go out a turn later: one frees the surface mid-tick, one holds the grid's lock.
     func handle(_ action: ghostty_action_s) -> Bool {

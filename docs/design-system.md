@@ -212,7 +212,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `Linger.ack`, `.readout`, `.notice`, `.toast` | How long a confirmation, a readout, a notice and a toast stay on screen |
 | `springScaleFade` | Modals and floats appearing and leaving, toasts leaving |
 | `fade` | Plain opacity changes, tooltips, the link preview, and find in the header |
-| `crossfade` | A process chip swapping its mark when its program changes or find takes its header; with `whenReduced`, a dissolve that stands in for movement |
+| `crossfade` | A process chip swapping its mark when its program changes or find or scroll mode takes its header; with `whenReduced`, a dissolve that stands in for movement |
 | `HostConnect` | The SSH host Connect screen's choreography: the emblem's rain and answer, the words after it, and the hand-off to the terminal |
 | `ease` | A hover fill or color change |
 | `stretch` | The selection pill sliding between tabs |
@@ -243,6 +243,8 @@ The command palette and the workspace picker share one shell, `PaletteOverlay`: 
 Every terminal pane, drawer and float wears a `PaneHeader` (unless `pane-headers` is off): its process chip at `.small`, its name in `.medium` weight and its path, both in `ink(.muted)` wherever focus sits, a quiet line of context; then its controls as `IconButton`s at `Icon.xs`, resting in `ink(.muted)`. An unfocused header shows its controls only while the pointer is over it. A narrow header truncates the path from its front first, so the folder survives, then the name, then drops every control but close.
 
 Find takes the header's row: the chip turns to `ProcessIcon.find`, the name, path and controls step aside, and a flat `FindField` (no fill, edge or shadow) fills the row after the chip. A pane with headers off shows its header while find is open. The field's buttons match the header's (`Icon.xs`, resting in `ink(.muted)`), close is `escape`, not the pane's `xmark`, and the steppers are disabled while there is no match. A query wider than the field fades on the side its hidden text is on (`EdgeFade`).
+
+Scroll mode names itself in the header: the chip turns to `ProcessIcon.scrollMode`, the name reads Scroll mode and its readout (the cursor's position, a selection's count, a copy's confirmation) takes the path's place in its muted ink, in the `.digits` face; the controls stay. A pane with headers off keeps its header hidden. Find open over scroll mode keeps its own chip and field.
 
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 

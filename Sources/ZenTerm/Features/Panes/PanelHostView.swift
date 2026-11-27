@@ -26,9 +26,9 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     var isZoomed: Bool = false { didSet { header?.isZoomed = isZoomed } }
 
     func setScrollCursor(
-        _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
+        _ state: ScrollCursorView.State?, readout: String?, metrics: @escaping () -> TerminalCellMetrics?
     ) {
-        chrome.setScrollCursor(state, metrics: metrics)
+        chrome.setScrollCursor(state, readout: readout, metrics: metrics)
     }
 
     @discardableResult

@@ -5,9 +5,9 @@ struct PaletteCommand {
     let shortcut: String
     let category: CommandCategory
     let chord: KeyInterceptor.ReservedChord
-    var floatIcon: ProcessIcon?
+    var ownIcon: ProcessIcon?
 
-    var icon: ProcessIcon { floatIcon ?? category.icon }
+    var icon: ProcessIcon { ownIcon ?? category.icon }
 }
 
 enum CommandCatalog {
@@ -46,7 +46,7 @@ enum CommandCatalog {
             let float = ToolFloatCatalog.byID(id)
             return .init(
                 title: float?.title ?? id, shortcut: glyph, category: .tools, chord: chord,
-                floatIcon: float.flatMap(ProcessIcon.toolFloat))
+                ownIcon: float.flatMap(ProcessIcon.toolFloat))
         case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
         case .newWorkspace: return workspace("New Workspace", glyph, chord)
         case .openSettings: return app("Settings…", glyph, chord)
@@ -57,8 +57,8 @@ enum CommandCatalog {
         case .increaseFontSize: return app("Increase Font Size", glyph, chord)
         case .decreaseFontSize: return app("Decrease Font Size", glyph, chord)
         case .resetFontSize: return app("Reset Font Size", glyph, chord)
-        case .toggleScrollMode: return terminal("Scroll Mode", glyph, chord)
-        case .toggleSearch: return terminal("Find in Scrollback", glyph, chord)
+        case .toggleScrollMode: return terminal("Scroll Mode", glyph, chord, icon: .scrollMode)
+        case .toggleSearch: return terminal("Find in Scrollback", glyph, chord, icon: .find)
         case .scrollToTop: return terminal("Scroll to Top", glyph, chord)
         case .scrollToBottom: return terminal("Scroll to Bottom", glyph, chord)
         case .scrollPageUp: return terminal("Scroll Page Up", glyph, chord)
@@ -156,9 +156,9 @@ enum CommandCatalog {
         .init(title: title, shortcut: shortcut, category: .panes, chord: chord)
     }
     private static func terminal(
-        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord, icon: ProcessIcon? = nil
     ) -> PaletteCommand {
-        .init(title: title, shortcut: shortcut, category: .terminal, chord: chord)
+        .init(title: title, shortcut: shortcut, category: .terminal, chord: chord, ownIcon: icon)
     }
     private static func tab(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord

@@ -709,13 +709,13 @@ final class WindowController: NSObject {
 
     private func toggleSearch() {
         guard let target = modeTarget else { return }
-        let selected = scrollMode.selectedText ?? target.surface.copySelection()
+        let selected = target.surface.copySelection()
         search.begin(surface: target.surface, panel: target.host, seed: selected ?? "")
     }
 
     private func searchSelection() {
         guard let target = modeTarget else { return }
-        guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
+        guard let selected = target.surface.copySelection(),
             !selected.isEmpty
         else { return }
         search.begin(surface: target.surface, panel: target.host, seed: selected)
@@ -734,7 +734,7 @@ final class WindowController: NSObject {
     // Not the pasteboard: ghostty's `paste_from_selection` means the X11 selection clipboard, which macOS lacks.
     private func pasteSelection() {
         guard let target = modeTarget else { return }
-        guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
+        guard let selected = target.surface.copySelection(),
             !selected.isEmpty
         else { return }
         target.surface.paste(selected)
@@ -745,8 +745,8 @@ final class WindowController: NSObject {
         case .scrollPosition(let position):
             scrollMode.report(position: position, from: surface)
             search.report(position: position, from: surface)
-        case .gridReflow:
-            scrollMode.reportReflow(from: surface)
+        case .selectionChanged:
+            scrollMode.reportSelectionChange(from: surface)
         case .search(let event):
             search.handle(event, from: surface, panel: modeTarget?.host)
         }

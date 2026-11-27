@@ -98,7 +98,6 @@ final class GhosttyHostView: NSView {
         guard let backing = backingSize, backing.width >= 1, backing.height >= 1 else { return }
         guard let surfacePtr else { return }
         ghostty_surface_set_size(surfacePtr, UInt32(backing.width), UInt32(backing.height))
-        owner?.reportGridIfChanged()
     }
 
     // Detached, `convertToBacking` is the identity and the size lands at half on Retina, so it needs a known scale.

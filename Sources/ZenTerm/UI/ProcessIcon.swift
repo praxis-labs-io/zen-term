@@ -47,7 +47,6 @@ struct ProcessIcon: Equatable {
     static let shell = neutral("Shell", "terminal")
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
-    static let find = neutral("Find", "search")
 
     static let workspace = purpose("Workspace", "folder", .workspace)
     static let closedWorkspace = muted("Workspace", "folder")
@@ -62,6 +61,8 @@ struct ProcessIcon: Equatable {
     static let pane = purpose("Pane", "columns-2", .pane)
     static let window = purpose("Window", "app-window", .window)
     static let terminal = neutral("Terminal", "terminal")
+    static let find = neutral("Find", "search")
+    static let scrollMode = neutral("Scroll Mode", "arrow-up-down")
     static let tool = neutral("Tool", "hammer")
     static let app = neutral("App", "settings")
 

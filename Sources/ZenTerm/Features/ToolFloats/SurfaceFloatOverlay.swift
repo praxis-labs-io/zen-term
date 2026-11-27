@@ -152,9 +152,9 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
     func applyHeaderShown() { chrome.applyHeaderShown() }
 
     func setScrollCursor(
-        _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
+        _ state: ScrollCursorView.State?, readout: String?, metrics: @escaping () -> TerminalCellMetrics?
     ) {
-        chrome.setScrollCursor(state, metrics: metrics)
+        chrome.setScrollCursor(state, readout: readout, metrics: metrics)
     }
 
     @discardableResult

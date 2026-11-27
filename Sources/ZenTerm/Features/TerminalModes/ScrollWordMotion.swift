@@ -1,15 +1,17 @@
-/// Vim's `w`, `b` and `e` over a viewport, where a word never spans a row break.
+import TerminalKit
+
+/// Vim's `w`, `b` and `e` over grid cells, where a word never spans a row break and a wide character is one step.
 enum ScrollWordMotion {
     enum Motion: Equatable {
         case next
         case back
         case end
 
-        func destination(from cell: ScrollCell, on screen: Screen) -> ScrollCell {
+        func destination(from point: TerminalGridPoint, on screen: Screen) -> TerminalGridPoint {
             switch self {
-            case .next: return nextWordStart(from: cell, on: screen)
-            case .back: return previousWordStart(from: cell, on: screen)
-            case .end: return wordEnd(from: cell, on: screen)
+            case .next: return nextWordStart(from: point, on: screen)
+            case .back: return previousWordStart(from: point, on: screen)
+            case .end: return wordEnd(from: point, on: screen)
             }
         }
     }
@@ -27,49 +29,59 @@ enum ScrollWordMotion {
         return .punctuation
     }
 
-    /// A class so each row is split once; re-splitting per step makes a long `w` quadratic.
+    static func characters(of cells: [TerminalGridCell]) -> [(column: Int, character: Character)] {
+        var line: [(column: Int, character: Character)] = []
+        for (column, cell) in cells.enumerated() where cell.width > 0 {
+            line.append((column, cell.text.first ?? " "))
+        }
+        while let last = line.last, last.character.isWhitespace { line.removeLast() }
+        return line
+    }
+
+    /// A class so each row is read once; re-reading per step makes a long `w` quadratic.
     final class Screen {
         let lastRow: Int
         let wide: Bool
-        private let reader: (Int) -> String
-        private var rows: [Int: [Character]] = [:]
+        private let reader: (Int) -> [TerminalGridCell]
+        private var rows: [Int: [(column: Int, character: Character)]] = [:]
 
-        init(lastRow: Int, wide: Bool = false, row: @escaping (Int) -> String) {
+        init(lastRow: Int, wide: Bool = false, row: @escaping (Int) -> [TerminalGridCell]) {
             self.lastRow = lastRow
             self.wide = wide
             self.reader = row
         }
 
-        private func characters(_ row: Int) -> [Character] {
+        func line(_ row: Int) -> [(column: Int, character: Character)] {
             if let known = rows[row] { return known }
-            let built = Array(reader(row))
+            let built = ScrollWordMotion.characters(of: reader(row))
             rows[row] = built
             return built
         }
 
-        func characterClass(at cell: ScrollCell) -> CharacterClass {
-            let text = characters(cell.row)
-            guard text.indices.contains(cell.column) else { return .blank }
-            return classify(text[cell.column], wide: wide)
+        func characterClass(at point: TerminalGridPoint) -> CharacterClass {
+            guard let found = line(point.row).first(where: { $0.column == point.column }) else { return .blank }
+            return classify(found.character, wide: wide)
         }
 
-        func forward(_ cell: ScrollCell) -> ScrollCell? {
-            if cell.column + 1 < characters(cell.row).count {
-                return ScrollCell(row: cell.row, column: cell.column + 1)
+        func forward(_ point: TerminalGridPoint) -> TerminalGridPoint? {
+            if let next = line(point.row).first(where: { $0.column > point.column }) {
+                return TerminalGridPoint(row: point.row, column: next.column)
             }
-            guard cell.row < lastRow else { return nil }
-            return ScrollCell(row: cell.row + 1, column: 0)
+            guard point.row < lastRow else { return nil }
+            return TerminalGridPoint(row: point.row + 1, column: line(point.row + 1).first?.column ?? 0)
         }
 
-        func backward(_ cell: ScrollCell) -> ScrollCell? {
-            if cell.column > 0 { return ScrollCell(row: cell.row, column: cell.column - 1) }
-            guard cell.row > 0 else { return nil }
-            return ScrollCell(row: cell.row - 1, column: max(characters(cell.row - 1).count - 1, 0))
+        func backward(_ point: TerminalGridPoint) -> TerminalGridPoint? {
+            if let previous = line(point.row).last(where: { $0.column < point.column }) {
+                return TerminalGridPoint(row: point.row, column: previous.column)
+            }
+            guard point.row > 0 else { return nil }
+            return TerminalGridPoint(row: point.row - 1, column: line(point.row - 1).last?.column ?? 0)
         }
     }
 
-    static func nextWordStart(from cell: ScrollCell, on screen: Screen) -> ScrollCell {
-        var current = cell
+    static func nextWordStart(from point: TerminalGridPoint, on screen: Screen) -> TerminalGridPoint {
+        var current = point
         let opening = screen.characterClass(at: current)
         if opening != .blank {
             while let next = screen.forward(current), next.row == current.row,
@@ -87,8 +99,8 @@ enum ScrollWordMotion {
         return current
     }
 
-    static func previousWordStart(from cell: ScrollCell, on screen: Screen) -> ScrollCell {
-        guard var current = screen.backward(cell) else { return cell }
+    static func previousWordStart(from point: TerminalGridPoint, on screen: Screen) -> TerminalGridPoint {
+        guard var current = screen.backward(point) else { return point }
         while screen.characterClass(at: current) == .blank {
             guard let previous = screen.backward(current) else { return current }
             current = previous
@@ -102,8 +114,8 @@ enum ScrollWordMotion {
         return current
     }
 
-    static func wordEnd(from cell: ScrollCell, on screen: Screen) -> ScrollCell {
-        guard var current = screen.forward(cell) else { return cell }
+    static func wordEnd(from point: TerminalGridPoint, on screen: Screen) -> TerminalGridPoint {
+        guard var current = screen.forward(point) else { return point }
         while screen.characterClass(at: current) == .blank {
             guard let next = screen.forward(current) else { return current }
             current = next

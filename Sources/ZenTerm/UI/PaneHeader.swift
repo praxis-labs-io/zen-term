@@ -52,7 +52,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
     var content: Content {
         didSet {
             guard content != oldValue else { return }
-            if content.process != oldValue.process, !isFinding { chip.show(content.process) }
+            chip.show(shownProcess)
             applyText()
         }
     }
@@ -68,12 +68,36 @@ final class PaneHeader: ControlView, ThemeReapplying {
     var isFinding = false {
         didSet {
             guard isFinding != oldValue else { return }
-            chip.show(isFinding ? .find : content.process)
+            chip.show(shownProcess)
             nameField.isHidden = isFinding
             controlStack.isHidden = isFinding
             applyText()
         }
     }
+
+    var isScrolling = false {
+        didSet {
+            guard isScrolling != oldValue else { return }
+            chip.show(shownProcess)
+            applyText()
+        }
+    }
+
+    var scrollReadout: String? {
+        didSet {
+            guard scrollReadout != oldValue else { return }
+            applyText()
+        }
+    }
+
+    private var shownReadout: String? { isScrolling && !isFinding ? scrollReadout : nil }
+
+    private var shownProcess: ProcessIcon {
+        if isFinding { return .find }
+        return isScrolling ? .scrollMode : content.process
+    }
+
+    private var shownName: String { isScrolling && !isFinding ? "Scroll mode" : content.name }
 
     var chipTrailingAnchor: NSLayoutXAxisAnchor { chip.trailingAnchor }
 
@@ -84,6 +108,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
     // The header reads mostly in lowercase (`claude`, a path), so the name's x-height centers on the chip, not its line box.
     private static var nameFont: NSFont { ChromeType.font(.small, weight: .medium) }
     private static var pathFont: NSFont { ChromeType.font(.small) }
+    private static var readoutFont: NSFont { ChromeType.font(.small, face: .digits) }
 
     private let controls: [Control]
     private let onControl: (Control) -> Void
@@ -172,7 +197,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
     func reapplyTheme() { applyText() }
 
     var nameForTesting: String { nameField.stringValue }
-    var pathForTesting: String? { pathField.isHidden ? nil : pathField.stringValue }
+    var pathForTesting: String? { pathField.isHidden || shownReadout != nil ? nil : pathField.stringValue }
+    var readoutForTesting: String? { pathField.isHidden || shownReadout == nil ? nil : pathField.stringValue }
     var processForTesting: ProcessIcon { content.process }
     var chipForTesting: ProcessIcon? { chip.shownProcessForTesting }
     var showsTitleAndControlsForTesting: Bool { !nameField.isHidden && !controlStack.isHidden }
@@ -202,10 +228,16 @@ final class PaneHeader: ControlView, ThemeReapplying {
     private func applyText() {
         let ink = Theme.current.chrome.ink(.muted)
         nameField.attributedStringValue = Self.text(
-            content.name, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
-        pathField.isHidden = isFinding || content.path == nil
-        pathField.attributedStringValue = Self.text(
-            content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
+            shownName, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
+        if let readout = shownReadout {
+            pathField.isHidden = false
+            pathField.attributedStringValue = Self.text(
+                readout, font: Self.readoutFont, ink: ink, truncation: .byTruncatingTail)
+        } else {
+            pathField.isHidden = isFinding || isScrolling || content.path == nil
+            pathField.attributedStringValue = Self.text(
+                content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
+        }
         needsUpdateConstraints = true
     }
 
