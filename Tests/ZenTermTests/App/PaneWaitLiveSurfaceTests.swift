@@ -168,6 +168,25 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         XCTAssertEqual(try result(answer).reason, .exited)
     }
 
+    func test_aFullScreenProgramDrawingTheNeedleAfterTheWaitBeganAnswersOutput() throws {
+        let (surface, token) = try shellPane()
+        let answer = wait(on: token, output: "zen-full-42")
+
+        run(#"printf '\033[?1049h'; echo zen-full-$((40+2)); sleep 30"#, in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+    }
+
+    func test_twoFullScreenSessionsEachDrawingTheNeedleOnceAnswerOutput() throws {
+        let (surface, token) = try shellPane()
+        let answer = wait(on: token, output: "zen-again-42")
+        let session = #"printf '\033[?1049h'; echo zen-again-$((40+2)); sleep 1; printf '\033[?1049l'; sleep 1"#
+
+        run("\(session); \(session); sleep 30", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+    }
+
     func test_readSinceTaskReturnsOnlyWhatThePanePrintedSinceTheTask() throws {
         let (surface, token) = try shellPane()
         run("echo zen-before-$((40+2))", in: surface)
