@@ -11,7 +11,7 @@ final class SearchController {
 
     enum Event: Equatable {
         case total(Int?)
-        case selected(Int?)
+        case selected(Int?, start: TerminalGridPoint?)
         case ended
         case wanted(needle: String)
     }
@@ -19,7 +19,7 @@ final class SearchController {
     func handle(_ event: Event, from s: AnyObject & TerminalSurface, panel: @autoclosure () -> TerminalModeHost?) {
         switch event {
         case .total(let total): report(total: total, from: s)
-        case .selected(let index): report(selected: index, from: s)
+        case .selected(let index, let start): report(selected: index, start: start, from: s)
         case .ended: backendEnded(from: s)
         case .wanted(let needle):
             guard let panel = panel() else { return }
@@ -127,12 +127,8 @@ final class SearchController {
             navigate(.next)
             return
         }
-        guard selected != nil else { return }
-        if let fieldLanding = currentFieldLanding {
-            scrollMode.land(on: fieldLanding)
-        } else {
-            land(after: .next)
-        }
+        guard selected != nil, case .at(let landing) = fieldLanding?.place else { return }
+        scrollMode.land(on: landing)
     }
 
     private func flushPendingNeedle() {
@@ -151,7 +147,7 @@ final class SearchController {
         guard isActive, !needle.isEmpty else { return }
         pendingStep = step
         didRequestSelection = true
-        rowsAtStep = surface.map(Self.viewportRows(of:))
+        viewportTopAtStep = surface?.grid?.viewportTop
         surface?.stepSearch(step)
     }
 
@@ -202,7 +198,7 @@ final class SearchController {
         selected = nil
         fieldLanding = nil
         pendingStep = nil
-        rowsAtStep = nil
+        viewportTopAtStep = nil
         didRequestSelection = false
         didWeighSelection = false
         unsent = nil
@@ -287,15 +283,15 @@ final class SearchController {
         return Self.viewportRows(of: surface).contains { !Self.occurrenceColumns(of: needle, in: $0).isEmpty }
     }
 
-    func report(selected: Int?, from s: AnyObject) {
+    func report(selected: Int?, start: TerminalGridPoint?, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
         self.selected = selected
         showCount()
-        guard let step = pendingStep, selected != nil else { return }
+        guard pendingStep != nil, selected != nil else { return }
         noteViewportMove()
         pendingStep = nil
-        land(after: step)
-        rowsAtStep = nil
+        viewportTopAtStep = nil
+        land(on: start)
     }
 
     private func showCount() {
@@ -304,107 +300,28 @@ final class SearchController {
 
     /// A selection already on screen moves nothing, and putting the viewport "back" would throw the reader to the bottom.
     private func noteViewportMove() {
-        guard let surface, let before = rowsAtStep, before != Self.viewportRows(of: surface) else { return }
+        guard let before = viewportTopAtStep, before != surface?.grid?.viewportTop else { return }
         didMoveViewport = true
     }
 
     private var pendingStep: TerminalSearchStep?
 
-    /// Steps from the field land on a cell of their own, so a hand-off to scroll mode starts on the selected match.
-    private var fieldLanding: ScrollCell?
-    private var rowsAtLanding: [String]?
+    private var viewportTopAtStep: Int?
 
-    /// A landing outlives its rows only until the viewport scrolls, reflows or prints, so it holds while they match.
-    private var currentFieldLanding: ScrollCell? {
-        guard let fieldLanding, let surface, rowsAtLanding == Self.viewportRows(of: surface) else { return nil }
-        return fieldLanding
-    }
+    /// Steps from the field mark their match, so a hand-off to scroll mode starts on it wherever output took it.
+    private var fieldLanding: TerminalGridMark?
 
-    private func land(after step: TerminalSearchStep) {
-        guard let surface else { return }
-        let rows = Self.viewportRows(of: surface)
-        let from =
-            scrollMode.isActive ? scrollMode.cursor : currentFieldLanding ?? ScrollCell(row: rows.count, column: 0)
-        guard
-            let cell = Self.matchCell(
-                needle: needle, rows: rows, from: from, step: step,
-                viewportMoved: rowsAtStep.map { $0 != rows } ?? false, selected: selected,
-                total: total)
-        else { return }
+    private func land(on start: TerminalGridPoint?) {
+        guard let start else { return }
         if scrollMode.isActive {
-            scrollMode.land(on: cell)
+            scrollMode.land(on: start)
         } else {
-            fieldLanding = cell
-            rowsAtLanding = rows
+            fieldLanding = surface?.grid?.mark(start)
         }
     }
 
     private static func viewportRows(of surface: TerminalSurface) -> [String] {
         (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
-    }
-
-    /// Compared by screen, not offset: the scrollbar report lags the selected index by a frame or more.
-    private var rowsAtStep: [String]?
-
-    static func matchCell(
-        needle: String, rows: [String], from cursor: ScrollCell, step: TerminalSearchStep,
-        viewportMoved: Bool, selected: Int?, total: Int?
-    ) -> ScrollCell? {
-        guard !needle.isEmpty else { return nil }
-        let occurrences = rows.enumerated().flatMap { row, text in
-            occurrenceColumns(of: needle, in: text).map { ScrollCell(row: row, column: $0) }
-        }
-        guard !occurrences.isEmpty else { return nil }
-        if let selected, let total, occurrences.count == total, selected < total {
-            return occurrences[total - 1 - selected]
-        }
-        if let end = bufferEnd(in: occurrences, step: step, selected: selected, total: total) {
-            return end
-        }
-        if viewportMoved {
-            let onTopRow = occurrences.filter { $0.row == 0 }
-            if !onTopRow.isEmpty { return step == .next ? onTopRow.last : onTopRow.first }
-            if let clamped = clampedMatch(
-                in: occurrences, step: step, selected: selected, total: total)
-            {
-                return clamped
-            }
-            return step == .next ? occurrences.first : occurrences.last
-        }
-        let before = occurrences.filter {
-            $0.row < cursor.row || ($0.row == cursor.row && $0.column < cursor.column)
-        }
-        let after = occurrences.filter {
-            $0.row > cursor.row || ($0.row == cursor.row && $0.column > cursor.column)
-        }
-        return (step == .next ? before.last ?? occurrences.first : after.first ?? occurrences.last)
-    }
-
-    /// Index 0 is the newest match and libghostty wraps, so either end is that end of the screen wherever it scrolled.
-    private static func bufferEnd(
-        in occurrences: [ScrollCell], step: TerminalSearchStep, selected: Int?, total: Int?
-    ) -> ScrollCell? {
-        switch step {
-        case .next: return selected == 0 ? occurrences.last : nil
-        case .previous:
-            guard let selected, let total, selected == total - 1 else { return nil }
-            return occurrences.first
-        }
-    }
-
-    private static func clampedMatch(
-        in occurrences: [ScrollCell], step: TerminalSearchStep, selected: Int?, total: Int?
-    ) -> ScrollCell? {
-        guard let selected else { return nil }
-        let index: Int
-        switch step {
-        case .previous: index = occurrences.count - 1 - selected
-        case .next:
-            guard let total else { return nil }
-            index = total - 1 - selected
-        }
-        guard occurrences.indices.contains(index) else { return nil }
-        return occurrences[index]
     }
 
     private static func occurrenceColumns(of needle: String, in text: String) -> [Int] {

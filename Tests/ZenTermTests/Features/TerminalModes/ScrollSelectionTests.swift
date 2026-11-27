@@ -4,74 +4,56 @@ import XCTest
 @testable import ZenTerm
 
 final class ScrollSelectionTests: XCTestCase {
-    private let singleWidth: (ScrollCell) -> ClosedRange<Int> = { $0.column...$0.column }
-
-    private func cell(_ row: Int, _ column: Int) -> ScrollCell {
-        ScrollCell(row: row, column: column)
+    private func point(_ row: Int, _ column: Int) -> TerminalGridPoint {
+        TerminalGridPoint(row: row, column: column)
     }
 
-    func test_aForwardSelectionKeepsTheAnchorAtTheStart() {
-        let selection = ScrollSelection(kind: .character, anchor: cell(2, 4))
-        let range = selection.range(to: cell(5, 9), columns: 80, cells: singleWidth)
+    private func row(_ text: String, wraps: Bool = false, continues: Bool = false) -> TerminalGridRow {
+        let cells = text.map { TerminalGridCell(text: String($0), width: 1, kind: .output) }
+        let padded =
+            cells + Array(repeating: TerminalGridCell(text: "", width: 1, kind: .output), count: 10 - cells.count)
+        return TerminalGridRow(cells: padded, wraps: wraps, continues: continues, prompt: .none)
+    }
 
-        XCTAssertEqual(range.startRow, 2)
-        XCTAssertEqual(range.startColumn, 4)
-        XCTAssertEqual(range.endRow, 5)
-        XCTAssertEqual(range.endColumn, 9)
+    private func span(
+        _ kind: ScrollSelection.Kind, _ anchor: TerminalGridPoint, _ cursor: TerminalGridPoint,
+        _ rows: [TerminalGridRow]
+    ) -> ClosedRange<TerminalGridPoint> {
+        ScrollSelection.span(kind, from: anchor, to: cursor, rowCount: rows.count) {
+            rows.indices.contains($0) ? rows[$0] : nil
+        }
     }
 
     func test_aSelectionDraggedUpwardsReadsForwards() {
-        let selection = ScrollSelection(kind: .character, anchor: cell(5, 9))
-        let range = selection.range(to: cell(2, 4), columns: 80, cells: singleWidth)
+        let rows = Array(repeating: row("abcdefghij"), count: 6)
 
-        XCTAssertEqual(range.startRow, 2)
-        XCTAssertEqual(range.startColumn, 4)
-        XCTAssertEqual(range.endRow, 5)
-        XCTAssertEqual(range.endColumn, 9)
+        XCTAssertEqual(span(.character, point(5, 9), point(2, 4), rows), point(2, 4)...point(5, 9))
     }
 
-    func test_aBackwardsSelectionOnOneRowSwapsOnlyTheColumns() {
-        let selection = ScrollSelection(kind: .character, anchor: cell(3, 12))
-        let range = selection.range(to: cell(3, 6), columns: 80, cells: singleWidth)
+    func test_aCharacterSelectionEndingOnAWideCharacterCoversItsSpacer() {
+        let wide = TerminalGridRow(
+            cells: [
+                TerminalGridCell(text: "a", width: 1, kind: .output),
+                TerminalGridCell(text: "漢", width: 2, kind: .output),
+                TerminalGridCell(text: "", width: 0, kind: .output),
+            ], wraps: false, continues: false, prompt: .none)
 
-        XCTAssertEqual(range.startRow, 3)
-        XCTAssertEqual(range.endRow, 3)
-        XCTAssertEqual(range.startColumn, 6)
-        XCTAssertEqual(range.endColumn, 12)
+        XCTAssertEqual(span(.character, point(0, 0), point(0, 1), [wide]), point(0, 0)...point(0, 2))
     }
 
-    func test_aSelectionOfOneCellIsAOneCellSpan() {
-        let selection = ScrollSelection(kind: .character, anchor: cell(7, 3))
-        let range = selection.range(to: cell(7, 3), columns: 80, cells: singleWidth)
+    func test_aLineSelectionTakesTheWholeWrappedLineEitherWayItWasDragged() {
+        let rows = [
+            row("before"), row("aaaaaaaaaa", wraps: true), row("bbbbbbbbbb", wraps: true, continues: true),
+            row("cc", continues: true), row("after"),
+        ]
 
-        XCTAssertEqual(range.rowCount, 1)
-        XCTAssertEqual(range.startColumn, 3)
-        XCTAssertEqual(range.endColumn, 3)
+        XCTAssertEqual(span(.line, point(2, 3), point(2, 3), rows), point(1, 0)...point(3, 9))
+        XCTAssertEqual(span(.line, point(3, 0), point(1, 5), rows), point(1, 0)...point(3, 9))
     }
 
-    func test_aLineSelectionOpensBothEndsToTheWholeRow() {
-        let selection = ScrollSelection(kind: .line, anchor: cell(2, 40))
-        let range = selection.range(to: cell(4, 7), columns: 80, cells: singleWidth)
+    func test_aLineSelectionOverUnwrappedRowsStopsAtThem() {
+        let rows = [row("one"), row("two"), row("three")]
 
-        XCTAssertEqual(range.startColumn, 0)
-        XCTAssertEqual(range.endColumn, 79, "the last column of an 80-column grid")
-        XCTAssertEqual(range.rowCount, 3)
-    }
-
-    func test_aLineSelectionDraggedUpwardsStillStartsAtColumnZero() {
-        let selection = ScrollSelection(kind: .line, anchor: cell(10, 3))
-        let range = selection.range(to: cell(5, 60), columns: 80, cells: singleWidth)
-
-        XCTAssertEqual(range.startRow, 5)
-        XCTAssertEqual(range.startColumn, 0)
-        XCTAssertEqual(range.endRow, 10)
-        XCTAssertEqual(range.endColumn, 79)
-    }
-
-    func test_aGridWithNoColumnsDoesNotProduceANegativeColumn() {
-        let selection = ScrollSelection(kind: .line, anchor: cell(0, 0))
-        let range = selection.range(to: cell(1, 0), columns: 0, cells: singleWidth)
-
-        XCTAssertEqual(range.endColumn, 0)
+        XCTAssertEqual(span(.line, point(1, 2), point(2, 0), rows), point(1, 0)...point(2, 9))
     }
 }

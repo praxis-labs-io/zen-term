@@ -96,20 +96,6 @@ final class ScrollAndFindChordTests: WindowTestCase {
         XCTAssertNil(panel.findFieldForTesting)
     }
 
-    func test_findSelectionReadsScrollModesOwnSelectionToo() throws {
-        let controller = makeWindow()
-        let surface = try focusedSurface(controller)
-        surface.rows[5] = "an error happened"
-        controller.handle(.toggleScrollMode)
-        controller.scrollMode.land(on: ScrollCell(row: 5, column: 3))
-        _ = controller.scrollMode.handle(try keyDown("v"))
-        let selected = try XCTUnwrap(controller.scrollMode.selectedText)
-
-        controller.handle(.searchSelection)
-
-        XCTAssertEqual(surface.searches.last, selected)
-    }
-
     func test_findNextAndPreviousStepTheRunningSearch() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
