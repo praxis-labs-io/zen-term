@@ -4,6 +4,8 @@ import TerminalKit
 // `NSProgressIndicator` tints from `effectiveAppearance`, which the chrome bans.
 final class Spinner: NSView, ThemeReapplying {
     private static let size: CGFloat = 13
+    // The ring's own geometry, not a chrome corner radius.
+    // swiftlint:disable:next untokened_radius
     private static let ringRadius: CGFloat = 5
     private static let dotDiameter: CGFloat = 2.25
     private static let dotCount = 8
