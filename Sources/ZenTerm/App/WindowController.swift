@@ -1057,7 +1057,7 @@ final class WindowController: NSObject {
         mountedCanvas = canvas
         restoreFocusToActive()
         renderDock()
-        if case .slide = transition { applyTabBarBand(animated: true) } else { applyTabBarBand(animated: false) }
+        tabBarHeight?.constant = tabBarBand
 
         switch transition {
         case .instant:
@@ -1082,19 +1082,6 @@ final class WindowController: NSObject {
 
     // The Connect screen has no tabs, so the band goes unless it holds the collapsed sidebar's toggle.
     private var tabBarBand: CGFloat { isOnConnect && sidebar.isDocked ? 0 : TabBarView.height }
-
-    private func applyTabBarBand(animated: Bool) {
-        guard let tabBarHeight, tabBarHeight.constant != tabBarBand else { return }
-        guard animated, !Motion.isReduceMotionEnabled() else {
-            tabBarHeight.constant = tabBarBand
-            return
-        }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = Motion.pageSlideDuration
-            context.timingFunction = Motion.landingTiming
-            tabBarHeight.animator().constant = tabBarBand
-        }
-    }
 
     private func unmountCanvas() {
         restoreFocusToActive()

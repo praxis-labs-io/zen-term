@@ -561,8 +561,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
   `tabID/id` and shut down with their tab; Scratch is the only one. A host shows no user
   float button, and the Connect screen hides the whole dock and, while the sidebar is docked, the
-  tab bar's band, so its card reaches the window's bottom; the band slides with the canvas and with
-  docking, and stays while the sidebar is collapsed because it holds the sidebar's toggle. There a float's card, shortcut
+  tab bar's band, so its card reaches the window's bottom; the band snaps when the canvas swaps, so a
+  slide resizes the terminal once. It slides with docking, and stays while the sidebar is collapsed
+  because it holds the sidebar's toggle. There a float's card, shortcut
   or palette row opens or closes it only while it is open, completed or waiting; any other
   toggle toasts in a connected host.
 - **A float pane is a tab's pane shown in the float slot.** `PaneFloats` owns it the way the tab
