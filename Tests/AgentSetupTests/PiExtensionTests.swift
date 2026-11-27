@@ -102,7 +102,6 @@ final class PiExtensionTests: XCTestCase {
         return try JSONDecoder().decode(Outcome.self, from: Data(output.utf8))
     }
 
-    // A stub `zen` that answers `hello`, and `pane get` with `pane`, or fails it when nil.
     private func zenPaneEnvironment(pane token: Int, answering pane: String?) throws -> [String: String] {
         let bin = root.appendingPathComponent("stub-bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
