@@ -68,8 +68,11 @@ zen pane read --pane dev --lines 40                                  # its outpu
 - The pane closes when its program exits, and `zen wait` still answers with
   its `exitCode` and last lines. `--keep` leaves it open at a shell.
 - A pane you start closes with your pane, and a float also closes when you
-  exit, even if your pane stays open. Anything that must outlive you takes
-  `--outlive-parent`, which opens it in a tab instead. `--tab` opens a tab without that.
+  exit, even if your pane stays open. Run servers, watchers and builds in a
+  float under you by default, so the user opens them from your row. Use
+  `--outlive-parent`, which opens a tab instead, only when the user asks for
+  one or the command has to keep running after you exit. `--tab` opens a tab
+  without that.
 - Leave a server running when your turn ends unless asked to stop it.
 
 ## Delegate to a helper
