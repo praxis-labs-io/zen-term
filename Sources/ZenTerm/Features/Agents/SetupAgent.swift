@@ -14,16 +14,6 @@ protocol SetupAgent {
     #endif
 }
 
-enum SetupChange { case install, remove }
-
-enum SetupStartup: Equatable {
-    case notInstalled
-    case updated
-    case updateFailed(SetupError)
-    case edited(version: String)
-    case current
-}
-
 private let setupQueue = DispatchQueue(label: "com.zenterm.agent-setup", qos: .userInitiated)
 
 extension SetupAgent {
