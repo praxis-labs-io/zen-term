@@ -48,4 +48,21 @@ final class SetupCommandTests: XCTestCase {
             XCTAssertTrue((error as? ZenFailure)?.message.contains("ZenTerm.app/Contents/MacOS/zen") == true)
         }
     }
+
+    private func pi(_ arguments: [String] = []) throws -> SetupCommands.PiAgent {
+        try XCTUnwrap(try Zen.parseAsRoot(["setup", "pi"] + arguments) as? SetupCommands.PiAgent)
+    }
+
+    func test_piSetupThenRerunThenRemove() throws {
+        let environment = ["PI_CODING_AGENT_DIR": root.path]
+        let files = PiSetupFiles(skill: Data("skill".utf8), extension: Data("extension".utf8))
+
+        XCTAssertEqual(try pi().changes(environment: environment, files: files).count, 2)
+        XCTAssertEqual(
+            try pi().changes(environment: environment, files: files), ["Nothing to change: zen is set up for Pi."])
+        XCTAssertEqual(try pi(["--remove"]).changes(environment: environment, files: files).count, 2)
+        XCTAssertEqual(
+            try pi(["--remove"]).changes(environment: environment, files: files),
+            ["Nothing to remove: zen isn't set up for Pi."])
+    }
 }
