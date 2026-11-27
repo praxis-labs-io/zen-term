@@ -21,6 +21,12 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             shippedDigests: [
                 ClaudeSetupFiles.digest(of: Data("older".utf8)), ClaudeSetupFiles.digest(of: Data("hook".utf8)),
             ])
+        PiCodeSetup.configRootOverrideForTesting = tempRoot.appendingPathComponent("pi")
+        PiCodeSetup.filesOverrideForTesting = PiSetupFiles(
+            skill: Data("skill".utf8), extensionScript: Data("extension".utf8),
+            shippedDigests: [
+                PiSetupFiles.digest(of: Data("older".utf8)), PiSetupFiles.digest(of: Data("extension".utf8)),
+            ])
         AppConfig.reload()
     }
 
@@ -30,6 +36,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         ConfigReset.toBuiltIn()
         ClaudeCodeSetup.configRootOverrideForTesting = nil
         ClaudeCodeSetup.filesOverrideForTesting = nil
+        PiCodeSetup.configRootOverrideForTesting = nil
+        PiCodeSetup.filesOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -57,7 +65,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Segment: Int {
-        case notifications, claudeSetup, attentionToast, completionToast, updates
+        case notifications, claudeSetup, piSetup, attentionToast, completionToast, updates
     }
 
     private func segment(_ which: Segment) -> SegmentedControl {
@@ -66,7 +74,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
 
     func test_everyToggle_isPresent_andDefaults() {
         let segments = mountSegments()
-        XCTAssertEqual(segments.count, 5, "notifications, Claude Code setup, the two toast rows, and updates")
+        XCTAssertEqual(segments.count, 6, "notifications, agent setup rows, the two toast rows, and updates")
         XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
@@ -131,6 +139,13 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private var claudeRoot: URL { tempRoot.appendingPathComponent("claude") }
+    private var piRoot: URL { tempRoot.appendingPathComponent("pi") }
+
+    private func piSetupControl() -> SegmentedControl {
+        let control = segment(.piSetup)
+        waitUntil(control.isEnabled, "the Pi setup state to load")
+        return control
+    }
 
     private func claudeSetupControl() -> SegmentedControl {
         let control = segment(.claudeSetup)
@@ -146,6 +161,23 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         hostWindow?.makeFirstResponder(control)
         control.keyDown(with: arrow(keyCode))
         waitUntil(control.isEnabled, "the Claude Code setup change to land")
+    }
+
+    func test_piSetup_showsOffWhenNothingIsInstalled() {
+        let control = piSetupControl()
+
+        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertNil(section?.rowFor(SettingsGeneralSection.piSetupKey)?.renderedMessageForTesting)
+    }
+
+    func test_piSetup_namesTheFolderItInstallsTo() throws {
+        _ = piSetupControl()
+        let detail = try XCTUnwrap(hostWindow?.contentView)
+        let texts = descendants(of: detail).compactMap { ($0 as? NSTextField)?.stringValue }
+
+        XCTAssertTrue(
+            texts.contains("The zen skill and extension, in \(PathDisplay.abbreviatingHome(piRoot.path))"),
+            "\(texts)")
     }
 
     func test_claudeSetup_showsOffWhenNothingIsInstalled() {
@@ -260,6 +292,9 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         try clickUpdate()
         hostWindow?.makeFirstResponder(control)
         control.onTab?()
+        let pi = piSetupControl()
+        hostWindow?.makeFirstResponder(pi)
+        pi.onTab?()
 
         let detail = try XCTUnwrap(hostWindow?.contentView)
         let attention = descendants(of: detail).compactMap { $0 as? SegmentedControl }[Segment.attentionToast.rawValue]

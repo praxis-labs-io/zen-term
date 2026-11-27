@@ -82,6 +82,26 @@ extension WindowController {
         ToastContent(variant: .warning, title: title, message: reason)
     }
 
+    static let piSetUpToast = ToastContent(
+        variant: .positive, title: "Pi can use zen", message: "New Pi sessions load the zen skill.")
+
+    static let piUpdatedToast = ToastContent(
+        variant: .info, title: "Updated zen for Pi", message: "New Pi sessions load it.")
+
+    static func piSetupFailureToast(title: String, reason: String) -> ToastContent {
+        ToastContent(variant: .warning, title: title, message: reason)
+    }
+
+    static func piSetupOffer(in folder: String) -> ClaudeSetupPrompt {
+        ClaudeSetupPrompt(
+            title: "Teach Pi to use zen?", message: piSetupOfferMessage(in: folder),
+            confirm: "Set up", decline: "Don't ask again")
+    }
+
+    static let piUpdateOffer = ClaudeSetupPrompt(
+        title: "Update zen for Pi?", message: piUpdateOfferMessage, confirm: "Update",
+        decline: "Skip this version")
+
     static func nothingWaitingToast(elsewhere: Bool) -> ToastContent {
         ToastContent(
             variant: .info,

@@ -70,7 +70,7 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  AgentSetup         Foundation + CryptoKit leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  AgentSetup         Foundation + CryptoKit leaf: the zen skills, agent hooks/extensions and installers, used by ZenTerm and zen
   zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 

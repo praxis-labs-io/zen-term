@@ -6,6 +6,7 @@ import XCTest
 final class SetupCommandTests: XCTestCase {
     private var root: URL!
     private let files = ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8))
+    private let piFiles = PiSetupFiles(skill: Data("skill".utf8), extensionScript: Data("extension".utf8))
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -18,9 +19,14 @@ final class SetupCommandTests: XCTestCase {
     }
 
     private var environment: [String: String] { ["CLAUDE_CONFIG_DIR": root.path] }
+    private var piEnvironment: [String: String] { ["PI_CODING_AGENT_DIR": root.path] }
 
     private func claude(_ arguments: [String] = []) throws -> SetupCommands.Claude {
         try XCTUnwrap(try Zen.parseAsRoot(["setup", "claude"] + arguments) as? SetupCommands.Claude)
+    }
+
+    private func pi(_ arguments: [String] = []) throws -> SetupCommands.PiCommand {
+        try XCTUnwrap(try Zen.parseAsRoot(["setup", "pi"] + arguments) as? SetupCommands.PiCommand)
     }
 
     func test_setupThenRerunThenRemove() throws {
@@ -32,6 +38,17 @@ final class SetupCommandTests: XCTestCase {
         XCTAssertEqual(
             try claude(["--remove"]).changes(environment: environment, files: files),
             ["Nothing to remove: zen isn't set up for Claude Code."])
+    }
+
+    func test_piSetupThenRerunThenRemove() throws {
+        XCTAssertEqual(try pi().changes(environment: piEnvironment, files: piFiles).count, 2)
+        XCTAssertEqual(
+            try pi().changes(environment: piEnvironment, files: piFiles),
+            ["Nothing to change: zen is set up for Pi."])
+        XCTAssertEqual(try pi(["--remove"]).changes(environment: piEnvironment, files: piFiles).count, 2)
+        XCTAssertEqual(
+            try pi(["--remove"]).changes(environment: piEnvironment, files: piFiles),
+            ["Nothing to remove: zen isn't set up for Pi."])
     }
 
     func test_aMalformedSettingsFileIsAnAppError() throws {

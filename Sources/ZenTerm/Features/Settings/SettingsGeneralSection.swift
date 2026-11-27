@@ -6,9 +6,14 @@ final class SettingsGeneralSection: SettingsFormSection {
 
     static let claudeSetupKey = "claude-setup"
     static let claudeUpdateKey = "claude-update"
+    static let piSetupKey = "pi-setup"
+    static let piUpdateKey = "pi-update"
     private weak var claudeSetupControl: SegmentedControl?
     private weak var claudeUpdateButton: AppButton?
+    private weak var piSetupControl: SegmentedControl?
+    private weak var piUpdateButton: AppButton?
     private var claudeSetupState: ClaudeSetup.State = .notInstalled
+    private var piSetupState: PiSetup.State = .notInstalled
 
     override func populate() {
         addGroup("Agents") {
@@ -19,9 +24,10 @@ final class SettingsGeneralSection: SettingsFormSection {
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addTextRow(
                 key: "agents", caption: "Agent programs",
-                blurb: "claude and codex are built in", placeholder: "pi, gemini",
+                blurb: "claude, codex and pi are built in", placeholder: "gemini",
                 read: { $0.agents.joined(separator: ", ") })
             self.addClaudeSetupRow()
+            self.addPiSetupRow()
         }
         addGroup("Notifications") {
             self.addSegmentedRow(
@@ -67,6 +73,69 @@ final class SettingsGeneralSection: SettingsFormSection {
             width: nil, refresh: {})
         addClaudeUpdateRow()
         ClaudeCodeSetup.refresh { [weak self] in self?.showClaudeSetup($0) }
+    }
+
+    private func addPiSetupRow() {
+        let control = SegmentedControl(options: ["On", "Off"], selectedIndex: 1, notifiesOnReselect: true) {
+            [weak self] index in
+            self?.applyPiSetup(index == 0 ? .install : .remove)
+        }
+        control.isEnabled = false
+        piSetupControl = control
+        addCustomRow(
+            key: Self.piSetupKey, caption: "Teach Pi to use zen",
+            description: "The zen skill and extension, in \(PiCodeSetup.folderName)", control: control,
+            focusStop: control, width: nil, refresh: {})
+        addPiUpdateRow()
+        PiCodeSetup.refresh { [weak self] in self?.showPiSetup($0) }
+    }
+
+    private func addPiUpdateRow() {
+        let update = AppButton(title: "Update", variant: .muted)
+        update.isKeyboardFocusable = true
+        update.onTap = { [weak self] in self?.applyPiSetup(.install) }
+        piUpdateButton = update
+        addCustomRow(
+            key: Self.piUpdateKey, caption: "Update zen for Pi", description: "", control: update,
+            focusStop: update, width: nil,
+            refresh: { [weak self] in self?.showPiUpdate() })
+        showPiUpdate()
+    }
+
+    private func showPiUpdate() {
+        let description = Self.piUpdateDescription(for: piSetupState)
+        let row = rowFor(Self.piUpdateKey)
+        row?.setDescription(description ?? "")
+        row?.isHidden = description == nil
+        piUpdateButton?.isHidden = description == nil
+    }
+
+    private func applyPiSetup(_ change: PiCodeSetup.Change) {
+        piSetupControl?.isEnabled = false
+        piUpdateButton?.isEnabled = false
+        PiCodeSetup.refresh(applying: change) { [weak self] in self?.showPiSetup($0) }
+    }
+
+    private func showPiSetup(_ result: Result<PiSetup.State, PiSetupError>) {
+        let row = rowFor(Self.piSetupKey)
+        switch result {
+        case .success(let state):
+            piSetupState = state
+            row?.showMessage(nil)
+        case .failure(let error): row?.showMessage(error.message)
+        }
+        piSetupControl?.setSelection(piSetupState == .notInstalled ? 1 : 0)
+        piSetupControl?.isEnabled = true
+        piUpdateButton?.isEnabled = true
+        showPiUpdate()
+    }
+
+    private static func piUpdateDescription(for state: PiSetup.State) -> String? {
+        switch state {
+        case .outdated: "An older version is installed."
+        case .edited: "Your zen setup has changes, and updating replaces them."
+        case .notInstalled, .newer, .current: nil
+        }
     }
 
     private func addClaudeUpdateRow() {

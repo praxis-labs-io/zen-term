@@ -15,7 +15,7 @@ final class AgentRoster {
         var hasExited = false
     }
 
-    static let knownAgents: Set<String> = ["claude", "codex"]
+    static let knownAgents: Set<String> = ["claude", "codex", "pi"]
 
     static let unnamed = "agent"
 

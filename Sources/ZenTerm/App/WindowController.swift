@@ -312,6 +312,7 @@ final class WindowController: NSObject {
     var onHelperNote: ((HelperNote) -> Void)?
 
     var claudeSetupOffer: ClaudeSetupOffer?
+    var piSetupOffer: PiSetupOffer?
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -4318,8 +4319,11 @@ final class WindowController: NSObject {
 
     private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
         agents.identify(surface, name: name, source: source)
-        guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
-        claudeSetupOffer?.claudeStarted { [weak self] in self?.showClaudeStartup($0) }
+        switch AgentRules.key(for: agents.agents[surface]?.name) {
+        case "claude": claudeSetupOffer?.claudeStarted { [weak self] in self?.showClaudeStartup($0) }
+        case "pi": piSetupOffer?.piStarted { [weak self] in self?.showPiStartup($0) }
+        default: break
+        }
     }
 
     private func showClaudeStartup(_ startup: ClaudeCodeSetup.Startup) {
@@ -4396,6 +4400,74 @@ final class WindowController: NSObject {
     private func showClaudeSetupFailure(_ error: ClaudeSetupError, title: String) {
         let shown = toasts.showSticky(
             Self.claudeSetupFailureToast(title: title, reason: error.message), actions: [], showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+    }
+
+    private func showPiStartup(_ startup: PiCodeSetup.Startup) {
+        switch startup {
+        case .notInstalled:
+            presentPiSetupPrompt(
+                Self.piSetupOffer(in: PiCodeSetup.folderName),
+                onConfirmed: { [weak self] in self?.showPiSetupResult($0) },
+                onDeclined: { [weak self] in self?.piSetupOffer?.declineForGood() })
+        case .edited(let version):
+            presentPiSetupPrompt(
+                Self.piUpdateOffer,
+                onConfirmed: { [weak self] in self?.showPiUpdateResult($0) },
+                onDeclined: { [weak self] in self?.piSetupOffer?.skipUpdate(to: version) })
+        case .updated: showPiUpdated()
+        case .updateFailed(let error): showPiSetupFailure(error, title: Self.piUpdateFailedTitle)
+        case .current: break
+        }
+    }
+
+    private func presentPiSetupPrompt(
+        _ prompt: ClaudeSetupPrompt,
+        onConfirmed: @escaping (Result<PiSetup.State, PiSetupError>) -> Void,
+        onDeclined: @escaping () -> Void
+    ) {
+        weak var toast: ToastView?
+        let actions = prompt.actions(
+            confirmed: { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                PiCodeSetup.refresh(applying: .install, completion: onConfirmed)
+            },
+            declined: { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                onDeclined()
+            })
+        let shown = toasts.showSticky(prompt.content, actions: actions, showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        toast = shown
+    }
+
+    static func piSetupOfferMessage(in folder: String) -> String {
+        "The zen skill and Pi extension,\nin \(folder)"
+    }
+
+    static let piUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
+
+    private func showPiSetupResult(_ result: Result<PiSetup.State, PiSetupError>) {
+        switch result {
+        case .success: toasts.show(Self.piSetUpToast)
+        case .failure(let error): showPiSetupFailure(error, title: "Couldn't set up Pi")
+        }
+    }
+
+    private func showPiUpdateResult(_ result: Result<PiSetup.State, PiSetupError>) {
+        switch result {
+        case .success: showPiUpdated()
+        case .failure(let error): showPiSetupFailure(error, title: Self.piUpdateFailedTitle)
+        }
+    }
+
+    static let piUpdateFailedTitle = "Couldn't update zen"
+
+    private func showPiUpdated() { toasts.show(Self.piUpdatedToast) }
+
+    private func showPiSetupFailure(_ error: PiSetupError, title: String) {
+        let shown = toasts.showSticky(
+            Self.piSetupFailureToast(title: title, reason: error.message), actions: [], showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
     }
 

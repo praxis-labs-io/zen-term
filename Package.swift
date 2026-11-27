@@ -70,7 +70,7 @@ let package = Package(
         ),
         .target(
             name: "AgentSetup",
-            resources: [.copy("Claude")],
+            resources: [.copy("Claude"), .copy("Pi")],
             swiftSettings: mainThreadEnforced
         ),
         .executableTarget(

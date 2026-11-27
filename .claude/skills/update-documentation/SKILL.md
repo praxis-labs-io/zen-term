@@ -1,6 +1,6 @@
 ---
 name: update-documentation
-description: Use when a change ships that could make documentation wrong: a new or changed config key, workspace field, theme concept, install/onboarding step, keyboard shortcut, or any user-facing behavior a doc describes. Also the doc-accuracy step of ship-feature, before marking a PR ready.
+description: "Use when a change ships that could make documentation wrong: a new or changed config key, workspace field, theme concept, install/onboarding step, keyboard shortcut, or any user-facing behavior a doc describes. Also the doc-accuracy step of ship-feature, before marking a PR ready."
 ---
 
 # Update documentation

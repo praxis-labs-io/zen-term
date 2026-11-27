@@ -169,7 +169,7 @@
 # ─── Agents ──────────────────────────────────────────────────────────────────
 
 # Programs ZenTerm treats as agents, by program name, separated by commas or
-# spaces. claude and codex are built in. A listed program counts as an agent when
+# spaces. claude, codex and pi are built in. A listed program counts as an agent when
 # a workspace pane or tool float starts it, or when a notification's title names
 # it. claude and codex are also recognized from their terminal titles, so an
 # alias or a command typed at a prompt works for them.

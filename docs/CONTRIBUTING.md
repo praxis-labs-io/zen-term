@@ -62,7 +62,7 @@ Sources/
   TabKit/        the tab list
   AppLog/        the logging facade
   ControlProtocol/  the control socket's wire types
-  AgentSetup/    the zen skill and session hook, and their installer
+  AgentSetup/    the zen skills, agent hooks/extensions, and their installers
   zen/           the control CLI
 ```
 
