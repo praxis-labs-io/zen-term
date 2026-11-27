@@ -98,12 +98,12 @@ ZEN_BIN=".build/release/zen"
 # bundle is a resource copy, not a relink.
 EXPECTED_BUNDLES=(ZenTerm_TerminalKit.bundle ZenTerm_ZenTerm.bundle ZenTerm_AgentSetup.bundle)
 
-# Harmless linker noise from libghostty-internal.a is filtered out, same as bin/check. A pipeline (not
-# `> >(…)`) so bash waits on the filter, and `set -o pipefail` above keeps swift build's exit status.
+# Filters libghostty's linker noise like bin/check; `|| true` inside covers only grep, so pipefail fails a failed build.
 LINKER_NOISE='could not find symbol .* in object file'
+filter_noise() { grep --line-buffered -vE "$LINKER_NOISE" || true; }
 echo "▸ Building release…"
 rm -rf .build/release/*.bundle
-swift build -c release 2>&1 | grep --line-buffered -vE "$LINKER_NOISE" || true
+swift build -c release 2>&1 | filter_noise
 
 # The bundle set is asserted both ways. After the wipe these describe the manifest,
 # not residue: a missing bundle means the build didn't emit one we ship (a partial
