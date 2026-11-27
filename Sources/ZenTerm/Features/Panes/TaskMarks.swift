@@ -21,7 +21,7 @@ final class TaskMarks {
     // A mark the scrollback dropped reads from the oldest row, and one on the screen not showing reads that screen.
     func read(since surface: SurfaceID, in terminal: TerminalSurface) -> Read {
         guard let mark = marks[surface] else { return .noTask }
-        guard let grid = terminal.grid, let metrics = terminal.cellMetrics, grid.rowCount > 0 else {
+        guard let grid = terminal.grid, grid.rowCount > 0 else {
             return .unreadable
         }
         let start: TerminalGridPoint
@@ -30,7 +30,7 @@ final class TaskMarks {
         case .at(let point): (start, truncated) = (point, false)
         case .gone: (start, truncated) = (TerminalGridPoint(row: 0, column: 0), true)
         case .aside:
-            (start, truncated) = (TerminalGridPoint(row: max(grid.rowCount - metrics.rows, 0), column: 0), true)
+            (start, truncated) = (TerminalGridPoint(row: grid.screenTop, column: 0), true)
         }
         guard let end = grid.lastCell(of: grid.rowCount - 1), let text = grid.text(from: start, to: end) else {
             return .unreadable

@@ -35,6 +35,8 @@ final class RecordingGrid: TerminalGrid {
         set { placedCursor = newValue }
     }
 
+    var screenTop: Int { surface.scrollback.count }
+
     private(set) var selectionBounds: ClosedRange<TerminalGridPoint>?
 
     func row(_ index: Int) -> TerminalGridRow? {

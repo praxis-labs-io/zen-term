@@ -38,6 +38,15 @@ final class OutputWatchTests: XCTestCase {
         XCTAssertTrue(watch.sawNeedle(in: pane))
     }
 
+    func test_textAtTheScreensTopWhileAResizeHasNotReachedTheGridIsAMatch() {
+        let pane = surface(["$ npm run dev", "", "", ""])
+        pane.scrollback = ["earlier"]
+        pane.cellMetrics = TerminalCellMetrics(columns: 80, rows: 2, cellWidth: 8, cellHeight: 16, gridInset: 2)
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        pane.rows = ["$ npm run dev", "server ready", "", ""]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
+    }
+
     func test_theCursorLineGrowingIntoTheNeedleIsAMatch() {
         let pane = surface(["building... "])
         let watch = OutputWatch(needle: "done", surface: pane)

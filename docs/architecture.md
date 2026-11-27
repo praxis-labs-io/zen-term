@@ -13,8 +13,9 @@ started, and the background its program last reported. It takes `start`, `focus`
 wrapped rows split) or as its last lines, scrollback included (`text(lastLines:)`).
 
 `grid` (`TerminalGrid`) reads the screen and scrollback as cells: rows with their wrap and
-prompt flags, text between two `TerminalGridPoint`s, the cursor, the viewport's top row and the
-selection, which it can also set. A point's row counts from the oldest scrollback row, so it
+prompt flags, text between two `TerminalGridPoint`s, the cursor, the viewport's top row, the
+top row of the screen showing (`screenTop`, which stays put while the viewport scrolls back) and
+the selection, which it can also set. A point's row counts from the oldest scrollback row, so it
 renumbers when the scrollback drops rows: it is good for one read. Anything kept is a
 `TerminalGridMark`, which follows its cell through output and reflow and reads `.gone` once the
 scrollback drops it.

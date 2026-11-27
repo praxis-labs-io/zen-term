@@ -139,6 +139,7 @@ private final class RecordingGrid: TerminalGrid {
 
     var rowCount: Int { grid.rowCount }
     var viewportTop: Int { grid.viewportTop }
+    var screenTop: Int { grid.screenTop }
     var cursorPoint: TerminalGridPoint? { grid.cursorPoint }
     var selectionBounds: ClosedRange<TerminalGridPoint>? { grid.selectionBounds }
 

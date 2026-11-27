@@ -17,8 +17,7 @@ final class OutputWatch {
 
     // Rows above the screen are settled, so the screen alone is read in one go and becomes the next check's baseline.
     func sawNeedle(in surface: TerminalSurface?) -> Bool {
-        guard let surface, let grid = surface.grid, let metrics = surface.cellMetrics, grid.rowCount > 0,
-            let screenTop = lineStart(grid, at: max(grid.rowCount - metrics.rows, 0))
+        guard let grid = surface?.grid, grid.rowCount > 0, let screenTop = lineStart(grid, at: grid.screenTop)
         else { return false }
         let (start, counted) = baseline(screenTop: screenTop)
         guard let mark = grid.mark(TerminalGridPoint(row: max(screenTop, start), column: 0)),
