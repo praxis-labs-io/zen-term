@@ -83,6 +83,11 @@ jobs:
       - name: Build
         run: swift build
 
+      - name: Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22.18.0"
+
       - name: Test
         timeout-minutes: 15
         run: swift test
