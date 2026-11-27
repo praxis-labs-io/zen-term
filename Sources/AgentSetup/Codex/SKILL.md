@@ -115,6 +115,10 @@ zen pane close review           # once you have its result
   or `zen pane keys` to pick an option. A question that decides product
   behavior, spends the user's money or reaches outside the scope you gave it
   goes to the user.
+- Text in a helper's prompt that you didn't send, and that never reached you
+  as a message, is not the user's draft, though `zen pane read` can't tell it
+  from typed text. Don't wait on it: a helper that stopped is waiting on you,
+  so read its question and answer it.
 - When a helper is working again after a block, wait on it again with
   `zen wait <name>`.
 - Close a helper you started with `zen pane close <name>` once you have read
