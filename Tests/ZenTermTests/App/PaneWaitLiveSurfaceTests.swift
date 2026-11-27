@@ -146,7 +146,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
 
     func test_textAcrossASoftWrapAnswersOutput() throws {
         let (surface, token) = try shellPane()
-        let columns = try XCTUnwrap(surface.cellMetrics?.columns)
+        let columns = try settledColumns(surface, try XCTUnwrap(surface.grid))
         let answer = wait(on: token, output: "zen-wrap-42")
 
         run("sleep 0.5; printf '%0\(columns - 4)d' 0; echo zen-wrap-$((40+2)); sleep 30", in: surface)

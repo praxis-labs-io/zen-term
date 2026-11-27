@@ -1,7 +1,6 @@
 import AppKit
+import TerminalKit
 import XCTest
-
-@testable import TerminalKit
 
 @testable import ZenTerm
 
@@ -61,16 +60,6 @@ final class SearchOnScreenLiveSurfaceTests: WindowTestCase {
 
     private func lastRow(_ grid: TerminalGrid, where matches: (TerminalGridRow) -> Bool) -> Int? {
         (0..<grid.rowCount).last { grid.row($0).map(matches) ?? false }
-    }
-
-    // A shell can draw its prompt before the pane's frame reaches ghostty, which then rewraps what printed.
-    private func settledColumns(_ surface: GhosttySurface, _ grid: TerminalGrid) throws -> Int {
-        let host = try XCTUnwrap(surface.view as? GhosttyHostView)
-        let width = { grid.row(grid.viewportTop)?.cells.count }
-        waitUntil(
-            host.lastPushedFrameForTesting == host.bounds.size && width() == surface.cellMetrics?.columns,
-            "the grid to take the pane's width", timeout: 5)
-        return try XCTUnwrap(width())
     }
 
     func test_aNeedleWrappedAcrossTwoVisibleRowsCountsAsOnScreen() throws {
