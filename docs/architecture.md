@@ -10,8 +10,7 @@ contract. A surface vends an `NSView`, a title, a cwd, a busy flag, whether it h
 started, and the background its program last reported. It takes `start`, `focus`,
 `terminate`, `paste`, `submit`, `copySelection`, `applyAppearance`, `setFontSize` and
 `scroll`, reports its grid as `cellMetrics`, and reads its own screen back a row at a time (`text(viewportRow:)`,
-wrapped rows split), a span at a time (`text(in:)`, wrapped rows joined), or as its last
-lines, scrollback included (`text(lastLines:)`).
+wrapped rows split) or as its last lines, scrollback included (`text(lastLines:)`).
 
 `grid` (`TerminalGrid`) reads the screen and scrollback as cells: rows with their wrap and
 prompt flags, text between two `TerminalGridPoint`s, the cursor, the viewport's top row and the
@@ -784,27 +783,31 @@ Bundled themes carry an `nvim-colorscheme` key.
 
 - `ScrollKeymap.key(for:pending:hasSelection:)` is a pure decode; counts and two-key
   commands arrive as `Pending`. Every key is consumed except unmapped ⌘ and ⌥ keys.
-- **The cursor is the chrome's.** `ScrollCursorView` paints the band, cell, selection and
-  yank pulse from `TerminalCellMetrics`, read at draw time and converted from backing
-  pixels. It returns nil from `hitTest`. `GhosttyConfigWriter` emits `window-padding-x/y`
+- **The cursor is a `TerminalGridMark`**, so it stays on its text through output, scrolling
+  and reflow. Each key reads it once as a `TerminalGridPoint`. Entry seats it on a mouse
+  selection's start, else the shell's cursor. A motion past the screen's edge scrolls the
+  viewport to it; a viewport someone else moved pulls it onto the screen; a resize scrolls to it.
+- **Motions walk cells** (`TerminalGridRow.cells`), so a wide character is one step and its
+  spacer is never a column. A row's text ends at its last written cell. `{` and `}` stop at
+  prompt rows when shell integration's marks show on the shell's row, the screen, or the rows
+  walked, and at blank lines otherwise.
+- **The selection is ghostty's.** `ScrollSelection` holds the kind and an anchor mark, and
+  every move sets `grid.setSelection`, so it draws like a drag and ⌘F, ⌘E and ⌘C read it as
+  one. `V` and `yy` widen to whole soft-wrapped lines. A pruned anchor drops the selection,
+  and the mode clears its selection on exit.
+- **`SELECTION_CHANGED` also fires for the mode's own sets.** Only a selection gone while
+  the mode holds one means ghostty cleared it (a click, a screen clear or reset, the
+  alternate screen), and that ends the mode.
+- **The chrome draws the cursor and the yank pulse only.** `ScrollCursorView` fills the
+  cell in the cursor color and draws the cell's glyph over it in the background color, from
+  the theme's font at the session size, so it can differ from libghostty's glyph under
+  font-thicken, fallback fonts and bold or italic cells. It reads `TerminalCellMetrics` at
+  draw time and returns nil from `hitTest`. `GhosttyConfigWriter` emits `window-padding-x/y`
   so the grid origin cannot move on a pin bump.
-- **Entry** lands on a mouse selection's first cell, else the last written row. The row is
-  read before the header shows, because the header's reflow makes shells clear the prompt.
-- **Page moves advance the cursor; the viewport follows** as far as it can.
-- **Live output does not move the screen.** A report where the buffer grew by exactly
-  the viewport's move is pulled back. A reflow looks identical, so `refreshGeometry` arms
-  a suppression stamp. At the scrollback cap nothing is observable.
-- **The cursor is a viewport row, so a reflow re-finds it by content.** The line is
-  captured when the cursor lands (`refreshCursor`), and re-found in three passes: exact,
-  prefix fragment, then containment, ranked by longest shared run.
-- **A selection cannot leave the viewport.** `Point.pin` clamps every coordinate to the
-  grid, so off-screen text cannot be read. `ScrollSelection` holds the anchor only; it is
-  carried through scrolls, re-found through reflows, and dropped when its row leaves,
-  was blank, or the ends come back crossed. `paintedSelectionRange()` keeps painting
-  while `selectionRange()` refuses to yank an unresolved span.
-- **A column is a character offset.** `ScrollModeController.cells(of:)` maps it to cells
-  by binary search from the right (the formatter drops unwritten trailing cells). ASCII
-  rows skip it. `rowText` trims trailing blanks.
+- **Live output does not move the screen.** A report where the buffer grew by exactly the
+  viewport's move is pulled back, once per visit, because libghostty then pins a viewport
+  above the active area. A report whose grid size changed is a rewrap, not output. Entry
+  seeds the position from the grid so the first burst is held too.
 - **Retractions:** the mode ends on pane focus change, float or card taking the keyboard,
   and window resign. Zoom refocuses with `focus(_:announces: false)` and must end the
   find field itself. The stand-down is lifted off the controller it was pushed at.
@@ -831,13 +834,11 @@ Bundled themes carry an `nvim-colorscheme` key.
 - **The first total selects the newest match**, once per needle, so the count always
   has an index, unless any match is already on screen. That check reads the viewport
   in one grid read with soft-wrapped rows joined, so a wrapped match counts.
-- **The match cell is inferred.** `SEARCH_SELECTED` carries only an index. `matchCell`
-  scans the viewport by direction (libghostty walks newest to oldest), checks whether
-  the viewport moved by comparing rows (`rowsAtStep`), not the scroll offset, which lags
-  by a frame, and counts from the clamped end when the viewport hits one. Case folding
-  is ASCII-only.
-- **Find wraps** (upstream). A step that selects index 0 going older, or the last index
-  going newer, reached an end of the buffer, so `matchCell` takes that end of the screen.
+- **The landing is the match's start**, which `SEARCH_SELECTED` carries. A step from the
+  field keeps it as a mark, so the hand-off lands on it wherever output took it. Whether
+  the search moved the viewport is read from `grid.viewportTop`, not the scroll report,
+  which lags by a frame.
+- **Find wraps** (upstream).
 - **One-line needles** (stepping and landing are per row).
 - The count shows `total - selected`, so 1 is the topmost match.
 

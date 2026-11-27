@@ -53,7 +53,7 @@ final class FindFieldInteractionTests: WindowTestCase {
         if !needle.isEmpty { controller.search.beginNeedleForTesting(needle) }
         if let total {
             controller.search.report(total: total, from: surface)
-            controller.search.report(selected: 0, from: surface)
+            controller.search.report(selected: 0, start: nil, from: surface)
         }
         controller.window.contentView?.layoutSubtreeIfNeeded()
         return Opened(controller: controller, surface: surface, panel: panel, field: field)

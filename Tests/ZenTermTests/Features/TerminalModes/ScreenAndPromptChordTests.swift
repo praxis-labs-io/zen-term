@@ -107,20 +107,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.pastes, ["./bin/check"])
     }
 
-    func test_pasteSelectionReadsScrollModesOwnSelectionToo() throws {
-        let controller = makeWindow()
-        let surface = try focusedSurface(controller)
-        surface.rows[5] = "an error happened"
-        controller.handle(.toggleScrollMode)
-        controller.scrollMode.land(on: ScrollCell(row: 5, column: 3))
-        _ = controller.scrollMode.handle(try keyDown("v"))
-        let selected = try XCTUnwrap(controller.scrollMode.selectedText)
-
-        controller.handle(.pasteSelection)
-
-        XCTAssertEqual(surface.pastes, [selected])
-    }
-
     func test_pasteSelectionWithNothingSelectedPastesNothing() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)

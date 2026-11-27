@@ -113,10 +113,8 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
 
-    var selectionOrigin: TerminalViewportCell?
-
     lazy var recordingGrid = RecordingGrid { [unowned self] in self.rows }
-    var grid: TerminalGrid? { recordingGrid }
+    lazy var grid: TerminalGrid? = recordingGrid
 
     var rows: [String] = {
         var rows = Array(repeating: "", count: 24)

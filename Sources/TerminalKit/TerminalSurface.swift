@@ -171,17 +171,6 @@ public struct TerminalViewportRange: Equatable {
     public var rowCount: Int { endRow - startRow + 1 }
 }
 
-/// One viewport cell, row 0 at the top. A cell index, never a character offset.
-public struct TerminalViewportCell: Equatable {
-    public var row: Int
-    public var column: Int
-
-    public init(row: Int, column: Int) {
-        self.row = row
-        self.column = column
-    }
-}
-
 public enum TerminalSearchStep: Equatable { case next, previous }
 
 public enum ScreenFileDisposition: Equatable {
@@ -246,9 +235,6 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surfaceDidFailToStart(_ s: TerminalSurface)
     /// The viewport moved or the buffer grew under it, from output or `scroll(_:)`.
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition)
-    /// Rows or columns changed, sent before the reflow. Note content-anchored state now and re-read it
-    /// on the next `scrollPositionDidChange`.
-    func surfaceGridDidReflow(_ s: TerminalSurface)
     /// The live needle's match count, or nil. Climbs repeatedly while the search runs.
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?)
     /// The selected match, zero-based, or nil, and where it starts when the backend knows. A fresh needle stays
@@ -277,7 +263,6 @@ public extension TerminalSurfaceDelegate {
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {}
-    func surfaceGridDidReflow(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {}
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {}
     func surfaceSelectionDidChange(_ s: TerminalSurface) {}
@@ -343,9 +328,6 @@ public protocol TerminalSurface: AnyObject {
 
     func copySelection() -> String?
 
-    /// The viewport cell the selection starts on, or nil when nothing is selected.
-    var selectionOrigin: TerminalViewportCell? { get }
-
     func scroll(_ command: TerminalScroll)
 
     /// Clears the screen and scrollback like `clear`. Does nothing on the alternate screen.
@@ -362,9 +344,6 @@ public protocol TerminalSurface: AnyObject {
 
     /// The text on one viewport row, or nil outside the grid.
     func text(viewportRow row: Int) -> String?
-
-    /// The text in `range`, with soft-wrapped rows joined into one line.
-    func text(in range: TerminalViewportRange) -> String?
 
     /// The last `count` lines of the screen and its scrollback, soft wraps joined and trailing blank lines dropped.
     /// Nil when the screen cannot be read.
@@ -409,11 +388,7 @@ public extension TerminalSurface {
 
     var grid: TerminalGrid? { nil }
 
-    var selectionOrigin: TerminalViewportCell? { nil }
-
     func text(viewportRow row: Int) -> String? { nil }
-
-    func text(in range: TerminalViewportRange) -> String? { nil }
 
     var activeScreenText: String? { nil }
 

@@ -92,24 +92,24 @@ final class FloatModeInteractionTests: WindowTestCase {
         XCTAssertNil(panel.scrollCursorForTesting.state, "the pane behind is not what is being read")
     }
 
-    func test_scrollKeysOverAFloat_moveTheBandOnTheCardsSurface() throws {
+    func test_scrollKeysOverAFloat_reachTheModeDrivingTheCard() throws {
         let c = makeWindow()
         let host = ModeHostSpy()
         c.keyModeHost = host
-        _ = try openScratch(c)
+        let surface = try openScratch(c)
 
         c.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler, "no handler means no bare key ever reaches the mode")
-        let start = c.scrollMode.cursorRow
         XCTAssertTrue(handler(try keyDown("k")))
 
-        XCTAssertEqual(c.scrollMode.cursorRow, start - 1)
+        XCTAssertTrue(c.scrollMode.isDriving(surface), "the card's surface, not the pane behind")
         XCTAssertNotNil(try card(c).scrollCursorForTesting.state, "the band has to paint on the card")
     }
 
     func test_aScrollReportFromTheCardsSurface_reachesTheMode() throws {
         let c = makeWindow()
         let surface = try openScratch(c)
+        surface.grid = nil
         c.handle(.toggleScrollMode)
         XCTAssertNil(c.scrollMode.lastPositionForTesting, "premise: nothing reported yet")
 

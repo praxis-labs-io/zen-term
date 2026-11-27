@@ -576,14 +576,14 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         onSurfaceEvent?(s, .scrollPosition(position))
     }
-    func surfaceGridDidReflow(_ s: TerminalSurface) {
-        onSurfaceEvent?(s, .gridReflow)
+    func surfaceSelectionDidChange(_ s: TerminalSurface) {
+        onSurfaceEvent?(s, .selectionChanged)
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         onSurfaceEvent?(s, .search(.total(total)))
     }
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {
-        onSurfaceEvent?(s, .search(.selected(index)))
+        onSurfaceEvent?(s, .search(.selected(index, start: start)))
     }
     func surfaceDidEndSearch(_ s: TerminalSurface) {
         onSurfaceEvent?(s, .search(.ended))

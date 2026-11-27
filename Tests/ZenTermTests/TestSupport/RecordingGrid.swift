@@ -1,6 +1,6 @@
 import TerminalKit
 
-// A grid over `RecordingSurface.rows` with no scrollback and one cell per character.
+// A grid over `RecordingSurface.rows`, one cell per character, with a viewport a test can move and marks that stay put.
 final class RecordingGrid: TerminalGrid {
     private let rows: () -> [String]
 
@@ -11,9 +11,9 @@ final class RecordingGrid: TerminalGrid {
     }
 
     var rowCount: Int { rows().count }
-    var viewportTop: Int { 0 }
-    var cursorPoint: TerminalGridPoint? { nil }
-    var selectionBounds: ClosedRange<TerminalGridPoint>? { nil }
+    var viewportTop = 0
+    var cursorPoint: TerminalGridPoint? = TerminalGridPoint(row: 0, column: 0)
+    private(set) var selectionBounds: ClosedRange<TerminalGridPoint>?
 
     func row(_ index: Int) -> TerminalGridRow? {
         let rows = rows()
@@ -37,7 +37,9 @@ final class RecordingGrid: TerminalGrid {
         }
     }
 
-    func mark(_ point: TerminalGridPoint) -> TerminalGridMark? { nil }
+    func mark(_ point: TerminalGridPoint) -> TerminalGridMark? {
+        TerminalGridMark(read: { .at(point) }, release: {})
+    }
 
-    func setSelection(_ range: ClosedRange<TerminalGridPoint>?) {}
+    func setSelection(_ range: ClosedRange<TerminalGridPoint>?) { selectionBounds = range }
 }

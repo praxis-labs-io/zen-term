@@ -176,7 +176,6 @@ extension PaneFloats: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         presenter?.surface(s, scrollPositionDidChange: position)
     }
-    func surfaceGridDidReflow(_ s: TerminalSurface) { presenter?.surfaceGridDidReflow(s) }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         presenter?.surface(s, searchTotalDidChange: total)
     }
