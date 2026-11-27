@@ -135,7 +135,7 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)
 
         _ = try setup.install()
-        var settings = try ClaudeSettings.read(at: setup.settingsURL)
+        var settings = try SessionStartHooks.read(at: setup.settingsURL)
         _ = settings.unregister()
         try settings.write(to: setup.settingsURL)
         XCTAssertEqual(try newer(hook: Data("hook v2\n".utf8)).state(), .edited)

@@ -2,7 +2,7 @@ import Foundation
 
 /// Installs, refreshes and removes the zen skill and SessionStart hook in one Claude Code config folder.
 public struct ClaudeSetup: AgentInstaller {
-    static let hookFileName = "zenterm-context.sh"
+    static let hookFileName = SessionStartHooks.hookFileName
     static let stampFileName = "zenterm-context.build"
 
     public let configRoot: URL
@@ -37,6 +37,6 @@ public struct ClaudeSetup: AgentInstaller {
     }
 
     public func readRegistration() throws(SetupError) -> (any SetupRegistration)? {
-        try ClaudeSessionStartEntry.read(at: settingsURL, command: hookCommand)
+        try SessionStartEntry.read(at: settingsURL, command: hookCommand)
     }
 }

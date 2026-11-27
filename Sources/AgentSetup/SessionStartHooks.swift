@@ -1,23 +1,25 @@
 import Foundation
 
-// Claude Code's settings.json, edited only under `hooks.SessionStart` and only where an entry runs ZenTerm's hook.
-struct ClaudeSettings {
+// A hooks file in Claude Code's settings shape, edited only under `hooks.SessionStart` where an entry runs ZenTerm's hook.
+struct SessionStartHooks {
+    static let hookFileName = "zenterm-context.sh"
+
     private(set) var root: [String: Any]
 
-    static func read(at url: URL) throws(SetupError) -> ClaudeSettings {
+    static func read(at url: URL) throws(SetupError) -> SessionStartHooks {
         let data: Data
         do {
             data = try Data(contentsOf: url)
         } catch CocoaError.fileReadNoSuchFile {
-            return ClaudeSettings(root: [:])
+            return SessionStartHooks(root: [:])
         } catch {
             throw .unreadable(url, error)
         }
-        if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) { return ClaudeSettings(root: [:]) }
+        if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) { return SessionStartHooks(root: [:]) }
         guard let object = try? JSONSerialization.jsonObject(with: data), let root = object as? [String: Any] else {
             throw .malformed(url, "isn't a JSON object")
         }
-        let settings = ClaudeSettings(root: root)
+        let settings = SessionStartHooks(root: root)
         _ = try settings.sessionStart(at: url)
         return settings
     }
@@ -91,7 +93,7 @@ struct ClaudeSettings {
 
     // Recognized by the script's file name, so an entry wired by hand before `zen setup` is adopted, not duplicated.
     private static func isOwn(_ hook: Any) -> Bool {
-        ((hook as? [String: Any])?["command"] as? String)?.contains("/\(ClaudeSetup.hookFileName)") == true
+        ((hook as? [String: Any])?["command"] as? String)?.contains("/\(hookFileName)") == true
     }
 
     private static let timeout = 5
