@@ -109,6 +109,7 @@ final class FloatModeInteractionTests: WindowTestCase {
     func test_aScrollReportFromTheCardsSurface_reachesTheMode() throws {
         let c = makeWindow()
         let surface = try openScratch(c)
+        surface.grid = nil
         c.handle(.toggleScrollMode)
         XCTAssertNil(c.scrollMode.lastPositionForTesting, "premise: nothing reported yet")
 

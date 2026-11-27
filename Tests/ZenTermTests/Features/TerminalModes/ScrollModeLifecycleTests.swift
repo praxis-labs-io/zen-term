@@ -324,8 +324,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     func test_outputAtTheLiveEndIsPulledBackOffTheBand() throws {
         let controller = makeWindow()
-        controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
+        surface.grid = nil
+        controller.handle(.toggleScrollMode)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         surface.delegate?.surface(
@@ -361,8 +362,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     func test_leavingHandsBackTheLiveEndItHeld() throws {
         let controller = makeWindow()
-        controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
+        surface.grid = nil
+        controller.handle(.toggleScrollMode)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
         surface.delegate?.surface(
             surface,
@@ -389,8 +391,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     func test_leavingKeepsAPlaceTheReaderChoseAfterAHold() throws {
         let controller = makeWindow()
-        controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
+        surface.grid = nil
+        controller.handle(.toggleScrollMode)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
         surface.delegate?.surface(
             surface,
@@ -409,8 +412,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     func test_aRewrapAtTheLiveEndIsNotReadAsOutput() throws {
         let controller = makeWindow()
-        controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
+        surface.grid = nil
+        controller.handle(.toggleScrollMode)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         surface.cellMetrics = TerminalCellMetrics(columns: 60, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
