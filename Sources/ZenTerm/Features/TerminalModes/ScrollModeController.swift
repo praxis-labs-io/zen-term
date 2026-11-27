@@ -260,7 +260,12 @@ final class ScrollModeController {
         let row = cells(point.row)
         let last = lastWrittenColumn(of: point.row)
         var column = point.column
-        for _ in 0..<abs(delta) {
+        var steps = abs(delta)
+        if delta < 0, column > last {
+            column = last
+            steps -= 1
+        }
+        for _ in 0..<steps {
             var next = column + (delta > 0 ? max(row.indices.contains(column) ? row[column].width : 1, 1) : -1)
             if delta < 0, row.indices.contains(next), row[next].width == 0 { next -= 1 }
             guard next >= 0, next <= last else { break }
@@ -457,12 +462,15 @@ final class ScrollModeController {
     private func runFind(_ find: ScrollKeymap.Find, times: Int, isRepeat: Bool) {
         guard let cursor else { return }
         let text = line(cursor.row)
-        guard var index = text.firstIndex(where: { $0.column >= cursor.column }) else { return }
+        let pastLastWritten = find.direction == .backward ? text.count : nil
+        guard var index = text.firstIndex(where: { $0.column >= cursor.column }) ?? pastLastWritten else { return }
         let characters = text.map(\.character)
         for step in 0..<times {
             let skips = find.till && (isRepeat || step > 0)
             let from = skips ? index + (find.direction == .forward ? 1 : -1) : index
-            guard let next = Self.findColumn(find, from: from, in: characters) else { return }
+            guard let next = Self.findColumn(find, from: from, in: characters), text.indices.contains(next) else {
+                return
+            }
             index = next
         }
         move(to: TerminalGridPoint(row: cursor.row, column: text[index].column))

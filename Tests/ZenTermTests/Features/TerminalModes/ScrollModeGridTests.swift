@@ -110,6 +110,26 @@ final class ScrollModeGridTests: WindowTestCase {
         XCTAssertEqual(c.scrollMode.cursor, grid.cursorPoint)
     }
 
+    func test_hAtAnEmptyPromptStepsOntoThePrompt() throws {
+        let (c, _, grid) = try pane(running: "printf 'ab> '", until: "ab>")
+        try pressChord("s", [.command, .shift], keyCode: 1, in: c)
+        XCTAssertEqual(c.scrollMode.cursor?.column, 4, "precondition: on the shell cursor, past the written text")
+
+        try press("h")
+
+        XCTAssertEqual(c.scrollMode.cursor, TerminalGridPoint(row: try XCTUnwrap(row(grid, "ab>")), column: 2))
+    }
+
+    func test_backwardFindAtAnEmptyPromptReachesTheTextBeforeIt() throws {
+        let (c, _, _) = try pane(running: "printf 'ab> '", until: "ab>")
+        try pressChord("s", [.command, .shift], keyCode: 1, in: c)
+
+        try press("F", shift: true)
+        try press("a")
+
+        XCTAssertEqual(c.scrollMode.cursor?.column, 0)
+    }
+
     func test_theCursorStaysOnItsTextThroughOutputAndTheRewrapAfterIt() throws {
         let long = String(repeating: "x", count: 140)
         let (c, surface, grid) = try pane(
