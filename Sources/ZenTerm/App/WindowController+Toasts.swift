@@ -152,7 +152,6 @@ extension WindowController {
         updatedToast: claudeUpdatedToast, setUpFailedTitle: "Couldn't set up Claude Code",
         updateFailedTitle: claudeUpdateFailedTitle)
 
-    // One agent's words for its setup offer, update offer and their outcomes.
     struct SetupCopy {
         let offer: (_ folder: String) -> SetupPrompt
         let updateOffer: SetupPrompt
