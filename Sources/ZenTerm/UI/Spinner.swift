@@ -3,35 +3,21 @@ import TerminalKit
 
 // `NSProgressIndicator` tints from `effectiveAppearance`, which the chrome bans.
 final class Spinner: NSView, ThemeReapplying {
-    struct Frame {
-        let rotation: CGFloat
-        let arcLength: CGFloat
-    }
-
     private static let size: CGFloat = 13
-    // The ring's own geometry, not a chrome corner radius.
-    // swiftlint:disable:next untokened_radius
-    private static let ringRadius: CGFloat = 5.25
-    private static let ringWidth: CGFloat = 1.5
-    private static let turnKey = "zenterm.spin.turn"
-    private static let stretchKey = "zenterm.spin.stretch"
+    private static let ringRadius: CGFloat = 5
+    private static let dotDiameter: CGFloat = 2.25
+    private static let dotCount = 8
+    // The lit dot, then its fading tail; every other dot rests at the last value.
+    private static let tailOpacities: [Float] = [1, 0.7, 0.45, 0.2]
 
-    // Every spinner steps on this one grid so the window redraws 30 times a second however many spin.
-    static let frameInterval: CFTimeInterval = 1.0 / 30
-    private static let turnPeriod: CFTimeInterval = 1.5
-    private static let stretchPeriod: CFTimeInterval = 2
-    private static let shortestArc: CGFloat = 0.05
-    private static let longestArc: CGFloat = 0.8
-    private static let leadAtLongest: CGFloat = 0.15
+    // Every spinner steps on one main-thread timer, so a window redraws 10 times a second however many spin.
+    static let stepsPerSecond: Double = 10
 
-    // 6 s is the first moment the 1.5 s turn and the 2 s stretch line up again.
-    private static let loopFrames = 180
-    static let frames: [Frame] = (0..<loopFrames).map(frame(at:))
+    private static let spinning = NSHashTable<Spinner>.weakObjects()
+    private static var clock: Timer?
+    private static var step = 0
 
-    private static let loopDuration = Double(loopFrames) * frameInterval
-    private static let keyTimes = (0...loopFrames).map { NSNumber(value: Double($0) / Double(loopFrames)) }
-
-    private let arc = CAShapeLayer()
+    private let dots: [CALayer] = (0..<dotCount).map { _ in CALayer() }
     private let stillDot = StateDot()
 
     var role: KeyPath<ChromeTheme, TerminalColor> = \.accent { didSet { reapplyTheme() } }
@@ -47,11 +33,11 @@ final class Spinner: NSView, ThemeReapplying {
         super.init(frame: .zero)
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
-        arc.fillColor = nil
-        arc.lineWidth = Self.ringWidth
-        arc.lineCap = .round
-        layer?.addSublayer(arc)
-        arc.strokeEnd = Self.shortestArc
+        for dot in dots {
+            // swiftlint:disable:next untokened_radius
+            dot.cornerRadius = Self.dotDiameter / 2
+            layer?.addSublayer(dot)
+        }
         stillDot.translatesAutoresizingMaskIntoConstraints = false
         stillDot.isHidden = true
         addSubview(stillDot)
@@ -69,26 +55,33 @@ final class Spinner: NSView, ThemeReapplying {
     }
 
     var stillDotStateForTesting: StateDot.State? { stillDot.isHidden ? nil : stillDot.state }
-    var arcForTesting: CAShapeLayer { arc }
+    var dotsForTesting: [CALayer] { dots }
+    var isOnClockForTesting: Bool { Self.spinning.contains(self) }
+    static func tickForTesting() { tick() }
 
     override func layout() {
         super.layout()
-        let box = CGRect(
-            x: ((bounds.width - Self.size) / 2).rounded(), y: ((bounds.height - Self.size) / 2).rounded(),
-            width: Self.size, height: Self.size)
-        let ring = CGMutablePath()
-        ring.addArc(
-            center: CGPoint(x: Self.size / 2, y: Self.size / 2), radius: Self.ringRadius, startAngle: 0,
-            endAngle: -2 * .pi, clockwise: true)
+        let center = CGPoint(x: (bounds.width / 2).rounded(), y: (bounds.height / 2).rounded())
         withoutImplicitMotion {
-            arc.frame = box
-            arc.path = ring
+            for (index, dot) in dots.enumerated() {
+                let angle = CGFloat.pi / 2 - 2 * .pi * CGFloat(index) / CGFloat(Self.dotCount)
+                dot.frame = CGRect(
+                    x: center.x + Self.ringRadius * cos(angle) - Self.dotDiameter / 2,
+                    y: center.y + Self.ringRadius * sin(angle) - Self.dotDiameter / 2,
+                    width: Self.dotDiameter, height: Self.dotDiameter)
+            }
         }
         applySpin()
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applySpin()
+    }
+
     func reapplyTheme() {
-        withoutImplicitMotion { arc.strokeColor = Theme.current.chrome[keyPath: role].nsColor.cgColor }
+        let color = Theme.current.chrome[keyPath: role].nsColor.cgColor
+        withoutImplicitMotion { dots.forEach { $0.backgroundColor = color } }
         if !stillDot.isHidden { stillDot.state = stillDotState }
     }
 
@@ -105,44 +98,41 @@ final class Spinner: NSView, ThemeReapplying {
         let showsStillDot = isSpinning && Motion.isReduceMotionEnabled()
         stillDot.state = showsStillDot ? stillDotState : nil
         stillDot.isHidden = !showsStillDot
-        withoutImplicitMotion { arc.isHidden = showsStillDot }
-        if isSpinning, !showsStillDot, arc.animation(forKey: Self.turnKey) != nil { return }
-        arc.removeAnimation(forKey: Self.turnKey)
-        arc.removeAnimation(forKey: Self.stretchKey)
-        guard isSpinning, !showsStillDot else { return }
-        let firstTick = (CACurrentMediaTime() / Self.frameInterval).rounded(.up) * Self.frameInterval
-        let beginTime = arc.convertTime(firstTick, from: nil)
-        let turn = Self.step("transform.rotation.z", Self.frames.map { NSNumber(value: Double($0.rotation)) })
-        let stretch = Self.step("strokeEnd", Self.frames.map { NSNumber(value: Double($0.arcLength)) })
-        for (key, step) in [(Self.turnKey, turn), (Self.stretchKey, stretch)] {
-            step.beginTime = beginTime
-            arc.add(step, forKey: key)
+        withoutImplicitMotion { dots.forEach { $0.isHidden = showsStillDot } }
+        if isSpinning, !showsStillDot, window != nil {
+            Self.spinning.add(self)
+        } else {
+            Self.spinning.remove(self)
+        }
+        showStep(Self.step)
+        Self.runClockWhileNeeded()
+    }
+
+    private func showStep(_ step: Int) {
+        withoutImplicitMotion {
+            for (index, dot) in dots.enumerated() {
+                let behind = (step - index + Self.dotCount) % Self.dotCount
+                dot.opacity = Self.tailOpacities[min(behind, Self.tailOpacities.count - 1)]
+            }
         }
     }
 
-    private static func step(_ keyPath: String, _ values: [NSNumber]) -> CAKeyframeAnimation {
-        let step = CAKeyframeAnimation(keyPath: keyPath)
-        step.calculationMode = .discrete
-        step.keyTimes = keyTimes
-        step.values = values
-        step.duration = loopDuration
-        step.repeatCount = .infinity
-        step.fillMode = .backwards
-        return step
+    private static func runClockWhileNeeded() {
+        if spinning.allObjects.isEmpty {
+            clock?.invalidate()
+            clock = nil
+        } else if clock == nil {
+            let timer = Timer(timeInterval: 1 / stepsPerSecond, repeats: true) { _ in
+                MainActor.assumeIsolated { tick() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            clock = timer
+        }
     }
 
-    private static func frame(at index: Int) -> Frame {
-        let time = Double(index) * frameInterval
-        let stretches = (time / stretchPeriod).rounded(.down)
-        let phase = CGFloat(time / stretchPeriod - stretches)
-        let growing = phase < 0.5
-        let progress = growing ? phase * 2 : (phase - 0.5) * 2
-        let arcLength =
-            growing
-            ? shortestArc + (longestArc - shortestArc) * progress
-            : longestArc - (longestArc - shortestArc) * progress
-        let lead = growing ? leadAtLongest * progress : leadAtLongest + (1 - leadAtLongest) * progress
-        let turns = CGFloat(time / turnPeriod + stretches) + lead
-        return Frame(rotation: -2 * .pi * turns, arcLength: arcLength)
+    private static func tick() {
+        step = (step + 1) % dotCount
+        for spinner in spinning.allObjects { spinner.showStep(step) }
+        runClockWhileNeeded()
     }
 }

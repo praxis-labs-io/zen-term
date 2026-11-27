@@ -235,12 +235,12 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         guard let spinner = descendants(of: overlay).compactMap({ $0 as? Spinner }).first else {
             return XCTFail("expected the spinner")
         }
-        let colorBefore = try XCTUnwrap(spinner.arcForTesting.strokeColor, "the arc is colored")
+        let colorBefore = try XCTUnwrap(spinner.dotsForTesting.first?.backgroundColor, "the dots are colored")
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         overlay.reapplyThemeTree()
 
-        let colorAfter = spinner.arcForTesting.strokeColor
+        let colorAfter = spinner.dotsForTesting.first?.backgroundColor
         XCTAssertNotEqual(colorBefore, colorAfter)
     }
 
