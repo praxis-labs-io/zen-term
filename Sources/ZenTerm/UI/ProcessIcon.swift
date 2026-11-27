@@ -7,7 +7,6 @@ struct ProcessIcon: Equatable {
         case brand(fill: TerminalColor, glyph: TerminalColor)
         case artwork(fill: TerminalColor)
         case neutral
-        // A neutral chip with its glyph at muted ink, for something present but not open.
         case muted
         case purpose(Purpose)
         // The one look that may draw an SF Symbol: a tool float's own icon picker name.
@@ -17,7 +16,6 @@ struct ProcessIcon: Equatable {
     enum Purpose: Equatable {
         case workspace, tab, pane, window
 
-        /// The hue this group's chip takes beside `accent`, or nil to draw neutral.
         func hue(beside accent: AccentSlot) -> AccentSlot? {
             switch self {
             case .workspace: return [.black, .white].contains(Self.family(of: accent)) ? nil : accent

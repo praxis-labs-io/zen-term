@@ -56,7 +56,6 @@ final class SidebarController {
     var onCloseAgent: (SurfaceID) -> Void = { _ in }
     var onActivateHost: (SSHHostID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
-    // Constraints the window moves in step with docking, read after `isDocked` has changed.
     var slidesWithDocking: () -> [(constraint: NSLayoutConstraint, to: CGFloat)] = { [] }
     var onMoveWindowButtons: (_ to: HostWindow.WindowButtonPlacement, _ visible: Bool, _ animated: Bool) -> Void = {
         _, _, _ in

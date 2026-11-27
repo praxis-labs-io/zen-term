@@ -20,7 +20,6 @@ final class NavRow: ListRow {
         didSet { if variant != oldValue { refreshContent() } }
     }
     private var detail: String?
-    // Spoken by VoiceOver when the row shows no detail.
     var spokenStatus: String? {
         didSet { if spokenStatus != oldValue { refreshContent() } }
     }
