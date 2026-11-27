@@ -478,10 +478,16 @@ extension ControlResponder {
         ControlError(.failed, "Pane \(token) has not started.")
     }
 
-    private static func viewport(of surface: TerminalSurface) -> String? {
-        guard let rows = surface.cellMetrics?.rows else { return nil }
-        var lines = (0..<rows).map { surface.text(viewportRow: $0) ?? "" }
+    static func viewport(of surface: TerminalSurface) -> String? {
+        guard let rows = surface.cellMetrics?.rows, let grid = surface.grid else { return nil }
+        let top = grid.viewportTop
+        var lines = (top..<top + rows).map { grid.row($0).map(text(of:)) ?? "" }
         while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
         return lines.joined(separator: "\n")
+    }
+
+    private static func text(of row: TerminalGridRow) -> String {
+        let written = row.cells.lastIndex { !$0.text.isEmpty }.map { row.cells[...$0] } ?? []
+        return written.filter { $0.width > 0 }.map { $0.text.isEmpty ? " " : $0.text }.joined()
     }
 }
