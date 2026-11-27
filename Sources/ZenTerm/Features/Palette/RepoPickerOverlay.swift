@@ -662,7 +662,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
 
         func setStatus(_ status: SSHHostStatus) {
-            detail = status.word
+            var next = content
+            next.leading = .process(status.chip)
+            render(next)
             setAccessibilityValue([status.word, state?.rawValue].compactMap { $0 }.joined(separator: ", "))
         }
 
@@ -698,7 +700,14 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             var isChild: Bool { self == .openChild || self == .closedChild }
 
-            var icon: ProcessIcon { isChild ? .workspaceWorktree : .workspace }
+            func icon(isOpen: Bool) -> ProcessIcon {
+                switch (isChild, isOpen) {
+                case (true, true): return .workspaceWorktree
+                case (true, false): return .closedWorktree
+                case (false, true): return .workspace
+                case (false, false): return .closedWorkspace
+                }
+            }
         }
 
         let workspace: Workspace?
@@ -766,7 +775,8 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.statusPath = statusPath
             super.init(
                 Content(
-                    title: label, titleSuffix: state?.rawValue, leading: .process(style.icon), ink: style.ink,
+                    title: label, titleSuffix: state?.rawValue, leading: .process(style.icon(isOpen: state != nil)),
+                    ink: style.ink,
                     nesting: style.isChild ? .indented : .none))
 
             churnLabel.alignment = .right

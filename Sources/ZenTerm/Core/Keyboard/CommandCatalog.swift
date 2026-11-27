@@ -103,15 +103,13 @@ enum CommandCatalog {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
         if !onHost { chords += [.renameWorkspace] }
-        if !onHost || tabCount > 0 { chords += [.closeWorkspace] }
         chords += [.nextWaitingAgent, .toggleAgentPicker]
-        chords += [
-            .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
-        ]
+        if !onHost || tabCount > 0 { chords += [.closeWorkspace] }
+        chords += [.newTab, .prevTab, .nextTab]
         if tabCount > 0 {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }
         }
-        chords += [.toggleBottomDrawer, .toggleRightDrawer]
+        chords += [.moveTabLeft, .moveTabRight, .renameTab, .toggleBottomDrawer, .toggleRightDrawer, .closeTab]
         chords += [
             .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane,
@@ -125,9 +123,9 @@ enum CommandCatalog {
             .clearScreen, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
         ]
-        chords += [.closeWindow, .fillScreen, .toggleSidebar, .focusSidebar]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.newTool]
+        chords += [.fillScreen, .toggleSidebar, .focusSidebar, .closeWindow]
         chords += [
             .openSettings, .reloadConfig, .checkForUpdates,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,

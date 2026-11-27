@@ -268,8 +268,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the nearest host row with a workspace in this window, else the first workspace. A connected
   host's workspace carries the host and stays out of the workspace rows.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
-  chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
-  below when it sits lower in `navigable`; a new one mounts without motion, its tabs already
+  chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace or a host slides in on the y axis,
+  from below when it sits lower in `WorkspaceOrder.line` (the workspaces, then every host); a new
+  workspace mounts without motion, its tabs already
   started with their recipes, on the tab its launch focus names. A close's landing slides the
   same way. An SSH host's row selects it through `activate(_ host:)`, which closes the open card,
   float and confirm the same way.
@@ -553,11 +554,15 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   moves them with the column (`moveWindowButtons`), sliding and fading with docking, the
   hover card and collapsing. AppKit puts them back on a resize, a title change, a hide, an
   alpha change, a fullscreen exit and a deminiaturize, so `HostWindow` places them again
-  after each. `window-chrome = false` hides them and closes the strip.
+  after each. `window-chrome = false` hides them and closes the strip, and the Workspaces caption then centers on
+  the first pane header's line. The sidebar's toggle, docked or on the window, centers on the rows' chips.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
   `tabID/id` and shut down with their tab; Scratch is the only one. A host shows no user
-  float button, and the Connect screen hides the whole dock. There a float's card, shortcut
+  float button, and the Connect screen hides the whole dock and, while the sidebar is docked, the
+  tab bar's band, so its card reaches the window's bottom; the band snaps when the canvas swaps, so a
+  slide resizes the terminal once. It slides with docking, and stays while the sidebar is collapsed
+  because it holds the sidebar's toggle. There a float's card, shortcut
   or palette row opens or closes it only while it is open, completed or waiting; any other
   toggle toasts in a connected host.
 - **A float pane is a tab's pane shown in the float slot.** `PaneFloats` owns it the way the tab
@@ -893,8 +898,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
-  sidebar's Remote hosts rows show their status word as the row's detail. Connectivity takes no color
-  anywhere: the word is muted text in both lists.
+  sidebar's Remote hosts rows and the workspace picker's host rows show no status word: a host's
+  chip is muted until it connects, and draws `server-off` while offline (`SSHHostStatus.chip`), and VoiceOver reads the word. Connectivity takes no
+  color anywhere.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the network or the date
   on `~/.ssh/config` or a file it includes changes, because `Match exec` can prompt (a host that stays

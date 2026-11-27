@@ -1,5 +1,5 @@
 enum CommandCategory: CaseIterable {
-    case workspaces, tabs, panes, terminal, window, tools, app
+    case workspaces, tabs, panes, terminal, tools, window, app
 
     var title: String {
         switch self {
