@@ -796,8 +796,9 @@ Bundled themes carry an `nvim-colorscheme` key.
   one. `V` and `yy` widen to whole soft-wrapped lines. A pruned anchor drops the selection,
   and the mode clears its selection on exit.
 - **The header's readout is `ScrollReadout`**, rebuilt from the cursor and selection marks on
-  every refresh, so output that renumbers rows renumbers it too. A copy's confirmation holds
-  until `handle` sees the next key.
+  every refresh, so output that renumbers rows renumbers it too. A one-row selection counts
+  the cells its grid row covers, a wide character once, with no text read. A copy's confirmation holds
+  until the next key or cursor move, find's steps included.
 - **`SELECTION_CHANGED` also fires for the mode's own sets.** Only a selection gone while
   the mode holds one means ghostty cleared it (a click, a screen clear or reset, the
   alternate screen), and that ends the mode.

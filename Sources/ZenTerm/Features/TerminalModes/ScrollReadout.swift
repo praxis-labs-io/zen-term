@@ -11,9 +11,9 @@ enum ScrollReadout: Equatable {
     var text: String {
         switch self {
         case .position(let point): return "\(point.row + 1):\(point.column + 1)"
-        case .characters(let count): return "\(count) \(count == 1 ? "char" : "chars")"
+        case .characters(let count): return "\(count) \(Self.characters(count))"
         case .lines(let count): return "\(count) \(Self.lines(count))"
-        case .copiedCharacters(let count): return "Copied \(count) \(count == 1 ? "character" : "characters")"
+        case .copiedCharacters(let count): return "Copied \(count) \(Self.characters(count))"
         case .copiedLines(let count): return "Copied \(count) \(Self.lines(count))"
         }
     }
@@ -26,13 +26,17 @@ enum ScrollReadout: Equatable {
         }
     }
 
+    private static func characters(_ count: Int) -> String { count == 1 ? "character" : "characters" }
+
     private static func lines(_ count: Int) -> String { count == 1 ? "line" : "lines" }
 
     static func selection(
-        _ kind: ScrollSelection.Kind, span: ClosedRange<TerminalGridPoint>, text: () -> String?
+        _ kind: ScrollSelection.Kind, span: ClosedRange<TerminalGridPoint>, cells: () -> [TerminalGridCell]
     ) -> ScrollReadout {
         let rows = span.upperBound.row - span.lowerBound.row + 1
         guard kind == .character, rows == 1 else { return .lines(rows) }
-        return .characters(text()?.count ?? 0)
+        let row = cells()
+        let covered = span.lowerBound.column...span.upperBound.column
+        return .characters(covered.count { !row.indices.contains($0) || row[$0].width != 0 })
     }
 }

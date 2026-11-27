@@ -374,12 +374,34 @@ final class ScrollModeGridTests: WindowTestCase {
         try enterOn(grid, line: "hello there")
 
         try press("v")
-        XCTAssertEqual(try readout(), "1 char")
+        XCTAssertEqual(try readout(), "1 character")
         try press("e")
-        XCTAssertEqual(try readout(), "5 chars")
+        XCTAssertEqual(try readout(), "5 characters")
         try press("j")
 
         XCTAssertEqual(try readout(), "2 lines")
+    }
+
+    func test_vOnAnEmptyRowCountsTheCellUnderTheCursor() throws {
+        let (_, _, grid) = try pane(running: "echo above; echo; echo below", until: "below")
+        try enterOn(grid, line: "below")
+        try press("k")
+        XCTAssertEqual(text(grid, try XCTUnwrap(controller?.scrollMode.cursor?.row)), "", "premise: an empty row")
+
+        try press("v")
+
+        XCTAssertEqual(try readout(), "1 character")
+    }
+
+    func test_vOverAWideCharacterPairCountsTwo() throws {
+        let (_, _, grid) = try pane(running: "printf '\\344\\270\\255\\346\\226\\207\\n'; echo end", until: "end")
+        let wide = try XCTUnwrap(row(grid, "中文"))
+        XCTAssertEqual(grid.row(wide)?.cells.first?.width, 2, "premise: wide cells")
+        try enterOn(grid, line: "中文")
+
+        try type("vl")
+
+        XCTAssertEqual(try readout(), "2 characters")
     }
 
     func test_shiftVCountsEachRowOfAWrappedLine() throws {
@@ -416,6 +438,26 @@ final class ScrollModeGridTests: WindowTestCase {
         try press("2")
 
         XCTAssertEqual(try readout(), "\(hello + 2):6", "a count is a key too")
+    }
+
+    func test_aFindStepOverTheModeGivesThePositionBackAfterACopy() throws {
+        let (c, _, grid) = try pane(running: "echo NEEDLE one; echo NEEDLE two; echo end", until: "end")
+        try enterOn(grid, line: "end")
+        c.handle(.toggleSearch)
+        c.search.typeForTesting("NEEDLE")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        c.search.enterScrollMode()
+        waitUntil((try? cursorText(grid)) == "NEEDLE two", "Return landed on the newest match")
+
+        try type("vey")
+        XCTAssertEqual(board.string(forType: .string), "NEEDLE", "precondition: the copy ran")
+        try press("n")
+        waitUntil((try? cursorText(grid)) == "NEEDLE one", "n stepped to the older match")
+        try press("", keyCode: 53)
+        XCTAssertNil(c.focusedPanelForTesting?.findFieldForTesting, "precondition: Esc closed find")
+
+        let one = try XCTUnwrap(row(grid, "NEEDLE one"))
+        XCTAssertEqual(try readout(), "\(one + 1):1")
     }
 
     func test_findOverTheModeTakesTheReadoutsPlace_untilItCloses() throws {

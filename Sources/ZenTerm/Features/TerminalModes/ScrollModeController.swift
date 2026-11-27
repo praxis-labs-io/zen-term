@@ -27,8 +27,8 @@ final class ScrollModeController {
 
     private var lastFind: ScrollKeymap.Find?
 
-    // A copy's confirmation stands in for the position until the next key.
     private var copied: ScrollReadout?
+    private var showsCopied = false
 
     private var holdsViewport = false
 
@@ -49,6 +49,7 @@ final class ScrollModeController {
         self.panel = panel
         pending = .init()
         copied = nil
+        showsCopied = false
         lastPosition = nil
         lastGridSize = Self.gridSize(of: surface)
         holdsViewport = false
@@ -80,6 +81,7 @@ final class ScrollModeController {
         isActive = false
         pending = .init()
         copied = nil
+        showsCopied = false
         if selection != nil {
             selection = nil
             grid?.setSelection(nil)
@@ -131,10 +133,8 @@ final class ScrollModeController {
     /// Declines unmapped ⌘ and ⌥ chords: `KeyInterceptor` runs before menu key equivalents resolve.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
-        if copied != nil {
-            copied = nil
-            refreshCursor()
-        }
+        copied = nil
+        defer { if showsCopied, copied == nil { refreshCursor() } }
         guard let key = ScrollKeymap.key(for: event, pending: pending, hasSelection: selection != nil)
         else {
             pending = .init()
@@ -243,6 +243,7 @@ final class ScrollModeController {
     }
 
     private func move(to point: TerminalGridPoint) {
+        copied = nil
         seat(at: point)
         reveal()
         applySelection()
@@ -438,7 +439,7 @@ final class ScrollModeController {
         let kind = selection?.kind ?? .character
         copy(text)
         releaseSelection()
-        copied = ScrollReadout.selection(kind, span: span) { text }.copied
+        copied = ScrollReadout.selection(kind, span: span) { cells(span.lowerBound.row) }.copied
         flash(span)
     }
 
@@ -553,6 +554,7 @@ final class ScrollModeController {
         guard isActive, let surface else { return }
         let top = grid?.viewportTop ?? 0
         let rows = screenRows
+        showsCopied = copied != nil
         panel?.setScrollCursor(
             ScrollCursorView.State(
                 cursor: cursorState(top: top, rows: rows),
@@ -564,10 +566,8 @@ final class ScrollModeController {
 
     private func readout() -> ScrollReadout? {
         if let copied { return copied }
-        if let selection, let grid, let span = selectionSpan() {
-            return ScrollReadout.selection(selection.kind, span: span) {
-                grid.text(from: span.lowerBound, to: span.upperBound)
-            }
+        if let selection, let span = selectionSpan() {
+            return ScrollReadout.selection(selection.kind, span: span) { cells(span.lowerBound.row) }
         }
         return cursor.map(ScrollReadout.position)
     }

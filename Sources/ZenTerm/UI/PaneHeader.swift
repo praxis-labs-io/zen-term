@@ -75,7 +75,6 @@ final class PaneHeader: ControlView, ThemeReapplying {
         }
     }
 
-    // Scroll mode names itself in the chip and name, and its readout takes the path's place; find, open over it, still wins.
     var isScrolling = false {
         didSet {
             guard isScrolling != oldValue else { return }
