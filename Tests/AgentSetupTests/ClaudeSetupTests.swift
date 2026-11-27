@@ -60,6 +60,10 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertEqual(try setup.state(), .current)
     }
 
+    func test_placementsFollowTheFilesContentsOrder() {
+        XCTAssertEqual(setup.placements.map(\.contents), files.contents)
+    }
+
     func test_installKeepsEveryEntryItDidNotWrite() throws {
         try writeSettings(unrelated)
 
@@ -240,7 +244,7 @@ final class ClaudeSetupTests: XCTestCase {
         try writeSettings(broken)
 
         XCTAssertThrowsError(try setup.install()) { error in
-            XCTAssertTrue((error as? ClaudeSetupError)?.message.contains(self.setup.settingsURL.path) == true)
+            XCTAssertTrue((error as? SetupError)?.message.contains(self.setup.settingsURL.path) == true)
         }
         XCTAssertThrowsError(try setup.remove())
         XCTAssertThrowsError(try setup.state())

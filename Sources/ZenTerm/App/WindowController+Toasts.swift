@@ -78,7 +78,7 @@ extension WindowController {
     static let claudeUpdatedToast = ToastContent(
         variant: .info, title: "Updated zen for Claude Code", message: "New Claude sessions load it.")
 
-    static func claudeSetupFailureToast(title: String, reason: String) -> ToastContent {
+    static func setupFailureToast(title: String, reason: String) -> ToastContent {
         ToastContent(variant: .warning, title: title, message: reason)
     }
 
@@ -121,7 +121,7 @@ extension WindowController {
         return actions
     }
 
-    struct ClaudeSetupPrompt {
+    struct SetupPrompt {
         let title: String
         let message: String
         let confirm: String
@@ -137,15 +137,29 @@ extension WindowController {
         }
     }
 
-    static func claudeSetupOffer(in folder: String) -> ClaudeSetupPrompt {
-        ClaudeSetupPrompt(
-            title: "Teach Claude Code to use zen?", message: claudeSetupOfferMessage(in: folder),
+    static func claudeSetupOffer(in folder: String) -> SetupPrompt {
+        SetupPrompt(
+            title: "Teach Claude Code to use zen?", message: setupOfferMessage(in: folder),
             confirm: "Set up", decline: "Don't ask again")
     }
 
-    static let claudeUpdateOffer = ClaudeSetupPrompt(
-        title: "Update zen for Claude Code?", message: claudeUpdateOfferMessage, confirm: "Update",
+    static let claudeUpdateOffer = SetupPrompt(
+        title: "Update zen for Claude Code?", message: updateOfferMessage, confirm: "Update",
         decline: "Skip this version")
+
+    static let claudeSetupCopy = SetupCopy(
+        offer: claudeSetupOffer(in:), updateOffer: claudeUpdateOffer, setUpToast: claudeSetUpToast,
+        updatedToast: claudeUpdatedToast, setUpFailedTitle: "Couldn't set up Claude Code",
+        updateFailedTitle: updateFailedTitle)
+
+    struct SetupCopy {
+        let offer: (_ folder: String) -> SetupPrompt
+        let updateOffer: SetupPrompt
+        let setUpToast: ToastContent
+        let updatedToast: ToastContent
+        let setUpFailedTitle: String
+        let updateFailedTitle: String
+    }
 
     static let surfaceFailureToast = ToastContent(
         variant: .warning, title: "Terminal didn't start", message: "The terminal surface failed to launch.")

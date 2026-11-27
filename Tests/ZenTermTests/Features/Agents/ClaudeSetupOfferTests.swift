@@ -49,7 +49,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    private func makeWindow(offer: ClaudeSetupOffer) -> WindowController {
+    private func makeWindow(offer: SetupOffer<ClaudeCodeSetup>) -> WindowController {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: FileManager.default.temporaryDirectory
         )
@@ -111,7 +111,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     private func claudeRoot() throws -> URL { try XCTUnwrap(ClaudeCodeSetup.configRootOverrideForTesting) }
 
     func test_claudeStartingWithoutSetupOffersIt() throws {
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
 
@@ -119,7 +119,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_claudeTypedAtAShellPromptOffersIt() throws {
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         let surface = try surface(in: c)
 
         surface.delegate?.surface(surface, titleDidChange: "\u{2733} Claude Code")
@@ -128,7 +128,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_anotherAgentStartingOffersNothing() throws {
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("codex", in: c)
         settle()
@@ -137,7 +137,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_itOffersOnceALaunchAcrossWindows() throws {
-        let offer = ClaudeSetupOffer(defaults: defaults)
+        let offer = SetupOffer<ClaudeCodeSetup>(defaults: defaults)
         let first = makeWindow(offer: offer)
         try start("claude", in: first)
         waitUntil(offerToast(in: first) != nil, "the setup offer")
@@ -152,7 +152,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_notNowAsksAgainOnALaterLaunch() throws {
-        let first = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let first = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: first)
         waitUntil(offerToast(in: first) != nil, "the setup offer")
         let close = try XCTUnwrap(
@@ -161,30 +161,30 @@ final class ClaudeSetupOfferTests: WindowTestCase {
             })
         close.onClick()
 
-        let later = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let later = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: later)
 
         waitUntil(offerToast(in: later) != nil, "the setup offer on a later launch")
-        XCTAssertFalse(defaults.bool(forKey: ClaudeSetupOffer.declinedKey))
+        XCTAssertFalse(defaults.bool(forKey: SetupOffer<ClaudeCodeSetup>.declinedKey))
     }
 
     func test_dontAskAgainStopsItForGood() throws {
-        let first = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let first = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: first)
         waitUntil(offerToast(in: first) != nil, "the setup offer")
         try press("Don't ask again", on: try XCTUnwrap(offerToast(in: first)))
 
-        let later = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let later = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: later)
         settle()
 
         XCTAssertNil(offerToast(in: later))
-        XCTAssertTrue(defaults.bool(forKey: ClaudeSetupOffer.declinedKey))
+        XCTAssertTrue(defaults.bool(forKey: SetupOffer<ClaudeCodeSetup>.declinedKey))
     }
 
     func test_anInstalledSetupIsNeverOffered() throws {
         _ = try ClaudeSetup(configRoot: try claudeRoot(), files: files).install()
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
         settle()
@@ -194,7 +194,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
     func test_anOlderShippedSetupIsUpdatedInPlace() throws {
         try install(skill: Data("older".utf8))
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
 
@@ -204,9 +204,9 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_anInstallDeclinedEarlierStillUpdatesWhatIsInstalled() throws {
-        defaults.set(true, forKey: ClaudeSetupOffer.declinedKey)
+        defaults.set(true, forKey: SetupOffer<ClaudeCodeSetup>.declinedKey)
         try install(skill: Data("older".utf8))
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
 
@@ -219,30 +219,30 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         let folder = try claudeRoot().appendingPathComponent("skills/zen")
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
 
-        waitUntil(toastTexts(in: c).contains(WindowController.claudeUpdateFailedTitle), "the failure")
+        waitUntil(toastTexts(in: c).contains(WindowController.updateFailedTitle), "the failure")
         XCTAssertNil(toast(titled: Self.updatedTitle, in: c))
         XCTAssertEqual(try installedSkill(), Data("older".utf8))
     }
 
     func test_anEditedSetupIsOfferedAndLeftAsItIs() throws {
         try install(skill: edited)
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
 
         waitUntil(toast(titled: Self.updateTitle, in: c) != nil, "the update offer")
-        XCTAssertTrue(toastTexts(in: c).contains(WindowController.claudeUpdateOfferMessage))
+        XCTAssertTrue(toastTexts(in: c).contains(WindowController.updateOfferMessage))
         XCTAssertEqual(try installedSkill(), edited)
     }
 
     func test_anEditedSetupIsNotOfferedOnceSetupWasDeclined() throws {
-        defaults.set(true, forKey: ClaudeSetupOffer.declinedKey)
+        defaults.set(true, forKey: SetupOffer<ClaudeCodeSetup>.declinedKey)
         try install(skill: edited)
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
         settle()
@@ -253,7 +253,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
     func test_updateReplacesAnEditedSetup() throws {
         try install(skill: edited)
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: c)
         waitUntil(toast(titled: Self.updateTitle, in: c) != nil, "the update offer")
 
@@ -269,7 +269,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         _ = try ClaudeSetup(configRoot: try claudeRoot(), files: later).install()
         ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
             skill: files.skill, hook: files.hook, shippedDigests: files.shippedDigests, build: 10)
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
         settle()
@@ -281,12 +281,12 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
     func test_skipThisVersionStopsTheOfferUntilTheFilesChange() throws {
         try install(skill: edited)
-        let first = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let first = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: first)
         waitUntil(toast(titled: Self.updateTitle, in: first) != nil, "the update offer")
         try press("Skip this version", on: try XCTUnwrap(toast(titled: Self.updateTitle, in: first)))
 
-        let later = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let later = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: later)
         settle()
         XCTAssertNil(toast(titled: Self.updateTitle, in: later))
@@ -294,14 +294,14 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
         ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(
             skill: Data("newer skill".utf8), hook: files.hook, shippedDigests: files.shippedDigests)
-        let newerBuild = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let newerBuild = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: newerBuild)
         waitUntil(toast(titled: Self.updateTitle, in: newerBuild) != nil, "the offer for a newer build")
         XCTAssertEqual(try installedSkill(), edited)
     }
 
     func test_setUpInstallsAndConfirms() throws {
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
         try start("claude", in: c)
         waitUntil(offerToast(in: c) != nil, "the setup offer")
 
@@ -312,25 +312,25 @@ final class ClaudeSetupOfferTests: WindowTestCase {
     }
 
     func test_theOfferNamesTheFolderItInstallsTo() throws {
-        let c = makeWindow(offer: ClaudeSetupOffer(defaults: defaults))
+        let c = makeWindow(offer: SetupOffer<ClaudeCodeSetup>(defaults: defaults))
 
         try start("claude", in: c)
 
         waitUntil(offerToast(in: c) != nil, "the setup offer")
         let folder = PathDisplay.abbreviatingHome(try claudeRoot().path)
         XCTAssertTrue(
-            toastTexts(in: c).contains(WindowController.claudeSetupOfferMessage(in: folder)), "\(toastTexts(in: c))")
+            toastTexts(in: c).contains(WindowController.setupOfferMessage(in: folder)), "\(toastTexts(in: c))")
     }
 
     func test_offerCopyFitsTheToast() {
         let messages = [
-            WindowController.claudeSetupOfferMessage(in: "~/.claude"), WindowController.claudeUpdateOfferMessage,
+            WindowController.setupOfferMessage(in: "~/.claude"), WindowController.updateOfferMessage,
         ]
         for line in messages.flatMap({ $0.split(separator: "\n") }) {
             let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.messageMaxWidth, "wraps: \(line)")
         }
-        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.claudeUpdateFailedTitle] {
+        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.updateFailedTitle] {
             let width = (title as NSString).size(withAttributes: [.font: ToastView.titleFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.titleMaxWidth, "truncates: \(title)")
         }
