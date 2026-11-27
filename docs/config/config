@@ -566,7 +566,8 @@
 # without leaving the mode. It is the same selection a mouse drag makes, so ⌘C copies
 # it too, and it can reach past the top of the screen. It stays on its text through
 # output and resizes, and goes only if the scrollback drops the line it started on.
-# Clicking in the pane clears it and leaves the mode; leaving the mode clears it.
+# Anything that clears it ends the mode too: a click in the pane, clearing the screen,
+# or a program taking over the screen. Leaving the mode clears it.
 #
 # Some chords move the viewport without the mode, for when you want a look rather
 # than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down

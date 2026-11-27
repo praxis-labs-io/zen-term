@@ -796,7 +796,8 @@ Bundled themes carry an `nvim-colorscheme` key.
   one. `V` and `yy` widen to whole soft-wrapped lines. A pruned anchor drops the selection,
   and the mode clears its selection on exit.
 - **`SELECTION_CHANGED` also fires for the mode's own sets.** Only a selection gone while
-  the mode holds one means ghostty cleared it (a click), and that ends the mode.
+  the mode holds one means ghostty cleared it (a click, a screen clear or reset, the
+  alternate screen), and that ends the mode.
 - **The chrome draws the cursor and the yank pulse only.** `ScrollCursorView` fills the
   cell in the cursor color and draws the cell's glyph over it in the background color, from
   the theme's font at the session size, so it can differ from libghostty's glyph under
