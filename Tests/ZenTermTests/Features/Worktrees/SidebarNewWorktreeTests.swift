@@ -231,7 +231,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
         XCTAssertEqual(rows(of: c).map(\.titleForTesting), [startFolderName, "Repo", "feature/nested"])
-        XCTAssertEqual(rows(of: c)[2].variant, .nested(.worktree))
+        XCTAssertEqual(rows(of: c)[2].variant, .nested(.workspaceWorktree))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
 
@@ -299,7 +299,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
         c.handle(.closeWorkspace)
         let ghost = rows(of: c)[1]
-        XCTAssertEqual(ghost.variant, .faint)
+        XCTAssertEqual(ghost.variant, .faint(.closedWorkspace))
         c.window.contentView?.layoutSubtreeIfNeeded()
         return ghost
     }
@@ -312,7 +312,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         XCTAssertEqual(
             rows(of: c).map(\.titleForTesting), [startFolderName, "Repo", "feature/first", "feature/second"])
-        XCTAssertEqual(rows(of: c)[1].variant, .faint, "the workspace stays closed")
+        XCTAssertEqual(rows(of: c)[1].variant, .faint(.closedWorkspace), "the workspace stays closed")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
 

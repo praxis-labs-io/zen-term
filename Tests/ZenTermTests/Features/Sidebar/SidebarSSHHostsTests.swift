@@ -28,6 +28,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
     }
 
     override func tearDownWithError() throws {
+        SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(alias: "prod"))
         for controller in controllers {
             controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
             AttentionCenter.shared.forget(windowID: controller.windowID)
@@ -87,6 +88,19 @@ final class SidebarSSHHostsTests: WindowTestCase {
 
         XCTAssertEqual(hostRows(c).map(\.titleForTesting), ["prod", "deploy@10.0.0.5"])
         XCTAssertFalse(c.sidebarForTesting.view.hostsAreHiddenForTesting)
+    }
+
+    func test_aHostRow_leadsWithTheHostChip_mutedWhileOffline() {
+        pin(hosts: ["prod"])
+
+        let c = makeWindow()
+        let row = hostRows(c).first
+        XCTAssertEqual(row?.processBadgeForTesting?.process, .offlineHost, "a host reads offline until probed")
+
+        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: "prod"))
+
+        XCTAssertEqual(hostRows(c).first?.processBadgeForTesting?.process, .unconnectedHost)
+        XCTAssertTrue(hostRows(c).first === row, "the row is repainted, not rebuilt")
     }
 
     func test_noHosts_hidesTheSection() {

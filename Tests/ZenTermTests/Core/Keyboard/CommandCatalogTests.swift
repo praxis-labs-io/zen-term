@@ -62,12 +62,14 @@ final class CommandCatalogTests: XCTestCase {
             names,
             [
                 "Open Workspace Picker", "New Workspace", "Previous Workspace", "Next Workspace",
-                "Rename Workspace…", "Close Workspace",
+                "Rename Workspace…",
                 "Jump to Waiting Agent",
                 "Open Agent Picker",
+                "Close Workspace",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
-                "Rename Tab…", "Close Tab",
+                "Rename Tab…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
+                "Close Tab",
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Focus Previous Pane", "Focus Next Pane",
@@ -78,8 +80,8 @@ final class CommandCatalogTests: XCTestCase {
                 "Jump to Previous Prompt", "Jump to Next Prompt", "Scroll to Selection",
                 "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
-                "Close Window", "Fill Screen", "Toggle Sidebar", "Focus Sidebar",
                 "New Tool Float…",
+                "Fill Screen", "Toggle Sidebar", "Focus Sidebar", "Close Window",
                 "Settings…", "Reload Config", "Check for Updates",
                 "Increase Font Size", "Decrease Font Size", "Reset Font Size",
                 "Dismiss Notice", "Dismiss All Notices", "Report an Issue…",
@@ -110,7 +112,7 @@ final class CommandCatalogTests: XCTestCase {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")
             seen.append(category)
         }
-        XCTAssertEqual(seen, ["Workspaces", "Tabs", "Panes", "Terminal", "Window", "Tools", "App"])
+        XCTAssertEqual(seen, ["Workspaces", "Tabs", "Panes", "Terminal", "Tools", "Window", "App"])
     }
 
     func test_selectTab_expandsPerTab() {

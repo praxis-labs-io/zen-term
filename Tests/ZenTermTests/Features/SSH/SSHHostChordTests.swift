@@ -134,42 +134,44 @@ final class SSHHostChordTests: WindowTestCase {
         try row(host, in: c).accessibilityValue() as? String
     }
 
-    func test_hostRows_sayTheirStatusToVoiceOver_andShowItAsTheDetail() throws {
+    func test_hostRows_sayTheirStatusToVoiceOver_showNoStatusWord_andMuteAnOfflineChip() throws {
         let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
 
-        XCTAssertEqual(try row("down", in: c).detailForTesting, "Offline")
-        XCTAssertEqual(try row("up", in: c).detailForTesting, "Online")
-        XCTAssertEqual(try row("live", in: c).detailForTesting, "Connected")
+        for host in ["down", "up", "live"] { XCTAssertEqual(try row(host, in: c).detailForTesting, "", host) }
+        XCTAssertEqual(try row("down", in: c).processBadgeForTesting?.process, .offlineHost)
+        XCTAssertEqual(try row("up", in: c).processBadgeForTesting?.process, .unconnectedHost)
+        XCTAssertEqual(try row("live", in: c).processBadgeForTesting?.process, .host)
         XCTAssertEqual(try status("down", in: c), "Offline")
         XCTAssertEqual(try status("up", in: c), "Online")
         XCTAssertEqual(try status("live", in: c), "Connected")
     }
 
-    func test_aHostNotConnected_paintsItsTitleSubtle_andConnectingRepaintsItInPlace() throws {
+    func test_anOfflineHost_paintsItsTitleFaint_onlineSubtle_andConnectedNormal_inPlace() throws {
         let c = makeWindow(hosts: ["devbox"], offline: ["devbox"])
         let row = try row("devbox", in: c)
-        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.subtle))
+        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.faint))
 
         SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(try self.row("devbox", in: c) === row, "the row is repainted, not rebuilt")
         XCTAssertEqual(try status("devbox", in: c), "Online")
+        XCTAssertEqual(row.processBadgeForTesting?.process, .unconnectedHost, "online but not connected stays muted")
         XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.subtle))
 
         SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertEqual(try status("devbox", in: c), "Connected")
         XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.normal))
+        XCTAssertEqual(row.processBadgeForTesting?.process, .host, "connecting lifts the chip into the accent")
     }
 
-    func test_aHostConnecting_repaintsItsDetailInPlace() throws {
+    func test_aHostConnecting_repaintsItsStatusInPlace() throws {
         let c = makeWindow(hosts: ["devbox"])
         let online = try row("devbox", in: c)
 
         SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(try row("devbox", in: c) === online, "the row is repainted, not rebuilt")
-        XCTAssertEqual(online.detailForTesting, "Connected")
         XCTAssertEqual(try status("devbox", in: c), "Connected")
     }
 
@@ -305,5 +307,29 @@ final class SSHHostChordTests: WindowTestCase {
         SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "fresh"))
         c.handle(.selectWorkspace(2))
         XCTAssertEqual(selected(c), "fresh")
+    }
+
+    func test_theConnectScreen_dropsTheTabBarBand_whileTheSidebarIsDocked_andKeepsItCollapsed() throws {
+        let reduceMotion = Motion.isReduceMotionEnabled
+        Motion.isReduceMotionEnabled = { true }
+        defer { Motion.isReduceMotionEnabled = reduceMotion }
+        let c = makeWindow(hosts: ["devbox"])
+        XCTAssertTrue(c.sidebarForTesting.isDocked)
+        XCTAssertEqual(c.tabBarFrameForTesting.height, TabBarView.height, "a workspace shows its tabs")
+
+        try click(row("devbox", in: c))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertEqual(c.tabBarFrameForTesting.height, 0, "Connect has no tabs, so its card takes the band")
+
+        c.handle(.toggleSidebar)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertFalse(c.sidebarForTesting.isDocked)
+        XCTAssertEqual(
+            c.tabBarFrameForTesting.height, TabBarView.height, "the band holds the collapsed sidebar's toggle")
+
+        c.handle(.toggleSidebar)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(c.tabBarFrameForTesting.height, 0)
     }
 }

@@ -13,7 +13,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (Request) -> Void
     private let onEditWorkspace: (() -> Void)?
 
-    private let header = ModalHeader(title: "New Worktree")
+    private let header = ModalHeader(title: "New Worktree", chip: .workspaceWorktree)
 
     private let branchField = BranchField()
     private var branchGroup: LabeledField?

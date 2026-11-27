@@ -2,6 +2,8 @@ import AppKit
 
 enum FormCard {
     static let maxHeight: CGFloat = 460
+    // The action bar sits as close to its rule as the hint footer's keys do, not a full modal inset away.
+    static let footerInset = ChromeMetrics.Spacing.s10
 
     /// The body's fit constraint stays `.defaultLow`; higher, it squashed captions to zero at the cap.
     static func content(rows: [NSView], footer: NSView, spacing: CGFloat) -> NSStackView {
@@ -34,9 +36,8 @@ enum FormCard {
                 equalTo: footerRow.leadingAnchor, constant: ChromeMetrics.Spacing.modalInsets.left),
             footer.trailingAnchor.constraint(
                 equalTo: footerRow.trailingAnchor, constant: -ChromeMetrics.Spacing.modalInsets.right),
-            footer.topAnchor.constraint(equalTo: footerRow.topAnchor, constant: ChromeMetrics.Spacing.modalInsets.top),
-            footer.bottomAnchor.constraint(
-                equalTo: footerRow.bottomAnchor, constant: -ChromeMetrics.Spacing.modalInsets.bottom),
+            footer.topAnchor.constraint(equalTo: footerRow.topAnchor, constant: footerInset),
+            footer.bottomAnchor.constraint(equalTo: footerRow.bottomAnchor, constant: -footerInset),
         ])
 
         let divider = Divider()

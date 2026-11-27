@@ -49,6 +49,27 @@ final class IconBadgeTests: XCTestCase {
             claude().scale, ProcessIcon.shell.scale, "a brand mark sits inside the box a Lucide glyph fills")
     }
 
+    func test_aWorkspaceChip_followsALiveAccentChange_andDrawsNeutralOnAWhiteAccent() {
+        let terminal = Theme.current.terminal
+        let chip = IconBadge(process: .workspace, size: .small)
+
+        Theme.setCurrentForTesting(AppTheme(terminal: terminal, accent: .green))
+        chip.reapplyTheme()
+        XCTAssertEqual(chip.iconTintForTesting, AccentSlot.green.color(in: terminal).nsColor)
+
+        Theme.setCurrentForTesting(AppTheme(terminal: terminal, accent: .white))
+        chip.reapplyTheme()
+        XCTAssertEqual(chip.iconTintForTesting, Theme.current.chrome.ink(.normal))
+        XCTAssertEqual(chip.fillForTesting, Theme.current.chrome.chipRaised.nsColor.cgColor)
+    }
+
+    func test_aClosedWorkspaceChip_isNeutral_withItsGlyphAtMutedInk() {
+        let chip = IconBadge(process: .closedWorkspace, size: .small)
+
+        XCTAssertEqual(chip.iconTintForTesting, Theme.current.chrome.ink(.muted))
+        XCTAssertEqual(chip.fillForTesting, Theme.current.chrome.chipRaised.nsColor.cgColor)
+    }
+
     func test_aBrandChip_keepsItsBrandsColorsOnEveryTheme_whileItsEdgeFollowsTheTheme() throws {
         let chip = IconBadge(process: claude(), size: .regular)
         let darkFill = chip.fillForTesting

@@ -3,8 +3,9 @@ import AppKit
 final class NavRow: ListRow {
     enum Variant: Equatable {
         case standard
+        case leading(ProcessIcon)
         case nested(ProcessIcon)
-        case faint
+        case faint(ProcessIcon)
     }
 
     var onArrowUp: (() -> Void)?
@@ -15,8 +16,13 @@ final class NavRow: ListRow {
     var onEscape: (() -> Void)?
     var onFocusChanged: (() -> Void)?
 
-    let variant: Variant
+    var variant: Variant {
+        didSet { if variant != oldValue { refreshContent() } }
+    }
     private var detail: String?
+    var spokenStatus: String? {
+        didSet { if spokenStatus != oldValue { refreshContent() } }
+    }
     private var titleInk: ChromeTheme.InkLevel?
     private(set) var hoverAccessory: NSView?
 
@@ -66,18 +72,23 @@ final class NavRow: ListRow {
         var shown: [NSView] = []
         if showsHoverAccessory, let hoverAccessory { shown.append(hoverAccessory) }
         var next = Content(title: content.title, note: showsHoverAccessory ? nil : detail, ink: titleInkLevel)
-        if case .nested(let process) = variant {
+        switch variant {
+        case .leading(let process), .faint(let process):
             next.leading = .process(process)
-            next.nesting = .indented
+        case .nested(let process):
+            next.leading = .process(process)
+            next.nesting = .underTitle
+        case .standard:
+            break
         }
         render(next, accessories: shown)
-        setAccessibilityValue(detail?.isEmpty == false ? detail : nil)
+        setAccessibilityValue(detail?.isEmpty == false ? detail : spokenStatus)
     }
 
     private var titleInkLevel: ChromeTheme.InkLevel {
         if let titleInk { return titleInk }
         switch variant {
-        case .standard: return .normal
+        case .standard, .leading: return .normal
         case .nested: return isCurrent ? .normal : .subtle
         case .faint: return .faint
         }

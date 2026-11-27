@@ -15,7 +15,8 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (ToolFloat) -> String?
     private let onDelete: (() -> String?)?
 
-    private lazy var header = ModalHeader(title: editingFloat == nil ? "New Tool Float" : "Edit Tool Float")
+    private lazy var header = ModalHeader(
+        title: editingFloat == nil ? "New Tool Float" : "Edit Tool Float", chip: .tool)
 
     private let titleField = FieldBox(placeholder: "Open GitDash")
     private var iconPicker: IconPickerField!

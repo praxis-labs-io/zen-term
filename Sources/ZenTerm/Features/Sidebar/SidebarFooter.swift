@@ -4,6 +4,9 @@ import AppKit
 final class SidebarFooter: NSStackView {
     static let spacing: CGFloat = ChromeMetrics.Spacing.s4
     static let buttonSize = NSSize(width: ChromeMetrics.Height.sm, height: ChromeMetrics.Height.sm)
+    // The sidebar toggle's glyph centers on the rows' chips, so the footer reads as one column with them.
+    static let toggleInset =
+        SidebarView.padding + ChromeMetrics.Spacing.controlInset + IconBadge.Size.small.side / 2 - buttonSize.width / 2
 
     private let paletteButton: IconButton
     private let settingsButton: IconButton
