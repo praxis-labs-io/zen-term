@@ -831,13 +831,14 @@ Bundled themes carry an `nvim-colorscheme` key.
   mode only if search started it (`didStartScrollMode`), and restores the viewport only
   if search moved it (`didMoveViewport`) and the reader does not own the mode.
 - **The first total selects the newest match**, once per needle, so the count always
-  has an index. The viewport moves only if that match is off screen.
+  has an index, unless any match is already on screen. That check reads the viewport
+  in one grid read with soft-wrapped rows joined, so a wrapped match counts.
 - **The landing is the match's start**, which `SEARCH_SELECTED` carries. A step from the
   field keeps it as a mark, so the hand-off lands on it wherever output took it. Whether
   the search moved the viewport is read from `grid.viewportTop`, not the scroll report,
   which lags by a frame.
 - **Find wraps** (upstream).
-- **One-line needles** (everything downstream is per row).
+- **One-line needles** (stepping and landing are per row).
 - The count shows `total - selected`, so 1 is the topmost match.
 
 ## Config

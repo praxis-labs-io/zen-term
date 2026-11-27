@@ -220,13 +220,16 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theFirstTotalSelectsTheNewestMatch_onlyWhenNoneIsOnScreen() throws {
-        for (name, rows, steps) in [
-            ("only in history", Array(repeating: "", count: 24), [TerminalSearchStep.next]),
-            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23), []),
-        ] {
+        for (name, rows, wrapping, steps) in [
+            ("only in history", Array(repeating: "", count: 24), [], [TerminalSearchStep.next]),
+            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23), [], []),
+            ("wrapped across two rows", ["an err", "or happened"] + Array(repeating: "", count: 22), [0], []),
+            ("split by a newline", ["an err", "or happened"] + Array(repeating: "", count: 22), [], [.next]),
+        ] as [(String, [String], Set<Int>, [TerminalSearchStep])] {
             let controller = makeWindow()
             let surface = try focusedSurface(controller)
             surface.rows = rows
+            surface.recordingGrid.wrappingRows = wrapping
             controller.handle(.toggleSearch)
             controller.search.beginNeedleForTesting("error")
 
@@ -344,9 +347,8 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
-        let grid = StubGrid()
+        let grid = surface.recordingGrid
         grid.viewportTop = 500
-        surface.grid = grid
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
@@ -363,9 +365,8 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
-        let grid = StubGrid()
+        let grid = surface.recordingGrid
         grid.viewportTop = 500
-        surface.grid = grid
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
@@ -648,7 +649,6 @@ final class SearchLifecycleTests: WindowTestCase {
 
     func test_escapeGivesASelectionBackBeforeItClosesTheField() throws {
         let controller = makeWindow()
-        try focusedSurface(controller).grid = StubGrid()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.toggleSearch)
@@ -667,9 +667,8 @@ final class SearchLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
-        let grid = StubGrid()
+        let grid = surface.recordingGrid
         grid.viewportTop = 500
-        surface.grid = grid
         controller.handle(.toggleSearch)
         controller.search.report(
             position: TerminalScrollPosition(total: 5000, offset: 500, viewport: 24), from: surface)
