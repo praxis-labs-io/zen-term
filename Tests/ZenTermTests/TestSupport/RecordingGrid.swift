@@ -6,6 +6,7 @@ final class RecordingGrid: TerminalGrid {
     private(set) var liveMarks = 0
 
     var wrappingRows: Set<Int> = []
+    var widthBeforeResize: Int?
 
     init(surface: RecordingSurface) {
         self.surface = surface
@@ -13,7 +14,7 @@ final class RecordingGrid: TerminalGrid {
 
     private var lines: [String] { surface.scrollback + surface.rows }
 
-    private var columns: Int { surface.cellMetrics?.columns ?? 80 }
+    private var columns: Int { widthBeforeResize ?? surface.cellMetrics?.columns ?? 80 }
 
     var rowCount: Int { lines.count }
     var viewportTop: Int { surface.scrollback.count }
@@ -46,6 +47,7 @@ final class RecordingGrid: TerminalGrid {
         let first = min(start, end)
         let last = max(start, end)
         var text = ""
+        guard first.column < columns, last.column < columns else { return nil }
         for index in first.row...last.row {
             guard let row = row(index) else { return nil }
             let from = index == first.row ? first.column : 0
@@ -59,7 +61,7 @@ final class RecordingGrid: TerminalGrid {
     }
 
     func mark(_ point: TerminalGridPoint) -> TerminalGridMark? {
-        guard lines.indices.contains(point.row) else { return nil }
+        guard lines.indices.contains(point.row), point.column < columns else { return nil }
         liveMarks += 1
         return TerminalGridMark(read: { .at(point) }, release: { [weak self] in self?.liveMarks -= 1 })
     }

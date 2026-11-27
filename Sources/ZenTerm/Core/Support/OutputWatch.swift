@@ -21,17 +21,14 @@ final class OutputWatch {
             let screenTop = lineStart(grid, at: max(grid.rowCount - metrics.rows, 0))
         else { return false }
         let (start, counted) = baseline(screenTop: screenTop)
-        let lastColumn = max(metrics.columns - 1, 0)
         guard let mark = grid.mark(TerminalGridPoint(row: max(screenTop, start), column: 0)),
-            case .at(let from) = mark.place,
-            let screen = grid.text(from: from, to: TerminalGridPoint(row: grid.rowCount - 1, column: lastColumn))
+            case .at(let from) = mark.place, let end = grid.lastCell(of: grid.rowCount - 1),
+            let screen = grid.text(from: from, to: end)
         else { return false }
         var settled = ""
         if from.row > start {
-            guard
-                let text = grid.text(
-                    from: TerminalGridPoint(row: start, column: 0),
-                    to: TerminalGridPoint(row: from.row - 1, column: lastColumn))
+            guard let end = grid.lastCell(of: from.row - 1),
+                let text = grid.text(from: TerminalGridPoint(row: start, column: 0), to: end)
             else { return false }
             settled = text
         }

@@ -32,8 +32,9 @@ final class TaskMarks {
         case .aside:
             (start, truncated) = (TerminalGridPoint(row: max(grid.rowCount - metrics.rows, 0), column: 0), true)
         }
-        let end = TerminalGridPoint(row: grid.rowCount - 1, column: max(metrics.columns - 1, 0))
-        guard let text = grid.text(from: start, to: end) else { return .unreadable }
+        guard let end = grid.lastCell(of: grid.rowCount - 1), let text = grid.text(from: start, to: end) else {
+            return .unreadable
+        }
         var lines = text.components(separatedBy: "\n")
         while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
         return .text(lines.joined(separator: "\n"), truncated: truncated)

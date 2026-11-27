@@ -57,6 +57,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         let surface = try XCTUnwrap(surfaces.first)
         try XCTSkipIf(!surface.isStarted, "ghostty_surface_new failed")
         let token = try XCTUnwrap(c.listing().workspaces.first?.tabs.first?.panes.first?.token)
+        _ = try settledColumns(surface, try XCTUnwrap(surface.grid))
         waitUntil(atPrompt(surface), "the shell's first prompt", timeout: 15)
         return (surface, token)
     }
