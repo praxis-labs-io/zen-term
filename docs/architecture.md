@@ -830,7 +830,8 @@ Bundled themes carry an `nvim-colorscheme` key.
   mode only if search started it (`didStartScrollMode`), and restores the viewport only
   if search moved it (`didMoveViewport`) and the reader does not own the mode.
 - **The first total selects the newest match**, once per needle, so the count always
-  has an index. The viewport moves only if that match is off screen.
+  has an index, unless any match is already on screen. That check reads the viewport
+  in one grid read with soft-wrapped rows joined, so a wrapped match counts.
 - **The match cell is inferred.** `SEARCH_SELECTED` carries only an index. `matchCell`
   scans the viewport by direction (libghostty walks newest to oldest), checks whether
   the viewport moved by comparing rows (`rowsAtStep`), not the scroll offset, which lags
@@ -838,7 +839,7 @@ Bundled themes carry an `nvim-colorscheme` key.
   is ASCII-only.
 - **Find wraps** (upstream). A step that selects index 0 going older, or the last index
   going newer, reached an end of the buffer, so `matchCell` takes that end of the screen.
-- **One-line needles** (everything downstream is per row).
+- **One-line needles** (stepping and landing are per row).
 - The count shows `total - selected`, so 1 is the topmost match.
 
 ## Config
