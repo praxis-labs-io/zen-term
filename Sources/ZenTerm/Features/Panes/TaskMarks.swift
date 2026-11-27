@@ -11,7 +11,9 @@ final class TaskMarks {
     private var marks: [SurfaceID: TerminalGridMark] = [:]
 
     func mark(_ surface: SurfaceID, at terminal: TerminalSurface) {
-        marks[surface] = terminal.grid.flatMap { grid in grid.cursorPoint.flatMap(grid.mark) }
+        marks[surface] = terminal.grid.flatMap { grid in
+            grid.cursorPoint.flatMap { grid.mark(TerminalGridPoint(row: $0.row, column: 0)) }
+        }
     }
 
     func release(_ surface: SurfaceID) { marks[surface] = nil }

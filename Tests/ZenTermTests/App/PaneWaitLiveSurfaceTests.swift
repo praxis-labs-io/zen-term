@@ -184,6 +184,18 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         XCTAssertEqual(read.truncated, false)
     }
 
+    func test_readSinceTaskReadsTheTasksRowFromItsFirstColumn() throws {
+        let (surface, token) = try shellPane()
+        run("printf 'zen-lead-%s ' 42; read -r _; sleep 30", in: surface)
+        waitUntil((surface.activeScreenText ?? "").contains("zen-lead-42 "), "the text before the cursor", timeout: 10)
+
+        _ = try request(.paneSend, ControlArgs(pane: .token(token), text: "zen-typed", enter: true))
+        waitUntil((surface.activeScreenText ?? "").contains("zen-typed"), "the task's echo", timeout: 10)
+
+        let read = try readSinceTask(token)
+        XCTAssertTrue(read.text.hasPrefix("zen-lead-42 zen-typed"), read.text)
+    }
+
     func test_readSinceTaskOnTheAlternateScreenReadsThatScreen_andSaysSo() throws {
         let (surface, token) = try shellPane()
         let task = #"printf '\033[?1049h'; echo zen-alt-$((40+2)); sleep 30"#

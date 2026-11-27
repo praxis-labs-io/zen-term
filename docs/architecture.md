@@ -732,7 +732,7 @@ app-wide since a caller and the pane it waits on can sit in different windows: `
 feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
 `pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
 without OSC 133 are checked on a timer while a wait holds: the text from a grid mark at the screen
-the last check read down to the bottom row (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). A task or message sent with `enter` drops a grid mark at the cursor, one per pane and replaced by the
+the last check read down to the bottom row (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). A task or message sent with `enter` drops a grid mark at the start of the cursor's row, one per pane and replaced by the
 next (`TaskMarks`), which `pane.read` with `since` reads from. The
 connection's thread checks for a hangup while it waits and drops the hold. A hangup is the write
 side's EOF (`kqueue`), since a read EOF and `POLLHUP` both fire on a client's `shutdown(SHUT_WR)`.
