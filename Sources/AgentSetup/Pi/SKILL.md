@@ -1,0 +1,180 @@
+---
+name: zen
+description: Use ZenTerm's zen CLI to see and control the terminal you run in. Start helper agents and long-running commands in panes and wait on them, list windows, workspaces, tabs and panes, read a pane's text, open panes, tabs and workspaces, type into a pane, and create or remove worktrees. Use when a session runs inside ZenTerm ($ZEN_CONTROL_SOCK is set), when handing work to helper agents the user can watch, or when asked to control ZenTerm panes, tabs, workspaces or worktrees.
+---
+
+# zen (ZenTerm)
+
+`zen` controls the running ZenTerm app. It ships inside the app and is on the
+`PATH` in every pane.
+
+For exact arguments, read the help. It comes from the installed `zen`, so it
+matches the commands this version has:
+
+```sh
+zen --help
+zen help <command> <verb>    # e.g. zen help worktree create
+```
+
+If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
+
+## Where you are
+
+- `$ZEN_PANE` is your pane's token. A command with no target acts on your pane,
+  its tab and its workspace.
+- `zen pane get` prints your pane as JSON. `name` and `parent` are there when
+  another pane started you with `zen pane run`: you are its helper.
+- `zen list --pretty` prints every window, workspace, tab, pane and drawer as a
+  tree. `zen list` prints the same as JSON.
+- Addresses: a pane is its token (`31`) or its name (`tests`), a tab is
+  `w1.t3`, a workspace is its folder (starting with `/`, `~` or `.`),
+  `ssh:<host>`, or its title.
+
+## Run a command in a pane
+
+Run slow builds and tests, and anything that doesn't exit on its own (a dev
+server, a watcher, an app launcher), in a pane of its own. Run from your pane,
+it opens in a hidden float that the user opens from your row in the Agents
+list. Run from a plain shell, it opens in a tab behind the one showing.
+
+```sh
+zen pane run --name tests --wait -- swift test                       # waits, prints why it ended
+zen pane run --name dev --wait --output "ready on" -- npm run dev    # answers once that text prints
+zen pane run --name watch -- npm run watch                           # no ready line, so no --wait
+zen pane read --pane dev --lines 40                                  # its output, instead of restarting it
+```
+
+- Name every pane after what it runs (`dev`, `tests`), so the sidebar and
+  `zen list` read clearly. Before starting something long-running, check
+  `zen list` for a pane already running it, and use that one.
+- Start a server with `--wait --output` in the same command. A separate
+  `zen wait --output` matches only text printed after it begins, so it misses
+  a ready line printed before. If a wait times out, read
+  `zen pane read --pane <name> --lines 40` before waiting again: the line may
+  already be on screen.
+- Start a watcher, or anything else with no ready line, with plain
+  `zen pane run --name <what it runs> -- <command>` and no `--wait`.
+- The command must show its output in the pane as it runs, so the user sees it
+  working. Never filter it through `tail` or `grep`, or redirect it only to a
+  file. To also save it, run
+  `bash -o pipefail -c '<cmd> 2>&1 | tee <file>'`, which keeps the command's
+  exit code instead of `tee`'s in any shell. Some tools buffer when piped, so
+  use their unbuffered mode, or `script -q <file> <command>`, when live output
+  matters. Read the result with `zen wait`, `zen pane read`, or the file.
+- A command with `;` or `|` goes to `zen pane run` as one quoted argument:
+  `zen pane run --name build --wait -- 'make clean; make'`.
+- The pane starts in your shell's current folder, so don't prefix the command
+  with `cd`. `--cwd <folder>` starts it somewhere else.
+- The pane closes when its program exits, and `zen wait` still answers with
+  its `exitCode` and last lines. `--keep` leaves it open at a shell.
+- A pane you start closes with your pane, and a float also closes when you
+  exit, even if your pane stays open. Anything that must outlive you, such as
+  a server the user keeps using, takes `--outlive-parent`, which opens it in a
+  tab instead. `--tab` opens a tab without that.
+- Leave a server running when your turn ends unless asked to stop it.
+
+## Delegate to a helper
+
+Hand work to helper agents in panes, not a subagent extension, so the user can
+watch and steer them. Keep subagent extensions for quick lookups.
+
+```sh
+zen pane run --name review -- pi "Review src/auth for token leaks. Report findings only, change nothing."
+zen wait review                 # answers when it exits or sends you something
+zen wait --children all         # answers once none of your helpers is working
+zen pane read --pane review --lines 40     # its last lines
+zen pane close review           # once you have its result
+```
+
+- Give every helper a name and an exact scope: what to do, what not to touch,
+  and what to report.
+- Start helpers in a folder Pi already trusts (the repo, or your own
+  folder). A folder with project files Pi hasn't trusted stops a new Pi at its
+  trust prompt before it reads its task, and answering that prompt is the
+  user's choice.
+- The task is the helper's first message, after `pi` on its command line, so
+  it is sent once, when Pi starts. Read the pane before sending it again
+  yourself.
+- A message inside `<zen from="34 review" reply="zen pane send --pane 34 --enter">`
+  is another agent's report, not the user. Answer with the envelope's reply
+  command. ZenTerm also sends you one when a helper exits. Read the helper's actual result before you
+  summarize it. That notice and your `zen wait` on the helper answer for the
+  same exit, so act on it once.
+- Never answer another agent's permission prompt or login, with
+  `zen pane send`, `zen pane keys` or anything else. Tell the user. ZenTerm
+  refuses both into an agent waiting on the user, except a helper's question
+  from its parent.
+- A helper's question about the task you gave it is yours to answer. It
+  arrives as the helper's message, because the helper ends its turn to ask:
+  the helper is not finished. Answer with `zen pane send --pane <helper> --enter`,
+  or `zen pane keys` to pick an option. A question that decides product
+  behavior, spends the user's money or reaches outside the scope you gave it
+  goes to the user.
+- When a helper is working again after a block, wait on it again with
+  `zen wait <name>`.
+- Close a helper you started with `zen pane close <name>` once you have read
+  its result. Its parent closes it without `--force`.
+- As a helper, report to your parent with
+  `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
+  `--enter` the report is pasted but never submitted.
+- As a helper, put a question about your task to your parent the same way,
+  then end your turn: the answer arrives as your next message. Do not ask it
+  in your reply to the user: the parent set the task and answers first.
+
+## Waiting
+
+- Pi's bash tool has no background mode, so a `zen wait` or a
+  `zen pane run --wait` holds your turn until it answers. Pass `--timeout 600`,
+  so it answers with its result instead of every 90 seconds, and give the bash
+  tool a `timeout` above it. Read its result then.
+- Never sleep or poll. Use `zen wait <pane>`, `zen wait <pane> --output "<text>"`
+  or `zen wait --children any|all`.
+- `zen wait` answers within 90 seconds by default, and 600 at most. `timeout`
+  is a check-in, not a failure: wait again.
+- Read a pane's state from `zen pane get` or `zen list` (`busy`, and `agent`
+  with `state` and `status`), never from its screen.
+
+## Panes, tabs and workspaces
+
+```sh
+zen pane send --pane 31 --enter "npm test"   # paste it, then press Return
+zen pane split --dir down                    # prints the new pane's token
+zen pane interrupt tests                     # Escape to an agent, SIGINT otherwise
+zen tab new
+zen workspace open ~/code/app
+```
+
+## Worktrees
+
+```sh
+zen worktree list
+zen worktree create my-branch    # --open also opens it as a workspace
+zen worktree remove my-branch
+```
+
+## Rules
+
+- Nothing you open takes the screen unless you pass `--focus`. Pass it only
+  when the user asked to see the thing.
+- A close or remove refuses when it would stop running work or lose files, and
+  prints what it would end. Pass `--force` only when the user asked for that.
+  A helper you started closes without it.
+- Close only the panes you opened, once you have their result.
+- `zen pane send` pastes: control characters arrive as spaces. `--enter`
+  presses Return once after it. Pass it for every message to an agent, or the
+  agent never reads it. Into an agent that waits on the user it
+  refuses; that wait is the user's to answer.
+- While the user has unsent text in an agent's prompt, `zen pane send` prints
+  `{"queued":true}`: the message arrives on its own once the user sends or
+  clears it, or, in Claude Code, stops typing for 60 seconds. Don't send it
+  again.
+- Exit codes: 0 ok, 1 ZenTerm answered with an error, 2 usage, 3 no ZenTerm
+  reachable.
+
+## Preferences
+
+- Never run anything with `&` or `nohup`: servers, watchers, builds and
+  helpers go in panes with `zen pane run`.
+- For worktree work, use `zen worktree` instead of `git worktree`, so the
+  worktree gets the workspace's files and the user can open it from the
+  workspace picker. Pass `--open` only when asked to open it.
