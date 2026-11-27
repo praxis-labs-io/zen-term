@@ -262,11 +262,7 @@ fi
 "${SIGN[@]}" "$SPARKLE"
 "${SIGN[@]}" --identifier "$BUNDLE_ID.zen" "$STAGE/Contents/MacOS/zen"
 
-# macOS treats a microphone request from any program in a pane as this app's: the app is the
-# program's responsible process. Under hardened runtime tccd refuses that request with no prompt
-# unless the app's signature carries audio-input and its Info.plist carries
-# NSMicrophoneUsageDescription. tccd checks the responsible process, so the nested code takes no
-# entitlements. The file sits outside the stage so the bundle does not seal it.
+# Pane programs run with this app as their responsible process, so TCC checks the mic entitlement here.
 SIGN_WORK="$(mktemp -d -t zenterm-package-app)"
 trap 'rm -rf "$SIGN_WORK"' EXIT
 ENTITLEMENTS="$SIGN_WORK/entitlements.plist"
@@ -281,10 +277,13 @@ cat > "$ENTITLEMENTS" <<PLIST
 PLIST
 "${SIGN[@]}" --entitlements "$ENTITLEMENTS" "$STAGE"
 
-# Read the signed app back. Nothing else packages the app, CI included, so a dropped entitlement
-# or usage string would ship a terminal whose programs record silence, and no check would fail.
+# CI does not package the app, so nothing else catches a dropped mic entitlement or usage string.
 SIGNED_ENTITLEMENTS="$SIGN_WORK/signed-entitlements.plist"
-codesign -d --entitlements - --xml "$STAGE" > "$SIGNED_ENTITLEMENTS" 2>/dev/null || true
+codesign -d --entitlements - --xml "$STAGE" > "$SIGNED_ENTITLEMENTS" 2> "$SIGN_WORK/read-back.err" || {
+    echo "✗ codesign could not read the signed app's entitlements back:" >&2
+    sed 's/^/  /' "$SIGN_WORK/read-back.err" >&2
+    exit 1
+}
 AUDIO_INPUT="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "$SIGNED_ENTITLEMENTS" 2>/dev/null || true)"
 [[ "$AUDIO_INPUT" == "true" ]] || {
     echo "✗ the signed app lacks com.apple.security.device.audio-input set to true" >&2

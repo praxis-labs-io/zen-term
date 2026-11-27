@@ -37,8 +37,7 @@ older build leaves a newer build's untouched copies alone.
 `bin/package-app` signs the outer app with the `com.apple.security.device.audio-input`
 entitlement and writes `NSMicrophoneUsageDescription` into its `Info.plist`. macOS treats a
 microphone request from a program in a pane as ZenTerm's, and under the hardened runtime it
-refuses that request with no prompt unless both are present. `bin/package-app` reads the signed
-app back and refuses to finish without them.
+refuses that request with no prompt unless both are present.
 
 ## zen-term-releases stays archived
 
