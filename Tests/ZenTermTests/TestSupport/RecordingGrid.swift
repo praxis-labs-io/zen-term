@@ -1,7 +1,6 @@
 import TerminalKit
 
-// `RecordingSurface`'s scrollback and rows as a grid, padded to its columns. A row wraps only when listed in
-// `wrappingRows`, a mark keeps its point, and the cursor sits at the start of the row after the last one written.
+// `RecordingSurface`'s scrollback and rows as a grid; a row wraps only when listed in `wrappingRows`.
 final class RecordingGrid: TerminalGrid {
     private unowned let surface: RecordingSurface
     private(set) var liveMarks = 0
