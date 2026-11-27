@@ -9,7 +9,7 @@ class WindowTestCase: XCTestCase {
     private let originalConnectAfter = MainActor.assumeIsolated { HostConnectView.after }
     private let originalConnectNow = MainActor.assumeIsolated { HostConnectView.now }
 
-    // Fixtures open worktrees at never-created folders the removal check reads as deleted, and Settings writes ~/.claude.
+    // Fixtures open worktrees at never-created folders the removal check reads as deleted, and Settings writes ~/.claude and ~/.pi.
     override func setUpWithError() throws {
         try super.setUpWithError()
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
@@ -17,6 +17,8 @@ class WindowTestCase: XCTestCase {
         MainActor.assumeIsolated { HostConnectView.after = { _, work in work() } }
         ClaudeCodeSetup.configRootOverrideForTesting = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-claude-\(UUID().uuidString)")
+        PiCodingAgentSetup.configRootOverrideForTesting = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-pi-\(UUID().uuidString)")
     }
 
     /// Not `tearDown`, which runs first and would close windows before a subclass's own teardown.
@@ -32,6 +34,8 @@ class WindowTestCase: XCTestCase {
         PointerRest.resetForTesting()
         ClaudeCodeSetup.configRootOverrideForTesting.map { try? FileManager.default.removeItem(at: $0) }
         ClaudeCodeSetup.configRootOverrideForTesting = nil
+        PiCodingAgentSetup.configRootOverrideForTesting.map { try? FileManager.default.removeItem(at: $0) }
+        PiCodingAgentSetup.configRootOverrideForTesting = nil
     }
 
     @MainActor

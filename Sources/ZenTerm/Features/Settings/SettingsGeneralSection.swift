@@ -6,6 +6,9 @@ final class SettingsGeneralSection: SettingsFormSection {
     static let claudeSetupKey = "claude-setup"
     static let claudeUpdateKey = "claude-update"
     private let claudeRows = SetupRows<ClaudeCodeSetup>(setupKey: claudeSetupKey, updateKey: claudeUpdateKey)
+    static let piSetupKey = "pi-setup"
+    static let piUpdateKey = "pi-update"
+    private let piRows = SetupRows<PiCodingAgentSetup>(setupKey: piSetupKey, updateKey: piUpdateKey)
 
     override func populate() {
         addGroup("Agents") {
@@ -22,6 +25,10 @@ final class SettingsGeneralSection: SettingsFormSection {
                 to: self, caption: "Teach Claude Code to use zen",
                 description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)",
                 updateCaption: "Update zen for Claude Code")
+            self.piRows.add(
+                to: self, caption: "Teach Pi to use zen",
+                description: "The zen skill and a session extension, in \(PiCodingAgentSetup.folderName)",
+                updateCaption: "Update zen for Pi")
         }
         addGroup("Notifications") {
             self.addSegmentedRow(

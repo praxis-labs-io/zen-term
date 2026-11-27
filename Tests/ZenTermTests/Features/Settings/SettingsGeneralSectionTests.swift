@@ -21,6 +21,12 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             shippedDigests: [
                 ClaudeSetupFiles.digest(of: Data("older".utf8)), ClaudeSetupFiles.digest(of: Data("hook".utf8)),
             ])
+        PiCodingAgentSetup.configRootOverrideForTesting = tempRoot.appendingPathComponent("pi")
+        PiCodingAgentSetup.filesOverrideForTesting = PiSetupFiles(
+            skill: Data("skill".utf8), extension: Data("extension".utf8),
+            shippedDigests: [
+                PiSetupFiles.digest(of: Data("older".utf8)), PiSetupFiles.digest(of: Data("extension".utf8)),
+            ])
         AppConfig.reload()
     }
 
@@ -30,6 +36,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         ConfigReset.toBuiltIn()
         ClaudeCodeSetup.configRootOverrideForTesting = nil
         ClaudeCodeSetup.filesOverrideForTesting = nil
+        PiCodingAgentSetup.configRootOverrideForTesting = nil
+        PiCodingAgentSetup.filesOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -57,7 +65,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Segment: Int {
-        case notifications, claudeSetup, attentionToast, completionToast, updates
+        case notifications, claudeSetup, piSetup, attentionToast, completionToast, updates
     }
 
     private func segment(_ which: Segment) -> SegmentedControl {
@@ -66,7 +74,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
 
     func test_everyToggle_isPresent_andDefaults() {
         let segments = mountSegments()
-        XCTAssertEqual(segments.count, 5, "notifications, Claude Code setup, the two toast rows, and updates")
+        XCTAssertEqual(segments.count, 6, "notifications, Claude Code and Pi setup, the two toast rows, and updates")
         XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
@@ -262,8 +270,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         control.onTab?()
 
         let detail = try XCTUnwrap(hostWindow?.contentView)
-        let attention = descendants(of: detail).compactMap { $0 as? SegmentedControl }[Segment.attentionToast.rawValue]
-        XCTAssertTrue(KeyboardFocus.isFocused(attention, in: hostWindow))
+        let next = descendants(of: detail).compactMap { $0 as? SegmentedControl }[Segment.piSetup.rawValue]
+        XCTAssertTrue(KeyboardFocus.isFocused(next, in: hostWindow))
     }
 
     func test_claudeSetup_malformedSettingsShowsWhy_andWritesNothing() throws {
@@ -276,6 +284,83 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(control.selectedIndex, 1)
         XCTAssertTrue(claudeSetupMessage()?.contains("settings.json") == true, "got: \(claudeSetupMessage() ?? "nil")")
         XCTAssertFalse(FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills").path))
+    }
+
+    private var piRoot: URL { tempRoot.appendingPathComponent("pi") }
+
+    private func piSetupControl() -> SegmentedControl {
+        let control = segment(.piSetup)
+        waitUntil(control.isEnabled, "the Pi setup state to load")
+        return control
+    }
+
+    private func piUpdateButton() throws -> AppButton {
+        let row = try XCTUnwrap(section?.rowFor(SettingsGeneralSection.piUpdateKey))
+        return try XCTUnwrap(descendants(of: row).compactMap { $0 as? AppButton }.first)
+    }
+
+    private var piUpdateRow: LayoutRow? { section?.rowFor(SettingsGeneralSection.piUpdateKey) }
+
+    private func piInstalledSkill() throws -> Data {
+        try Data(contentsOf: piRoot.appendingPathComponent("skills/zen/SKILL.md"))
+    }
+
+    func test_piSetup_showsOffWhenNothingIsInstalled_andNamesItsFolder() throws {
+        let control = piSetupControl()
+        let detail = try XCTUnwrap(hostWindow?.contentView)
+        let texts = descendants(of: detail).compactMap { ($0 as? NSTextField)?.stringValue }
+
+        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertNil(section?.rowFor(SettingsGeneralSection.piSetupKey)?.renderedMessageForTesting)
+        XCTAssertEqual(piUpdateRow?.isHidden, true)
+        XCTAssertTrue(
+            texts.contains("The zen skill and a session extension, in \(PathDisplay.abbreviatingHome(piRoot.path))"),
+            "\(texts)")
+    }
+
+    func test_piSetup_choosingOnInstalls_andOffRemoves() {
+        let control = piSetupControl()
+        let skill = piRoot.appendingPathComponent("skills/zen/SKILL.md")
+        let piExtension = piRoot.appendingPathComponent("extensions/zenterm-context.ts")
+
+        press(Self.leftKey, on: control)
+
+        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: skill.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: piExtension.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: claudeRoot.path), "Pi's row leaves Claude Code alone")
+
+        press(Self.rightKey, on: control)
+
+        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: skill.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: piExtension.path))
+    }
+
+    func test_piSetup_anOlderInstallIsUpdatedByUpdate() throws {
+        let older = PiSetupFiles(skill: Data("older".utf8), extension: Data("extension".utf8))
+        _ = try PiSetup(configRoot: piRoot, files: older).install()
+        _ = piSetupControl()
+
+        XCTAssertEqual(piUpdateRow?.isHidden, false)
+        let update = try piUpdateButton()
+        update.performClick(nil)
+        waitUntil(update.isHidden && update.isEnabled, "the update to land")
+
+        XCTAssertEqual(piUpdateRow?.isHidden, true)
+        XCTAssertEqual(try piInstalledSkill(), Data("skill".utf8))
+    }
+
+    func test_piSetup_anEditedInstallOffersUpdate() throws {
+        _ = try PiSetup(
+            configRoot: piRoot, files: PiSetupFiles(skill: Data("mine".utf8), extension: Data("extension".utf8))
+        )
+        .install()
+        _ = piSetupControl()
+
+        let texts = piUpdateRow.map { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } } ?? []
+        XCTAssertEqual(piUpdateRow?.isHidden, false)
+        XCTAssertTrue(texts.contains("Your zen setup has changes, and updating replaces them."))
     }
 
     private func arrow(_ keyCode: UInt16) -> NSEvent {

@@ -80,8 +80,13 @@ final class SettingsRowDescriptionTests: WindowTestCase {
         ClaudeCodeSetup.configRootOverrideForTesting = URL(fileURLWithPath: PathDisplay.homePath)
             .appendingPathComponent(".claude")
         defer { ClaudeCodeSetup.configRootOverrideForTesting = testRoot }
+        let piTestRoot = PiCodingAgentSetup.configRootOverrideForTesting
+        PiCodingAgentSetup.configRootOverrideForTesting = URL(fileURLWithPath: PathDisplay.homePath)
+            .appendingPathComponent(".pi/agent")
+        defer { PiCodingAgentSetup.configRootOverrideForTesting = piTestRoot }
         let detail = mount(SettingsGeneralSection())
         ClaudeCodeSetup.configRootOverrideForTesting = testRoot
+        PiCodingAgentSetup.configRootOverrideForTesting = piTestRoot
         let labels = notes(in: detail)
         XCTAssertFalse(labels.isEmpty, "expected the section to render descriptions")
 
