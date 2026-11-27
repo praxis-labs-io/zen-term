@@ -432,31 +432,31 @@ final class HostConnectLoginTests: WindowTestCase {
         XCTAssertNil(view.emblemForTesting.glyphForTesting)
     }
 
-    private func sidebarDetail(in c: WindowController) throws -> String? {
+    private func sidebarStatus(in c: WindowController) throws -> String? {
         try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == host.alias })
-            .detailForTesting
+            .accessibilityValue() as? String
     }
 
     func test_theSidebarRowReadsConnecting_untilTheLoginConnects() throws {
         let (c, _) = try loggingIn()
-        XCTAssertEqual(try sidebarDetail(in: c), "Connecting")
+        XCTAssertEqual(try sidebarStatus(in: c), "Connecting")
 
         fake.connect()
 
-        XCTAssertEqual(try sidebarDetail(in: c), "Connected")
+        XCTAssertEqual(try sidebarStatus(in: c), "Connected")
     }
 
     func test_theSidebarRowStopsReadingConnecting_whenTheLoginFailsOrIsCancelled() throws {
         let (c, login) = try loggingIn()
         login.delegate?.surfaceDidExit(login, code: 255)
         drainMainQueue()
-        XCTAssertNotEqual(try sidebarDetail(in: c), "Connecting", "failed")
+        XCTAssertNotEqual(try sidebarStatus(in: c), "Connecting", "failed")
 
         try send(keyCode: 36, "\r", in: c)
         fake.ready?()
-        XCTAssertEqual(try sidebarDetail(in: c), "Connecting", "precondition: retrying")
+        XCTAssertEqual(try sidebarStatus(in: c), "Connecting", "precondition: retrying")
         try pressEscape(in: c)
-        XCTAssertNotEqual(try sidebarDetail(in: c), "Connecting", "cancelled")
+        XCTAssertNotEqual(try sidebarStatus(in: c), "Connecting", "cancelled")
     }
 
     func test_theEmblemRainsWhileConnecting_untilTheLoginIsCancelled() throws {
@@ -499,7 +499,7 @@ final class HostConnectLoginTests: WindowTestCase {
 
         XCTAssertNotEqual(c.selectedHostForTesting, host)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, local)
-        XCTAssertEqual(try sidebarDetail(in: c), "Connected")
+        XCTAssertEqual(try sidebarStatus(in: c), "Connected")
     }
 
     func test_aHostLeftWhileItConnects_stopsItsEmblemRaining() throws {
@@ -534,10 +534,10 @@ final class HostConnectLoginTests: WindowTestCase {
         HostConnectView.after = { _, _ in }
 
         fake.connect()
-        XCTAssertEqual(try sidebarDetail(in: c), "Connecting", "precondition: the answer has not shown")
+        XCTAssertEqual(try sidebarStatus(in: c), "Connecting", "precondition: the answer has not shown")
         c.activate(SSHHostID(alias: "other"))
 
-        XCTAssertEqual(try sidebarDetail(in: c), "Connected")
+        XCTAssertEqual(try sidebarStatus(in: c), "Connected")
     }
 
     func test_aFailureOffItsConnectScreen_stillToasts() throws {

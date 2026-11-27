@@ -230,6 +230,7 @@ final class WindowController: NSObject {
     private var tabProcesses: [TabID: ProcessIcon?] = [:]
     private let dock: ToggleDock
     private var dockTrailing: NSLayoutConstraint?
+    private var tabBarHeight: NSLayoutConstraint?
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
     private var connectView: HostConnectView?
@@ -521,6 +522,10 @@ final class WindowController: NSObject {
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
         sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
+        sidebar.slidesWithDocking = { [weak self] in
+            guard let self, let tabBarHeight = self.tabBarHeight else { return [] }
+            return [(tabBarHeight, self.tabBarBand)]
+        }
         sidebar.onMoveWindowButtons = { [weak self] in
             self?.window.moveWindowButtons(to: $0, visible: $1, animated: $2)
         }
@@ -675,13 +680,15 @@ final class WindowController: NSObject {
         let dockTrailing = dock.trailingAnchor.constraint(
             equalTo: container.trailingAnchor, constant: -ChromeMetrics.windowGutter)
         self.dockTrailing = dockTrailing
+        let tabBarHeight = tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height)
+        self.tabBarHeight = tabBarHeight
         NSLayoutConstraint.activate([
             canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
             canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvasHost.topAnchor.constraint(equalTo: container.topAnchor),
             canvasHost.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
+            tabBarHeight,
             dockTrailing,
             dock.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
@@ -1051,6 +1058,7 @@ final class WindowController: NSObject {
         mountedCanvas = canvas
         restoreFocusToActive()
         renderDock()
+        tabBarHeight?.constant = tabBarBand
 
         switch transition {
         case .instant:
@@ -1072,6 +1080,9 @@ final class WindowController: NSObject {
             }
         }
     }
+
+    // The Connect screen has no tabs, so the band goes unless it holds the collapsed sidebar's toggle.
+    private var tabBarBand: CGFloat { isOnConnect && sidebar.isDocked ? 0 : TabBarView.height }
 
     private func unmountCanvas() {
         restoreFocusToActive()
@@ -1333,7 +1344,7 @@ final class WindowController: NSObject {
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
-        let transition = transition ?? workspaceSlide(from: activeWorkspace?.id, to: id)
+        let transition = transition ?? slide(to: workspace.host.map(WorkspaceOrder.Target.host) ?? .workspace(id))
         selection = .workspace(workspace)
         mount(transition, then: finished)
         if let tab = workspace.activeID { visit(tab) }
@@ -1348,8 +1359,9 @@ final class WindowController: NSObject {
         closeFloatForTabChange()
         cancelConfirm()
         endModes()
+        let transition = slide(to: .host(host))
         selection = .host(host)
-        mount(.instant)
+        mount(transition)
         renderAttention()
     }
 
@@ -1369,9 +1381,11 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    private func workspaceSlide(from old: WorkspaceID?, to new: WorkspaceID) -> MountTransition {
-        let ids = order.navigableWorkspaces
-        guard let old, let from = ids.firstIndex(of: old), let to = ids.firstIndex(of: new) else { return .instant }
+    private func slide(to new: WorkspaceOrder.Target) -> MountTransition {
+        let line = order.line
+        guard let old = selectedTarget, let from = line.firstIndex(of: old), let to = line.firstIndex(of: new),
+            from != to
+        else { return .instant }
         return .slide(from: to > from ? .fromBottom : .fromTop)
     }
 
@@ -4818,6 +4832,7 @@ final class WindowController: NSObject {
     var selectedHostForTesting: SSHHostID? { selection.host }
 
     var connectViewForTesting: HostConnectView? { mountedCanvas as? HostConnectView }
+    var tabBarFrameForTesting: NSRect { tabBar.frame }
 
     var activeConnectionForTesting: SSHConnection? { activeWorkspace?.connection }
     func connectionForTesting(of host: SSHHostID) -> SSHConnection? { workspaces.first { $0.host == host }?.connection }

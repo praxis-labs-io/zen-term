@@ -368,7 +368,7 @@ final class PaletteInteractionTests: WindowTestCase {
         let window = mount(overlay)
         window.layoutIfNeeded()
         let hues: [CommandCategory: AccentSlot] = [
-            .workspaces: .magenta, .tabs: .cyan, .panes: .yellow, .terminal: .green, .window: .blue, .tools: .green,
+            .workspaces: .blue, .tabs: .cyan, .panes: .yellow, .window: .magenta,
         ]
         let commands = CommandCatalog.commands(tabCount: 3, workspaceCount: 1)
         let shown = rows(in: overlay)

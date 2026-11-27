@@ -339,15 +339,15 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(titles(of: c), [startFolderName, "Alpha", "feature/one"])
         let ghost = rows(of: c)[1]
-        XCTAssertEqual(ghost.variant, .faint)
+        XCTAssertEqual(ghost.variant, .faint(.closedWorkspace))
         XCTAssertEqual(ghost.titleInkForTesting, Theme.current.chrome.ink(.faint))
         XCTAssertEqual(ghost.detailForTesting, "")
         XCTAssertNil(ghost.tooltip, "a ghost takes no ⌘⌃ number")
-        XCTAssertEqual(rows(of: c)[2].variant, .nested(.worktree))
+        XCTAssertEqual(rows(of: c)[2].variant, .nested(.workspaceWorktree))
         let chip = try XCTUnwrap(rows(of: c)[2].processBadgeForTesting, "a worktree row draws no chip")
-        XCTAssertEqual(chip.process, .worktree)
+        XCTAssertEqual(chip.process, .workspaceWorktree)
         XCTAssertTrue(chip.isDescendant(of: rows(of: c)[2]), "the chip is not in the row")
-        XCTAssertNil(rows(of: c)[1].processBadgeForTesting, "a workspace row is not a worktree")
+        XCTAssertEqual(rows(of: c)[1].processBadgeForTesting?.process, .closedWorkspace, "a closed parent leads muted")
         XCTAssertEqual(rows(of: c)[2].layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
     }
 
@@ -360,7 +360,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
         XCTAssertEqual(c.workspaceNamesForTesting, [startFolderName, "Alpha: feature/one", "Alpha"])
         XCTAssertEqual(titles(of: c), [startFolderName, "Alpha", "feature/one"])
-        XCTAssertEqual(rows(of: c).map(\.variant), [.standard, .standard, .nested(.worktree)])
+        XCTAssertEqual(
+            rows(of: c).map(\.variant), [.leading(.workspace), .leading(.workspace), .nested(.workspaceWorktree)])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting[2])
     }
 
@@ -579,7 +580,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         c.handle(.closeWorkspace)
 
         XCTAssertEqual(titles(of: c), [startFolderName, "Alpha", "feature/one", "Beta"])
-        XCTAssertEqual(rows(of: c)[1].variant, .faint, "Alpha's row turns ghost")
+        XCTAssertEqual(rows(of: c)[1].variant, .faint(.closedWorkspace), "Alpha's row turns ghost")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree, "the next row down, not the next one opened")
     }
 
