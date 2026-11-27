@@ -15,6 +15,7 @@
             zoomed.isZoomed = true
             let scrolling = header(shell, active: true)
             scrolling.isScrolling = true
+            scrolling.scrollReadout = "1284:17"
             return [
                 GallerySection(
                     title: "PaneHeader",
