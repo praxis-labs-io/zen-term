@@ -106,8 +106,10 @@ final class GhosttyGridTests: XCTestCase {
     }
 
     func test_aMarkIsAsideWhileTheAlternateScreenShows() throws {
-        let (_, grid) = try mounted("echo MARKHERE; sleep 1; printf '\\033[?1049h'; sleep 1; printf '\\033[?1049l'")
+        let (surface, grid) = try mounted(
+            "echo MARKHERE; sleep 1; printf '\\033[?1049h'; sleep 1; printf '\\033[?1049l'")
         let row = try awaitRow(grid, "MARKHERE")
+        _ = try settledColumns(surface, grid)
         let mark = try XCTUnwrap(grid.mark(TerminalGridPoint(row: row, column: 0)))
 
         XCTAssertTrue(waitFor { mark.place == .aside })
@@ -136,8 +138,9 @@ final class GhosttyGridTests: XCTestCase {
     }
 
     func test_textReadsAcrossTheViewportsTopEdge() throws {
-        let (_, grid) = try mounted("seq 5000")
+        let (surface, grid) = try mounted("seq 5000")
         let last = try awaitRow(grid, "5000")
+        _ = try settledColumns(surface, grid)
         let top = grid.viewportTop
 
         let read = grid.text(
@@ -192,9 +195,7 @@ final class GhosttyGridTests: XCTestCase {
     func test_aColumnPastTheRightEdgeIsOutsideTheGrid() throws {
         let (surface, grid) = try mounted("echo HERE")
         let row = try awaitRow(grid, "HERE")
-        let settled = waitFor { grid.row(row)?.cells.count == surface.cellMetrics?.columns }
-        XCTAssertTrue(settled, "the grid never took the view's width")
-        let columns = try XCTUnwrap(grid.row(row)?.cells.count)
+        let columns = try settledColumns(surface, grid)
         let past = TerminalGridPoint(row: row, column: columns)
 
         XCTAssertNil(grid.mark(past))
