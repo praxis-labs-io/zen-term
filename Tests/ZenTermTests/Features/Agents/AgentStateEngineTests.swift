@@ -238,6 +238,19 @@ final class AgentRulesKeyTests: XCTestCase {
         }
     }
 
+    func test_aNameMatchingTwoAgents_resolvesToTheFirstInNameOrder() {
+        let cases: [(name: String, expected: String)] = [
+            ("codex claude", "claude"),
+            ("Claude Code under codex", "claude"),
+            ("pi codex", "codex"),
+            ("pi claude", "claude"),
+        ]
+
+        for item in cases {
+            XCTAssertEqual(AgentRules.key(for: item.name), item.expected, item.name)
+        }
+    }
+
     func test_claudesMessage_isTheToolName_withoutTheSpinner() {
         XCTAssertEqual(
             AgentRules.message(fromTitle: AgentTitleFixtures.claudeWorking, agentName: "claude"),

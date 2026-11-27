@@ -9,7 +9,7 @@ enum AgentRules {
     // A launch names an agent by its program (`claude`), a notification by its own words (`Claude Code`).
     static func key(for agentName: String?) -> String? {
         guard let name = agentName?.lowercased(), !name.isEmpty else { return nil }
-        return AgentRoster.knownAgents.first {
+        return AgentRoster.knownAgents.sorted().first {
             name.contains($0) && (!wholeWordAgents.contains($0) || containsWord($0, in: name))
         }
     }
