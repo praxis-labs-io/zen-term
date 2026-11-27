@@ -32,6 +32,13 @@ SessionStart entry is not the one setup writes, or an installed file matches no 
 stamps `hooks/zenterm-context.build` with the `CFBundleVersion` that wrote the files, so an
 older build leaves a newer build's untouched copies alone.
 
+## The app declares microphone access
+
+`bin/package-app` signs the outer app with the `com.apple.security.device.audio-input`
+entitlement and writes `NSMicrophoneUsageDescription` into its `Info.plist`. macOS treats a
+microphone request from a program in a pane as ZenTerm's, and under the hardened runtime it
+refuses that request with no prompt unless both are present.
+
 ## zen-term-releases stays archived
 
 Builds before v1.0.0 poll a frozen `SUFeedURL` in `zen-term/zen-term-releases`, which

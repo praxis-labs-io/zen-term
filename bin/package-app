@@ -237,6 +237,7 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Praxis Labs. MIT licensed.</string>
+  <key>NSMicrophoneUsageDescription</key><string>A program running in ${BUNDLE_NAME} wants to use your microphone.</string>
 ${SPARKLE_KEYS}
 </dict>
 </plist>
@@ -260,7 +261,41 @@ fi
 "${SIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
 "${SIGN[@]}" "$SPARKLE"
 "${SIGN[@]}" --identifier "$BUNDLE_ID.zen" "$STAGE/Contents/MacOS/zen"
-"${SIGN[@]}" "$STAGE"
+
+# Pane programs run with this app as their responsible process, so TCC checks the mic entitlement here.
+SIGN_WORK="$(mktemp -d -t zenterm-package-app)"
+trap 'rm -rf "$SIGN_WORK"' EXIT
+ENTITLEMENTS="$SIGN_WORK/entitlements.plist"
+cat > "$ENTITLEMENTS" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>
+PLIST
+"${SIGN[@]}" --entitlements "$ENTITLEMENTS" "$STAGE"
+
+# CI does not package the app, so nothing else catches a dropped mic entitlement or usage string.
+SIGNED_ENTITLEMENTS="$SIGN_WORK/signed-entitlements.plist"
+codesign -d --entitlements - --xml "$STAGE" > "$SIGNED_ENTITLEMENTS" 2> "$SIGN_WORK/read-back.err" || {
+    echo "✗ codesign could not read the signed app's entitlements back:" >&2
+    sed 's/^/  /' "$SIGN_WORK/read-back.err" >&2
+    exit 1
+}
+AUDIO_INPUT="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "$SIGNED_ENTITLEMENTS" 2>/dev/null || true)"
+[[ "$AUDIO_INPUT" == "true" ]] || {
+    echo "✗ the signed app lacks com.apple.security.device.audio-input set to true" >&2
+    echo "  under hardened runtime macOS refuses a pane program's microphone request with no prompt" >&2
+    exit 1
+}
+MIC_USAGE="$(/usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$STAGE/Contents/Info.plist" 2>/dev/null || true)"
+[[ -n "$MIC_USAGE" ]] || {
+    echo "✗ the signed app's Info.plist lacks NSMicrophoneUsageDescription" >&2
+    echo "  without it macOS refuses a pane program's microphone request with no prompt" >&2
+    exit 1
+}
 
 # The only point where the installed app is at risk, and by now the replacement is
 # complete and signed.
