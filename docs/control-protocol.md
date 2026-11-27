@@ -489,9 +489,10 @@ not started or its screen cannot be read.
 
 - With `since: "task"` it returns what the pane printed since its last task or message: a
   `pane.run` `task` or a `pane.send` with `enter`, read from the start of the cursor's row as it
-  arrived, so the text starts with the prompt and its echo. Each such send replaces the last. The answer carries
+  arrived, so the text starts with the prompt and its echo. A full-screen program showing as it arrived
+  reads from that row, not its whole screen. Each such send replaces the last. The answer carries
   `truncated`, true when the scrollback dropped that spot, so the text starts at the oldest
-  row, or when a full-screen program shows, so the text is that screen.
+  row, or when a full-screen program started since shows, so the text is that screen.
 - It reads the cells as they stand, not a log: a program that redraws reads as it shows now.
 - `lines` and `since` together are a `bad_request`. `failed` when the pane has had no task or
   message.

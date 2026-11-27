@@ -280,7 +280,8 @@ struct PaneCommands: ParsableCommand {
         @Flag(
             help: ArgumentHelp(
                 "Print from the row where the pane's last task or message sent with --enter began, its echo included. "
-                    + "Cells as they stand, not a log: a full-screen program reads as its screen now."))
+                    + "Cells as they stand, not a log. A full-screen program already showing reads from the row its "
+                    + "cursor was on as the task arrived."))
         var sinceTask = false
 
         func validate() throws {
