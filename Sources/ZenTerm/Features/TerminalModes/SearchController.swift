@@ -47,6 +47,7 @@ final class SearchController {
 
     /// `selected` lags the backend, so a Return before its report would otherwise step twice.
     private var didRequestSelection = false
+    private var didWeighSelection = false
 
     private var didStartScrollMode = false
 
@@ -127,7 +128,7 @@ final class SearchController {
             return
         }
         guard selected != nil else { return }
-        if let fieldLanding {
+        if let fieldLanding = currentFieldLanding {
             scrollMode.land(on: fieldLanding)
         } else {
             land(after: .next)
@@ -142,6 +143,7 @@ final class SearchController {
         selected = nil
         fieldLanding = nil
         didRequestSelection = false
+        didWeighSelection = false
         surface?.search(text)
     }
 
@@ -202,6 +204,7 @@ final class SearchController {
         pendingStep = nil
         rowsAtStep = nil
         didRequestSelection = false
+        didWeighSelection = false
         unsent = nil
         restoreViewport()
         if didStartScrollMode {
@@ -223,6 +226,7 @@ final class SearchController {
     private func needleDidChange(_ text: String) {
         needle = text
         didRequestSelection = false
+        didWeighSelection = false
         debounce?.cancel()
         debounce = nil
         guard !text.isEmpty, text.count < Self.debounceBelowLength else {
@@ -270,19 +274,28 @@ final class SearchController {
     }
 
     /// Once per needle: `SEARCH_TOTAL` fires repeatedly as the engine works back through the buffer.
+    /// A match already on screen selects nothing, so opening find never scrolls away from what the reader sees.
     private func selectNewestIfUnselected() {
-        guard !didRequestSelection, !needle.isEmpty, unsent == nil else { return }
+        guard !didRequestSelection, !didWeighSelection, !needle.isEmpty, unsent == nil else { return }
+        didWeighSelection = true
+        guard !viewportHoldsNeedle() else { return }
         navigate(.next)
+    }
+
+    private func viewportHoldsNeedle() -> Bool {
+        guard let surface else { return false }
+        return Self.viewportRows(of: surface).contains { !Self.occurrenceColumns(of: needle, in: $0).isEmpty }
     }
 
     func report(selected: Int?, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
         self.selected = selected
         showCount()
-        noteViewportMove()
         guard let step = pendingStep, selected != nil else { return }
+        noteViewportMove()
         pendingStep = nil
         land(after: step)
+        rowsAtStep = nil
     }
 
     private func showCount() {
@@ -299,11 +312,19 @@ final class SearchController {
 
     /// Steps from the field land on a cell of their own, so a hand-off to scroll mode starts on the selected match.
     private var fieldLanding: ScrollCell?
+    private var rowsAtLanding: [String]?
+
+    /// A landing outlives its rows only until the viewport scrolls, reflows or prints, so it holds while they match.
+    private var currentFieldLanding: ScrollCell? {
+        guard let fieldLanding, let surface, rowsAtLanding == Self.viewportRows(of: surface) else { return nil }
+        return fieldLanding
+    }
 
     private func land(after step: TerminalSearchStep) {
         guard let surface else { return }
         let rows = Self.viewportRows(of: surface)
-        let from = scrollMode.isActive ? scrollMode.cursor : fieldLanding ?? ScrollCell(row: rows.count, column: 0)
+        let from =
+            scrollMode.isActive ? scrollMode.cursor : currentFieldLanding ?? ScrollCell(row: rows.count, column: 0)
         guard
             let cell = Self.matchCell(
                 needle: needle, rows: rows, from: from, step: step,
@@ -314,6 +335,7 @@ final class SearchController {
             scrollMode.land(on: cell)
         } else {
             fieldLanding = cell
+            rowsAtLanding = rows
         }
     }
 
@@ -333,6 +355,9 @@ final class SearchController {
             occurrenceColumns(of: needle, in: text).map { ScrollCell(row: row, column: $0) }
         }
         guard !occurrences.isEmpty else { return nil }
+        if let selected, let total, occurrences.count == total, selected < total {
+            return occurrences[total - 1 - selected]
+        }
         if let end = bufferEnd(in: occurrences, step: step, selected: selected, total: total) {
             return end
         }

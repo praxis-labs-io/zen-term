@@ -233,10 +233,10 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next])
     }
 
-    func test_theFirstTotalSelectsTheNewestMatch() throws {
-        for (name, rows) in [
-            ("only in history", Array(repeating: "", count: 24)),
-            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23)),
+    func test_theFirstTotalSelectsTheNewestMatch_onlyWhenNoneIsOnScreen() throws {
+        for (name, rows, steps) in [
+            ("only in history", Array(repeating: "", count: 24), [TerminalSearchStep.next]),
+            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23), []),
         ] {
             let controller = makeWindow()
             let surface = try focusedSurface(controller)
@@ -245,9 +245,10 @@ final class SearchLifecycleTests: WindowTestCase {
             controller.search.beginNeedleForTesting("error")
 
             controller.search.report(total: 3, from: surface)
+            controller.search.report(total: 3, from: surface)
 
             XCTAssertEqual(
-                surface.searchSteps, [.next], "\(name): one step selects the newest, so the count has an index")
+                surface.searchSteps, steps, "\(name): opening find never scrolls away from a match the reader sees")
         }
     }
 
@@ -289,6 +290,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 3, from: surface)
+        controller.search.step(.next)
         controller.search.report(selected: 0, from: surface)
         controller.search.step(.next)
         controller.search.report(selected: 1, from: surface)
@@ -296,6 +298,43 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.enterScrollMode()
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 10, "the match the count names, not the newest on screen")
+    }
+
+    func test_handingOffAfterTheRowsMoved_landsWhereTheMatchIsNow() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        for row in [5, 10, 15] { surface.rows[row] = "an error here" }
+        surface.rows[23] = "❯ "
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 0, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 1, from: surface)
+        surface.rows = Array(surface.rows.dropFirst(2)) + ["", ""]
+
+        controller.search.enterScrollMode()
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 8, "output moved the match up two rows since the step landed")
+    }
+
+    func test_aSelectionReportedWithNoStepPending_neverCountsAsTheSearchMovingTheViewport() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows[5] = "an error happened"
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 1, from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 0, from: surface)
+        surface.rows = Array(surface.rows.dropFirst(3)) + ["", "", ""]
+
+        controller.search.report(selected: 0, from: surface)
+        controller.search.end()
+
+        XCTAssertEqual(surface.scrolls, [], "the reader's own scroll or new output is not the search's to undo")
     }
 
     func test_returnInTheFieldStepsOlderAndShiftReturnNewer() throws {
@@ -394,7 +433,7 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.beginNeedleForTesting("error")
         controller.search.report(total: 1, from: surface)
         controller.search.report(selected: 0, from: surface)
-        XCTAssertEqual(surface.searchSteps, [.next], "precondition: the newest was selected where it sat")
+        XCTAssertEqual(surface.searchSteps, [], "precondition: a match on screen selects nothing")
 
         controller.search.end()
 
