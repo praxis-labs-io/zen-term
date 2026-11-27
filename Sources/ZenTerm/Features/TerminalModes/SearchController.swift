@@ -333,10 +333,6 @@ final class SearchController {
         }
     }
 
-    private static func viewportRows(of surface: TerminalSurface) -> [String] {
-        (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
-    }
-
     private static func occurrenceColumns(of needle: String, in text: String) -> [Int] {
         let haystack = text.map(asciiFolded)
         let pattern = needle.map(asciiFolded)
