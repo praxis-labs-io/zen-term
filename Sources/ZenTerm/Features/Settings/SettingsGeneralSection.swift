@@ -89,13 +89,13 @@ final class SettingsGeneralSection: SettingsFormSection {
         claudeUpdateButton?.isHidden = description == nil
     }
 
-    private func applyClaudeSetup(_ change: ClaudeCodeSetup.Change) {
+    private func applyClaudeSetup(_ change: SetupChange) {
         claudeSetupControl?.isEnabled = false
         claudeUpdateButton?.isEnabled = false
         ClaudeCodeSetup.refresh(applying: change) { [weak self] in self?.showClaudeSetup($0) }
     }
 
-    private func showClaudeSetup(_ result: Result<ClaudeSetup.State, SetupError>) {
+    private func showClaudeSetup(_ result: Result<SetupState, SetupError>) {
         let row = rowFor(Self.claudeSetupKey)
         switch result {
         case .success(let state):

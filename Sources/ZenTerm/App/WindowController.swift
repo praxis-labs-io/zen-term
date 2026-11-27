@@ -313,7 +313,7 @@ final class WindowController: NSObject {
 
     var onHelperNote: ((HelperNote) -> Void)?
 
-    var claudeSetupOffer: ClaudeSetupOffer?
+    var claudeSetupOffer: SetupOffer<ClaudeCodeSetup>?
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -4341,41 +4341,49 @@ final class WindowController: NSObject {
 
     private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
         agents.identify(surface, name: name, source: source)
-        guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
-        claudeSetupOffer?.claudeStarted { [weak self] in self?.showClaudeStartup($0) }
+        switch AgentRules.key(for: agents.agents[surface]?.name) {
+        case "claude": offerSetup(claudeSetupOffer, copy: Self.claudeSetupCopy)
+        default: break
+        }
     }
 
-    private func showClaudeStartup(_ startup: ClaudeCodeSetup.Startup) {
+    private func offerSetup<Agent: SetupAgent>(_ offer: SetupOffer<Agent>?, copy: SetupCopy) {
+        offer?.agentStarted { [weak self, weak offer] in self?.showSetupStartup($0, offer: offer, copy: copy) }
+    }
+
+    private func showSetupStartup<Agent: SetupAgent>(
+        _ startup: SetupStartup, offer: SetupOffer<Agent>?, copy: SetupCopy
+    ) {
         switch startup {
         case .notInstalled:
-            presentClaudeSetupPrompt(
-                Self.claudeSetupOffer(in: ClaudeCodeSetup.folderName),
-                onConfirmed: { [weak self] in self?.showClaudeSetupResult($0) },
-                onDeclined: { [weak self] in self?.claudeSetupOffer?.declineForGood() })
+            presentSetupPrompt(
+                copy.offer(Agent.folderName), for: Agent.self,
+                onConfirmed: { [weak self] in self?.showSetupResult($0, copy: copy) },
+                onDeclined: { [weak offer] in offer?.declineForGood() })
         case .edited(let version):
-            presentClaudeSetupPrompt(
-                Self.claudeUpdateOffer,
-                onConfirmed: { [weak self] in self?.showClaudeUpdateResult($0) },
-                onDeclined: { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) })
+            presentSetupPrompt(
+                copy.updateOffer, for: Agent.self,
+                onConfirmed: { [weak self] in self?.showUpdateResult($0, copy: copy) },
+                onDeclined: { [weak offer] in offer?.skipUpdate(to: version) })
         case .updated:
-            showClaudeUpdated()
+            toasts.show(copy.updatedToast)
         case .updateFailed(let error):
-            showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
+            showSetupFailure(error, title: copy.updateFailedTitle)
         case .current:
             break
         }
     }
 
-    private func presentClaudeSetupPrompt(
-        _ prompt: ClaudeSetupPrompt,
-        onConfirmed: @escaping (Result<ClaudeSetup.State, SetupError>) -> Void,
+    private func presentSetupPrompt<Agent: SetupAgent>(
+        _ prompt: SetupPrompt, for agent: Agent.Type,
+        onConfirmed: @escaping (Result<SetupState, SetupError>) -> Void,
         onDeclined: @escaping () -> Void
     ) {
         weak var toast: ToastView?
         let actions = prompt.actions(
             confirmed: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                ClaudeCodeSetup.refresh(applying: .install, completion: onConfirmed)
+                Agent.refresh(applying: .install, completion: onConfirmed)
             },
             declined: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
@@ -4394,31 +4402,25 @@ final class WindowController: NSObject {
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
     static let claudeUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
 
-    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, SetupError>) {
-        switch result {
-        case .success:
-            toasts.show(Self.claudeSetUpToast)
-        case .failure(let error):
-            showClaudeSetupFailure(error, title: "Couldn't set up Claude Code")
-        }
-    }
-
-    private func showClaudeUpdateResult(_ result: Result<ClaudeSetup.State, SetupError>) {
-        switch result {
-        case .success: showClaudeUpdated()
-        case .failure(let error): showClaudeSetupFailure(error, title: Self.claudeUpdateFailedTitle)
-        }
-    }
-
     static let claudeUpdateFailedTitle = "Couldn't update zen"
 
-    private func showClaudeUpdated() {
-        toasts.show(Self.claudeUpdatedToast)
+    private func showSetupResult(_ result: Result<SetupState, SetupError>, copy: SetupCopy) {
+        switch result {
+        case .success: toasts.show(copy.setUpToast)
+        case .failure(let error): showSetupFailure(error, title: copy.setUpFailedTitle)
+        }
     }
 
-    private func showClaudeSetupFailure(_ error: SetupError, title: String) {
+    private func showUpdateResult(_ result: Result<SetupState, SetupError>, copy: SetupCopy) {
+        switch result {
+        case .success: toasts.show(copy.updatedToast)
+        case .failure(let error): showSetupFailure(error, title: copy.updateFailedTitle)
+        }
+    }
+
+    private func showSetupFailure(_ error: SetupError, title: String) {
         let shown = toasts.showSticky(
-            Self.claudeSetupFailureToast(title: title, reason: error.message), actions: [], showsClose: true)
+            Self.setupFailureToast(title: title, reason: error.message), actions: [], showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
     }
 
