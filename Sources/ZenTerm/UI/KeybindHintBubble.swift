@@ -1,14 +1,8 @@
 import AppKit
 
 final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
-    private static let width: CGFloat = 220
     private static let insets = ChromeMetrics.Spacing.modalInsets
-    private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8
     private static let gap = ChromeMetrics.Spacing.s6
-
-    static func inputWidth(withReset: Bool) -> CGFloat {
-        width - insets.left - insets.right - (withReset ? resetSlot : 0)
-    }
 
     private let previewHost = NSView()
     private let previewBox = NSView()
@@ -16,7 +10,9 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     private var previewGlyph = ""
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
     private var isShowingError = false
-    private let footer = HintFooter([.init(keys: "⌫", label: "Remove"), .init(keys: "⎋", label: "Cancel")])
+    // The input row runs the hints' exact length; a reset button takes its room from the input.
+    private let footer = HintFooter(
+        [.init(keys: "⌫", label: "Remove"), .init(keys: "⎋", label: "Cancel")], inset: insets.left, side: .leading)
     /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
     private lazy var resetButton = IconButton(
         symbol: "arrow.uturn.backward",
@@ -42,7 +38,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
 
         noteLabel.font = ChromeType.font(.caption, weight: .medium)
         noteLabel.alignment = .center
-        noteLabel.preferredMaxLayoutWidth = Self.inputWidth(withReset: true)
+        noteLabel.preferredMaxLayoutWidth = footer.hintsWidth
         noteLabel.isHidden = true
 
         previewBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -73,13 +69,12 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
         addSubview(card)
 
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: Self.width),
             content.widthAnchor.constraint(equalTo: card.widthAnchor),
             footer.widthAnchor.constraint(equalTo: card.widthAnchor),
-            header.widthAnchor.constraint(
-                equalTo: content.widthAnchor, constant: -(Self.insets.left + Self.insets.right)),
-            previewGroup.widthAnchor.constraint(equalTo: header.widthAnchor),
-            inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
+            widthAnchor.constraint(equalToConstant: Self.insets.left + footer.hintsWidth + Self.insets.right),
+            inputRow.widthAnchor.constraint(equalToConstant: footer.hintsWidth),
+            header.widthAnchor.constraint(equalTo: inputRow.widthAnchor),
+            previewGroup.widthAnchor.constraint(equalTo: inputRow.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             noteLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
@@ -172,7 +167,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
 
     var inputWidthForTesting: CGFloat { previewHost.superview?.frame.width ?? 0 }
 
-    static var widthForTesting: CGFloat { width }
+    var hintsWidthForTesting: CGFloat { footer.hintsWidth }
 
     var previewedChordForTesting: String? {
         (previewHost.subviews.first as? KeycapView)?.shortcut

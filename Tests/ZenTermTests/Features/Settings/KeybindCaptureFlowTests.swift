@@ -395,24 +395,25 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(try resetIcon().isHidden, "nothing to back out of, so nothing to offer")
     }
 
-    func test_theInputFillsTheCard() throws {
+    func test_theInputRowRunsTheHintsLength_andAResetIconTakesItsRoomFromTheInput() throws {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
-        let insets = ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right
 
         row(for: .newTab).chip.onActivate?()
         try hintBubble().layoutSubtreeIfNeeded()
+        let card = try hintBubble().frame.width
         XCTAssertEqual(
-            try hintBubble().inputWidthForTesting, KeybindHintBubble.widthForTesting - insets,
-            accuracy: 0.5, "no reset icon, so the input takes the whole row")
+            try hintBubble().inputWidthForTesting, try hintBubble().hintsWidthForTesting, accuracy: 1,
+            "no reset icon, so the input runs the hints' whole length, to the point they snap to")
 
         capturer.feed(event(for: novelChord))
         row(for: .newTab).chip.onActivate?()
         try hintBubble().layoutSubtreeIfNeeded()
         XCTAssertEqual(
             try hintBubble().inputWidthForTesting,
-            KeybindHintBubble.widthForTesting - insets - ChromeMetrics.Height.control - ChromeMetrics.Spacing.s8,
-            accuracy: 0.5, "and gives up exactly the icon's width when one appears")
+            try hintBubble().hintsWidthForTesting - ChromeMetrics.Height.control - ChromeMetrics.Spacing.s8,
+            accuracy: 1, "the input gives up the icon's width")
+        XCTAssertEqual(try hintBubble().frame.width, card, accuracy: 0.5, "and the card keeps its width")
     }
 
     func test_resetIcon_isShownWhenAKeybindLineTookTheChord() throws {
