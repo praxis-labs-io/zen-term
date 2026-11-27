@@ -554,7 +554,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   moves them with the column (`moveWindowButtons`), sliding and fading with docking, the
   hover card and collapsing. AppKit puts them back on a resize, a title change, a hide, an
   alpha change, a fullscreen exit and a deminiaturize, so `HostWindow` places them again
-  after each. `window-chrome = false` hides them and closes the strip.
+  after each. `window-chrome = false` hides them and closes the strip, and the Workspaces caption then centers on
+  the first pane header's line. The sidebar's toggle, docked or on the window, centers on the rows' chips.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
   `tabID/id` and shut down with their tab; Scratch is the only one. A host shows no user

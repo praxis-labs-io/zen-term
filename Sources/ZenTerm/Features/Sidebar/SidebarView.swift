@@ -37,6 +37,8 @@ final class SidebarView: NSView, ThemeReapplying {
     static let captionLeading = padding + captionInset
     static let windowButtonStripHeight: CGFloat = ChromeMetrics.Height.control
     private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
+    // Without window buttons the caption centers on the first pane header's line, across the gap.
+    private static let chromelessTop = ModeChrome.headerCenterY - captionHeight / 2
     private static let newWorktreeSize = NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs)
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
     private static let contentBottomGap: CGFloat = ChromeMetrics.Spacing.s8
@@ -563,7 +565,7 @@ final class SidebarView: NSView, ThemeReapplying {
 
     // The window's buttons sit over this strip, above the scroll area, so the rows scroll beneath them.
     func reapplyWindowButtonStrip() {
-        scrollTop?.constant = GeneralConfig.current.windowChrome ? Self.windowButtonStripHeight : 0
+        scrollTop?.constant = GeneralConfig.current.windowChrome ? Self.windowButtonStripHeight : Self.chromelessTop
     }
 
     var addButtonForTesting: IconButton { addButton }

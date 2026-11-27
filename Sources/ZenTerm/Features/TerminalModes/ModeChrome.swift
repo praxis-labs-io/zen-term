@@ -22,6 +22,8 @@ final class ModeChrome {
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
+    static var headerCenterY: CGFloat { stripInset + ChromeMetrics.Height.xs / 2 }
+
     // What a shown header takes from the content's height, above the padding it would have anyway.
     static var headerRoom: CGFloat {
         GeneralConfig.current.paneHeaders ? stripInset + ChromeMetrics.Height.xs : 0
