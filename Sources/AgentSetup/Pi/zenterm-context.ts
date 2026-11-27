@@ -1,6 +1,6 @@
-// Pi extension installed by `zen setup pi`: in a live ZenTerm pane, say so, name a helper's parent, and point at the zen skill.
+// Pi extension installed by `zen setup pi`: in a live ZenTerm pane, say so, name a helper's parent, point at the zen skill, and report each turn.
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const digits = /^[0-9]+$/;
 
@@ -41,13 +41,42 @@ You are helper ${who}, started by pane ${parent}. When done or stuck, report wit
 - Leave the screen as it is: \`--focus\` only when asked to show something, \`--force\` only when asked to stop work. Close only what you opened, once you have its result; a helper you started closes without \`--force\`.`;
 }
 
+type Terminal = { setProgress(active: boolean): void };
+
+function paneTerminal(ctx: ExtensionContext): Terminal | undefined {
+  if (!process.env.ZEN_CONTROL_SOCK || ctx.mode !== "tui") return undefined;
+  let terminal: Terminal | undefined;
+  ctx.ui.setWidget(
+    "zenterm-progress",
+    (tui) => {
+      terminal = tui.terminal;
+      return { render: () => [], invalidate: () => {} };
+    },
+    { placement: "belowEditor" },
+  );
+  ctx.ui.setWidget("zenterm-progress", undefined);
+  return terminal;
+}
+
+// ZenTerm reads Pi's turns from OSC 9;4, which Pi sends itself only with `terminal.showTerminalProgress` on.
+function reportTurn(pi: ExtensionAPI, terminal: Terminal | undefined, active: boolean) {
+  const settings = pi.getSettings() as { terminal?: { showTerminalProgress?: boolean } };
+  if (!settings.terminal?.showTerminalProgress) terminal?.setProgress(active);
+}
+
 export default function (pi: ExtensionAPI) {
   let zenContext: Promise<string | undefined> = Promise.resolve(undefined);
-  pi.on("session_start", () => {
+  let terminal: Terminal | undefined;
+  const report = (active: boolean) => reportTurn(pi, terminal, active);
+  pi.on("session_start", (_event, ctx) => {
     zenContext = context(pi).catch(() => undefined);
+    terminal = paneTerminal(ctx);
   });
   pi.on("before_agent_start", async (event) => {
     const text = await zenContext;
     if (text) event.systemPromptOptions.sections.zenterm = text;
   });
+  pi.on("turn_start", () => report(true));
+  pi.on("agent_end", () => report(false));
+  pi.on("session_shutdown", () => report(false));
 }

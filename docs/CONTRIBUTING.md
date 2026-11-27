@@ -25,6 +25,9 @@ You need Xcode 26 or later. The manifest declares `swift-tools-version: 6.2`, so
 an older toolchain refuses to resolve it, and the Metal compiler is not in the
 Command Line Tools alone.
 
+The tests also need Node 22.18 or later on `PATH`: they run the Pi extension
+`zen setup pi` installs, which is TypeScript that Node loads only from 22.18 on.
+
 There is no Xcode project. Open `Package.swift` if you want a debugger or
 Instruments; everything else is the terminal.
 
