@@ -3,6 +3,7 @@ import AppKit
 final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     private static let insets = ChromeMetrics.Spacing.modalInsets
     private static let gap = ChromeMetrics.Spacing.s6
+    private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8
 
     private let previewHost = NSView()
     private let previewBox = NSView()
@@ -38,7 +39,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
 
         noteLabel.font = ChromeType.font(.caption, weight: .medium)
         noteLabel.alignment = .center
-        noteLabel.preferredMaxLayoutWidth = footer.hintsWidth
+        noteLabel.preferredMaxLayoutWidth = footer.hintsWidth - Self.resetSlot
         noteLabel.isHidden = true
 
         previewBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
