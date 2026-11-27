@@ -526,54 +526,58 @@
 #
 # `toggle_scroll_mode` (⌘⇧S) reads back through the focused pane's scrollback with
 # the keyboard. While it's up the pane header says SCROLL and how far below the
-# viewport the buffer runs, a band marks the row you're on, and nothing reaches the
-# shell:
+# viewport the buffer runs, a block cursor marks the cell you're on, and nothing
+# reaches the shell:
 #
 #   j / k (or ↑ ↓)   move the cursor a row         { / }      move by paragraph
 #   h / l (or ← →)   move a column                 0 / ^ / $  ends of the row
 #   w / b / e        move by word                  gg / G     top / bottom
 #   W / B / E        move by WORD                  H / M / L  top / middle / last row
 #   f / F / t / T    find a character on the row   ; / ,      that find again, or back
-#   ctrl+d / ctrl+u  half a page                   v / V      select, by cell or row
-#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  y / yy     copy the selection, or rows
+#   ctrl+d / ctrl+u  half a page                   v / V      select, by cell or line
+#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  y / yy     copy the selection, or lines
 #   *                find this word in the buffer  esc, q, i  leave
 #
 # A page moves the cursor, not just the view: it walks half a screen down the buffer
-# and the view follows, so the band sits in the middle while the text runs past it.
-# At the end of the buffer the view stops and the band carries on to the last line.
+# and the view follows, so the cursor sits in the middle while the text runs past it.
+# At the end of the buffer the view stops and the cursor carries on to the last line.
+# Any motion that leaves the screen takes the view with it, so `k` and `{` read on
+# into the scrollback. A wide character, such as CJK or an emoji, is one step.
 #
 # Every motion takes a count, so `12j` moves twelve rows and `3yy` copies three.
 # `0` is the start of the row on its own and a digit once you are typing a count,
 # which is vim's rule: without it `10j` would jump to column 0 and step once.
 #
-# With text selected, the mode opens on the start of your selection. With nothing
-# selected it opens on the last line with anything written on it.
+# With text selected, the mode opens on the start of your selection and keeps it, so
+# `y` copies it and motions reshape it. With nothing selected it opens on the shell's
+# cursor. The cursor stays on the text it is on while output arrives.
 #
 # Your own chords still work inside it, so ⌘T and pane nav are never swallowed.
-# `{` and `}` are vim's paragraph motion: they move the cursor to the next blank
-# line, which in a terminal is what separates one command's output from the next.
+# `{` and `}` move the cursor to the next prompt when your shell marks its prompts
+# (shell integration), and otherwise to the next blank line, vim's paragraph motion.
 # The mode ends on its own when focus moves, the pane closes, you change tab, or a
 # tool float or palette opens.
 #
 # With a tool float open, ⌘⇧S reads the float's buffer instead of the pane behind it.
 # The card wears the header while the mode is up, and closing the card ends the mode.
 #
-# `v` starts a selection at the cursor and `V` takes whole rows; motions grow it, `y`
-# copies it and pulses what it took, and Esc hands it back without leaving the mode.
-# A selection follows its text: scrolling grows it by the rows that arrive, and a resize
-# re-finds it where the rewrap put it. It goes when the row you started on leaves the
-# screen, because the terminal core can only read text you can see.
+# `v` starts a selection at the cursor and `V` takes whole lines, a wrapped line as
+# one; motions grow it, `y` copies it and pulses what it took, and Esc hands it back
+# without leaving the mode. It is the same selection a mouse drag makes, so ⌘C copies
+# it too, and it can reach past the top of the screen. It stays on its text through
+# output and resizes, and goes only if the scrollback drops the line it started on.
+# Anything that clears it ends the mode too: a click in the pane, clearing the screen,
+# or a program taking over the screen. Leaving the mode clears it.
 #
 # Some chords move the viewport without the mode, for when you want a look rather
 # than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down
 # move a screen at a time, and ⌘⇧↑ and ⌘⇧↓ walk between the prompts your shell
 # marked. All of them repeat if you hold them, and they work on the focused drawer.
 #
-# ⌘⇧↑ is not scroll mode's `{`, and both are worth having. `{` moves the cursor to a
-# blank line on screen; ⌘⇧↑ moves the buffer, so it reaches a prompt that scrolled
-# off the top and does nothing when your whole session fits on one screen. Prompt
-# marks come from shell integration, so a shell that sets none leaves it with nothing
-# to find.
+# ⌘⇧↑ is not scroll mode's `{`, and both are worth having. `{` moves the cursor and
+# the view follows it; ⌘⇧↑ moves only the view, and does nothing when your whole
+# session fits on one screen. Prompt marks come from shell integration, so a shell
+# that sets none leaves ⌘⇧↑ with nothing to find.
 #
 # The terminal binds these on bare ⌘↑ and ⌘↓ as well. ZenTerm does not, because macOS
 # claims that pair on most Macs and the keypress never arrives. Bind them here if

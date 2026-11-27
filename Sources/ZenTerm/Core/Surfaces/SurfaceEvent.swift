@@ -2,6 +2,6 @@ import TerminalKit
 
 enum SurfaceEvent {
     case scrollPosition(TerminalScrollPosition)
-    case gridReflow
+    case selectionChanged
     case search(SearchController.Event)
 }

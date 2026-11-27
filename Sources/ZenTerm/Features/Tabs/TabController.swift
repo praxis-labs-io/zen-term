@@ -1237,14 +1237,14 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         relay(s, .scrollPosition(position))
     }
-    func surfaceGridDidReflow(_ s: TerminalSurface) {
-        relay(s, .gridReflow)
+    func surfaceSelectionDidChange(_ s: TerminalSurface) {
+        relay(s, .selectionChanged)
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         relay(s, .search(.total(total)))
     }
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {
-        relay(s, .search(.selected(index)))
+        relay(s, .search(.selected(index, start: start)))
     }
     func surfaceDidEndSearch(_ s: TerminalSurface) {
         relay(s, .search(.ended))
