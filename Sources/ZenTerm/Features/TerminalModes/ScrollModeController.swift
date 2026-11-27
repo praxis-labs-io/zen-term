@@ -614,10 +614,11 @@ final class ScrollModeController {
     }
 
     /// A report trails the terminal, so a pull can land short while output streams; the next one pulls the rest.
+    /// A view above the held one is the reader's own scroll, so it stands.
     private func holdViewport(against position: TerminalScrollPosition) -> Bool {
         guard let last = lastPosition, position.total > last.total else { return false }
         let pushed = position.linesBelow == 0 && position.offset - last.offset == position.total - last.total
-        guard pushed || (holdsViewport && position.offset != last.offset) else { return false }
+        guard pushed || (holdsViewport && position.offset > last.offset) else { return false }
         holdsViewport = true
         surface?.scroll(.lines(last.offset - position.offset))
         lastPosition = TerminalScrollPosition(total: position.total, offset: last.offset, viewport: position.viewport)

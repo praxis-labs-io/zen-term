@@ -379,6 +379,27 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor?.row, 100)
     }
 
+    func test_aReaderScrollingUpDuringABurstIsNotPulledBack() throws {
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<200).map { "line \($0)" }
+        surface.recordingGrid.viewportTop = 176
+        controller.handle(.toggleScrollMode)
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+        XCTAssertEqual(surface.scrolls, [.lines(-3)], "precondition: the first push is held")
+
+        surface.rows = (0..<210).map { "line \($0)" }
+        surface.recordingGrid.viewportTop = 150
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 210, offset: 150, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3)], "the reader's scroll up stands")
+        XCTAssertEqual(controller.scrollMode.lastPositionForTesting?.offset, 150)
+    }
+
     func test_aReaderReachingTheLiveEndIsLeftThere() throws {
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
