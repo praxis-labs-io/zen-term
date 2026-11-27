@@ -53,7 +53,7 @@ Three ways in, never a raw alpha:
 
 - **A control's interactive states** take a tier, `chrome.fill(.rest / .hover / .active)`.
 - **Structural fills** (a divider, a border, a swatch ring) take `chrome.fill(alpha:)`
-  with `ChromeTheme.hairline`, `.border`, `.divider` (`ToolbarDivider`, the short rule between groups of icon buttons) or `.swatchRing`.
+  with `ChromeTheme.hairline`, `.border`, `.divider` (the toolbar's group dividers) or `.swatchRing`.
 - **A role-toned surface behind text** takes `chrome.tint(_:alpha:)` with `ChromeTheme.badgeTint`
   or `.flashTint`. It sits outside the per-theme fill scale, so it never goes next to a
   sibling `fill(_:)`.
@@ -216,7 +216,7 @@ Animation goes through `Motion`. Its helpers check Reduce Motion themselves, exc
 | `slideFill` | A row list's current, focus or cursor fill sliding straight to the next row (`RowFillSlide`) |
 | `slideSwap` | Switching workspaces |
 | `handOff` | An SSH host's Connect screen giving way to its terminal |
-| `slideFade` | The collapsed sidebar's hover reveal, the find card (headers off), and toasts arriving from the window's trailing edge |
+| `slideFade` | The collapsed sidebar's hover reveal and toasts arriving from the window's trailing edge |
 | `drawerSlide` | Drawers and docking the sidebar |
 | `zoomPop` | Focus Mode |
 | `morph` | A folded toast growing out of its plate or sinking back into it |
@@ -239,7 +239,7 @@ The command palette and the workspace picker share one shell, `PaletteOverlay`: 
 
 Every terminal pane, drawer and float wears a `PaneHeader` (unless `pane-headers` is off): its process chip at `.small`, its name in `.medium` weight and its path, both in `ink(.muted)` wherever focus sits, a quiet line of context; then its controls as `IconButton`s at `Icon.xs`, resting in `ink(.muted)`. An unfocused header shows its controls only while the pointer is over it. A narrow header truncates the path from its front first, so the folder survives, then the name, then drops every control but close.
 
-Find takes the header's row: the chip turns to `ProcessIcon.find`, the name, path and controls step aside, and a flat `FindField` (no fill, edge or shadow) fills the row after the chip. Its buttons match the header's (`Icon.xs`, resting in `ink(.muted)`), and close is `escape`, not the pane's `xmark`. With headers off it is a card instead, `Spacing.s8` from the pane's top and trailing edges, on the overlay tier (`CardChrome`) with a control's radius, and a `ToolbarDivider` sets its buttons off from the count. Either way its steppers are `IconButton`s, disabled while there is no match, and a query wider than the field fades on the side its hidden text is on (`EdgeFade`).
+Find takes the header's row: the chip turns to `ProcessIcon.find`, the name, path and controls step aside, and a flat `FindField` (no fill, edge or shadow) fills the row after the chip. A pane with headers off shows its header while find is open. The field's buttons match the header's (`Icon.xs`, resting in `ink(.muted)`), close is `escape`, not the pane's `xmark`, and the steppers are disabled while there is no match. A query wider than the field fades on the side its hidden text is on (`EdgeFade`).
 
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 

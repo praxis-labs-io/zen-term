@@ -18,15 +18,9 @@ final class ModeChrome {
 
     private var findField: FindField?
     private var isFindFieldShown = false
-    private var slideRuns: [ObjectIdentifier: Int] = [:]
-    private var findFieldInHeader: [NSLayoutConstraint] = []
-    private var findFieldAsCard: [NSLayoutConstraint] = []
+    private var fadeRun = 0
 
     private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
-
-    // Below required: a pane too narrow for the count and steppers lets the field past the padding, not break layout.
-    private static let findFieldLimitPriority = NSLayoutConstraint.Priority(
-        NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
 
     // What a shown header takes from the content's height, above the padding it would have anyway.
     static var headerRoom: CGFloat {
@@ -59,18 +53,18 @@ final class ModeChrome {
             cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         if let header { mount(header) }
-        setHeaderShown(Self.showsHeader(header))
+        setHeaderShown(showsHeader)
     }
 
     func applyHeaderShown() {
-        let shown = Self.showsHeader(header)
-        guard shown != isHeaderShown else { return }
-        setHeaderShown(shown)
+        guard showsHeader != isHeaderShown else { return }
+        setHeaderShown(showsHeader)
         onStripsChanged()
     }
 
-    private static func showsHeader(_ header: PaneHeader?) -> Bool {
-        header != nil && GeneralConfig.current.paneHeaders
+    /// Find lives in the header, so a pane with headers off shows its header while a search runs.
+    private var showsHeader: Bool {
+        header != nil && (GeneralConfig.current.paneHeaders || isFindFieldShown)
     }
 
     private func setHeaderShown(_ shown: Bool) {
@@ -83,17 +77,6 @@ final class ModeChrome {
             contentTopToHeader?.isActive = false
             contentTopToContainer.isActive = true
         }
-        placeFindField()
-    }
-
-    private var findsInHeader: Bool { isHeaderShown && !findFieldInHeader.isEmpty }
-
-    private func placeFindField() {
-        guard let findField else { return }
-        NSLayoutConstraint.deactivate(findFieldInHeader + findFieldAsCard)
-        NSLayoutConstraint.activate(findsInHeader ? findFieldInHeader : findFieldAsCard)
-        findField.isFlat = findsInHeader
-        header?.isFinding = findsInHeader && isFindFieldShown
     }
 
     func setScrollCursor(
@@ -118,28 +101,33 @@ final class ModeChrome {
             isFindFieldShown = false
             findField.isDismissed = true
             header?.isFinding = false
-            reveal(findField, appearing: false)
+            if GeneralConfig.current.paneHeaders {
+                fade(findField, appearing: false)
+            } else {
+                findField.isHidden = true
+            }
+            applyHeaderShown()
             return nil
         }
-        let field = findField ?? makeFindField()
+        guard let field = findField ?? makeFindField() else { return nil }
         guard !isFindFieldShown else { return field }
         isFindFieldShown = true
         field.isDismissed = false
-        placeFindField()
-        reveal(field, appearing: true)
+        applyHeaderShown()
+        header?.isFinding = true
+        fade(field, appearing: true)
         return field
     }
 
-    private func reveal(_ field: FindField, appearing: Bool) {
-        guard field.isFlat else { return slide(field, appearing: appearing) }
-        let key = ObjectIdentifier(field)
-        let run = (slideRuns[key] ?? 0) + 1
-        slideRuns[key] = run
+    // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the field.
+    private func fade(_ field: FindField, appearing: Bool) {
+        fadeRun += 1
+        let run = fadeRun
         field.isHidden = false
         field.wantsLayer = true
         if appearing { field.layer?.opacity = 0 }
         Motion.fade(field, to: appearing ? 1 : 0) { [weak self] in
-            guard !appearing, self?.slideRuns[key] == run else { return }
+            guard !appearing, self?.fadeRun == run else { return }
             field.isHidden = true
         }
     }
@@ -147,20 +135,6 @@ final class ModeChrome {
     var scrollCursorForTesting: ScrollCursorView { cursor }
     var findFieldForTesting: FindField? { isFindFieldShown ? findField : nil }
     var shownHeaderForTesting: PaneHeader? { isHeaderShown ? header : nil }
-
-    // Core Animation completes a run the moment the next replaces it, so only the latest run may hide the strip.
-    private func slide(_ strip: NSView, appearing: Bool) {
-        let key = ObjectIdentifier(strip)
-        let run = (slideRuns[key] ?? 0) + 1
-        slideRuns[key] = run
-        let depth = strip.fittingSize.height + Self.stripInset
-        strip.isHidden = false
-        Motion.slideFade(strip, appearing: appearing, from: CGVector(dx: 0, dy: depth)) {
-            [weak self] in
-            guard !appearing, self?.slideRuns[key] == run else { return }
-            strip.isHidden = true
-        }
-    }
 
     private func mount(_ view: PaneHeader) {
         view.isHidden = true
@@ -174,31 +148,18 @@ final class ModeChrome {
             equalTo: view.bottomAnchor, constant: padding)
     }
 
-    private func makeFindField() -> FindField {
+    private func makeFindField() -> FindField? {
+        guard let header else { return nil }
         let field = FindField()
         field.translatesAutoresizingMaskIntoConstraints = false
         field.isHidden = true
         container.addSubview(field)
-        let inset = ChromeMetrics.Spacing.s8
-        let pastPadding = field.leadingAnchor.constraint(
-            greaterThanOrEqualTo: container.leadingAnchor, constant: padding)
-        pastPadding.priority = Self.findFieldLimitPriority
-        findFieldAsCard = [
-            field.topAnchor.constraint(equalTo: container.topAnchor, constant: inset),
-            field.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
-            pastPadding,
-        ]
-        findFieldInHeader =
-            header.map {
-                [
-                    field.leadingAnchor.constraint(
-                        equalTo: $0.chipTrailingAnchor, constant: ChromeMetrics.Spacing.s8),
-                    field.trailingAnchor.constraint(equalTo: $0.trailingAnchor),
-                    field.centerYAnchor.constraint(equalTo: $0.centerYAnchor),
-                ]
-            } ?? []
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: header.chipTrailingAnchor, constant: ChromeMetrics.Spacing.s8),
+            field.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            field.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+        ])
         findField = field
-        placeFindField()
         return field
     }
 }

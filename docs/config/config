@@ -582,7 +582,7 @@
 # ─── Find ────────────────────────────────────────────────────────────────────
 #
 # `toggle_search` (⌘F) turns the focused pane's header into a find field (with
-# `pane-headers = false` it opens in the pane's top-right corner) and searches its
+# `pane-headers = false` the header shows while find is open) and searches its
 # whole scrollback, not just what's on screen. Every match is highlighted as you
 # type, and the field selects the newest one and counts them. If that match is only
 # in history, the pane scrolls to it so you can see it while you type. With a tool

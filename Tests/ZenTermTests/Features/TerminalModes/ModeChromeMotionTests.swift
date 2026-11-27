@@ -7,9 +7,12 @@ import XCTest
 final class ModeChromeMotionTests: WindowTestCase {
     private var window: NSWindow!
     private var chrome: ModeChrome!
+    private var originalConfig: GeneralConfig!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
         Motion.isReduceMotionEnabled = { false }
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
@@ -25,41 +28,38 @@ final class ModeChromeMotionTests: WindowTestCase {
         window.contentView?.addSubview(container)
         chrome = ModeChrome(
             container: container, content: content, padding: ChromeMetrics.Spacing.s8,
-            header: nil, onStripsChanged: {})
+            header: PaneHeader(
+                content: .init(process: .shell, name: "zsh", path: nil), controls: [.close], onControl: { _ in }),
+            onStripsChanged: {})
     }
 
     override func tearDownWithError() throws {
         chrome = nil
         window = nil
+        GeneralConfig.setCurrentForTesting(originalConfig)
         try super.tearDownWithError()
     }
 
-    private func slide(on view: NSView) throws -> NSSize {
-        let anim = try XCTUnwrap(view.layer?.animation(forKey: "motion.slide") as? CABasicAnimation)
-        return try XCTUnwrap((anim.fromValue as? NSValue)?.sizeValue)
-    }
-
-    func test_theFindField_dropsInFromTheTopEdgeAndBackUp() throws {
+    func test_theFindField_fadesInAndOut() throws {
         let field = try XCTUnwrap(chrome.setFindFieldShown(true))
-        XCTAssertGreaterThan(try slide(on: field).height, 0, "the field drops in from above the pane's top edge")
-        XCTAssertNotNil(field.layer?.animation(forKey: "motion.opacity"))
+        XCTAssertNotNil(field.layer?.animation(forKey: "motion.opacity"), "the field fades into the header's row")
 
         chrome.setFindFieldShown(false)
 
         XCTAssertNil(chrome.findFieldForTesting, "the search is over the moment the field is dismissed")
-        XCTAssertFalse(field.isHidden, "the field leaves by sliding, not by vanishing")
-        XCTAssertNotNil(field.layer?.animation(forKey: "motion.slide"))
-        waitUntil(field.isHidden, "the field to hide once it has slid out")
+        XCTAssertFalse(field.isHidden, "the field leaves by fading, not by vanishing")
+        XCTAssertNotNil(field.layer?.animation(forKey: "motion.opacity"))
+        waitUntil(field.isHidden, "the field to hide once it has faded out")
     }
 
-    func test_dismissingTheFieldWhileItArrives_slidesItBackOut() throws {
+    func test_dismissingTheFieldWhileItArrives_fadesItBackOut() throws {
         let field = try XCTUnwrap(chrome.setFindFieldShown(true))
         chrome.setFindFieldShown(false)
-        let soon = Date().addingTimeInterval(Motion.pageSlideDuration / 4)
+        let soon = Date().addingTimeInterval(Motion.fadeDuration / 4)
         while Date() < soon { RunLoop.main.run(mode: .default, before: soon) }
 
-        XCTAssertFalse(field.isHidden, "the replaced arrival's completion must not cut the leaving slide short")
-        waitUntil(field.isHidden, "the field to hide once it has slid out")
+        XCTAssertFalse(field.isHidden, "the replaced arrival's completion must not cut the leaving fade short")
+        waitUntil(field.isHidden, "the field to hide once it has faded out")
     }
 
     func test_aLeavingField_takesNoClicks() throws {
@@ -70,7 +70,7 @@ final class ModeChromeMotionTests: WindowTestCase {
 
         chrome.setFindFieldShown(false)
 
-        XCTAssertFalse(field.isHidden, "premise: the field is still sliding out")
+        XCTAssertFalse(field.isHidden, "premise: the field is still fading out")
         XCTAssertNil(field.hitTest(center), "a click on the leaving field would focus a field nothing listens to")
     }
 
@@ -79,9 +79,9 @@ final class ModeChromeMotionTests: WindowTestCase {
         chrome.setFindFieldShown(false)
 
         chrome.setFindFieldShown(true)
-        let deadline = Date().addingTimeInterval(Motion.pageSlideDuration * 2)
+        let deadline = Date().addingTimeInterval(Motion.fadeDuration * 2)
         while Date() < deadline { RunLoop.main.run(mode: .default, before: deadline) }
 
-        XCTAssertFalse(field.isHidden, "the leaving slide's completion must not hide a field that came back")
+        XCTAssertFalse(field.isHidden, "the leaving fade's completion must not hide a field that came back")
     }
 }

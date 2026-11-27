@@ -63,7 +63,6 @@
                 rows: [
                     GallerySection.Row(label: "Horizontal", samples: [sized(Divider())]),
                     GallerySection.Row(label: "Vertical", samples: [vertical]),
-                    GallerySection.Row(label: "Toolbar", samples: [ToolbarDivider()]),
                     GallerySection.Row(
                         label: "Empty state",
                         samples: [

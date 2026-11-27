@@ -69,8 +69,9 @@ final class PaneHeader: ControlView, ThemeReapplying {
         didSet {
             guard isFinding != oldValue else { return }
             chip.show(isFinding ? .find : content.process)
-            for view in [nameField, pathField, controlStack] as [NSView] { view.isHidden = isFinding }
-            if !isFinding { pathField.isHidden = content.path == nil }
+            nameField.isHidden = isFinding
+            controlStack.isHidden = isFinding
+            applyText()
         }
     }
 
@@ -202,7 +203,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
         let ink = Theme.current.chrome.ink(.muted)
         nameField.attributedStringValue = Self.text(
             content.name, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
-        pathField.isHidden = content.path == nil
+        pathField.isHidden = isFinding || content.path == nil
         pathField.attributedStringValue = Self.text(
             content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
         needsUpdateConstraints = true

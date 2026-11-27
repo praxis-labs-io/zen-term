@@ -1,35 +1,24 @@
 import AppKit
 import TerminalKit
 
-// The scrollback search field a pane wears over its header's top-right corner while a search runs.
+// The scrollback search field a pane's header turns into while a search runs.
 final class FindField: NSView, ThemeReapplying {
-    private let glyph = NSImageView()
     private let field = FocusReportingField()
     private let count = NSTextField(labelWithString: "")
-    private let divider = ToolbarDivider()
     private let queryFade = EdgeFade(axis: .horizontal)
     private weak var observedEditorClip: NSClipView?
-    private var olderButton: IconButton!
-    private var newerButton: IconButton!
-    private var closeButton: IconButton!
-    private let buttons = NSStackView()
+    // The header's own control size and ink, and close reads as find's, not the pane's.
+    private lazy var olderButton = button("chevron.up", "Older Match", "↩") { [weak self] in self?.onStep?(.next) }
+    private lazy var newerButton = button("chevron.down", "Newer Match", "⇧↩") { [weak self] in
+        self?.onStep?(.previous)
+    }
+    private lazy var closeButton = button("escape", "Close Find", "esc") { [weak self] in self?.onCancel?() }
 
     var onChange: ((String) -> Void)?
     var onStep: ((TerminalSearchStep) -> Void)?
     var onCancel: (() -> Void)?
     var onFocusChange: ((Bool) -> Void)?
     var isDismissed = false
-
-    // Flat, the field is the header's row: no card, no glyph, since the header's chip carries it.
-    var isFlat = false {
-        didSet {
-            guard isFlat != oldValue else { return }
-            applyLook()
-        }
-    }
-    private var heightConstraint: NSLayoutConstraint?
-    private var cardWidth: [NSLayoutConstraint] = []
-    private var row: NSStackView?
 
     /// Setting it doesn't fire `onChange`, so a seed from a selection doesn't re-run its search.
     var needle: String {
@@ -40,10 +29,6 @@ final class FindField: NSView, ThemeReapplying {
         }
     }
 
-    static let height: CGFloat = ChromeMetrics.Height.control
-    // The board's width: no token holds a field this wide, and the pane can always shrink it.
-    static let width: CGFloat = 300
-    private static let buttonSize = NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs)
     private static let queryFadeDepth: CGFloat = ChromeMetrics.Spacing.s16
 
     // The copy is English throughout, so the grouping follows it rather than the system region.
@@ -51,10 +36,6 @@ final class FindField: NSView, ThemeReapplying {
 
     init() {
         super.init(frame: .zero)
-
-        glyph.image = IconCatalog.image("magnifyingglass", pointSize: ChromeMetrics.Icon.sm, weight: .regular)
-        glyph.setContentHuggingPriority(.required, for: .horizontal)
-        glyph.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         field.font = ChromeType.font(.small)
         field.isBordered = false
@@ -80,64 +61,37 @@ final class FindField: NSView, ThemeReapplying {
         count.setContentHuggingPriority(.required, for: .horizontal)
         count.setContentCompressionResistancePriority(.required, for: .horizontal)
 
+        let buttons = NSStackView(views: [olderButton, newerButton, closeButton])
         buttons.orientation = .horizontal
         buttons.spacing = ChromeMetrics.Spacing.s2
         buttons.setHuggingPriority(.required, for: .horizontal)
-        buildButtons()
 
-        let row = NSStackView(views: [glyph, field, count, buttons])
+        let row = NSStackView(views: [field, count, buttons])
         row.orientation = .horizontal
         row.spacing = ChromeMetrics.Spacing.s8
-        row.edgeInsets = NSEdgeInsets(
-            top: 0, left: ChromeMetrics.Spacing.controlInset, bottom: 0, right: ChromeMetrics.Spacing.s4)
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
-
-        let preferredWidth = widthAnchor.constraint(equalToConstant: Self.width)
-        preferredWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
             row.leadingAnchor.constraint(equalTo: leadingAnchor),
             row.trailingAnchor.constraint(equalTo: trailingAnchor),
             row.topAnchor.constraint(equalTo: topAnchor),
             row.bottomAnchor.constraint(equalTo: bottomAnchor),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
         ])
-        cardWidth = [widthAnchor.constraint(lessThanOrEqualToConstant: Self.width), preferredWidth]
-        NSLayoutConstraint.activate(cardWidth)
-        self.row = row
-        let height = heightAnchor.constraint(equalToConstant: Self.height)
-        height.isActive = true
-        heightConstraint = height
 
-        CardChrome.apply(to: self, cornerRadius: ChromeMetrics.Radius.control, tier: .overlay)
         showCount(total: nil, selected: nil)
         reapplyTheme()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // Flat in the header, the buttons take the header's own control size and ink, and close reads as find's, not the pane's.
-    private func buildButtons() {
-        let pointSize = isFlat ? ChromeMetrics.Icon.xs : ChromeMetrics.Icon.sm
-        let restInk: ChromeTheme.InkLevel = isFlat ? .muted : .subtle
-        func button(_ symbol: String, _ label: String, _ shortcut: String, _ action: @escaping () -> Void)
-            -> IconButton
-        {
-            IconButton(
-                symbol: symbol, size: Self.buttonSize, pointSize: pointSize, accessibilityLabel: label,
-                shortcut: { shortcut }, restInk: restInk, onClick: action)
-        }
-        let enabled = olderButton?.isEnabled ?? false
-        olderButton = button("chevron.up", "Older Match", "↩") { [weak self] in self?.onStep?(.next) }
-        newerButton = button("chevron.down", "Newer Match", "⇧↩") { [weak self] in self?.onStep?(.previous) }
-        closeButton = button(isFlat ? "escape" : "xmark", "Close Find", "esc") { [weak self] in
-            self?.onCancel?()
-        }
-        olderButton.isEnabled = enabled
-        newerButton.isEnabled = enabled
-        for view in buttons.arrangedSubviews { view.removeFromSuperview() }
-        let views: [NSView] = (isFlat ? [] : [divider]) + [olderButton, newerButton, closeButton]
-        for view in views { buttons.addArrangedSubview(view) }
-        if !isFlat { buttons.setCustomSpacing(ChromeMetrics.Spacing.s4, after: divider) }
+    private func button(_ symbol: String, _ label: String, _ shortcut: String, onClick: @escaping () -> Void)
+        -> IconButton
+    {
+        IconButton(
+            symbol: symbol, size: NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs),
+            pointSize: ChromeMetrics.Icon.xs, accessibilityLabel: label, shortcut: { shortcut }, restInk: .muted,
+            onClick: onClick)
     }
 
     /// `selected` is zero-based and newest-first, libghostty's order; the count shows oldest-first.
@@ -225,29 +179,9 @@ final class FindField: NSView, ThemeReapplying {
         return (colors.first?.alpha == 0, colors.last?.alpha == 0)
     }
 
-    private func applyLook() {
-        glyph.isHidden = isFlat
-        buildButtons()
-        reapplyTheme()
-        heightConstraint?.constant = isFlat ? ChromeMetrics.Height.xs : Self.height
-        for constraint in cardWidth { constraint.isActive = !isFlat }
-        row?.edgeInsets = NSEdgeInsets(
-            top: 0, left: isFlat ? 0 : ChromeMetrics.Spacing.controlInset, bottom: 0,
-            right: isFlat ? 0 : ChromeMetrics.Spacing.s4)
-        if isFlat {
-            layer?.backgroundColor = nil
-            layer?.borderWidth = 0
-            layer?.shadowOpacity = 0
-        } else {
-            CardChrome.apply(to: self, cornerRadius: ChromeMetrics.Radius.control, tier: .overlay)
-        }
-    }
-
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        if !isFlat { CardChrome.reapplyTheme(to: self, tier: .overlay) }
         field.applyThemedEditor()
-        glyph.contentTintColor = chrome.ink(.muted)
         field.textColor = chrome.ink(.normal)
         count.textColor = chrome.ink(.muted)
         field.placeholderAttributedString = NSAttributedString(

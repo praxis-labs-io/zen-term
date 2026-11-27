@@ -1,7 +1,7 @@
 import AppKit
 import TabKit
 
-final class ToggleDock: NSView {
+final class ToggleDock: NSView, ThemeReapplying {
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let scratchBtn: IconButton
@@ -13,7 +13,7 @@ final class ToggleDock: NSView {
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Built and hidden, not skipped: the dot is a hidden live float's only handle.
     private var toolbarHiddenFloatIDs: Set<String> = []
-    private var dividers: [ToolbarDivider] = []
+    private var dividers: [NSView] = []
     private let stack = NSStackView()
     private let onToolFloat: (ToolFloat) -> Void
 
@@ -45,7 +45,7 @@ final class ToggleDock: NSView {
         fixedButtons = [
             .newTab: newTab, .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
         ]
-        dividers = ToolbarButton.groups.map { _ in ToolbarDivider() }
+        dividers = ToolbarButton.groups.map { _ in Self.divider() }
 
         stack.orientation = .horizontal
         stack.alignment = .centerY
@@ -215,5 +215,20 @@ final class ToggleDock: NSView {
         } else {
             surfacedButtons.remove(button)
         }
+    }
+
+    func reapplyTheme() {
+        let dividerColor = Theme.current.chrome.fill(alpha: ChromeTheme.divider).cgColor
+        for divider in dividers { divider.layer?.backgroundColor = dividerColor }
+    }
+
+    static func divider() -> NSView {
+        let v = NSView()
+        v.wantsLayer = true
+        v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.divider).cgColor
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.widthAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
+        v.heightAnchor.constraint(equalToConstant: ChromeMetrics.Spacing.s12).isActive = true
+        return v
     }
 }

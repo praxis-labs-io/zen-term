@@ -193,7 +193,6 @@ final class FindFieldInteractionTests: WindowTestCase {
         let opened = try openFind()
         let header = try XCTUnwrap(opened.panel.shownHeaderForTesting)
 
-        XCTAssertTrue(opened.field.isFlat)
         XCTAssertEqual(header.chipForTesting, .find)
         XCTAssertFalse(header.showsTitleAndControlsForTesting)
     }
@@ -208,26 +207,31 @@ final class FindFieldInteractionTests: WindowTestCase {
         XCTAssertTrue(header.showsTitleAndControlsForTesting)
     }
 
-    func test_aProgramChangeDuringFind_waitsUntilFindClosesToReachTheChip() throws {
+    func test_aProgramOrPathChangeDuringFind_waitsUntilFindCloses() throws {
         let opened = try openFind()
         let header = try XCTUnwrap(opened.panel.shownHeaderForTesting)
         XCTAssertNotEqual(header.processForTesting, .worktree, "premise: the new process differs")
 
         header.content.process = .worktree
+        header.content.path = "~/elsewhere"
 
         XCTAssertEqual(header.chipForTesting, .find)
+        XCTAssertNil(header.pathForTesting, "a new path waits for find to close too")
         try click(opened.field.closeButtonForTesting, in: opened.controller.window)
         XCTAssertEqual(header.chipForTesting, .worktree)
     }
 
-    func test_withHeadersOff_findIsACardOverTheTerminal() throws {
+    func test_withHeadersOff_findShowsTheHeaderOnlyWhileItIsOpen() throws {
         var config = GeneralConfig.builtIn
         config.paneHeaders = false
         GeneralConfig.setCurrentForTesting(config)
 
         let opened = try openFind()
+        let header = try XCTUnwrap(opened.panel.shownHeaderForTesting, "find lives in the header")
+        XCTAssertEqual(header.chipForTesting, .find)
 
-        XCTAssertNil(opened.panel.shownHeaderForTesting)
-        XCTAssertFalse(opened.field.isFlat)
+        try click(opened.field.closeButtonForTesting, in: opened.controller.window)
+
+        XCTAssertNil(opened.panel.shownHeaderForTesting, "closing find puts the header away again")
     }
 }
