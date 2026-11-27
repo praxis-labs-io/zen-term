@@ -319,12 +319,17 @@ final class ScrollModeController {
         }
     }
 
+    // The walk reads a row at a time on the main thread, so a scrollback with no stop ends it at the cap.
+    static let paragraphWalkLimit = 10_000
+
     private func paragraphStop(from row: Int, delta: Int, integrated: inout Bool) -> Int {
         guard let grid else { return row }
         let last = max(grid.rowCount - 1, 0)
-        var next = row + delta
+        let end = min(max(row + delta * Self.paragraphWalkLimit, 0), last)
+        var reached = row
         var inBlock = false
-        while next >= 0, next <= last, let candidate = grid.row(next) {
+        for next in stride(from: row + delta, through: end, by: delta) {
+            guard let candidate = grid.row(next) else { break }
             if candidate.prompt != .none { integrated = true }
             if candidate.prompt == .start { return next }
             let blank = ScrollWordMotion.characters(of: candidate.cells).isEmpty
@@ -332,9 +337,9 @@ final class ScrollModeController {
                 if inBlock, blank { return next }
                 if !blank { inBlock = true }
             }
-            next += delta
+            reached = next
         }
-        return min(max(next, 0), last)
+        return reached
     }
 
     private func wordScreen(wide: Bool) -> ScrollWordMotion.Screen {

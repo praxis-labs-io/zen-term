@@ -425,6 +425,21 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [], "the rewrap put those rows there; nothing pushed a screen")
     }
 
+    func test_aParagraphWalkWithNoStopEndsAtTheCap() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        let limit = ScrollModeController.paragraphWalkLimit
+        surface.rows = Array(repeating: "x", count: 2 * limit + 1)
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.land(on: TerminalGridPoint(row: 2 * limit, column: 0))
+
+        XCTAssertTrue(try XCTUnwrap(host.modeHandler)(try keyDown("{", unshifted: "[", flags: .shift)))
+
+        XCTAssertEqual(controller.scrollMode.cursor?.row, limit, "the walk stops at the cap, not the top")
+    }
+
     func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
