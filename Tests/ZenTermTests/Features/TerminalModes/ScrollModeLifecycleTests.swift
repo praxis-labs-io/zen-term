@@ -336,6 +336,49 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.lines(-3)], "the three rows the output pushed")
     }
 
+    func test_aPullThatLandsShortDuringABurstIsPulledTheRestOfTheWay() throws {
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<200).map { "line \($0)" }
+        surface.recordingGrid.viewportTop = 176
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.land(on: TerminalGridPoint(row: 180, column: 0))
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+        XCTAssertEqual(surface.scrolls, [.lines(-3)], "precondition: the first push is held")
+
+        surface.rows = (0..<300).map { "line \($0)" }
+        surface.recordingGrid.viewportTop = 230
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 300, offset: 230, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3), .lines(-54)], "back to the held offset, not the report's")
+        XCTAssertEqual(controller.scrollMode.cursor?.row, 180, "the cursor stays on its text, off the burst")
+    }
+
+    func test_aMoveOffTheHeldScreenDuringABurstIsNotPulledBack() throws {
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<200).map { "line \($0)" }
+        surface.recordingGrid.viewportTop = 176
+        controller.handle(.toggleScrollMode)
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+
+        controller.scrollMode.land(on: TerminalGridPoint(row: 100, column: 0))
+        surface.rows = (0..<210).map { "line \($0)" }
+        surface.recordingGrid.viewportTop = 100
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 210, offset: 100, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3), .lines(-76)], "the reveal stands; nothing pulls it back")
+        XCTAssertEqual(controller.scrollMode.cursor?.row, 100)
+    }
+
     func test_aReaderReachingTheLiveEndIsLeftThere() throws {
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
