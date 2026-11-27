@@ -82,7 +82,7 @@ watch and steer them. Keep built-in subagents for quick lookups.
 zen pane run --name review --task "Review src/auth for token leaks. Report findings only, change nothing." claude
 zen wait review                 # answers when it stops, exits or sends you something
 zen wait --children all         # answers once none of your helpers is working
-zen pane read --pane review --lines 80
+zen pane read --pane review --since-task   # only what it printed since its task
 zen pane close review           # once you have its result
 ```
 
@@ -105,7 +105,8 @@ zen pane close review           # once you have its result
   from its parent.
 - A helper's question about the task you gave it is yours to answer. It
   arrives with a `stopped` notice, because the helper ends its turn to ask:
-  the helper is not finished. Read the question with `zen pane read`, then answer with `zen pane send --pane <helper> --enter`,
+  the helper is not finished. Read the question with
+  `zen pane read --pane <helper> --since-task`, then answer with `zen pane send --pane <helper> --enter`,
   or `zen pane keys` to pick an option. A question that decides product
   behavior, spends the user's money or reaches outside the scope you gave it
   goes to the user.
