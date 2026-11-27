@@ -126,15 +126,15 @@ final class CodexSetupFilesTests: XCTestCase {
 
     func test_shippedHookNeverAsksASessionToRenameItsTab() throws {
         let pane = #"{"agent":{"name":"codex"},"token":31}"#
-        for start in ["startup", "clear", "resume", "compact"] {
+        for source in ["startup", "clear", "resume", "compact"] {
             let (status, output) = try runShippedHook(
-                environment: try zenPaneEnvironment(pane: 31, answering: pane), start: start)
+                environment: try zenPaneEnvironment(pane: 31, answering: pane), source: source)
 
             XCTAssertEqual(status, 0)
-            XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"), start)
-            XCTAssertFalse(output.contains("zen tab rename"), "a tab follows its agent's own title: \(start)")
+            XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"), source)
+            XCTAssertFalse(output.contains("zen tab rename"), "a tab follows its agent's own title: \(source)")
             XCTAssertTrue(
-                output.contains("- Your first action after the user's first prompt: read the zen skill."), start)
+                output.contains("- Your first action after the user's first prompt: read the zen skill."), source)
         }
     }
 
@@ -183,7 +183,6 @@ final class CodexSetupFilesTests: XCTestCase {
         }
     }
 
-    // A stub `zen` that answers `hello`, and `pane get` with `pane`, or fails it when nil.
     private func zenPaneEnvironment(pane token: Int, answering pane: String?) throws -> [String: String] {
         let bin = root.appendingPathComponent("stub-bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -204,8 +203,7 @@ final class CodexSetupFilesTests: XCTestCase {
         return ["PATH": "\(bin.path):/usr/bin:/bin", "ZEN_CONTROL_SOCK": "/tmp/zen-test.sock", "ZEN_PANE": "\(token)"]
     }
 
-    // `start` is the SessionStart `source` Codex sends on stdin.
-    private func runShippedHook(environment: [String: String], start: String = "startup") throws -> (Int32, String) {
+    private func runShippedHook(environment: [String: String], source: String = "startup") throws -> (Int32, String) {
         let files = try XCTUnwrap(shipped)
         let script = root.appendingPathComponent(CodexSetup.hookFileName)
         try files.hook.write(to: script)
@@ -219,7 +217,7 @@ final class CodexSetupFilesTests: XCTestCase {
         process.standardInput = input
 
         try process.run()
-        input.fileHandleForWriting.write(Data(#"{"session_id":"s1","source":"\#(start)"}"#.utf8))
+        input.fileHandleForWriting.write(Data(#"{"session_id":"s1","source":"\#(source)"}"#.utf8))
         try input.fileHandleForWriting.close()
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()

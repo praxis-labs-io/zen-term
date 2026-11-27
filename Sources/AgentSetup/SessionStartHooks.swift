@@ -1,6 +1,5 @@
 import Foundation
 
-// A hooks file in Claude Code's settings shape, edited only under `hooks.SessionStart` where an entry runs ZenTerm's hook.
 struct SessionStartHooks {
     static let hookFileName = "zenterm-context.sh"
 

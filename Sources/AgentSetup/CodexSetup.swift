@@ -4,7 +4,6 @@ import Foundation
 public struct CodexSetup: AgentInstaller {
     static let hookFileName = SessionStartHooks.hookFileName
     static let stampFileName = "zenterm-context.build"
-    // Codex runs a new or changed hook only once the user trusts it at its startup review.
     static let trustNote = "Codex asks you to trust it when it next starts."
 
     public let configRoot: URL

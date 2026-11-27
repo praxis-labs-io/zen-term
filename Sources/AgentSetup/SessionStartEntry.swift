@@ -1,6 +1,5 @@
 import Foundation
 
-// The registration for an agent that reads hooks in Claude Code's shape: ZenTerm's hook under `hooks.SessionStart`.
 struct SessionStartEntry: SetupRegistration {
     let url: URL
     let command: String
