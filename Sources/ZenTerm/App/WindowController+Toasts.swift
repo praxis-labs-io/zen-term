@@ -139,18 +139,18 @@ extension WindowController {
 
     static func claudeSetupOffer(in folder: String) -> SetupPrompt {
         SetupPrompt(
-            title: "Teach Claude Code to use zen?", message: claudeSetupOfferMessage(in: folder),
+            title: "Teach Claude Code to use zen?", message: setupOfferMessage(in: folder),
             confirm: "Set up", decline: "Don't ask again")
     }
 
     static let claudeUpdateOffer = SetupPrompt(
-        title: "Update zen for Claude Code?", message: claudeUpdateOfferMessage, confirm: "Update",
+        title: "Update zen for Claude Code?", message: updateOfferMessage, confirm: "Update",
         decline: "Skip this version")
 
     static let claudeSetupCopy = SetupCopy(
         offer: claudeSetupOffer(in:), updateOffer: claudeUpdateOffer, setUpToast: claudeSetUpToast,
         updatedToast: claudeUpdatedToast, setUpFailedTitle: "Couldn't set up Claude Code",
-        updateFailedTitle: claudeUpdateFailedTitle)
+        updateFailedTitle: updateFailedTitle)
 
     struct SetupCopy {
         let offer: (_ folder: String) -> SetupPrompt

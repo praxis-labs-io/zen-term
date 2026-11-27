@@ -4395,14 +4395,14 @@ final class WindowController: NSObject {
     }
 
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
-    static func claudeSetupOfferMessage(in folder: String) -> String {
+    static func setupOfferMessage(in folder: String) -> String {
         "The zen skill and a session hook,\nin \(folder)"
     }
 
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
-    static let claudeUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
+    static let updateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
 
-    static let claudeUpdateFailedTitle = "Couldn't update zen"
+    static let updateFailedTitle = "Couldn't update zen"
 
     private func showSetupResult(_ result: Result<SetupState, SetupError>, copy: SetupCopy) {
         switch result {

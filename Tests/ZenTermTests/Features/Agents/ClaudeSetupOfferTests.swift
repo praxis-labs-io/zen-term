@@ -223,7 +223,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
 
         try start("claude", in: c)
 
-        waitUntil(toastTexts(in: c).contains(WindowController.claudeUpdateFailedTitle), "the failure")
+        waitUntil(toastTexts(in: c).contains(WindowController.updateFailedTitle), "the failure")
         XCTAssertNil(toast(titled: Self.updatedTitle, in: c))
         XCTAssertEqual(try installedSkill(), Data("older".utf8))
     }
@@ -235,7 +235,7 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         try start("claude", in: c)
 
         waitUntil(toast(titled: Self.updateTitle, in: c) != nil, "the update offer")
-        XCTAssertTrue(toastTexts(in: c).contains(WindowController.claudeUpdateOfferMessage))
+        XCTAssertTrue(toastTexts(in: c).contains(WindowController.updateOfferMessage))
         XCTAssertEqual(try installedSkill(), edited)
     }
 
@@ -319,18 +319,18 @@ final class ClaudeSetupOfferTests: WindowTestCase {
         waitUntil(offerToast(in: c) != nil, "the setup offer")
         let folder = PathDisplay.abbreviatingHome(try claudeRoot().path)
         XCTAssertTrue(
-            toastTexts(in: c).contains(WindowController.claudeSetupOfferMessage(in: folder)), "\(toastTexts(in: c))")
+            toastTexts(in: c).contains(WindowController.setupOfferMessage(in: folder)), "\(toastTexts(in: c))")
     }
 
     func test_offerCopyFitsTheToast() {
         let messages = [
-            WindowController.claudeSetupOfferMessage(in: "~/.claude"), WindowController.claudeUpdateOfferMessage,
+            WindowController.setupOfferMessage(in: "~/.claude"), WindowController.updateOfferMessage,
         ]
         for line in messages.flatMap({ $0.split(separator: "\n") }) {
             let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.messageMaxWidth, "wraps: \(line)")
         }
-        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.claudeUpdateFailedTitle] {
+        for title in [Self.offerTitle, Self.updateTitle, Self.updatedTitle, WindowController.updateFailedTitle] {
             let width = (title as NSString).size(withAttributes: [.font: ToastView.titleFont]).width
             XCTAssertLessThanOrEqual(width, ToastView.titleMaxWidth, "truncates: \(title)")
         }
