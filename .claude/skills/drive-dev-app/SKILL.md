@@ -110,18 +110,22 @@ Privacy & Security:
 - **Accessibility** (send keystrokes)
 - **Screen Recording** (screenshots)
 
-`zt-drive.sh preflight` reports which are missing.
-
 **macOS will not prompt for them.** TCC asks once per responsible process, and after
 a decision (especially a revoke) every later attempt fails silently: error `1002` on
 a keystroke, `-25211` on a UI query. Drew watching for a permission dialog will wait
-forever. So if preflight reports a denial:
+forever. So grant them one at a time, before anything is driven:
 
-1. **Ask him to grant it**, naming both panes and saying plainly that no dialog is
-   coming. `preflight` prints the `open x-apple.systempreferences:…` links.
-2. **Wait.** Do not drive anything, and do not fall back to a partial run.
-3. If he would rather not, hand the runbook over as a checklist and say which steps
-   a machine would have checked.
+1. **Check both** with `zt-drive.sh preflight`. If both are granted, go on to the flow.
+2. **Accessibility first**, if missing: run `zt-drive.sh grant accessibility`, which opens its
+   Settings pane. Tell Drew to turn on `ZenTerm Dev` there, that no dialog is coming,
+   and to reply **done**. Then stop and wait for that reply.
+3. **Screen Recording next**, if missing: run `zt-drive.sh grant screen-recording` and do the
+   same, waiting for **done** again.
+4. **Re-run `zt-drive.sh preflight`.** If a grant still reads denied, the host app usually
+   needs a restart before it applies: say so and wait again.
+5. Do not drive anything, and do not fall back to a partial run, until both read
+   granted. If he would rather not grant them, hand the runbook over as a checklist
+   and say which steps a machine would have checked.
 
 Probe the permission that actually gates input. Reading `name of first process whose
 frontmost is true` succeeds **without** assistive access, so an earlier version of
@@ -152,7 +156,8 @@ Then drive it:
 
 ```bash
 $S run 'python3 /tmp/fixture.py 8931'   # paste a command into the focused pane
-$S chord '\' command,shift              # split a pane
+$S paste 'needle'                       # paste text into the focused field, no Return
+$S chord '\' command,shift              # split a pane (modifiers are required: a bare letter is refused)
 $S chord w command                      # close the focused pane
 $S key escape                           # a named key: return escape tab space and the arrows
 $S click 630 91                         # window-relative points, read off a wshot at half its pixels
