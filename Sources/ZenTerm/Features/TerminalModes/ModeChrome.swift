@@ -80,9 +80,10 @@ final class ModeChrome {
     }
 
     func setScrollCursor(
-        _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
+        _ state: ScrollCursorView.State?, readout: String?, metrics: @escaping () -> TerminalCellMetrics?
     ) {
         header?.isScrolling = state != nil
+        header?.scrollReadout = readout
         guard let state else {
             cursor.isHidden = true
             cursor.metrics = nil

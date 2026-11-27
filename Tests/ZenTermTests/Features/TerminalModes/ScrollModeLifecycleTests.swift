@@ -516,6 +516,26 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(header.showsTitleAndControlsForTesting)
     }
 
+    func test_theHeadersPositionFollowsTheRowsTheScrollbackDrops() throws {
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = Array(repeating: "", count: 200)
+        let grid = surface.recordingGrid
+        grid.viewportTop = 176
+        grid.cursorPoint = TerminalGridPoint(row: 190, column: 0)
+        let header = try XCTUnwrap(controller.focusedPanelForTesting?.shownHeaderForTesting)
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(header.readoutForTesting, "191:1", "precondition")
+
+        grid.droppedRows = 50
+        grid.viewportTop = 126
+        surface.delegate?.surface(
+            surface, scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 126, viewport: 24))
+
+        XCTAssertEqual(controller.scrollMode.cursor?.row, 140, "premise: the cursor's text renumbered")
+        XCTAssertEqual(header.readoutForTesting, "141:1")
+    }
+
     func test_withHeadersOff_theModeLeavesTheHeaderHidden() throws {
         var config = GeneralConfig.current
         config.paneHeaders = false

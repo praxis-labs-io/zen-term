@@ -225,7 +225,7 @@ final class ScrollModeGridTests: WindowTestCase {
 
     func test_yyTakesTheWholeWrappedLine() throws {
         let long = String(repeating: "q", count: 200)
-        let (c, _, grid) = try pane(running: "echo \(long); echo after", until: "after")
+        let (c, _, grid) = try settledPane(running: "echo \(long); echo after", until: "after")
         c.handle(.toggleScrollMode)
         let start = try XCTUnwrap((0..<grid.rowCount).first { text(grid, $0).hasPrefix("qqq") })
         XCTAssertEqual(grid.row(start)?.wraps, true, "precondition: the line wraps")
@@ -350,5 +350,84 @@ final class ScrollModeGridTests: WindowTestCase {
         c.handle(.toggleSearch)
 
         XCTAssertEqual(c.focusedPanelForTesting?.findFieldForTesting?.needle, "error")
+    }
+
+    private func readout() throws -> String? {
+        try XCTUnwrap(controller?.focusedPanelForTesting?.shownHeaderForTesting).readoutForTesting
+    }
+
+    func test_theHeaderReadsTheCursorsRowAndColumn_andFollowsAMotion() throws {
+        let (_, _, grid) = try pane(running: "printf 'one\\ntwo\\nlast\\n'", until: "last")
+        let two = try XCTUnwrap(row(grid, "two"))
+        try enterOn(grid, line: "two")
+        XCTAssertEqual(try readout(), "\(two + 1):1")
+
+        try press("l")
+        XCTAssertEqual(try readout(), "\(two + 1):2")
+        try press("j")
+
+        XCTAssertEqual(try readout(), "\(two + 2):2")
+    }
+
+    func test_vOnOneRowCountsCharacters_andAcrossRowsCountsLines() throws {
+        let (_, _, grid) = try pane(running: "echo hello there; echo second line", until: "second line")
+        try enterOn(grid, line: "hello there")
+
+        try press("v")
+        XCTAssertEqual(try readout(), "1 char")
+        try press("e")
+        XCTAssertEqual(try readout(), "5 chars")
+        try press("j")
+
+        XCTAssertEqual(try readout(), "2 lines")
+    }
+
+    func test_shiftVCountsEachRowOfAWrappedLine() throws {
+        let long = String(repeating: "w", count: 200)
+        let (c, _, grid) = try settledPane(running: "echo \(long); echo after", until: "after")
+        let afterRow = try XCTUnwrap(row(grid, "after"))
+        XCTAssertEqual(grid.row(afterRow - 1)?.continues, true, "precondition: the line wraps")
+        let first = try XCTUnwrap((0..<grid.rowCount).first { text(grid, $0).hasPrefix("www") })
+        c.handle(.toggleScrollMode)
+        c.scrollMode.land(on: TerminalGridPoint(row: first, column: 0))
+
+        try press("V", shift: true)
+
+        XCTAssertGreaterThan(afterRow - first, 1, "premise: more than one row")
+        XCTAssertEqual(try readout(), "\(afterRow - first) lines")
+    }
+
+    func test_aCopyConfirmsWhatItTook_untilTheNextKey() throws {
+        let (_, _, grid) = try pane(running: "echo hello there; echo second line", until: "second line")
+        let hello = try XCTUnwrap(row(grid, "hello there"))
+        try enterOn(grid, line: "hello there")
+
+        try type("vey")
+        XCTAssertEqual(try readout(), "Copied 5 characters")
+        try press("l")
+        XCTAssertEqual(try readout(), "\(hello + 1):6", "the next key gives the position back")
+
+        try type("vjy")
+        XCTAssertEqual(try readout(), "Copied 2 lines")
+        try type("yy")
+        XCTAssertEqual(try readout(), "Copied 1 line")
+        try type("vy")
+        XCTAssertEqual(try readout(), "Copied 1 character")
+        try press("2")
+
+        XCTAssertEqual(try readout(), "\(hello + 2):6", "a count is a key too")
+    }
+
+    func test_findOverTheModeTakesTheReadoutsPlace_untilItCloses() throws {
+        let (c, _, grid) = try pane(running: "echo hello", until: "hello")
+        let hello = try XCTUnwrap(row(grid, "hello"))
+        try enterOn(grid, line: "hello")
+
+        c.handle(.toggleSearch)
+        XCTAssertNotNil(c.focusedPanelForTesting?.findFieldForTesting)
+        XCTAssertNil(try readout())
+        c.search.end()
+
+        XCTAssertEqual(try readout(), "\(hello + 1):1")
     }
 }

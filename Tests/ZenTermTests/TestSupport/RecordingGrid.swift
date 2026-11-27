@@ -1,6 +1,6 @@
 import TerminalKit
 
-// A grid over `RecordingSurface.rows`, one cell per character, with a viewport a test can move and marks that stay put.
+// A grid over `RecordingSurface.rows`: one cell per character, a movable viewport, marks that follow dropped rows.
 final class RecordingGrid: TerminalGrid {
     private let rows: () -> [String]
 
@@ -12,6 +12,7 @@ final class RecordingGrid: TerminalGrid {
 
     var rowCount: Int { rows().count }
     var viewportTop = 0
+    var droppedRows = 0
     var cursorPoint: TerminalGridPoint? = TerminalGridPoint(row: 0, column: 0)
     private(set) var selectionBounds: ClosedRange<TerminalGridPoint>?
 
@@ -38,7 +39,12 @@ final class RecordingGrid: TerminalGrid {
     }
 
     func mark(_ point: TerminalGridPoint) -> TerminalGridMark? {
-        TerminalGridMark(read: { .at(point) }, release: {})
+        let droppedAtMark = droppedRows
+        return TerminalGridMark(
+            read: { [weak self] in
+                let dropped = (self?.droppedRows ?? droppedAtMark) - droppedAtMark
+                return .at(TerminalGridPoint(row: point.row - dropped, column: point.column))
+            }, release: {})
     }
 
     func setSelection(_ range: ClosedRange<TerminalGridPoint>?) { selectionBounds = range }
