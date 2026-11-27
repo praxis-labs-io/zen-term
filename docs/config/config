@@ -630,10 +630,8 @@
 # `search-background`, `search-foreground`, `search-selected-background` and
 # `search-selected-foreground`; unset, they're derived from the chrome accent.
 #
-# The cursor lands on the match by reading the screen back, because the terminal
-# core reports which match is selected but never where it is. With several matches
-# on one screen it can land on the wrong one. The selected match is highlighted
-# differently, so you'll see it, and one `j` or `k` fixes it.
+# The cursor lands on the match the find field counted, even with several matches
+# on one screen.
 #
 # ─── The screen ──────────────────────────────────────────────────────────────
 #
