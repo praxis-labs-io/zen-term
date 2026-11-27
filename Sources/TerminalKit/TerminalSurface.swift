@@ -251,8 +251,11 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surfaceGridDidReflow(_ s: TerminalSurface)
     /// The live needle's match count, or nil. Climbs repeatedly while the search runs.
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?)
-    /// The selected match, zero-based, or nil. A fresh needle stays nil until the first `stepSearch`.
-    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?)
+    /// The selected match, zero-based, or nil, and where it starts when the backend knows. A fresh needle stays
+    /// nil until the first `stepSearch`.
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?)
+    /// The selection changed, from the mouse, `grid?.setSelection`, or the terminal clearing it. Read it from `grid`.
+    func surfaceSelectionDidChange(_ s: TerminalSurface)
     /// The backend ended its search on its own. Close the find field without calling `endSearch()`.
     func surfaceDidEndSearch(_ s: TerminalSurface)
     /// The backend asks the chrome to open its find field, seeded with `needle`.
@@ -276,7 +279,8 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {}
     func surfaceGridDidReflow(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {}
-    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {}
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {}
+    func surfaceSelectionDidChange(_ s: TerminalSurface) {}
     func surfaceDidEndSearch(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {}
 }
@@ -299,6 +303,9 @@ public protocol TerminalSurface: AnyObject {
 
     /// False until `start(_:)` brings the terminal up, after a failed start, and after `terminate()`.
     var isStarted: Bool { get }
+
+    /// The screen and scrollback as cells, or nil while `isStarted` is false or when the backend has no grid.
+    var grid: TerminalGrid? { get }
 
     /// The background the terminal last reported (OSC 11), or nil if it never has.
     var backgroundOverride: TerminalColor? { get }
@@ -399,6 +406,8 @@ public extension TerminalSurface {
     var backgroundOverride: TerminalColor? { nil }
 
     var cellMetrics: TerminalCellMetrics? { nil }
+
+    var grid: TerminalGrid? { nil }
 
     var selectionOrigin: TerminalViewportCell? { nil }
 

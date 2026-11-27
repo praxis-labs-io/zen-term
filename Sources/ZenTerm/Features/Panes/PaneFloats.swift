@@ -180,9 +180,10 @@ extension PaneFloats: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         presenter?.surface(s, searchTotalDidChange: total)
     }
-    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
-        presenter?.surface(s, searchSelectionDidChange: index)
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {
+        presenter?.surface(s, searchSelectionDidChange: index, start: start)
     }
+    func surfaceSelectionDidChange(_ s: TerminalSurface) { presenter?.surfaceSelectionDidChange(s) }
     func surfaceDidEndSearch(_ s: TerminalSurface) { presenter?.surfaceDidEndSearch(s) }
     func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {
         presenter?.surface(s, wantsSearchWithNeedle: needle)

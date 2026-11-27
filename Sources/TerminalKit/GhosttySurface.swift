@@ -48,6 +48,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public var currentDirectory: URL? { lastCwd }
     public var isStarted: Bool { surfacePtr != nil }
 
+    private var ghosttyGrid: GhosttyGrid?
+
+    public var grid: TerminalGrid? {
+        guard surfacePtr != nil else { return nil }
+        if let ghosttyGrid { return ghosttyGrid }
+        let grid = GhosttyGrid(surface: self)
+        ghosttyGrid = grid
+        return grid
+    }
+
     // Reads OSC 133 prompt marks: a shell without integration reads busy, a background job does not.
     public var isBusy: Bool {
         guard tracksBusy, let surfacePtr else { return false }
@@ -371,6 +381,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         removeAppActiveObservers()
         guard let surfacePtr else { return }
         ShellSessionLedger.shared.record(ShellSession.leaderChildren())
+        ghosttyGrid?.releaseMarks(surfacePtr)
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
         hostView.surfacePtr = nil
@@ -383,6 +394,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         removeAppActiveObservers()
         if let surfacePtr {
             ShellSessionLedger.shared.record(ShellSession.leaderChildren())
+            ghosttyGrid?.releaseMarks(surfacePtr)
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
             ShellSessionReaper.shared.reapOrphans()
@@ -612,7 +624,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         lastGrid = (columns: metrics.columns, rows: metrics.rows)
     }
 
-    // Child exit is reported a turn later: freeing the surface inside `ghostty_app_tick` is a use-after-free.
+    // Child exit and selection changes go out a turn later: one frees the surface mid-tick, one holds the grid's lock.
     func handle(_ action: ghostty_action_s) -> Bool {
         switch action.tag {
         case GHOSTTY_ACTION_SET_TITLE:
@@ -699,8 +711,17 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             delegate?.surface(self, searchTotalDidChange: Self.searchCount(action.action.search_total.total))
             return true
         case GHOSTTY_ACTION_SEARCH_SELECTED:
+            let selected = action.action.search_selected
             delegate?.surface(
-                self, searchSelectionDidChange: Self.searchCount(action.action.search_selected.selected))
+                self, searchSelectionDidChange: Self.searchCount(selected.selected),
+                start: selected.has_start
+                    ? TerminalGridPoint(row: Int(selected.start_y), column: Int(selected.start_x)) : nil)
+            return true
+        case GHOSTTY_ACTION_SELECTION_CHANGED:
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.surfacePtr != nil else { return }
+                self.delegate?.surfaceSelectionDidChange(self)
+            }
             return true
         case GHOSTTY_ACTION_END_SEARCH:
             delegate?.surfaceDidEndSearch(self)

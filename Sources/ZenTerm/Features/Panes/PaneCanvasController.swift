@@ -582,7 +582,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         onSurfaceEvent?(s, .search(.total(total)))
     }
-    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {
         onSurfaceEvent?(s, .search(.selected(index)))
     }
     func surfaceDidEndSearch(_ s: TerminalSurface) {

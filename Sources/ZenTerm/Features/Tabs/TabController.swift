@@ -1243,7 +1243,7 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         relay(s, .search(.total(total)))
     }
-    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?, start: TerminalGridPoint?) {
         relay(s, .search(.selected(index)))
     }
     func surfaceDidEndSearch(_ s: TerminalSurface) {
