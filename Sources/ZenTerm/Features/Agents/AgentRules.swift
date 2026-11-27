@@ -9,7 +9,8 @@ enum AgentRules {
     // A launch names an agent by its program (`claude`), a notification by its own words (`Claude Code`).
     static func key(for agentName: String?) -> String? {
         guard let name = agentName?.lowercased(), !name.isEmpty else { return nil }
-        return AgentRoster.knownAgents.first { name.contains($0) }
+        let words = name.split { !$0.isLetter && !$0.isNumber }
+        return AgentRoster.knownAgents.first { key in words.contains { $0 == key } }
     }
 
     // Claude Code's chat:stash sets the prompt's text aside, and its next submit puts it back.

@@ -106,34 +106,33 @@ public struct ClaudeSetup: Sendable {
 
     private func contents(of url: URL) throws(ClaudeSetupError) -> Data? {
         do {
-            return try Data(contentsOf: url)
-        } catch CocoaError.fileReadNoSuchFile {
-            return nil
+            return try SetupFileOperations.contents(of: url)
+        } catch let SetupFileError.unreadable(_, error) {
+            throw .unreadable(url, error)
         } catch {
             throw .unreadable(url, error)
         }
     }
 
     private func place(_ data: Data, at url: URL) throws(ClaudeSetupError) -> String? {
-        let existing = try contents(of: url)
-        guard existing != data else { return nil }
         do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: .atomic)
+            return try SetupFileOperations.place(data, at: url)
+        } catch let SetupFileError.unreadable(_, error) {
+            throw .unreadable(url, error)
+        } catch let SetupFileError.unwritable(_, error) {
+            throw .unwritable(url, error)
         } catch {
             throw .unwritable(url, error)
         }
-        return existing == nil ? "Installed" : "Updated"
     }
 
     private func delete(_ url: URL) throws(ClaudeSetupError) -> Bool {
-        guard FileManager.default.fileExists(atPath: url.path) else { return false }
         do {
-            try FileManager.default.removeItem(at: url)
+            return try SetupFileOperations.delete(url)
+        } catch let SetupFileError.unwritable(_, error) {
+            throw .unwritable(url, error)
         } catch {
             throw .unwritable(url, error)
         }
-        return true
     }
 }

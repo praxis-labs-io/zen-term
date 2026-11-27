@@ -214,6 +214,8 @@ final class AgentRulesKeyTests: XCTestCase {
             ("Claude Code", "claude"),
             ("codex", "codex"),
             ("Codex", "codex"),
+            ("Pi", "pi"),
+            ("copilot", nil),
             ("some-new-agent", nil),
             ("", nil),
             (nil, nil),

@@ -1,7 +1,7 @@
 import AgentSetup
 import Foundation
 
-// The installer `zen setup pi` runs off the main thread because it reads and writes Pi's agent directory.
+// The app-side wrapper around `PiSetup` keeps Pi's agent-directory I/O off the main thread.
 enum PiCodeSetup {
     enum Change { case install, remove }
 

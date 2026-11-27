@@ -27,18 +27,15 @@ export default function zenTermContext(pi: ExtensionAPI) {
 	let context: string | undefined;
 
 	pi.on("session_start", async (_event, _ctx) => {
+		context = undefined;
 		const pane = await paneInfo();
+		if (!pane) return;
 		const paneID = process.env.ZEN_PANE;
-		if (!pane && !process.env.ZEN_CONTROL_SOCK) {
-			context = undefined;
-			return;
-		}
-		if (paneID && /^\d+$/.test(paneID)) {
-			context = `This Pi session runs in ZenTerm pane ${paneID}. The \`zen\` CLI controls it.`;
-		}
-		const parent = pane?.parent;
+		context = `This Pi session runs in ZenTerm pane ${paneID}. The \`zen\` CLI controls it.`;
+		const parent = pane.parent;
 		if (parent !== undefined && /^\d+$/.test(String(parent))) {
-			const who = pane?.name ? `\`${pane.name}\`` : `pane ${paneID}`;
+			const safeName = pane.name?.replace(/[\\`\\r\\n]/g, "");
+			const who = safeName ? `\`${safeName}\`` : `pane ${paneID}`;
 			context += ` You are helper ${who}, started by pane ${parent}. When done or stuck, report with \`zen pane send --pane ${parent} --enter "<result>"\`, then stop. Put task questions there rather than asking the user.`;
 		}
 	});
