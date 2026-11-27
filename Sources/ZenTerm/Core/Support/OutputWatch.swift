@@ -9,9 +9,12 @@ final class OutputWatch {
 
     let needle: String
     private var spots: [Spot] = []
+    // A surface with no grid yet has printed nothing, so its first readable screen is all new output.
+    private let startsBlank: Bool
 
     init(needle: String, surface: TerminalSurface?) {
         self.needle = needle
+        startsBlank = surface?.grid == nil
         _ = sawNeedle(in: surface)
     }
 
@@ -37,7 +40,7 @@ final class OutputWatch {
 
     // A mark on the screen not showing keeps its place for when that screen returns, and the showing one starts fresh.
     private func baseline(screenTop: Int) -> (row: Int, counted: Int) {
-        guard !spots.isEmpty else { return (screenTop, .max) }
+        guard !spots.isEmpty else { return startsBlank ? (0, 0) : (screenTop, .max) }
         for spot in spots {
             if case .at(let point) = spot.mark.place { return (point.row, spot.counted) }
         }

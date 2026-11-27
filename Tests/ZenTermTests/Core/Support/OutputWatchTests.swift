@@ -29,6 +29,15 @@ final class OutputWatchTests: XCTestCase {
         XCTAssertTrue(watch.sawNeedle(in: pane))
     }
 
+    func test_textAPaneStartingAfterTheWaitBeganPrintsIsAMatch() {
+        let pane = RecordingSurface()
+        let watch = OutputWatch(needle: "ready", surface: pane)
+        XCTAssertFalse(watch.sawNeedle(in: pane))
+        pane.start(TerminalSurfaceConfig())
+        pane.rows = ["server ready", "$ "]
+        XCTAssertTrue(watch.sawNeedle(in: pane))
+    }
+
     func test_textPrintedAfterAWaitThatBeganMidResizeIsAMatch() {
         let pane = surface(["$ npm run dev"])
         pane.recordingGrid.widthBeforeResize = 40
