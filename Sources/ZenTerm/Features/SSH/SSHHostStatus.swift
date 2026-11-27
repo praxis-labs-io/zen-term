@@ -14,4 +14,12 @@ enum SSHHostStatus: Equatable {
     }
 
     var isNavigable: Bool { self == .connected }
+
+    var chip: ProcessIcon {
+        switch self {
+        case .offline: return .offlineHost
+        case .online, .connecting: return .unconnectedHost
+        case .connected: return .host
+        }
+    }
 }

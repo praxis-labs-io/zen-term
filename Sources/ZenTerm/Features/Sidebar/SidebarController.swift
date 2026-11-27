@@ -56,6 +56,8 @@ final class SidebarController {
     var onCloseAgent: (SurfaceID) -> Void = { _ in }
     var onActivateHost: (SSHHostID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
+    // Constraints the window moves in step with docking, read after `isDocked` has changed.
+    var slidesWithDocking: () -> [(constraint: NSLayoutConstraint, to: CGFloat)] = { [] }
     var onMoveWindowButtons: (_ to: HostWindow.WindowButtonPlacement, _ visible: Bool, _ animated: Bool) -> Void = {
         _, _, _ in
     }
@@ -180,10 +182,11 @@ final class SidebarController {
         lead.isHidden = false
         Motion.fade(footer, to: isDocked ? 1 : 0, duration: Motion.pageSlideDuration)
         slideID &+= 1
-        let animate = [
-            (edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset),
-            (tabBarLeading, tabBarPull), (columnLeading, 0), (columnBottom, 0), (contentTop, 0),
-        ]
+        let animate =
+            [
+                (edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset),
+                (tabBarLeading, tabBarPull), (columnLeading, 0), (columnBottom, 0), (contentTop, 0),
+            ] + slidesWithDocking()
         guard !Motion.isReduceMotionEnabled() else {
             for (constraint, target) in animate { constraint.constant = target }
             stopFloating()
@@ -248,6 +251,7 @@ final class SidebarController {
         canvasOffset.constant = canvasGap
         leadWidth.constant = leadOffset
         tabBarLeading.constant = tabBarPull
+        for (constraint, target) in slidesWithDocking() { constraint.constant = target }
         view.layer?.transform = CATransform3DIdentity
         settle()
         applyLeadWidth()
@@ -515,17 +519,18 @@ final class SidebarController {
         case .workspace:
             let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
-                id: entry.row, variant: .standard, name: entry.name, detail: branch, number: entry.number,
+                id: entry.row, variant: .leading(.workspace), name: entry.name, detail: branch, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
         case .worktree(let origin):
             return SidebarRowItem(
-                id: entry.row, variant: .nested(.worktree),
+                id: entry.row, variant: .nested(.workspaceWorktree),
                 name: entry.pinnedName ?? branch ?? origin.name,
                 detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: false)
         case .ghost:
             return SidebarRowItem(
-                id: entry.row, variant: .faint, name: entry.name, detail: nil, number: nil, isActive: false,
+                id: entry.row, variant: .faint(.closedWorkspace), name: entry.name, detail: nil, number: nil,
+                isActive: false,
                 makesWorktrees: true)
         }
     }

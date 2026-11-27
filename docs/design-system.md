@@ -66,7 +66,7 @@ Accent is rare. It goes in these places only:
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
 - The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
-- Role-toned `tint` surfaces: icon badges, focused text selection, the scroll flash.
+- Role-toned `tint` surfaces: icon badges, the Workspaces chips, focused text selection, the scroll flash.
 
 A control's focus or edit ring takes `chrome.focusRing`, a neutral. Never accent text, an
 accent check mark, an accent selection or state fill, or `accent.withAlphaComponent`.
@@ -92,17 +92,20 @@ every theme. They live in `ProcessIcon`'s registry and nowhere else; no call sit
 one. Everything else comes from the system: the shape (`Radius.icon(_:)`, continuous
 corners), the size and mark box (`IconBadge.Size`), the edge (`fill(alpha:)` with `border`,
 at `Border.width`) and the sheen (`ChipSheen`), a fixed alpha mask lit from the top that every chip shares, and an SSH host's emblem tile in a longer, lighter spread.
-A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
+A chip with no brand (a shell, a generic program, a worktree in a tab) takes `chipRaised`, a lift a
 step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
 program runs, so a resting shell and a worktree are never branded. A purpose tint names a
-palette group: a soft `tint(_:alpha:)` of an ANSI hue at `badgeTint` over `chipRaised`, behind
-the glyph in full hue (`ProcessIcon.Look.purpose`). ANSI red is never a purpose tint: it is
+group (`ProcessIcon.Purpose`): a soft `tint(_:alpha:)` of an ANSI hue at `badgeTint` over
+`chipRaised`, behind the glyph in full hue. Workspaces, worktrees and hosts take the accent, or
+draw neutral on a black or white accent. Tabs take cyan, Panes yellow, Window blue, each moving to
+its fallback (magenta, green, magenta) when the accent shares its hue family, so no two groups
+match. Terminal, Tools and App are neutral. ANSI red is never a fixed purpose tint: it is
 `blocked`. Process marks are never SF
 Symbols, except a tool float's own icon in its palette row and header (`ProcessIcon.toolFloat`), which is
-an icon picker name: a picked symbol takes the Tools tint, a picked brand mark its brand's chip. A
+an icon picker name: a picked symbol draws neutral, a picked brand mark its brand's chip. A
 generic chip's glyph is Lucide, unmodified. In a row, a chip leads it
-(`ListRow.Leading.process`, at `.small`): an Agents row, a worktree row in the sidebar, and a
-palette row.
+(`ListRow.Leading.process`, at `.small`): an Agents row, a sidebar workspace, worktree or host row, and a
+palette row. A sidebar worktree's chip starts under its workspace's title (`ListRow.Nesting.underTitle`). A worktree's closed parent and an offline host lead with a neutral chip at muted ink (`ProcessIcon.Look.muted`), an offline host's drawing `server-off`; an offline host's title is faint like a ghost row's. A host online or connecting but not connected leads with the muted `server` chip and a subtle title; only a connected host takes the Workspaces tint.
 
 ## State
 
@@ -235,7 +238,7 @@ takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`). A word about the row's state rides right after its title in muted caption ink (`ListRow.Content.titleSuffix`: the picker's Current, Open, Other window); a `note` sits at the trailing edge. A row's text lines up with its list's heading, and its fill bleeds `Spacing.controlInset` into the gutter: the Settings nav indents its heading, and a Settings list widens its stack (`SettingsDetail.listOutset`). In a persistent list (the sidebar, the Settings nav, a Settings list) and a palette, a `RowFillSlide` carries the current, focus and cursor fills from the row that loses one to the row that gains it; hover fills in place, and a palette's cursor lands in place when its rows rebuild. When an arrow scrolls a palette or a Settings list, the slide's start moves with the scroll (`RowFillSlide.holdInViewport`), so the fill keeps its place on screen while the rows step under it.
 
-The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette or workspace picker row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint; the workspace picker's are all magenta, a host's included. A row's detail (the picker's branch or a host's status word, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
+The command palette and the workspace picker share one shell, `PaletteOverlay`: its top pinned where it would center at its full height, so only its bottom moves with the results, and a search field. A command palette or workspace picker row leads with a process chip (`ListRow.Leading.process`) in its group's purpose tint. A workspace picker row is in the Workspaces tint while open or an action, and muted (`ProcessIcon.closedWorkspace`, `closedWorktree`) while nothing has opened it; a host's is muted until it connects. A row's detail (the picker's branch, the palette's category while a query filters out the headers) sits in muted ink just left of its shortcut. Every header but the list's first leaves `PaletteSectionHeader.sectionGap` above it. The bar names the selected row's Return action and the shortcuts that act on it, never ↑↓ or esc.
 
 Every terminal pane, drawer and float wears a `PaneHeader` (unless `pane-headers` is off): its process chip at `.small`, its name in `.medium` weight and its path, both in `ink(.muted)` wherever focus sits, a quiet line of context; then its controls as `IconButton`s at `Icon.xs`, resting in `ink(.muted)`. An unfocused header shows its controls only while the pointer is over it. A narrow header truncates the path from its front first, so the folder survives, then the name, then drops every control but close.
 

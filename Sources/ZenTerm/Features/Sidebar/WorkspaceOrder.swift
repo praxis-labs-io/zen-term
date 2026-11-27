@@ -63,8 +63,11 @@ struct WorkspaceOrder {
         navigableWorkspaces.map(Target.workspace) + hosts.filter(\.status.isNavigable).map { .host($0.id) }
     }
 
+    /// Every row a switch can land on, top to bottom: the workspaces, then every host whatever its status.
+    var line: [Target] { navigableWorkspaces.map(Target.workspace) + hosts.map { .host($0.id) } }
+
     func stop(after current: Target, _ delta: Int) -> Target? {
-        let line = navigableWorkspaces.map(Target.workspace) + hosts.map { .host($0.id) }
+        let line = self.line
         guard delta != 0, let start = line.firstIndex(of: current) else { return nil }
         let stops = Set(navigable)
         let step = delta > 0 ? 1 : -1

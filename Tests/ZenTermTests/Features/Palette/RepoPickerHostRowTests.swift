@@ -86,12 +86,15 @@ final class RepoPickerHostRowTests: WindowTestCase {
         picker.rowViews.compactMap { $0 as? RepoPickerOverlay.HostRowView }
     }
 
-    func test_hosts_followTheWorkspaces_inConfigOrder_namedWithTheirStatus() throws {
+    func test_hosts_followTheWorkspaces_inConfigOrder() throws {
         SSHHostStatusCenter.shared.setReachable(true, host: build)
         let picker = try openPicker(in: makeWindow())
 
         XCTAssertEqual(hostRows(of: picker).map(\.title), ["Dev Box", "build"])
-        XCTAssertEqual(hostRows(of: picker).map(\.detail), ["Offline", "Online"])
+        XCTAssertEqual(hostRows(of: picker).map(\.detail), ["", ""], "a host row shows no status word")
+        XCTAssertEqual(
+            hostRows(of: picker).map { $0.processBadgeForTesting?.process }, [.offlineHost, .unconnectedHost],
+            "an offline host's chip is muted")
         let titles = picker.rowViews.compactMap { ($0 as? ListRow)?.title }
         let alpha = try XCTUnwrap(titles.firstIndex(of: "Alpha"))
         let firstHost = try XCTUnwrap(titles.firstIndex(of: "Dev Box"))
@@ -124,11 +127,12 @@ final class RepoPickerHostRowTests: WindowTestCase {
     func test_aStatusChange_whileOpen_updatesTheRowInPlace() throws {
         let picker = try openPicker(in: makeWindow())
         let row = try XCTUnwrap(hostRows(of: picker).first)
-        XCTAssertEqual(row.detail, "Offline")
+        XCTAssertEqual(row.processBadgeForTesting?.process, .offlineHost)
 
         SSHHostStatusCenter.shared.setReachable(true, host: devbox)
 
-        XCTAssertEqual(row.detail, "Online")
+        XCTAssertEqual(row.processBadgeForTesting?.process, .unconnectedHost)
+        XCTAssertEqual(row.accessibilityValue() as? String, "Online")
         XCTAssertTrue(hostRows(of: picker).first === row, "the row is kept, not rebuilt")
     }
 

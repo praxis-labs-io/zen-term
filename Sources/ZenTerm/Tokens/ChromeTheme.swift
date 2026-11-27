@@ -8,6 +8,7 @@ struct ChromeTheme: Equatable {
     let warning: TerminalColor
     let destructive: TerminalColor
     let accent: TerminalColor
+    let accentSlot: AccentSlot
     let onAccent: TerminalColor
     let working: TerminalColor
     let done: TerminalColor

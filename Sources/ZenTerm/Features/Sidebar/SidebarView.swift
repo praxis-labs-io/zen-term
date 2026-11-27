@@ -236,8 +236,9 @@ final class SidebarView: NSView, ThemeReapplying {
             let row = hostRow(for: item)
             row.setTitle(item.name)
             row.isCurrent = item.isActive
-            row.setDetail(item.status.word)
-            row.setTitleInk(item.status == .connected ? nil : .subtle)
+            row.variant = .leading(item.status.chip)
+            row.spokenStatus = item.status.word
+            row.setTitleInk(Self.titleInk(of: item.status))
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -255,11 +256,19 @@ final class SidebarView: NSView, ThemeReapplying {
         return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
     }
 
+    private static func titleInk(of status: SSHHostStatus) -> ChromeTheme.InkLevel? {
+        switch status {
+        case .offline: return .faint
+        case .online, .connecting: return .subtle
+        case .connected: return nil
+        }
+    }
+
     private func hostRow(for item: SidebarHostItem) -> NavRow {
         let host = item.id.alias
         if let row = hostRows[host] { return row }
         let id = item.id
-        let row = NavRow(title: item.name, focusesOnClick: false) {
+        let row = NavRow(title: item.name, variant: .leading(item.status.chip), focusesOnClick: false) {
             [weak self] in self?.onActivateHost?(id)
         }
         row.tooltip = TooltipHost(label: "Open host") { [weak self] in
