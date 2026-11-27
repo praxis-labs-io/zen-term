@@ -40,25 +40,12 @@ final class ScrollModeGridTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
+    // A surface is born at a default size and rewraps once the pane's frame reaches the grid, so the script waits for it.
     private func pane(
         running script: String, until marker: String
     ) throws -> (controller: WindowController, surface: GhosttySurface, grid: TerminalGrid) {
-        let (c, surface, grid) = try mount(running: script)
-        waitUntil(row(grid, marker) != nil, "\(marker) printed", timeout: 15)
-        return (c, surface, grid)
-    }
-
-    // A surface is born at a default size and rewraps once the pane's frame reaches the grid, so this prints after.
-    private func settledPane(
-        running script: String, until marker: String
-    ) throws -> (controller: WindowController, surface: GhosttySurface, grid: TerminalGrid) {
         let (c, surface, grid) = try mount(running: "stty -echo; read columns; " + script)
-        let host = try XCTUnwrap(surface.view as? GhosttyHostView)
-        let width = { grid.row(grid.viewportTop)?.cells.count }
-        waitUntil(
-            host.lastPushedFrameForTesting == host.bounds.size && width() == surface.cellMetrics?.columns,
-            "the grid to take the pane's width", timeout: 5)
-        surface.paste(String(try XCTUnwrap(width())))
+        surface.paste(String(try settledColumns(surface, grid)))
         surface.submit()
         waitUntil(row(grid, marker) != nil, "\(marker) printed", timeout: 15)
         return (c, surface, grid)
@@ -157,7 +144,7 @@ final class ScrollModeGridTests: WindowTestCase {
     }
 
     func test_theCursorStaysOnItsTextThroughOutputAndTheRewrapAfterIt() throws {
-        let (c, surface, grid) = try settledPane(
+        let (c, surface, grid) = try pane(
             running: "seq 1 20; \(fullRow); echo READ-HERE; sleep 1; seq 1000 1300; echo DONE", until: "READ-HERE")
         try enterOn(grid, line: "READ-HERE")
         let before = try XCTUnwrap(c.scrollMode.cursor?.row)
@@ -173,7 +160,7 @@ final class ScrollModeGridTests: WindowTestCase {
     }
 
     func test_aSelectionSurvivesAResizeThatRewrapsTheLinesAboveIt() throws {
-        let (c, surface, grid) = try settledPane(
+        let (c, surface, grid) = try pane(
             running: "\(fullRow); echo keep this text; echo END", until: "END")
         try enterOn(grid, line: "keep this text")
         try press("v")
@@ -200,7 +187,7 @@ final class ScrollModeGridTests: WindowTestCase {
 
         try press("v")
         try type("\(rows + 20)k")
-        XCTAssertLessThan(grid.viewportTop, top, "the screen followed the cursor up")
+        waitUntil(grid.viewportTop < top, "the screen followed the cursor up")
         try press("y")
 
         let yanked = try XCTUnwrap(board.string(forType: .string)).split(separator: "\n").map(String.init)
@@ -225,7 +212,7 @@ final class ScrollModeGridTests: WindowTestCase {
 
     func test_yyTakesTheWholeWrappedLine() throws {
         let long = String(repeating: "q", count: 200)
-        let (c, _, grid) = try settledPane(running: "echo \(long); echo after", until: "after")
+        let (c, _, grid) = try pane(running: "echo \(long); echo after", until: "after")
         c.handle(.toggleScrollMode)
         let start = try XCTUnwrap((0..<grid.rowCount).first { text(grid, $0).hasPrefix("qqq") })
         XCTAssertEqual(grid.row(start)?.wraps, true, "precondition: the line wraps")
@@ -406,7 +393,7 @@ final class ScrollModeGridTests: WindowTestCase {
 
     func test_shiftVCountsEachRowOfAWrappedLine() throws {
         let long = String(repeating: "w", count: 200)
-        let (c, _, grid) = try settledPane(running: "echo \(long); echo after", until: "after")
+        let (c, _, grid) = try pane(running: "echo \(long); echo after", until: "after")
         let afterRow = try XCTUnwrap(row(grid, "after"))
         XCTAssertEqual(grid.row(afterRow - 1)?.continues, true, "precondition: the line wraps")
         let first = try XCTUnwrap((0..<grid.rowCount).first { text(grid, $0).hasPrefix("www") })
