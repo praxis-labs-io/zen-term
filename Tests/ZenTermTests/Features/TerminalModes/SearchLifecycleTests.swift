@@ -343,6 +343,25 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next], "the first total's step is the only one")
     }
 
+    func test_aSelectionWithNoStartLeavesNoEarlierMatchForTheHandOff() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows[5] = "an error happened"
+        surface.recordingGrid.cursorPoint = TerminalGridPoint(row: 11, column: 0)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.step(.next)
+        controller.search.report(selected: 0, start: TerminalGridPoint(row: 5, column: 3), from: surface)
+        controller.search.step(.next)
+        controller.search.report(selected: 1, start: nil, from: surface)
+
+        controller.search.enterScrollMode()
+
+        XCTAssertEqual(
+            controller.scrollMode.cursor, TerminalGridPoint(row: 11, column: 0),
+            "on the shell cursor, not the match the step before")
+    }
+
     func test_leavingPutsTheViewportBackAtTheBottom() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)

@@ -326,11 +326,10 @@ final class SearchController {
     private var fieldLanding: TerminalGridMark?
 
     private func land(on start: TerminalGridPoint?) {
-        guard let start else { return }
         if scrollMode.isActive {
-            scrollMode.land(on: start)
+            if let start { scrollMode.land(on: start) }
         } else {
-            fieldLanding = surface?.grid?.mark(start)
+            fieldLanding = start.flatMap { surface?.grid?.mark($0) }
         }
     }
 
