@@ -522,10 +522,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func text(lastLines count: Int) -> String? {
-        guard count > 0, let screen = hostView.readScreenText() else { return nil }
-        var lines = screen.components(separatedBy: "\n")
-        while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
-        return lines.suffix(count).joined(separator: "\n")
+        grid?.text(lastLines: count)
     }
 
     public var activeScreenText: String? {
