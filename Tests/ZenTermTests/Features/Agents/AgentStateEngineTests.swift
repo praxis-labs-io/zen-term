@@ -224,6 +224,20 @@ final class AgentRulesKeyTests: XCTestCase {
         }
     }
 
+    func test_piIsFoundOnlyAsAWholeWord() {
+        let cases: [(name: String, expected: String?)] = [
+            ("pi", "pi"),
+            ("Pi", "pi"),
+            ("pi-coding-agent", "pi"),
+            ("copilot", nil),
+            ("spinner", nil),
+        ]
+
+        for item in cases {
+            XCTAssertEqual(AgentRules.key(for: item.name), item.expected, item.name)
+        }
+    }
+
     func test_claudesMessage_isTheToolName_withoutTheSpinner() {
         XCTAssertEqual(
             AgentRules.message(fromTitle: AgentTitleFixtures.claudeWorking, agentName: "claude"),

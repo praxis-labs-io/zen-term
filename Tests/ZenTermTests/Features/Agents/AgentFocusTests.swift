@@ -23,7 +23,7 @@ final class AgentFocusTests: WindowTestCase {
             return surface
         }
         var config = GeneralConfig.builtInWithStickyCards
-        config.ai = "pi"
+        config.ai = "acme"
         GeneralConfig.setCurrentForTesting(config)
         WindowController.isPresent = { _ in true }
     }
@@ -155,7 +155,7 @@ final class AgentFocusTests: WindowTestCase {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let surface = try XCTUnwrap(spawned.first)
-        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
+        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "acme", body: "Done?"))
         drainMainQueue()
         XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the ask raised its card")
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting, "precondition: the tab shows it")
@@ -176,7 +176,7 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertNotEqual(c.focusedSurfaceIDForTesting, first, "precondition: the split takes focus")
         WindowController.isPresent = { _ in false }
         firstSurface.delegate?.surface(
-            firstSurface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
+            firstSurface, didPostNotification: TerminalNotification(title: "acme", body: "Wants to run swift test"))
         drainMainQueue()
         XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the ask raised its card")
 
@@ -237,7 +237,7 @@ final class AgentFocusTests: WindowTestCase {
         let float = try openFloat(c)
         WindowController.isPresent = { _ in false }
         float.surface.delegate?.surface(
-            float.surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
+            float.surface, didPostNotification: TerminalNotification(title: "acme", body: "Done?"))
         drainMainQueue()
         XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the ask raised its card")
 
@@ -327,7 +327,7 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertNotEqual(c.focusedSurfaceIDForTesting, first, "precondition: the split takes focus")
 
         firstSurface.delegate?.surface(
-            firstSurface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
+            firstSurface, didPostNotification: TerminalNotification(title: "acme", body: "Wants to run swift test"))
         drainMainQueue()
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "the tab number keeps using tab activeness")
@@ -351,7 +351,7 @@ final class AgentFocusTests: WindowTestCase {
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let surface = try XCTUnwrap(spawned.first)
 
-        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
+        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "acme", body: "Done?"))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(pane), .blocked)
 
@@ -414,10 +414,10 @@ final class AgentFocusTests: WindowTestCase {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let surface = try XCTUnwrap(spawned.first)
-        c.identifyAgentForTesting(pane, name: "pi")
+        c.identifyAgentForTesting(pane, name: "acme")
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "pi", body: "Approve the plan?"))
+            surface, didPostNotification: TerminalNotification(title: "acme", body: "Approve the plan?"))
         drainMainQueue()
         let asking = try XCTUnwrap(c.agentRowForTesting(pane))
         XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "a prompt you watched arrive is still blocked")

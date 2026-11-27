@@ -78,6 +78,12 @@ extension WindowController {
     static let claudeUpdatedToast = ToastContent(
         variant: .info, title: "Updated zen for Claude Code", message: "New Claude sessions load it.")
 
+    static let piSetUpToast = ToastContent(
+        variant: .positive, title: "Pi can use zen", message: "New Pi sessions load the zen skill.")
+
+    static let piUpdatedToast = ToastContent(
+        variant: .info, title: "Updated zen for Pi", message: "New Pi sessions load it.")
+
     static func setupFailureToast(title: String, reason: String) -> ToastContent {
         ToastContent(variant: .warning, title: title, message: reason)
     }
@@ -151,6 +157,26 @@ extension WindowController {
         offer: claudeSetupOffer(in:), updateOffer: claudeUpdateOffer, setUpToast: claudeSetUpToast,
         updatedToast: claudeUpdatedToast, setUpFailedTitle: "Couldn't set up Claude Code",
         updateFailedTitle: updateFailedTitle)
+
+    static func piSetupOffer(in folder: String) -> SetupPrompt {
+        SetupPrompt(
+            title: "Teach Pi to use zen?", message: piSetupOfferMessage(in: folder), confirm: "Set up",
+            decline: "Don't ask again")
+    }
+
+    static let piUpdateOffer = SetupPrompt(
+        title: "Update zen for Pi?", message: updateOfferMessage, confirm: "Update",
+        decline: "Skip this version")
+
+    static let piSetupCopy = SetupCopy(
+        offer: piSetupOffer(in:), updateOffer: piUpdateOffer, setUpToast: piSetUpToast,
+        updatedToast: piUpdatedToast, setUpFailedTitle: "Couldn't set up Pi",
+        updateFailedTitle: updateFailedTitle)
+
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static func piSetupOfferMessage(in folder: String) -> String {
+        "The zen skill and a session extension,\nin \(folder)"
+    }
 
     struct SetupCopy {
         let offer: (_ folder: String) -> SetupPrompt

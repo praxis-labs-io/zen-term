@@ -169,16 +169,16 @@
 # ─── Agents ──────────────────────────────────────────────────────────────────
 
 # Programs ZenTerm treats as agents, by program name, separated by commas or
-# spaces. claude and codex are built in. A listed program counts as an agent when
-# a workspace pane or tool float starts it, or when a notification's title names
-# it. claude and codex are also recognized from their terminal titles, so an
-# alias or a command typed at a prompt works for them.
+# spaces. claude, codex and pi are built in. A listed program counts as an
+# agent when a workspace pane or tool float starts it, or when a notification's
+# title names it. claude and codex are also recognized from their terminal
+# titles, so an alias or a command typed at a prompt works for them.
 # In-app Settings edit: applies to the next agent that starts or notifies.
-# agents = pi, gemini
+# agents = gemini, aider
 
 # One more program that counts as an agent, as if it were listed in `agents`.
 # Not in Settings.
-# ai = pi
+# ai = gemini
 
 # ─── Remote hosts ────────────────────────────────────────────────────────────
 

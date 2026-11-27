@@ -30,7 +30,7 @@ final class SidebarAgentsTests: WindowTestCase {
             return surface
         }
         var config = GeneralConfig.builtInWithStickyCards
-        config.ai = "pi"
+        config.ai = "acme"
         GeneralConfig.setCurrentForTesting(config)
         WindowController.isPresent = { _ in true }
         root = FileManager.default.temporaryDirectory
@@ -91,7 +91,7 @@ final class SidebarAgentsTests: WindowTestCase {
         wait(for: [expectation], timeout: 2)
     }
 
-    private func notify(_ agent: Agent, _ body: String, title: String = "pi") {
+    private func notify(_ agent: Agent, _ body: String, title: String = "acme") {
         agent.surface.delegate?.surface(
             agent.surface, didPostNotification: TerminalNotification(title: title, body: body))
         drainMainQueue()
@@ -324,7 +324,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.id), [first.id, second.id, third.id])
         XCTAssertEqual(items(c).map(\.state), [.blocked, .working, .idle])
         XCTAssertEqual(
-            items(c).map(\.summary), ["pi", AgentRoster.unnamed, AgentRoster.unnamed])
+            items(c).map(\.summary), ["acme", AgentRoster.unnamed, AgentRoster.unnamed])
         XCTAssertEqual(items(c).first?.message, "Wants to run swift test")
         XCTAssertFalse(c.sidebarForTesting.view.agentsAreHiddenForTesting)
 
@@ -335,7 +335,7 @@ final class SidebarAgentsTests: WindowTestCase {
         c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.id), [second.id, first.id, third.id])
         XCTAssertEqual(items(c).map(\.state), [.blocked, .idle, .idle])
-        XCTAssertEqual(items(c)[1].summary, "pi", "an answered question does not linger")
+        XCTAssertEqual(items(c)[1].summary, "acme", "an answered question does not linger")
 
         progress(third, working: true)
         XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
@@ -847,23 +847,23 @@ final class SidebarAgentsTests: WindowTestCase {
         var config = GeneralConfig.current
         config.floats = [
             ToolFloat(
-                id: "pi", order: 0, title: "pi", icon: ToolFloatParser.defaultIcon,
-                command: "pi", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                id: "acme", order: 0, title: "acme", icon: ToolFloatParser.defaultIcon,
+                command: "acme", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
                 requiresGitRepo: false, persist: .window,
                 toggle: Chord(command: true, shift: true, key: "b"))
         ]
         GeneralConfig.setCurrentForTesting(config)
         let c = makeWindow()
-        c.handle(.toggleToolFloat("pi"))
-        let float = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
-        c.handle(.toggleToolFloat("pi"))
+        c.handle(.toggleToolFloat("acme"))
+        let float = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "acme"] })
+        c.handle(.toggleToolFloat("acme"))
         XCTAssertNil(c.floatsForTesting.activeID, "precondition: the float is hidden")
-        float.delegate?.surface(float, didPostNotification: TerminalNotification(title: "pi", body: "Needs input"))
+        float.delegate?.surface(float, didPostNotification: TerminalNotification(title: "acme", body: "Needs input"))
         drainMainQueue()
 
         try click(try XCTUnwrap(rows(c).first))
 
-        XCTAssertEqual(c.floatsForTesting.activeID, "pi")
+        XCTAssertEqual(c.floatsForTesting.activeID, "acme")
         XCTAssertTrue(c.window.firstResponder === float.view)
     }
 
@@ -1034,14 +1034,14 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(agent, body)
 
         XCTAssertTrue(rows(c).first === row, "precondition: the message re-renders the same row")
-        XCTAssertEqual(row.summaryTextForTesting, "pi", "the message never replaces the title")
+        XCTAssertEqual(row.summaryTextForTesting, "acme", "the message never replaces the title")
         XCTAssertEqual(row.frame.height, shortHeight, "the message does not grow the row")
         try assertInkCentered(row)
 
         try hover(row, in: c)
 
         XCTAssertEqual(try presentedTooltip().labelForTesting, body)
-        XCTAssertEqual(row.accessibilityLabel(), "pi, \(body)", "a screen reader hears the whole message too")
+        XCTAssertEqual(row.accessibilityLabel(), "acme, \(body)", "a screen reader hears the whole message too")
     }
 
     // Drives the row's own render: a window-level render would settle hover first, which a non-key test window reads as a pointer that left.
@@ -1083,7 +1083,7 @@ final class SidebarAgentsTests: WindowTestCase {
         focus(agent, in: c)
         c.answerTypedAgent()
         let row = try XCTUnwrap(rows(c).first)
-        XCTAssertEqual(row.summaryTextForTesting, "pi", "precondition: an answered agent shows its name")
+        XCTAssertEqual(row.summaryTextForTesting, "acme", "precondition: an answered agent shows its name")
 
         try hover(row, in: c)
 

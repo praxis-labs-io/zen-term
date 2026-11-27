@@ -19,7 +19,7 @@ final class SettingsGeneralSection: SettingsFormSection {
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addTextRow(
                 key: "agents", caption: "Agent programs",
-                blurb: "claude and codex are built in", placeholder: "pi, gemini",
+                blurb: "claude, codex and pi are built in", placeholder: "gemini, aider",
                 read: { $0.agents.joined(separator: ", ") })
             self.claudeRows.add(
                 to: self, caption: "Teach Claude Code to use zen",

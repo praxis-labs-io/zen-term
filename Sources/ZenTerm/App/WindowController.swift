@@ -315,6 +315,8 @@ final class WindowController: NSObject {
 
     var claudeSetupOffer: SetupOffer<ClaudeCodeSetup>?
 
+    var piSetupOffer: SetupOffer<PiCodingAgentSetup>?
+
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
@@ -4343,6 +4345,7 @@ final class WindowController: NSObject {
         agents.identify(surface, name: name, source: source)
         switch AgentRules.key(for: agents.agents[surface]?.name) {
         case "claude": offerSetup(claudeSetupOffer, copy: Self.claudeSetupCopy)
+        case "pi": offerSetup(piSetupOffer, copy: Self.piSetupCopy)
         default: break
         }
     }

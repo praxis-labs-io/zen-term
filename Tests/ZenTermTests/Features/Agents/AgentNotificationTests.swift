@@ -252,15 +252,15 @@ final class AgentNotificationTests: WindowTestCase {
     func test_aNewTurn_leavesTheCardOfAnAskItDoesNotAnswer() throws {
         let c = makeWindow()
         let pi = try backgroundPane(c)
-        c.identifyAgentForTesting(pi.id, name: "pi")
-        post(pi.surface, title: "pi", body: "Approve the plan?")
+        c.identifyAgentForTesting(pi.id, name: "acme")
+        post(pi.surface, title: "acme", body: "Approve the plan?")
         XCTAssertEqual(cardCount(c), 1, "precondition: the ask raised its card")
 
         pi.surface.delegate?.surface(
             pi.surface, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
         drainMainQueue()
 
-        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .blocked, "only typing answers pi")
+        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .blocked, "only typing answers acme")
         XCTAssertTrue(cardCopy(c).contains("Approve the plan?"), "the card stays as long as its ask does")
     }
 
@@ -297,12 +297,12 @@ final class AgentNotificationTests: WindowTestCase {
 
     func test_aConfiguredAgentLaunchedByHand_joinsOnItsNotification() throws {
         var config = GeneralConfig.current
-        config.ai = "pi"
+        config.ai = "acme"
         GeneralConfig.setCurrentForTesting(config)
         let c = makeWindow()
         let pi = try backgroundPane(c)
 
-        post(pi.surface, title: "pi", body: "Wants to run swift test")
+        post(pi.surface, title: "acme", body: "Wants to run swift test")
 
         XCTAssertEqual(
             c.attentionStateForTesting(tabIndex: 0), .waiting, "an agent with no body rules is taken at its word")
@@ -350,7 +350,7 @@ final class AgentNotificationTests: WindowTestCase {
         let c = makeWindow()
         let pane = try backgroundPane(c)
         let failure = TerminalCommandResult(exitCode: 1, duration: 1)
-        c.identifyAgentForTesting(pane.id, name: "pi")
+        c.identifyAgentForTesting(pane.id, name: "acme")
         pane.surface.delegate?.surface(pane.surface, commandDidFinish: failure)
         drainMainQueue()
 

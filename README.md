@@ -44,7 +44,8 @@ The skill shows Claude how to start helper agents and long-running commands in
 panes and wait on them. ZenTerm offers the setup when it sees Claude
 start in a pane, and Settings > General turns it on or off.
 `zen setup pi` does the same for Pi, with a zen skill and a session extension in
-`~/.pi/agent`, and Settings > General turns it on or off too.
+`~/.pi/agent`. ZenTerm offers it when a pane or tool float starts Pi, and
+Settings > General turns it on or off too.
 
 The [zen CLI Guide](https://zenterm.io/docs/cli) covers the rest.
 

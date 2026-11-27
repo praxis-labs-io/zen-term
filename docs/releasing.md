@@ -26,7 +26,7 @@ symlink resolves. Moving or renaming the binary breaks every installed link.
 
 `zen setup claude` and `zen setup pi` read the files they install from `Claude/` and `Pi/` in
 `Contents/Resources/ZenTerm_AgentSetup.bundle`, found the same way, so an app update ships
-new copies. The app installs Claude's when Claude next starts. When a part is missing, Claude's
+new copies. The app installs them when that agent next starts. When a part is missing, Claude's
 SessionStart entry is not the one setup writes, or an installed file matches no digest in
 `shipped-digests.txt` beside them, that is the user's edit, so the app asks first. Setup
 stamps `hooks/zenterm-context.build` (Claude) or `extensions/zenterm-context.build` (Pi) with the
