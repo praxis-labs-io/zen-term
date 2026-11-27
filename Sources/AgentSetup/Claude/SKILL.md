@@ -75,11 +75,14 @@ zen pane read --pane dev --lines 40                                  # its outpu
 
 ## Delegate to a helper
 
-Hand work to helper agents in panes, not built-in subagents, so the user can
-watch and steer them. Keep built-in subagents for quick lookups.
+When the user authorizes delegation, use helper agents in panes so the user can
+watch and steer them. Use the same agent CLI as your own session.
 
 ```sh
-zen pane run --name review --task "Review src/auth for token leaks. Report findings only, change nothing." claude
+# Claude Code
+zen pane run --name review --task "Review the latest edits for regressions. Report findings only." claude
+# Codex takes the initial prompt as a CLI argument.
+zen pane run --name review -- codex "Review the latest edits for regressions. Report findings only."
 zen wait review                 # answers when it stops, exits or sends you something
 zen wait --children all         # answers once none of your helpers is working
 zen pane read --pane review --lines 80
@@ -88,9 +91,8 @@ zen pane close review           # once you have its result
 
 - Give every helper a name and an exact scope: what to do, what not to touch,
   and what to report.
-- Start helpers in a folder Claude already trusts (the repo, or your own
-  folder). An untrusted folder stops a new Claude at its trust prompt, so its
-  task is never sent, and answering that prompt is the user's choice.
+- Start helpers in a folder the agent already trusts. If a trust prompt holds
+  up task delivery, let the user answer it.
 - With `--task`, `zen pane run` answers once the task is sent, or says why not
   in `first_task`. The task is sent at most once: read the pane before sending
   it yourself.
@@ -117,15 +119,14 @@ zen pane close review           # once you have its result
   `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
   `--enter` the report is pasted but never submitted.
 - As a helper, put a question about your task to your parent the same way,
-  then end your turn: the answer arrives as your next message. Do not use
-  AskUserQuestion: the parent set the task and answers first.
+  then end your turn: the answer arrives as your next message. Use the parent pane for questions about the task it assigned.
 
 ## Waiting
 
-- Run every `zen wait`, and every `zen pane run --wait`, in your shell tool's
-  background mode. You are notified when it answers, and stay free to answer
-  the user and do other work meanwhile. Pass `--timeout 600`, so it answers
-  with its result instead of every 90 seconds. Read its result then.
+- Run every `zen wait`, and every `zen pane run --wait`, with
+  `--timeout 600`. In Claude Code, use the shell tool's background mode.
+  In Codex, let the shell tool yield and resume its running command to collect
+  the result. Keep the same wait when the shell tool yields.
 - Never sleep or poll. Use `zen wait <pane>`, `zen wait <pane> --output "<text>"`
   or `zen wait --children any|all`.
 - `zen wait` answers within 90 seconds by default, and 600 at most. `timeout`

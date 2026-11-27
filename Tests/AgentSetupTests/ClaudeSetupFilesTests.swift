@@ -159,6 +159,18 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertFalse(output.contains("zen tab rename"))
     }
 
+    func test_codexHookUsesCodexSkillAndPassesTheTaskAsAnArgument() throws {
+        let pane = #"{"name":"review","parent":31,"token":34}"#
+        let (status, output) = try runShippedHook(
+            environment: try zenPaneEnvironment(pane: 34, answering: pane), client: "codex")
+
+        XCTAssertEqual(status, 0)
+        XCTAssertTrue(output.contains("Load the $zen skill"))
+        XCTAssertTrue(output.contains(#"zen pane run --name <name> -- codex "<exact scope>""#))
+        XCTAssertTrue(output.contains("You are helper `review`, started by pane 31"))
+        XCTAssertFalse(output.contains("AskUserQuestion"))
+    }
+
     // A stub `zen` that answers `hello`, and `pane get` with `pane`, or fails it when nil.
     private func zenPaneEnvironment(pane token: Int, answering pane: String?) throws -> [String: String] {
         let bin = root.appendingPathComponent("stub-bin")
@@ -181,13 +193,15 @@ final class ClaudeSetupFilesTests: XCTestCase {
     }
 
     // `start` is the SessionStart `source` Claude Code sends on stdin.
-    private func runShippedHook(environment: [String: String], start: String = "startup") throws -> (Int32, String) {
+    private func runShippedHook(environment: [String: String], start: String = "startup", client: String? = nil)
+        throws -> (Int32, String)
+    {
         let files = try XCTUnwrap(shipped)
         let script = root.appendingPathComponent(ClaudeSetup.hookFileName)
         try files.hook.write(to: script)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path]
+        process.arguments = [script.path] + (client.map { [$0] } ?? [])
         process.environment = environment
         let output = Pipe()
         process.standardOutput = output

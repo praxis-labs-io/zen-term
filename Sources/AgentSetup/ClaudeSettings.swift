@@ -4,20 +4,24 @@ import Foundation
 struct ClaudeSettings {
     private(set) var root: [String: Any]
 
-    static func read(at url: URL) throws(ClaudeSetupError) -> ClaudeSettings {
+    private let hookFileName: String
+
+    static func read(
+        at url: URL, hookFileName: String = ClaudeSetup.hookFileName
+    ) throws(ClaudeSetupError) -> ClaudeSettings {
         let data: Data
         do {
             data = try Data(contentsOf: url)
         } catch CocoaError.fileReadNoSuchFile {
-            return ClaudeSettings(root: [:])
+            return ClaudeSettings(root: [:], hookFileName: hookFileName)
         } catch {
             throw .unreadable(url, error)
         }
-        if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) { return ClaudeSettings(root: [:]) }
+        if String(decoding: data, as: UTF8.self).allSatisfy(\.isWhitespace) { return ClaudeSettings(root: [:], hookFileName: hookFileName) }
         guard let object = try? JSONSerialization.jsonObject(with: data), let root = object as? [String: Any] else {
             throw .malformed(url, "isn't a JSON object")
         }
-        let settings = ClaudeSettings(root: root)
+        let settings = ClaudeSettings(root: root, hookFileName: hookFileName)
         _ = try settings.sessionStart(at: url)
         return settings
     }
@@ -43,7 +47,7 @@ struct ClaudeSettings {
 
     func hasOwnEntry() -> Bool {
         sessionStartGroups.contains {
-            (($0 as? [String: Any])?["hooks"] as? [Any])?.contains(where: Self.isOwn) == true
+            (($0 as? [String: Any])?["hooks"] as? [Any])?.contains(where: isOwn) == true
         }
     }
 
@@ -56,7 +60,7 @@ struct ClaudeSettings {
                 groups.append(group)
                 continue
             }
-            let kept = hooks.filter { !Self.isOwn($0) }
+            let kept = hooks.filter { !isOwn($0) }
             if kept.count == hooks.count {
                 groups.append(group)
             } else if kept.isEmpty {
@@ -78,7 +82,7 @@ struct ClaudeSettings {
                 groups.append(group)
                 continue
             }
-            let kept = hooks.filter { !Self.isOwn($0) }
+            let kept = hooks.filter { !isOwn($0) }
             if kept.count == hooks.count {
                 groups.append(group)
             } else if !kept.isEmpty {
@@ -90,8 +94,8 @@ struct ClaudeSettings {
     }
 
     // Recognized by the script's file name, so an entry wired by hand before `zen setup` is adopted, not duplicated.
-    private static func isOwn(_ hook: Any) -> Bool {
-        ((hook as? [String: Any])?["command"] as? String)?.contains("/\(ClaudeSetup.hookFileName)") == true
+    private func isOwn(_ hook: Any) -> Bool {
+        ((hook as? [String: Any])?["command"] as? String)?.contains("/\(hookFileName)") == true
     }
 
     private static let timeout = 5

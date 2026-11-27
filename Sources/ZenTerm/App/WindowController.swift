@@ -312,6 +312,7 @@ final class WindowController: NSObject {
     var onHelperNote: ((HelperNote) -> Void)?
 
     var claudeSetupOffer: ClaudeSetupOffer?
+    var codexSetupOffer: ClaudeSetupOffer?
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -4318,22 +4319,48 @@ final class WindowController: NSObject {
 
     private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
         agents.identify(surface, name: name, source: source)
-        guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
-        claudeSetupOffer?.claudeStarted { [weak self] in self?.showClaudeStartup($0) }
+        let offer: ClaudeSetupOffer?
+        switch AgentRules.key(for: agents.agents[surface]?.name) {
+        case "claude": offer = claudeSetupOffer
+        case "codex": offer = codexSetupOffer
+        default: return
+        }
+        guard let offer else { return }
+        offer.claudeStarted { [weak self, weak offer] startup in
+            guard let offer else { return }
+            self?.showClaudeStartup(startup, offer: offer)
+        }
     }
 
-    private func showClaudeStartup(_ startup: ClaudeCodeSetup.Startup) {
+    private func showClaudeStartup(_ startup: ClaudeCodeSetup.Startup, offer: ClaudeSetupOffer) {
+        let client = offer.client
         switch startup {
         case .notInstalled:
             presentClaudeSetupPrompt(
-                Self.claudeSetupOffer(in: ClaudeCodeSetup.folderName),
-                onConfirmed: { [weak self] in self?.showClaudeSetupResult($0) },
-                onDeclined: { [weak self] in self?.claudeSetupOffer?.declineForGood() })
+                client == .claude
+                    ? Self.claudeSetupOffer(in: ClaudeCodeSetup.folderName)
+                    : ClaudeSetupPrompt(
+                        title: "Teach Codex to use zen?", message: "Install the zen skill and a session hook.",
+                        confirm: "Set up", decline: "Don't ask again"),
+                client: client,
+                onConfirmed: { [weak self] in self?.showClaudeSetupResult($0, client: client) },
+                onDeclined: { offer.declineForGood() })
         case .edited(let version):
             presentClaudeSetupPrompt(
-                Self.claudeUpdateOffer,
-                onConfirmed: { [weak self] in self?.showClaudeUpdateResult($0) },
-                onDeclined: { [weak self] in self?.claudeSetupOffer?.skipUpdate(to: version) })
+                client == .claude
+                    ? Self.claudeUpdateOffer
+                    : ClaudeSetupPrompt(
+                        title: "Update zen for Codex?", message: Self.claudeUpdateOfferMessage,
+                        confirm: "Update", decline: "Skip this version"),
+                client: client,
+                onConfirmed: { [weak self] in
+                    if client == .codex {
+                        self?.showClaudeSetupResult($0, client: client)
+                    } else {
+                        self?.showClaudeUpdateResult($0)
+                    }
+                },
+                onDeclined: { offer.skipUpdate(to: version) })
         case .updated:
             showClaudeUpdated()
         case .updateFailed(let error):
@@ -4344,7 +4371,7 @@ final class WindowController: NSObject {
     }
 
     private func presentClaudeSetupPrompt(
-        _ prompt: ClaudeSetupPrompt,
+        _ prompt: ClaudeSetupPrompt, client: ClaudeSetup.Client,
         onConfirmed: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void,
         onDeclined: @escaping () -> Void
     ) {
@@ -4352,7 +4379,7 @@ final class WindowController: NSObject {
         let actions = prompt.actions(
             confirmed: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
-                ClaudeCodeSetup.refresh(applying: .install, completion: onConfirmed)
+                ClaudeCodeSetup.refresh(applying: .install, client: client, completion: onConfirmed)
             },
             declined: { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
@@ -4371,12 +4398,20 @@ final class WindowController: NSObject {
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
     static let claudeUpdateOfferMessage = "Your zen setup has changes, and\nupdating replaces them."
 
-    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+    private func showClaudeSetupResult(
+        _ result: Result<ClaudeSetup.State, ClaudeSetupError>, client: ClaudeSetup.Client
+    ) {
         switch result {
         case .success:
-            toasts.show(Self.claudeSetUpToast)
+            let content =
+                client == .claude
+                ? Self.claudeSetUpToast
+                : ToastContent(
+                    variant: .info, title: "Zen set up for Codex",
+                    message: "Review the ZenTerm hook in /hooks,\nthen start a new Codex session.")
+            toasts.show(content)
         case .failure(let error):
-            showClaudeSetupFailure(error, title: "Couldn't set up Claude Code")
+            showClaudeSetupFailure(error, title: "Couldn't set up \(client.displayName)")
         }
     }
 

@@ -50,6 +50,35 @@ final class ClaudeSetupTests: XCTestCase {
         }
         """
 
+    func test_codexUsesItsOwnHookConfigAndSharesTheBundledAssets() throws {
+        let codexHome = root.appendingPathComponent("custom-codex")
+        let codex = ClaudeSetup.Client.codex.setup(
+            files: files, environment: ["HOME": root.path, "CODEX_HOME": codexHome.path])
+        XCTAssertEqual(codex.settingsURL, codexHome.appendingPathComponent("hooks.json"))
+        let claude = ClaudeSetup(configRoot: codexHome, files: files)
+        _ = try claude.install()
+        XCTAssertEqual(codex.skillURL, root.appendingPathComponent(".agents/skills/zen/SKILL.md"))
+        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
+        try Data(unrelated.utf8).write(to: codex.settingsURL)
+
+        XCTAssertEqual(try codex.state(), .notInstalled)
+        XCTAssertEqual(try codex.install().count, 3)
+        XCTAssertEqual(try codex.state(), .current)
+        XCTAssertEqual(try codex.install(), [])
+        XCTAssertEqual(try Data(contentsOf: codex.skillURL), files.skill)
+        XCTAssertEqual(try Data(contentsOf: codex.hookURL), files.hook)
+        let installed = try String(contentsOf: codex.settingsURL, encoding: .utf8)
+        XCTAssertTrue(installed.contains("zenterm-codex-context.sh' codex"))
+        XCTAssertTrue(installed.contains("say done"))
+        XCTAssertEqual(try codex.remove().count, 3)
+        XCTAssertEqual(try claude.state(), .current)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: codex.skillURL.path))
+        XCTAssertEqual(try codex.state(), .notInstalled)
+        let remaining = try JSONSerialization.jsonObject(with: Data(contentsOf: codex.settingsURL)) as? NSDictionary
+        let original = try JSONSerialization.jsonObject(with: Data(unrelated.utf8)) as? NSDictionary
+        XCTAssertEqual(remaining, original)
+    }
+
     func test_installIntoAnEmptyConfigWritesTheSkillHookAndEntry() throws {
         let changes = try setup.install()
 

@@ -31,9 +31,10 @@ enum ClaudeCodeSetup {
     }
 
     static func refresh(
-        applying change: Change? = nil, completion: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void
+        applying change: Change? = nil, client: ClaudeSetup.Client = .claude,
+        completion: @escaping (Result<ClaudeSetup.State, ClaudeSetupError>) -> Void
     ) {
-        perform(completion: completion) { setup throws(ClaudeSetupError) in
+        perform(client: client, completion: completion) { setup throws(ClaudeSetupError) in
             switch change {
             case .install: _ = try setup.install()
             case .remove: _ = try setup.remove()
@@ -43,8 +44,10 @@ enum ClaudeCodeSetup {
         }
     }
 
-    static func claudeStarted(completion: @escaping (Result<Startup, ClaudeSetupError>) -> Void) {
-        perform(completion: completion) { setup throws(ClaudeSetupError) in
+    static func claudeStarted(
+        client: ClaudeSetup.Client = .claude, completion: @escaping (Result<Startup, ClaudeSetupError>) -> Void
+    ) {
+        perform(client: client, completion: completion) { setup throws(ClaudeSetupError) in
             switch try setup.state() {
             case .notInstalled: return .notInstalled
             case .edited: return .edited(version: setup.files.version)
@@ -61,7 +64,7 @@ enum ClaudeCodeSetup {
     }
 
     private static func perform<Outcome>(
-        completion: @escaping (Result<Outcome, ClaudeSetupError>) -> Void,
+        client: ClaudeSetup.Client, completion: @escaping (Result<Outcome, ClaudeSetupError>) -> Void,
         _ work: @escaping (ClaudeSetup) throws(ClaudeSetupError) -> Outcome
     ) {
         let configRoot = configRoot
@@ -74,7 +77,10 @@ enum ClaudeCodeSetup {
                 guard let files = files ?? ClaudeSetupFiles.bundled() else {
                     throw ClaudeSetupError(message: "ZenTerm can't find the skill it ships with. Reinstall ZenTerm.")
                 }
-                return try work(ClaudeSetup(configRoot: configRoot, files: files))
+                let setup =
+                    client == .claude
+                    ? ClaudeSetup(configRoot: configRoot, files: files) : client.setup(files: files)
+                return try work(setup)
             }
             DispatchQueue.main.async { completion(result) }
         }

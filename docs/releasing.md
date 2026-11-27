@@ -24,9 +24,11 @@ ZenTerm, install is a symlink to `/Applications/ZenTerm.app/Contents/MacOS/zen`,
 `zen --version` reads the version from the `Info.plist` two folders above wherever that
 symlink resolves. Moving or renaming the binary breaks every installed link.
 
-`zen setup claude` reads the skill and hook it installs from
+`zen setup claude` and `zen setup codex` read the same skill and hook from
 `Contents/Resources/ZenTerm_AgentSetup.bundle`, found the same way, so an app update ships
-new copies. The app installs them when Claude next starts. When a part is missing, the
+new copies. The app refreshes them when the corresponding agent next starts.
+Codex uses `~/.agents/skills/zen/` and `$CODEX_HOME/hooks.json` (defaulting to
+`~/.codex/hooks.json`). The user reviews and trusts its hook in `/hooks`. When a part is missing, the
 SessionStart entry is not the one setup writes, or an installed file matches no digest in
 `shipped-digests.txt` beside them, that is the user's edit, so the app asks first. Setup
 stamps `hooks/zenterm-context.build` with the `CFBundleVersion` that wrote the files, so an

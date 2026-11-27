@@ -44,6 +44,11 @@ The skill shows Claude how to start helper agents and long-running commands in
 panes and wait on them. ZenTerm offers the setup when it sees Claude
 start in a pane, and Settings > General turns it on or off.
 
+`zen setup codex` installs the same skill and a SessionStart hook for Codex CLI.
+ZenTerm offers it when it sees Codex start in a pane. In Codex, open `/hooks`
+to review and trust the ZenTerm hook, then start a new session. Use
+`zen setup codex --remove` to take out the integration.
+
 The [zen CLI Guide](https://zenterm.io/docs/cli) covers the rest.
 
 ## What it does
