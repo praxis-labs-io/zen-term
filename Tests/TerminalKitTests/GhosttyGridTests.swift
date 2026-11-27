@@ -192,7 +192,9 @@ final class GhosttyGridTests: XCTestCase {
     func test_aColumnPastTheRightEdgeIsOutsideTheGrid() throws {
         let (surface, grid) = try mounted("echo HERE")
         let row = try awaitRow(grid, "HERE")
-        let columns = try XCTUnwrap(surface.cellMetrics?.columns)
+        let settled = waitFor { grid.row(row)?.cells.count == surface.cellMetrics?.columns }
+        XCTAssertTrue(settled, "the grid never took the view's width")
+        let columns = try XCTUnwrap(grid.row(row)?.cells.count)
         let past = TerminalGridPoint(row: row, column: columns)
 
         XCTAssertNil(grid.mark(past))
