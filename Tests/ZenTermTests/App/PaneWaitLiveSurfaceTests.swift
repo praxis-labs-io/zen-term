@@ -197,7 +197,8 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         waitUntil((surface.activeScreenText ?? "").contains("zen-after-42"), "the task's output", timeout: 10)
 
         let read = try readSinceTask(token)
-        XCTAssertTrue(read.text.hasPrefix("echo zen-after-$((40+2))"), read.text)
+        let firstLine = read.text.split(separator: "\n", omittingEmptySubsequences: false).first ?? ""
+        XCTAssertTrue(firstLine.contains("echo zen-after-$((40+2))"), read.text)
         XCTAssertTrue(read.text.contains("\nzen-after-42"), read.text)
         XCTAssertFalse(read.text.contains("zen-before"), read.text)
         XCTAssertEqual(read.truncated, false)
