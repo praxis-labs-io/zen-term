@@ -403,7 +403,6 @@ final class ScrollModeController {
         }
     }
 
-    /// Drops the selection once the scrollback prunes its anchor.
     private func applySelection() {
         guard let grid, selection != nil else { return }
         guard let span = selectionSpan() else { return releaseSelection() }
@@ -473,7 +472,7 @@ final class ScrollModeController {
         for step in 0..<times {
             let skips = find.till && (isRepeat || step > 0)
             let from = skips ? index + (find.direction == .forward ? 1 : -1) : index
-            guard let next = Self.findColumn(find, from: from, in: characters), text.indices.contains(next) else {
+            guard let next = Self.findIndex(find, from: from, in: characters), text.indices.contains(next) else {
                 return
             }
             index = next
@@ -481,10 +480,9 @@ final class ScrollModeController {
         move(to: TerminalGridPoint(row: cursor.row, column: text[index].column))
     }
 
-    /// An index into `text`, one character per cell.
-    static func findColumn(_ find: ScrollKeymap.Find, from column: Int, in text: [Character]) -> Int? {
+    static func findIndex(_ find: ScrollKeymap.Find, from start: Int, in text: [Character]) -> Int? {
         let stride = find.direction == .forward ? 1 : -1
-        var index = column + stride
+        var index = start + stride
         while text.indices.contains(index) {
             if text[index] == find.character { return find.till ? index - stride : index }
             index += stride
