@@ -57,7 +57,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Segment: Int {
-        case notifications, claudeSetup, attentionToast, completionToast, updates
+        case notifications, claudeSetup, codexSetup, attentionToast, completionToast, updates
     }
 
     private func segment(_ which: Segment) -> SegmentedControl {
@@ -66,7 +66,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
 
     func test_everyToggle_isPresent_andDefaults() {
         let segments = mountSegments()
-        XCTAssertEqual(segments.count, 5, "notifications, Claude Code setup, the two toast rows, and updates")
+        XCTAssertEqual(segments.count, 6, "notifications, Claude Code and Codex setup, the two toast rows, and updates")
         XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
@@ -262,8 +262,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         control.onTab?()
 
         let detail = try XCTUnwrap(hostWindow?.contentView)
-        let attention = descendants(of: detail).compactMap { $0 as? SegmentedControl }[Segment.attentionToast.rawValue]
-        XCTAssertTrue(KeyboardFocus.isFocused(attention, in: hostWindow))
+        let codex = descendants(of: detail).compactMap { $0 as? SegmentedControl }[Segment.codexSetup.rawValue]
+        XCTAssertTrue(KeyboardFocus.isFocused(codex, in: hostWindow))
     }
 
     func test_claudeSetup_malformedSettingsShowsWhy_andWritesNothing() throws {

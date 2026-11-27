@@ -80,8 +80,13 @@ final class SettingsRowDescriptionTests: WindowTestCase {
         ClaudeCodeSetup.configRootOverrideForTesting = URL(fileURLWithPath: PathDisplay.homePath)
             .appendingPathComponent(".claude")
         defer { ClaudeCodeSetup.configRootOverrideForTesting = testRoot }
+        let codexTestRoot = CodexAgentSetup.configRootOverrideForTesting
+        CodexAgentSetup.configRootOverrideForTesting = URL(fileURLWithPath: PathDisplay.homePath)
+            .appendingPathComponent(".codex")
+        defer { CodexAgentSetup.configRootOverrideForTesting = codexTestRoot }
         let detail = mount(SettingsGeneralSection())
         ClaudeCodeSetup.configRootOverrideForTesting = testRoot
+        CodexAgentSetup.configRootOverrideForTesting = codexTestRoot
         let labels = notes(in: detail)
         XCTAssertFalse(labels.isEmpty, "expected the section to render descriptions")
 

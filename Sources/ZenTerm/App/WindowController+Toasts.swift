@@ -152,6 +152,30 @@ extension WindowController {
         updatedToast: claudeUpdatedToast, setUpFailedTitle: "Couldn't set up Claude Code",
         updateFailedTitle: updateFailedTitle)
 
+    static let codexSetUpToast = ToastContent(
+        variant: .positive, title: "Codex can use zen", message: codexSetUpMessage)
+
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static let codexSetUpMessage = "Trust its hook when Codex asks,\nthen new sessions load the zen skill."
+
+    static let codexUpdatedToast = ToastContent(
+        variant: .info, title: "Updated zen for Codex", message: "New Codex sessions load it.")
+
+    static func codexSetupOffer(in folder: String) -> SetupPrompt {
+        SetupPrompt(
+            title: "Teach Codex to use zen?", message: setupOfferMessage(in: folder),
+            confirm: "Set up", decline: "Don't ask again")
+    }
+
+    static let codexUpdateOffer = SetupPrompt(
+        title: "Update zen for Codex?", message: updateOfferMessage, confirm: "Update",
+        decline: "Skip this version")
+
+    static let codexSetupCopy = SetupCopy(
+        offer: codexSetupOffer(in:), updateOffer: codexUpdateOffer, setUpToast: codexSetUpToast,
+        updatedToast: codexUpdatedToast, setUpFailedTitle: "Couldn't set up Codex",
+        updateFailedTitle: updateFailedTitle)
+
     struct SetupCopy {
         let offer: (_ folder: String) -> SetupPrompt
         let updateOffer: SetupPrompt

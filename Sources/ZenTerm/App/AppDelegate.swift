@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let paneWaits = PaneWaits()
     private let paneDrafts = PaneDrafts()
     private let claudeSetupOffer = SetupOffer<ClaudeCodeSetup>()
+    private let codexSetupOffer = SetupOffer<CodexAgentSetup>()
     private var controlResponder: ControlResponder?
     private let keys = KeyInterceptor()
     private var navSocket: NavSocketServer?
@@ -240,6 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.paneWaits = paneWaits
         wc.paneDrafts = paneDrafts
         wc.claudeSetupOffer = claudeSetupOffer
+        wc.codexSetupOffer = codexSetupOffer
         wc.onHelperNote = { [weak self] in self?.controlResponder?.tell($0) }
         wc.onClosedByRemovalAtPath = { [weak self, weak wc] path in
             self?.windows.reduce(ClosedByRemoval()) {

@@ -6,6 +6,9 @@ final class SettingsGeneralSection: SettingsFormSection {
     static let claudeSetupKey = "claude-setup"
     static let claudeUpdateKey = "claude-update"
     private let claudeRows = SetupRows<ClaudeCodeSetup>(setupKey: claudeSetupKey, updateKey: claudeUpdateKey)
+    static let codexSetupKey = "codex-setup"
+    static let codexUpdateKey = "codex-update"
+    private let codexRows = SetupRows<CodexAgentSetup>(setupKey: codexSetupKey, updateKey: codexUpdateKey)
 
     override func populate() {
         addGroup("Agents") {
@@ -22,6 +25,10 @@ final class SettingsGeneralSection: SettingsFormSection {
                 to: self, caption: "Teach Claude Code to use zen",
                 description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)",
                 updateCaption: "Update zen for Claude Code")
+            self.codexRows.add(
+                to: self, caption: "Teach Codex to use zen",
+                description: "The zen skill and a session hook, in \(CodexAgentSetup.folderName)",
+                updateCaption: "Update zen for Codex")
         }
         addGroup("Notifications") {
             self.addSegmentedRow(

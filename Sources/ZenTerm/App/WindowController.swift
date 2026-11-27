@@ -314,6 +314,7 @@ final class WindowController: NSObject {
     var onHelperNote: ((HelperNote) -> Void)?
 
     var claudeSetupOffer: SetupOffer<ClaudeCodeSetup>?
+    var codexSetupOffer: SetupOffer<CodexAgentSetup>?
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -4343,6 +4344,7 @@ final class WindowController: NSObject {
         agents.identify(surface, name: name, source: source)
         switch AgentRules.key(for: agents.agents[surface]?.name) {
         case "claude": offerSetup(claudeSetupOffer, copy: Self.claudeSetupCopy)
+        case "codex": offerSetup(codexSetupOffer, copy: Self.codexSetupCopy)
         default: break
         }
     }

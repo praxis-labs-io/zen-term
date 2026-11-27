@@ -674,7 +674,7 @@ argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's 
 the answer, and exits 0. It never reads stdin. With `SSH_ASKPASS_PROMPT=confirm` it exits 1
 without asking, which ssh reads as no; with `none`, a notice, it exits 0. Any failure exits 1,
 or 3 without an instance, and prints neither prompt nor answer.
-`zen setup claude` and `zen setup claude --remove` edit Claude Code's config, not the app,
+`zen setup claude`, `zen setup codex` and their `--remove` edit the agent's config, not the app,
 and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane read --since-task` sends `since: "task"`, and says on stderr when the

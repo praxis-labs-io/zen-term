@@ -60,6 +60,7 @@
                     ]
                 ),
                 ("Claude Code", [Window.claudeSetUpToast, Window.claudeUpdatedToast]),
+                ("Codex", [Window.codexSetUpToast, Window.codexUpdatedToast]),
                 (
                     "Agents",
                     [Window.nothingWaitingToast(elsewhere: false), Window.nothingWaitingToast(elsewhere: true)]
@@ -121,6 +122,11 @@
                     Window.setupFailureToast(
                         title: Window.updateFailedTitle, reason: "~/.claude/settings.json isn't valid JSON."),
                     [], showsClose: true),
+                GallerySection.Row(
+                    label: "Codex offers",
+                    samples: [Window.codexSetupOffer(in: "~/.codex"), Window.codexUpdateOffer].map {
+                        sticky($0.content, $0.actions(confirmed: {}, declined: {}), showsClose: true)
+                    }),
                 row(
                     "Surface failed", Window.surfaceFailureToast,
                     Window.surfaceFailureActions(close: {}, retry: {})),
