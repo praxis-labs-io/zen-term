@@ -234,13 +234,16 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theFirstTotalSelectsTheNewestMatch_onlyWhenNoneIsOnScreen() throws {
-        for (name, rows, steps) in [
-            ("only in history", Array(repeating: "", count: 24), [TerminalSearchStep.next]),
-            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23), []),
-        ] {
+        for (name, rows, wrapping, steps) in [
+            ("only in history", Array(repeating: "", count: 24), [], [TerminalSearchStep.next]),
+            ("already on screen", ["an error happened"] + Array(repeating: "", count: 23), [], []),
+            ("wrapped across two rows", ["an err", "or happened"] + Array(repeating: "", count: 22), [0], []),
+            ("split by a newline", ["an err", "or happened"] + Array(repeating: "", count: 22), [], [.next]),
+        ] as [(String, [String], Set<Int>, [TerminalSearchStep])] {
             let controller = makeWindow()
             let surface = try focusedSurface(controller)
             surface.rows = rows
+            surface.recordingGrid.wrappingRows = wrapping
             controller.handle(.toggleSearch)
             controller.search.beginNeedleForTesting("error")
 

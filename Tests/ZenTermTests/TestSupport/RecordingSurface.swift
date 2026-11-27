@@ -115,6 +115,9 @@ final class RecordingSurface: NSObject, TerminalSurface {
 
     var selectionOrigin: TerminalViewportCell?
 
+    lazy var recordingGrid = RecordingGrid { [unowned self] in self.rows }
+    var grid: TerminalGrid? { recordingGrid }
+
     var rows: [String] = {
         var rows = Array(repeating: "", count: 24)
         rows[2] = "❯ seq 1 3"
