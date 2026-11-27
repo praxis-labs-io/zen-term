@@ -110,7 +110,6 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var modifierKeyCodes: [UInt16] = []
     func modifiersDidChange(_ event: NSEvent) { modifierKeyCodes.append(event.keyCode) }
 
-
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
 
