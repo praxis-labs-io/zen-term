@@ -526,9 +526,8 @@ Holds until something happens to the pane, then answers once with why:
   under a shell other than sh, bash, zsh and ksh, or under bash, sh and ksh once it set an `EXIT`
   trap of its own. `text` is the last 40 lines. Both are absent for a pane that closed, unless
   `pane.run` opened it.
-- `output` is matched within one line of the screen's rows, without escapes, so a newline in it
-  is a `bad_request`. Text that scrolls more than a
-  screen past between checks, a quarter second apart, can be missed.
+- `output` is matched within one line, a soft-wrapped line read as one, without escapes, so a
+  newline in it is a `bad_request`.
 - A pane `pane.run` opened closes when its program exits, and a wait on it still answers
   `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
   A name then reaches the most recent such pane with that name. The app keeps the 64 most

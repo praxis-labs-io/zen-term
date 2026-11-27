@@ -120,6 +120,40 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         XCTAssertEqual(try result(answer).reason, .output)
     }
 
+    func test_textThatScrollsMoreThanAScreenPastBetweenChecksAnswersOutput() throws {
+        let (surface, token) = try shellPane()
+        let rows = try XCTUnwrap(surface.cellMetrics?.rows)
+        let answer = wait(on: token, output: "zen-mid-42")
+
+        run("sleep 0.5; seq \(rows * 4); echo zen-mid-$((40+2)); seq \(rows * 4); sleep 30", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+    }
+
+    func test_textAcrossASoftWrapAnswersOutput() throws {
+        let (surface, token) = try shellPane()
+        let columns = try XCTUnwrap(surface.cellMetrics?.columns)
+        let answer = wait(on: token, output: "zen-wrap-42")
+
+        run("sleep 0.5; printf '%0\(columns - 4)d' 0; echo zen-wrap-$((40+2)); sleep 30", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .output)
+        let grid = try XCTUnwrap(surface.grid)
+        XCTAssertTrue((0..<grid.rowCount).contains { grid.row($0)?.wraps == true }, "the needle never wrapped")
+    }
+
+    func test_textAlreadyOnScreenWhenTheWaitBeganDoesNotAnswerOutput() throws {
+        let (surface, token) = try shellPane()
+        run("echo zen-old-$((40+2))", in: surface)
+        waitUntil((surface.activeScreenText ?? "").contains("zen-old-42"), "the old text", timeout: 10)
+        waitUntil(atPrompt(surface), "the prompt after it", timeout: 10)
+        let answer = wait(on: token, output: "zen-old-42")
+
+        run("seq 3; sleep 0.5; (exit 0)", in: surface)
+
+        XCTAssertEqual(try result(answer).reason, .exited)
+    }
+
     func test_aCommandThatExitsAnswersExited_withTheShellsExitCode() throws {
         let (surface, token) = try shellPane()
         let answer = wait(on: token)
