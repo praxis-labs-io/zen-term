@@ -402,6 +402,17 @@ automatic layout for a window never ordered in; views keep zero bounds and `spli
 can silently omit a case. Pair it with a switch the table is measured against (`isEditableInSettings`
 and `SettingsKeybindGroupsTests`): ordering belongs in the array, membership in the switch.
 
+**A live surface is born at a default size, so settle it before a test prints or measures.** It
+takes its view's size a main-queue turn after mounting, which rewraps what printed and moves row
+indices, columns and `viewportTop`; a 1x CI display races differently from a 2x laptop. Wait through
+`settledColumns` (one per test target) first. Anything that does not need real ghostty belongs in a
+`RecordingSurface` test instead.
+
+**libghostty sends no scrollbar report for a surface whose window it treats as occluded.** A test
+window behind other windows on a laptop gets none, while CI's visible window does, so behavior driven
+by `scrollPositionDidChange` passes locally and fails on CI. Drive it with reports into a
+`RecordingSurface`.
+
 **When a test's premise expires, invert it rather than deleting it.** `BackendShadowTests` and
 `BackendShadowSweepTests` assert an empty freed set against a live backend, with a liveness canary so
 empty cannot mean a dead probe.
