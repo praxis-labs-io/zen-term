@@ -103,7 +103,10 @@ LINKER_NOISE='could not find symbol .* in object file'
 filter_noise() { grep --line-buffered -vE "$LINKER_NOISE" || true; }
 echo "▸ Building release…"
 rm -rf .build/release/*.bundle
-swift build -c release 2>&1 | filter_noise
+swift build -c release 2>&1 | filter_noise || {
+    echo "✗ swift build -c release failed" >&2
+    exit 1
+}
 
 # The bundle set is asserted both ways. After the wipe these describe the manifest,
 # not residue: a missing bundle means the build didn't emit one we ship (a partial
@@ -138,7 +141,11 @@ done
 # before that flag, or a ghostty pin that force-loads the intl archive, would relink libintl
 # while THIRD-PARTY-NOTICES.md no longer discloses it. Probing the linked binary here is the
 # gate a stale artifact cannot pass. Symbols like _libintl_*, _bindtextdomain, __nl_msg_cat_cntr.
-if nm "$BIN" 2>/dev/null | grep -qiE 'libintl|bindtextdomain|nl_msg_cat_cntr'; then
+BIN_SYMBOLS="$(nm "$BIN")" || {
+    echo "✗ nm could not read $BIN, so the libintl check cannot run" >&2
+    exit 1
+}
+if grep -qiE 'libintl|bindtextdomain|nl_msg_cat_cntr' <<<"$BIN_SYMBOLS"; then
     echo "✗ $BIN statically links GNU libintl (LGPL-2.1), and the notices do not disclose it" >&2
     echo "  rebuild GhosttyKit with bin/build-ghosttykit (it passes -Di18n=false), then re-probe" >&2
     echo "  per docs/third-party-notices.md" >&2
