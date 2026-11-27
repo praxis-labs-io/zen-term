@@ -252,7 +252,7 @@ A centered message that wraps is a `BalancedLabel`: its lines come out of simila
 A mark on a rounded chip is an `IconBadge`: tinted by one role, or a process chip (see
 [Process chips](#process-chips)).
 
-A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
+A modal's title row is `ModalHeader` and its button row is `ModalActionBar`. A form's title leads with its palette group's chip at `.small` (Workspace, Worktree, Host, Tool, App), and a `FormCard` footer sits `FormCard.footerInset` from its rule and the card's edge. A keyboard-only card uses
 `HintFooter` in its place: right aligned, each hint its Title Case label then its key. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.
 

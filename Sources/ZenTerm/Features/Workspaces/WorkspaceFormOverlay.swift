@@ -28,7 +28,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let onDelete: (() -> String?)?
     private var form: WorkspaceForm
 
-    private lazy var header = ModalHeader(title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace")
+    private lazy var header = ModalHeader(
+        title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace", chip: .workspace)
 
     private let titleField = FieldBox(placeholder: WorkspaceFormOverlay.namePlaceholder)
     private let folderPicker = DirectoryPickerField(placeholder: "Type a path, or Choose")

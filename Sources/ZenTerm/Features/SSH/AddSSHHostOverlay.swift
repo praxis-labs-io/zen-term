@@ -21,7 +21,8 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     private let removal: Removal?
     private let onSubmit: (SSHHostEntry) -> String?
 
-    private lazy var header = ModalHeader(title: editing == nil ? "Add remote host" : "Edit remote host")
+    private lazy var header = ModalHeader(
+        title: editing == nil ? "Add remote host" : "Edit remote host", chip: .host)
     private let hostField = FieldBox(placeholder: "user@host or alias")
     private lazy var hostCaption = SectionCaption("Host", required: editing == nil)
     private lazy var hostGroup = LabeledField(caption: hostCaption, control: hostField)

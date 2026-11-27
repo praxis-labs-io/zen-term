@@ -11,7 +11,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     private let onOpenURL: (URL) -> String?
     private let onExportDiagnostics: () -> Void
 
-    private let header = ModalHeader(title: "Report an Issue")
+    private let header = ModalHeader(title: "Report an Issue", chip: .app)
     private let titleField = FieldBox(placeholder: "A short summary")
     private let whatHappened = TextAreaBox(placeholder: "What went wrong, and what you expected instead")
     private var titleGroup: LabeledField?

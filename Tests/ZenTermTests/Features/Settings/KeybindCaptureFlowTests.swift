@@ -386,11 +386,6 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         try XCTUnwrap(descendants(of: try hintBubble()).compactMap { $0 as? IconButton }.first)
     }
 
-    private func hintText() throws -> String {
-        descendants(of: try hintBubble()).compactMap { ($0 as? NSTextField)?.stringValue }
-            .joined(separator: " ")
-    }
-
     func test_resetIcon_isHiddenWhenAFloatTookTheChord() throws {
         try seed("float = title:lazygit command:lazygit key:cmd+g\n")
         _ = mountSection(FakeCapturer())
@@ -403,7 +398,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     func test_theInputFillsTheCard() throws {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
-        let insets = ChromeMetrics.Spacing.s12 * 2
+        let insets = ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right
 
         row(for: .newTab).chip.onActivate?()
         try hintBubble().layoutSubtreeIfNeeded()
@@ -434,9 +429,8 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         _ = mountSection(FakeCapturer())
 
         row(for: .toggleCommandPalette).chip.onActivate?()
-        let conflicted = try hintText()
-        XCTAssertTrue(conflicted.contains("to cancel"), conflicted)
-        XCTAssertTrue(conflicted.contains("to remove"), conflicted)
+        XCTAssertEqual(
+            try hintBubble().hintsForTesting, [.init(keys: "⌫", label: "Remove"), .init(keys: "⎋", label: "Cancel")])
     }
 
     func test_resetIcon_appearsOnlyWhenTheRowIsOffItsDefault() throws {
