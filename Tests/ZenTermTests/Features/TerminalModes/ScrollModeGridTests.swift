@@ -1,6 +1,7 @@
 import AppKit
-import TerminalKit
 import XCTest
+
+@testable import TerminalKit
 
 @testable import ZenTerm
 
@@ -42,6 +43,30 @@ final class ScrollModeGridTests: WindowTestCase {
     private func pane(
         running script: String, until marker: String
     ) throws -> (controller: WindowController, surface: GhosttySurface, grid: TerminalGrid) {
+        let (c, surface, grid) = try mount(running: script)
+        waitUntil(row(grid, marker) != nil, "\(marker) printed", timeout: 15)
+        return (c, surface, grid)
+    }
+
+    // A surface is born at a default size and rewraps once the pane's frame reaches the grid, so this prints after.
+    private func settledPane(
+        running script: String, until marker: String
+    ) throws -> (controller: WindowController, surface: GhosttySurface, grid: TerminalGrid) {
+        let (c, surface, grid) = try mount(running: "stty -echo; read columns; " + script)
+        let host = try XCTUnwrap(surface.view as? GhosttyHostView)
+        let width = { grid.row(grid.viewportTop)?.cells.count }
+        waitUntil(
+            host.lastPushedFrameForTesting == host.bounds.size && width() == surface.cellMetrics?.columns,
+            "the grid to take the pane's width", timeout: 5)
+        surface.paste(String(try XCTUnwrap(width())))
+        surface.submit()
+        waitUntil(row(grid, marker) != nil, "\(marker) printed", timeout: 15)
+        return (c, surface, grid)
+    }
+
+    private func mount(
+        running script: String
+    ) throws -> (controller: WindowController, surface: GhosttySurface, grid: TerminalGrid) {
         var config = GeneralConfig.builtIn
         config.shell = "/bin/sh"
         config.shellArgs = ["-c", script + "; exec sleep 600"]
@@ -60,10 +85,11 @@ final class ScrollModeGridTests: WindowTestCase {
         c.scrollMode.yankPasteboard = board
         let surface = try XCTUnwrap(surfaces.first)
         try XCTSkipIf(!surface.isStarted, "ghostty_surface_new failed")
-        let grid = try XCTUnwrap(surface.grid)
-        waitUntil(row(grid, marker) != nil, "\(marker) printed", timeout: 15)
-        return (c, surface, grid)
+        return (c, surface, try XCTUnwrap(surface.grid))
     }
+
+    // A line exactly as wide as the grid, so any narrowing wraps it onto a second row.
+    private let fullRow = "printf '%*s\\n' \"$columns\" '' | tr ' ' x"
 
     private func press(_ characters: String, shift: Bool = false, control: Bool = false, keyCode: UInt16 = 0) throws {
         let c = try XCTUnwrap(controller)
@@ -131,9 +157,8 @@ final class ScrollModeGridTests: WindowTestCase {
     }
 
     func test_theCursorStaysOnItsTextThroughOutputAndTheRewrapAfterIt() throws {
-        let long = String(repeating: "x", count: 140)
-        let (c, surface, grid) = try pane(
-            running: "seq 1 20; echo \(long); echo READ-HERE; sleep 1; seq 1000 1300; echo DONE", until: "READ-HERE")
+        let (c, surface, grid) = try settledPane(
+            running: "seq 1 20; \(fullRow); echo READ-HERE; sleep 1; seq 1000 1300; echo DONE", until: "READ-HERE")
         try enterOn(grid, line: "READ-HERE")
         let before = try XCTUnwrap(c.scrollMode.cursor?.row)
         waitUntil(row(grid, "DONE") != nil, "the burst printed", timeout: 15)
@@ -148,8 +173,8 @@ final class ScrollModeGridTests: WindowTestCase {
     }
 
     func test_aSelectionSurvivesAResizeThatRewrapsTheLinesAboveIt() throws {
-        let long = String(repeating: "x", count: 140)
-        let (c, surface, grid) = try pane(running: "echo \(long); echo keep this text; echo END", until: "END")
+        let (c, surface, grid) = try settledPane(
+            running: "\(fullRow); echo keep this text; echo END", until: "END")
         try enterOn(grid, line: "keep this text")
         try press("v")
         try press("$")
