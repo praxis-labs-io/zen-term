@@ -53,7 +53,9 @@ final class ScrollCursorView: NSView {
     // Drawn over the glyph libghostty renders: above its Metal layer an overlay has no pixels to blend against.
     private func draw(_ cursor: Cursor, metrics: TerminalCellMetrics) {
         let cell = bounds.intersection(
-            metrics.cellFrame(row: cursor.row, columns: Self.columns(cursor.columns, metrics)))
+            metrics.cellFrame(
+                row: cursor.row,
+                columns: Self.columns(cursor.columns.lowerBound, cursor.columns.upperBound, metrics)))
         guard !cell.isEmpty else { return }
         Theme.current.chrome.cursor.nsColor.setFill()
         NSBezierPath(rect: cell).fill()
@@ -83,22 +85,20 @@ final class ScrollCursorView: NSView {
     static func rects(for range: TerminalViewportRange, metrics: TerminalCellMetrics) -> [CGRect] {
         let last = max(metrics.columns - 1, 0)
         guard range.endRow > range.startRow else {
-            return [
-                metrics.cellFrame(
-                    row: range.startRow, columns: columns(range.startColumn...range.endColumn, metrics))
-            ]
+            let span = columns(range.startColumn, range.endColumn, metrics)
+            return [metrics.cellFrame(row: range.startRow, columns: span)]
         }
-        var rects = [metrics.cellFrame(row: range.startRow, columns: columns(range.startColumn...last, metrics))]
+        var rects = [metrics.cellFrame(row: range.startRow, columns: columns(range.startColumn, last, metrics))]
         for row in (range.startRow + 1)..<range.endRow {
-            rects.append(metrics.cellFrame(row: row, columns: columns(0...last, metrics)))
+            rects.append(metrics.cellFrame(row: row, columns: columns(0, last, metrics)))
         }
-        rects.append(metrics.cellFrame(row: range.endRow, columns: columns(0...range.endColumn, metrics)))
+        rects.append(metrics.cellFrame(row: range.endRow, columns: columns(0, range.endColumn, metrics)))
         return rects
     }
 
-    private static func columns(_ range: ClosedRange<Int>, _ metrics: TerminalCellMetrics) -> ClosedRange<Int> {
+    private static func columns(_ first: Int, _ through: Int, _ metrics: TerminalCellMetrics) -> ClosedRange<Int> {
         let last = max(metrics.columns - 1, 0)
-        let low = min(max(range.lowerBound, 0), last)
-        return low...min(max(range.upperBound, low), last)
+        let low = min(max(first, 0), last)
+        return low...min(max(through, low), last)
     }
 }
