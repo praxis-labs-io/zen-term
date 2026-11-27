@@ -432,6 +432,68 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.focusRenders.last, true)
     }
 
+    func test_theModeTurnsTheHeaderToItsChipAndName_andLeavingGivesThemBack() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        panel.shownHeaderForTesting?.content.path = "~/dev"
+        let header = try XCTUnwrap(panel.shownHeaderForTesting)
+        let name = header.nameForTesting
+        XCTAssertNotEqual(name, "Scroll mode", "premise: the pane has its own name")
+
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(header.chipForTesting, .scrollMode)
+        XCTAssertEqual(header.nameForTesting, "Scroll mode")
+        XCTAssertNil(header.pathForTesting, "the path steps aside")
+        XCTAssertTrue(header.showsTitleAndControlsForTesting, "the controls stay")
+
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(header.chipForTesting, header.processForTesting)
+        XCTAssertEqual(header.nameForTesting, name)
+        XCTAssertEqual(header.pathForTesting, "~/dev")
+    }
+
+    func test_findOverTheMode_keepsFindsChipAndField_untilItCloses() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let header = try XCTUnwrap(panel.shownHeaderForTesting)
+        controller.handle(.toggleScrollMode)
+
+        controller.handle(.toggleSearch)
+        XCTAssertEqual(header.chipForTesting, .find)
+        XCTAssertFalse(header.showsTitleAndControlsForTesting)
+
+        controller.search.end()
+        XCTAssertTrue(controller.scrollMode.isActive, "premise: the reader's own mode outlives find")
+        XCTAssertEqual(header.chipForTesting, .scrollMode)
+        XCTAssertEqual(header.nameForTesting, "Scroll mode")
+    }
+
+    func test_findHandingOffToTheMode_keepsFindsChip() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let header = try XCTUnwrap(panel.shownHeaderForTesting)
+        controller.handle(.toggleSearch)
+
+        controller.search.enterScrollMode()
+
+        XCTAssertTrue(controller.scrollMode.isActive)
+        XCTAssertEqual(header.chipForTesting, .find)
+        XCTAssertFalse(header.showsTitleAndControlsForTesting)
+    }
+
+    func test_withHeadersOff_theModeLeavesTheHeaderHidden() throws {
+        var config = GeneralConfig.current
+        config.paneHeaders = false
+        GeneralConfig.setCurrentForTesting(config)
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertTrue(controller.scrollMode.isActive)
+        XCTAssertNil(panel.shownHeaderForTesting)
+    }
+
     private static func position(offset: Int) -> TerminalScrollPosition {
         TerminalScrollPosition(total: 200, offset: offset, viewport: 24)
     }

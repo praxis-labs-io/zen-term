@@ -52,7 +52,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
     var content: Content {
         didSet {
             guard content != oldValue else { return }
-            if content.process != oldValue.process, !isFinding { chip.show(content.process) }
+            chip.show(shownProcess)
             applyText()
         }
     }
@@ -68,12 +68,28 @@ final class PaneHeader: ControlView, ThemeReapplying {
     var isFinding = false {
         didSet {
             guard isFinding != oldValue else { return }
-            chip.show(isFinding ? .find : content.process)
+            chip.show(shownProcess)
             nameField.isHidden = isFinding
             controlStack.isHidden = isFinding
             applyText()
         }
     }
+
+    // Scroll mode names itself in the chip and name, and the path steps aside; find, open over it, still wins.
+    var isScrolling = false {
+        didSet {
+            guard isScrolling != oldValue else { return }
+            chip.show(shownProcess)
+            applyText()
+        }
+    }
+
+    private var shownProcess: ProcessIcon {
+        if isFinding { return .find }
+        return isScrolling ? .scrollMode : content.process
+    }
+
+    private var shownName: String { isScrolling && !isFinding ? "Scroll mode" : content.name }
 
     var chipTrailingAnchor: NSLayoutXAxisAnchor { chip.trailingAnchor }
 
@@ -202,8 +218,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
     private func applyText() {
         let ink = Theme.current.chrome.ink(.muted)
         nameField.attributedStringValue = Self.text(
-            content.name, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
-        pathField.isHidden = isFinding || content.path == nil
+            shownName, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
+        pathField.isHidden = isFinding || isScrolling || content.path == nil
         pathField.attributedStringValue = Self.text(
             content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
         needsUpdateConstraints = true

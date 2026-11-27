@@ -350,6 +350,19 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(scratch.detail, CommandCategory.tools.title)
     }
 
+    func test_commandPalette_scrollModeAndFindRowsWearTheirOwnChips() throws {
+        let overlay = catalogPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let shown = rows(in: overlay)
+        for (title, icon) in [("Scroll Mode", ProcessIcon.scrollMode), ("Find in Scrollback", .find)] {
+            let row = try XCTUnwrap(shown.first { $0.title == title }, title)
+            let chip = try XCTUnwrap(row.processBadgeForTesting, title)
+            XCTAssertEqual(chip.process, icon, title)
+            XCTAssertNotNil(chip.iconImageForTesting, "\(title)'s mark \(icon.mark) is not in the bundle")
+        }
+    }
+
     func test_commandPalette_everyChipTakesItsGroupsPurposeTint() throws {
         let overlay = catalogPalette()
         let window = mount(overlay)
@@ -392,7 +405,7 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertNotNil(ProcessIcon.toolFloat(.scratch))
         let command = PaletteCommand(
             title: typo.title, shortcut: "", category: .tools, chord: .toggleToolFloat(typo.id),
-            floatIcon: ProcessIcon.toolFloat(typo))
+            ownIcon: ProcessIcon.toolFloat(typo))
         XCTAssertEqual(command.icon, CommandCategory.tools.icon)
     }
 
