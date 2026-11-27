@@ -27,6 +27,9 @@ final class ScrollModeController {
 
     private var lastFind: ScrollKeymap.Find?
 
+    private var copied: ScrollReadout?
+    private var showsCopied = false
+
     private var holdsViewport = false
 
     var onActiveChanged: ((Bool) -> Void)?
@@ -45,6 +48,8 @@ final class ScrollModeController {
         self.surface = surface
         self.panel = panel
         pending = .init()
+        copied = nil
+        showsCopied = false
         lastPosition = nil
         lastGridSize = Self.gridSize(of: surface)
         holdsViewport = false
@@ -75,6 +80,8 @@ final class ScrollModeController {
         flashRange = nil
         isActive = false
         pending = .init()
+        copied = nil
+        showsCopied = false
         if selection != nil {
             selection = nil
             grid?.setSelection(nil)
@@ -84,7 +91,7 @@ final class ScrollModeController {
         lastGridSize = nil
         if holdsViewport { surface?.scroll(.bottom) }
         holdsViewport = false
-        panel?.setScrollCursor(nil) { nil }
+        panel?.setScrollCursor(nil, readout: nil) { nil }
         panel = nil
         surface = nil
         Log.info("scroll mode left", category: .panes)
@@ -126,6 +133,8 @@ final class ScrollModeController {
     /// Declines unmapped ⌘ and ⌥ chords: `KeyInterceptor` runs before menu key equivalents resolve.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
+        copied = nil
+        defer { if showsCopied, copied == nil { refreshCursor() } }
         guard let key = ScrollKeymap.key(for: event, pending: pending, hasSelection: selection != nil)
         else {
             pending = .init()
@@ -234,6 +243,7 @@ final class ScrollModeController {
     }
 
     private func move(to point: TerminalGridPoint) {
+        copied = nil
         seat(at: point)
         reveal()
         applySelection()
@@ -305,6 +315,7 @@ final class ScrollModeController {
             return
         }
         guard cursor.row < top || cursor.row > bottom else { return }
+        copied = nil
         seat(at: textPoint(column: cursor.column, row: min(max(cursor.row, top), bottom)))
         applySelection()
     }
@@ -426,8 +437,10 @@ final class ScrollModeController {
             Log.warning("scroll mode: the surface declined a yank read", category: .panes)
             return
         }
+        let kind = selection?.kind ?? .character
         copy(text)
         releaseSelection()
+        copied = ScrollReadout.selection(kind, span: span) { cells(span.lowerBound.row) }.copied
         flash(span)
     }
 
@@ -450,6 +463,7 @@ final class ScrollModeController {
             return
         }
         copy(text)
+        copied = .copiedLines(last - first.lowerBound + 1)
         flash(span)
     }
 
@@ -541,12 +555,22 @@ final class ScrollModeController {
         guard isActive, let surface else { return }
         let top = grid?.viewportTop ?? 0
         let rows = screenRows
+        showsCopied = copied != nil
         panel?.setScrollCursor(
             ScrollCursorView.State(
                 cursor: cursorState(top: top, rows: rows),
                 flash: flashRange.flatMap { Self.viewportRange(of: $0, top: top, rows: rows) },
-                flashLevel: flashLevel)
+                flashLevel: flashLevel),
+            readout: readout()?.text
         ) { [weak surface] in surface?.cellMetrics }
+    }
+
+    private func readout() -> ScrollReadout? {
+        if let copied { return copied }
+        if let selection, let span = selectionSpan() {
+            return ScrollReadout.selection(selection.kind, span: span) { cells(span.lowerBound.row) }
+        }
+        return cursor.map(ScrollReadout.position)
     }
 
     private func cursorState(top: Int, rows: Int) -> ScrollCursorView.Cursor? {

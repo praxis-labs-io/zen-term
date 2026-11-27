@@ -1,6 +1,6 @@
 import TerminalKit
 
-// `RecordingSurface`'s scrollback and rows as a grid, with a viewport and cursor a test can move and marks that stay put.
+// `RecordingSurface`'s scrollback and rows as a grid, with a viewport and cursor a test can move and marks that follow dropped rows.
 final class RecordingGrid: TerminalGrid {
     private unowned let surface: RecordingSurface
     private(set) var liveMarks = 0
@@ -36,6 +36,8 @@ final class RecordingGrid: TerminalGrid {
     }
 
     var screenTop: Int { surface.scrollback.count }
+
+    var droppedRows = 0
 
     private(set) var selectionBounds: ClosedRange<TerminalGridPoint>?
 
@@ -78,7 +80,12 @@ final class RecordingGrid: TerminalGrid {
     func mark(_ point: TerminalGridPoint) -> TerminalGridMark? {
         guard lines.indices.contains(point.row), point.column < columns else { return nil }
         liveMarks += 1
-        return TerminalGridMark(read: { .at(point) }, release: { [weak self] in self?.liveMarks -= 1 })
+        let droppedAtMark = droppedRows
+        return TerminalGridMark(
+            read: { [weak self] in
+                let dropped = (self?.droppedRows ?? droppedAtMark) - droppedAtMark
+                return .at(TerminalGridPoint(row: point.row - dropped, column: point.column))
+            }, release: { [weak self] in self?.liveMarks -= 1 })
     }
 
     func setSelection(_ range: ClosedRange<TerminalGridPoint>?) { selectionBounds = range }

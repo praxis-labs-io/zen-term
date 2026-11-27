@@ -525,9 +525,9 @@
 # ─── Scroll mode ─────────────────────────────────────────────────────────────
 #
 # `toggle_scroll_mode` (⌘⇧S) reads back through the focused pane's scrollback with
-# the keyboard. While it's up the pane header says SCROLL and how far below the
-# viewport the buffer runs, a block cursor marks the cell you're on, and nothing
-# reaches the shell:
+# the keyboard. While it's up the pane header says Scroll mode and the cursor's row
+# and column in the whole buffer, a block cursor marks the cell you're on, and
+# nothing reaches the shell:
 #
 #   j / k (or ↑ ↓)   move the cursor a row         { / }      move by paragraph
 #   h / l (or ← →)   move a column                 0 / ^ / $  ends of the row
@@ -568,6 +568,8 @@
 # output and resizes, and goes only if the scrollback drops the line it started on.
 # Anything that clears it ends the mode too: a click in the pane, clearing the screen,
 # or a program taking over the screen. Leaving the mode clears it.
+# While it's up the header counts it, in characters on one row and in lines across
+# rows or with `V`. After a copy it says what it copied until your next key.
 #
 # Some chords move the viewport without the mode, for when you want a look rather
 # than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down

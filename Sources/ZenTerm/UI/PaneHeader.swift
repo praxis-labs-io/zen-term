@@ -83,6 +83,15 @@ final class PaneHeader: ControlView, ThemeReapplying {
         }
     }
 
+    var scrollReadout: String? {
+        didSet {
+            guard scrollReadout != oldValue else { return }
+            applyText()
+        }
+    }
+
+    private var shownReadout: String? { isScrolling && !isFinding ? scrollReadout : nil }
+
     private var shownProcess: ProcessIcon {
         if isFinding { return .find }
         return isScrolling ? .scrollMode : content.process
@@ -99,6 +108,7 @@ final class PaneHeader: ControlView, ThemeReapplying {
     // The header reads mostly in lowercase (`claude`, a path), so the name's x-height centers on the chip, not its line box.
     private static var nameFont: NSFont { ChromeType.font(.small, weight: .medium) }
     private static var pathFont: NSFont { ChromeType.font(.small) }
+    private static var readoutFont: NSFont { ChromeType.font(.small, face: .digits) }
 
     private let controls: [Control]
     private let onControl: (Control) -> Void
@@ -187,7 +197,8 @@ final class PaneHeader: ControlView, ThemeReapplying {
     func reapplyTheme() { applyText() }
 
     var nameForTesting: String { nameField.stringValue }
-    var pathForTesting: String? { pathField.isHidden ? nil : pathField.stringValue }
+    var pathForTesting: String? { pathField.isHidden || shownReadout != nil ? nil : pathField.stringValue }
+    var readoutForTesting: String? { pathField.isHidden || shownReadout == nil ? nil : pathField.stringValue }
     var processForTesting: ProcessIcon { content.process }
     var chipForTesting: ProcessIcon? { chip.shownProcessForTesting }
     var showsTitleAndControlsForTesting: Bool { !nameField.isHidden && !controlStack.isHidden }
@@ -218,9 +229,15 @@ final class PaneHeader: ControlView, ThemeReapplying {
         let ink = Theme.current.chrome.ink(.muted)
         nameField.attributedStringValue = Self.text(
             shownName, font: Self.nameFont, ink: ink, truncation: .byTruncatingTail)
-        pathField.isHidden = isFinding || isScrolling || content.path == nil
-        pathField.attributedStringValue = Self.text(
-            content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
+        if let readout = shownReadout {
+            pathField.isHidden = false
+            pathField.attributedStringValue = Self.text(
+                readout, font: Self.readoutFont, ink: ink, truncation: .byTruncatingTail)
+        } else {
+            pathField.isHidden = isFinding || isScrolling || content.path == nil
+            pathField.attributedStringValue = Self.text(
+                content.path ?? "", font: Self.pathFont, ink: ink, truncation: .byTruncatingHead)
+        }
         needsUpdateConstraints = true
     }
 
