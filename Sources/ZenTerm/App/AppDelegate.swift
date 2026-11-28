@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let worktreeRemovals = WorktreeRemovalTracker()
     private let paneWaits = PaneWaits()
     private let paneDrafts = PaneDrafts()
-    private let claudeSetupOffer = SetupOffer<ClaudeCodeSetup>()
+    private let claudeSetupOffer = ClaudeSetupOffer()
     private var controlResponder: ControlResponder?
     private let keys = KeyInterceptor()
     private var navSocket: NavSocketServer?

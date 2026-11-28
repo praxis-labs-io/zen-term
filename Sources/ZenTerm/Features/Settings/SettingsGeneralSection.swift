@@ -1,3 +1,4 @@
+import AgentSetup
 import AppKit
 
 final class SettingsGeneralSection: SettingsFormSection {
@@ -5,7 +6,9 @@ final class SettingsGeneralSection: SettingsFormSection {
 
     static let claudeSetupKey = "claude-setup"
     static let claudeUpdateKey = "claude-update"
-    private let claudeRows = SetupRows<ClaudeCodeSetup>(setupKey: claudeSetupKey, updateKey: claudeUpdateKey)
+    private weak var claudeSetupControl: SegmentedControl?
+    private weak var claudeUpdateButton: AppButton?
+    private var claudeSetupState: ClaudeSetup.State = .notInstalled
 
     override func populate() {
         addGroup("Agents") {
@@ -18,10 +21,7 @@ final class SettingsGeneralSection: SettingsFormSection {
                 key: "agents", caption: "Agent programs",
                 blurb: "claude and codex are built in", placeholder: "pi, gemini",
                 read: { $0.agents.joined(separator: ", ") })
-            self.claudeRows.add(
-                to: self, caption: "Teach Claude Code to use zen",
-                description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)",
-                updateCaption: "Update zen for Claude Code")
+            self.addClaudeSetupRow()
         }
         addGroup("Notifications") {
             self.addSegmentedRow(
@@ -50,6 +50,71 @@ final class SettingsGeneralSection: SettingsFormSection {
                 options: ["On", "Off"],
                 read: { $0.automaticUpdateChecks ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+        }
+    }
+
+    private func addClaudeSetupRow() {
+        let control = SegmentedControl(options: ["On", "Off"], selectedIndex: 1, notifiesOnReselect: true) {
+            [weak self] index in
+            self?.applyClaudeSetup(index == 0 ? .install : .remove)
+        }
+        control.isEnabled = false
+        claudeSetupControl = control
+        addCustomRow(
+            key: Self.claudeSetupKey, caption: "Teach Claude Code to use zen",
+            description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)", control: control,
+            focusStop: control,
+            width: nil, refresh: {})
+        addClaudeUpdateRow()
+        ClaudeCodeSetup.refresh { [weak self] in self?.showClaudeSetup($0) }
+    }
+
+    private func addClaudeUpdateRow() {
+        let update = AppButton(title: "Update", variant: .muted)
+        update.isKeyboardFocusable = true
+        update.onTap = { [weak self] in self?.applyClaudeSetup(.install) }
+        claudeUpdateButton = update
+        addCustomRow(
+            key: Self.claudeUpdateKey, caption: "Update zen for Claude Code", description: "", control: update,
+            focusStop: update, width: nil,
+            refresh: { [weak self] in self?.showClaudeUpdate() })
+        showClaudeUpdate()
+    }
+
+    private func showClaudeUpdate() {
+        let description = Self.claudeUpdateDescription(for: claudeSetupState)
+        let row = rowFor(Self.claudeUpdateKey)
+        row?.setDescription(description ?? "")
+        row?.isHidden = description == nil
+        claudeUpdateButton?.isHidden = description == nil
+    }
+
+    private func applyClaudeSetup(_ change: ClaudeCodeSetup.Change) {
+        claudeSetupControl?.isEnabled = false
+        claudeUpdateButton?.isEnabled = false
+        ClaudeCodeSetup.refresh(applying: change) { [weak self] in self?.showClaudeSetup($0) }
+    }
+
+    private func showClaudeSetup(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        let row = rowFor(Self.claudeSetupKey)
+        switch result {
+        case .success(let state):
+            claudeSetupState = state
+            row?.showMessage(nil)
+        case .failure(let error):
+            row?.showMessage(error.message)
+        }
+        claudeSetupControl?.setSelection(claudeSetupState == .notInstalled ? 1 : 0)
+        claudeSetupControl?.isEnabled = true
+        claudeUpdateButton?.isEnabled = true
+        showClaudeUpdate()
+    }
+
+    private static func claudeUpdateDescription(for state: ClaudeSetup.State) -> String? {
+        switch state {
+        case .outdated: "An older version is installed."
+        case .edited: "Your zen setup has changes, and updating replaces them."
+        case .notInstalled, .newer, .current: nil
         }
     }
 
