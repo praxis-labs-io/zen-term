@@ -31,11 +31,11 @@ final class WorktreeCommandTests: XCTestCase {
     }
 
     func test_aBaseThatIsNeitherDefaultNorCurrentIsAUsageError() {
-        XCTAssertEqual(Zen.exitCode(running: ["worktree", "create", "feat/x", "--base", "main"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["worktree", "create", "feat/x", "--base", "main"]), 2)
     }
 
     func test_aBaseWithExistingIsAUsageError() {
-        XCTAssertEqual(Zen.exitCode(running: ["worktree", "create", "feat/x", "--existing", "--base", "current"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["worktree", "create", "feat/x", "--existing", "--base", "current"]), 2)
     }
 
     func test_removeSendsABranchAsABranch_andAFolderAsAnAbsolutePath() throws {

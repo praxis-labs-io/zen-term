@@ -79,13 +79,13 @@ final class PaneCommandTests: XCTestCase {
                 XCTAssertEqual(pane, .name("review"), "pane \(form.joined(separator: " "))")
             }
             XCTAssertEqual(
-                Zen.exitCode(running: ["pane", verb, "999999", "--pane", "999999"]), 2, "pane \(verb) twice")
+                Zen.exitCode(parsing: ["pane", verb, "31", "--pane", "31"]), 2, "pane \(verb) twice")
         }
         for form in [["wait", "review"], ["wait", "--pane", "review"]] {
             XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(form) as? WaitCommand).pane, .name("review"))
         }
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "999999", "--pane", "999999"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "--pane", "999999", "--children", "any"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "31", "--pane", "31"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "--pane", "31", "--children", "any"]), 2)
     }
 
     func test_sendTakesThePaneBeforeTheTextOrWithPaneOption() throws {
@@ -102,8 +102,8 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertNil(mine.pane)
         XCTAssertEqual(mine.text, "31")
 
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "send", "999999", "hi", "--pane", "999999"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "send", "999999", "hi", "there"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "send", "31", "hi", "--pane", "31"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "send", "31", "hi", "there"]), 2)
     }
 
     func test_keysTakeThePaneFirstOrWithPaneOption() throws {
@@ -111,9 +111,9 @@ final class PaneCommandTests: XCTestCase {
             try Zen.parseAsRoot(["pane", "keys", "--pane", "review", "down", "enter"]) as? PaneCommands.Keys)
         XCTAssertEqual(option.args, ControlArgs(force: false, pane: .name("review"), keys: ["down", "enter"]))
 
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "999999", "enter", "--pane", "999999"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "--pane", "999999"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "keys", "31", "enter", "--pane", "31"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "keys", "--pane", "31"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "keys"]), 2)
     }
 
     func test_runsFloatAndTabFlagsSendFloat_andNeitherLeavesItToTheApp() throws {
@@ -197,7 +197,7 @@ final class PaneCommandTests: XCTestCase {
                 XCTAssertEqual(Zen.exitCode(for: $0), .success)
                 XCTAssertTrue(Zen.fullMessage(for: $0).contains("--outlive-parent"), "\(flag) prints pane run's help")
             }
-            XCTAssertEqual(Zen.exitCode(running: ["pane", "run", flag]), 0)
+            XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", flag]), 0)
         }
         let literal = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--", "--help"]) as? PaneCommands.Run)
         XCTAssertEqual(literal.commandLine, "--help")
@@ -206,23 +206,23 @@ final class PaneCommandTests: XCTestCase {
     }
 
     func test_runWithoutACommandOrWithADigitNameIsAUsageError() {
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--name", "42", "claude"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--split", "left", "claude"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--timeout", "601", "claude"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--output", "ready", "npm run dev"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--output", "", "npm run dev"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--output", "a\nb", "npm run dev"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--name", "42", "claude"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--split", "left", "claude"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--wait", "--timeout", "601", "claude"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--output", "ready", "npm run dev"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--wait", "--output", "", "npm run dev"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "run", "--wait", "--output", "a\nb", "npm run dev"]), 2)
     }
 
     func test_aBadDirectionLineCountOrKeyIsAUsageError() {
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "split", "--dir", "left"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "read", "--lines", "0"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "send"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "send", "go", "--wait", "--timeout", "0"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34", "down", "ctrl-1"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["pane", "interrupt"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "split", "--dir", "left"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "read", "--lines", "0"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "send"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "send", "go", "--wait", "--timeout", "0"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "keys", "34", "down", "ctrl-1"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "keys", "34"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["pane", "interrupt"]), 2)
     }
 }

@@ -18,7 +18,10 @@ final class WorkspaceTabCommandTests: XCTestCase {
         let tmp = FileManager.default.temporaryDirectory.standardizedFileURL.path
         XCTAssertEqual(try CommandPath.folder(".", in: tmp), tmp)
         XCTAssertThrowsError(try CommandPath.folder("missing-\(UUID().uuidString)", in: tmp))
-        XCTAssertEqual(Zen.exitCode(running: ["tab", "new", "--cwd", "/nowhere-\(UUID().uuidString)"]), 2)
+        XCTAssertEqual(
+            Zen.exitCode(running: [
+                "tab", "new", "--socket", Zen.unreachableSocket, "--cwd", "/nowhere-\(UUID().uuidString)",
+            ]), 2)
     }
 
     func test_theSubcommandsParseTheirArguments() throws {

@@ -21,9 +21,9 @@ final class WaitCommandTests: XCTestCase {
         let wait = try XCTUnwrap(try Zen.parseAsRoot(["wait", "--children", "all"]) as? WaitCommand)
         XCTAssertNil(wait.pane)
         XCTAssertEqual(wait.children, .all)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--children", "any"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "--children", "some"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "--children", "all", "--output", "ready"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--children", "any"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "--children", "some"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "--children", "all", "--output", "ready"]), 2)
         XCTAssertNoThrow(try Zen.parseAsRoot(["wait", "--children", "any", "--output", "ready"]))
     }
 
@@ -42,10 +42,10 @@ final class WaitCommandTests: XCTestCase {
     }
 
     func test_aMissingPaneOrAnOutOfRangeTimeoutIsAUsageError() {
-        XCTAssertEqual(Zen.exitCode(running: ["wait"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--timeout", "0"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--timeout", "601"]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--output", ""]), 2)
-        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--output", "built\nready"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--timeout", "0"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--timeout", "601"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--output", ""]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--output", "built\nready"]), 2)
     }
 }
