@@ -8,6 +8,7 @@ final class SettingsGeneralSection: SettingsFormSection {
     static let claudeUpdateKey = "claude-update"
     private weak var claudeSetupControl: ToggleSwitch?
     private weak var claudeUpdateButton: AppButton?
+    private weak var focusBeforeClaudeSetup: NSView?
     private var claudeSetupState: ClaudeSetup.State = .notInstalled
 
     override func populate() {
@@ -47,11 +48,13 @@ final class SettingsGeneralSection: SettingsFormSection {
     }
 
     private func addClaudeSetupRow() {
+        let caption = "Teach Claude Code to use zen"
         let control = ToggleSwitch { [weak self] on in self?.applyClaudeSetup(on ? .install : .remove) }
+        control.setAccessibilityLabel(caption)
         control.isEnabled = false
         claudeSetupControl = control
         addCustomRow(
-            key: Self.claudeSetupKey, caption: "Teach Claude Code to use zen",
+            key: Self.claudeSetupKey, caption: caption,
             description: "The zen skill and a session hook, in \(ClaudeCodeSetup.folderName)", control: control,
             focusStop: control,
             width: nil, refresh: {})
@@ -80,6 +83,9 @@ final class SettingsGeneralSection: SettingsFormSection {
     }
 
     private func applyClaudeSetup(_ change: ClaudeCodeSetup.Change) {
+        let window = claudeSetupControl?.window
+        let controls: [NSView?] = [claudeSetupControl, claudeUpdateButton]
+        focusBeforeClaudeSetup = controls.compactMap { $0 }.first { KeyboardFocus.isFocused($0, in: window) }
         claudeSetupControl?.isEnabled = false
         claudeUpdateButton?.isEnabled = false
         ClaudeCodeSetup.refresh(applying: change) { [weak self] in self?.showClaudeSetup($0) }
@@ -98,6 +104,15 @@ final class SettingsGeneralSection: SettingsFormSection {
         claudeSetupControl?.isEnabled = true
         claudeUpdateButton?.isEnabled = true
         showClaudeUpdate()
+        restoreFocusAfterClaudeSetup()
+    }
+
+    private func restoreFocusAfterClaudeSetup() {
+        guard let focused = focusBeforeClaudeSetup else { return }
+        focusBeforeClaudeSetup = nil
+        let target = focused.isHidden ? claudeSetupControl : focused
+        guard let target, let window = target.window, window.firstResponder === window else { return }
+        window.makeFirstResponder(target)
     }
 
     private static func claudeUpdateDescription(for state: ClaudeSetup.State) -> String? {

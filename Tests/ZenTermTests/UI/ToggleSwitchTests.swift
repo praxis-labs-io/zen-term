@@ -168,6 +168,15 @@ final class ToggleSwitchTests: WindowTestCase {
         XCTAssertTrue(control.isOn)
     }
 
+    func test_setOn_withTheSameValue_keepsTheSlideGoing() throws {
+        let control = mount()
+
+        try click(control)
+        control.setOn(true)
+
+        XCTAssertTrue(control.isKnobSlidingForTesting)
+    }
+
     func test_setOn_movesWithoutReporting() {
         var changes: [Bool] = []
         let control = mount { changes.append($0) }

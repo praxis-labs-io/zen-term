@@ -16,6 +16,8 @@ final class ToggleSwitch: ControlView, ThemeReapplying {
                 setHovered(false)
                 isPressed = false
                 if hasKeyboardFocus { window?.makeFirstResponder(nil) }
+            } else {
+                refreshHover()
             }
             window?.invalidateCursorRects(for: self)
             restyle()
@@ -54,6 +56,7 @@ final class ToggleSwitch: ControlView, ThemeReapplying {
     override var intrinsicContentSize: NSSize { NSSize(width: Self.trackWidth, height: Self.trackHeight) }
 
     func setOn(_ on: Bool) {
+        guard on != isOn else { return }
         isOn = on
         restyle()
         placeKnob(animated: false)
@@ -94,6 +97,7 @@ final class ToggleSwitch: ControlView, ThemeReapplying {
         switch KeyboardFocus.key(for: event) {
         case .activate where KeyboardFocus.isUnmodified(event): flip()
         case .left: onArrowLeft?()
+        case .right: break
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .tab(let shift) where onTab != nil || onBacktab != nil:

@@ -155,6 +155,7 @@ class SettingsFormSection: SettingsSection {
         let toggle = ToggleSwitch(isOn: read(GeneralConfig.current)) { [weak self] on in
             self?.writeOrRemove(key, token(on), row: key)
         }
+        toggle.setAccessibilityLabel(caption)
         addRow(
             key: key, caption: caption, description: blurb, control: toggle, focusStop: toggle, width: nil,
             refresh: { [weak toggle] in toggle?.setOn(read(GeneralConfig.current)) })
@@ -289,6 +290,7 @@ class SettingsFormSection: SettingsSection {
         do {
             try write()
         } catch {
+            refreshers.forEach { $0() }
             (reportKey.flatMap(rowFor) ?? rows.first)?.showMessage(
                 "Couldn't write config: \(error.localizedDescription)")
             return false

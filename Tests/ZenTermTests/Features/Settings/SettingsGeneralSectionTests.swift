@@ -190,6 +190,15 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             "\(texts)")
     }
 
+    func test_claudeSetup_keepsKeyboardFocusThroughTheChange() {
+        let control = claudeSetupControl()
+
+        flipClaudeSetup(control)
+
+        XCTAssertTrue(KeyboardFocus.isFocused(control, in: hostWindow), "focus fell to nothing")
+        XCTAssertEqual(control.accessibilityLabel(), "Teach Claude Code to use zen")
+    }
+
     func test_claudeSetup_choosingOnInstalls_andOffRemoves() {
         let control = claudeSetupControl()
 

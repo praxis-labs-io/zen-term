@@ -79,6 +79,30 @@ final class SettingsTerminalRowsTests: WindowTestCase {
         XCTAssertTrue(configText().contains("font-thicken = false"), "got: \(configText())")
     }
 
+    func test_fontThicken_slidesItsKnob_throughTheRowRefresh() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let thicken = try toggle("font-thicken")
+
+        try click(thicken)
+
+        XCTAssertTrue(thicken.isKnobSlidingForTesting, "the row's refresh snapped the knob to its end")
+    }
+
+    func test_aSwitchRow_namesItsSwitchForVoiceOver() throws {
+        XCTAssertEqual(try toggle("font-thicken").accessibilityLabel(), "Thicken")
+    }
+
+    func test_aFailedWrite_putsTheSwitchBack() throws {
+        let thicken = try toggle("font-thicken")
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: tempRoot.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tempRoot.path) }
+
+        try click(thicken)
+
+        XCTAssertFalse(thicken.isOn, "the switch shows a value that was never saved")
+        XCTAssertFalse(GeneralConfig.current.fontThicken)
+    }
+
     func test_tabInheritCWD_defaultsToHome() throws {
         let directory = try segment("tab-inherit-cwd")
         XCTAssertEqual(directory.selectedIndex, 0, "home is the shipped default, and Home is index 0")
