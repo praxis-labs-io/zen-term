@@ -52,7 +52,10 @@ final class ChildrenWait {
         answerOnceNoneWorks()
     }
 
-    func messageArrived() { answer(.message) }
+    func messageArrived(from sender: Int?) {
+        guard watches.contains(where: { $0.token == sender }) else { return }
+        answer(.message)
+    }
 
     // `all` keeps each child's probe until it exits, records the latest change, and reports it when it answers.
     func answers(_ reason: WaitReason, from surface: SurfaceID) -> Bool {
@@ -86,7 +89,8 @@ final class ChildrenWait {
         let children = watches.map { watch in
             let heard = news[watch.token]
             return WaitResult.Child(
-                reason: heard?.reason, exitCode: heard?.exitCode, text: heard?.text, pane: watch.probe.pane)
+                reason: heard?.reason, exitCode: heard?.exitCode, text: heard?.text,
+                outputFile: heard?.outputFile?.path, pane: watch.probe.pane)
         }
         finish()
         reply(.success(WaitResult(reason: reason, children: children)))

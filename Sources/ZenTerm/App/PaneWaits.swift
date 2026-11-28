@@ -31,9 +31,9 @@ final class PaneWaits {
         pending.filter { closed.contains($0.watched.surfaceID) }.forEach { $0.closed() }
     }
 
-    func sent(to surface: SurfaceID) {
-        pending.filter { $0.caller == surface }.forEach { $0.messageArrived() }
-        childrenWaits.filter { $0.caller == surface }.forEach { $0.messageArrived() }
+    func sent(to surface: SurfaceID, from sender: Int?) {
+        pending.filter { $0.caller == surface }.forEach { $0.messageArrived(from: sender) }
+        childrenWaits.filter { $0.caller == surface }.forEach { $0.messageArrived(from: sender) }
     }
 
     private func track(_ wait: PaneWait) {

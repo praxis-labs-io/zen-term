@@ -17,6 +17,12 @@ final class WaitCommandTests: XCTestCase {
         XCTAssertEqual(plain.timeout, 90)
     }
 
+    func test_aTimeoutPastTheLongestWaitParses_forTheAppToCap() throws {
+        let wait = try XCTUnwrap(try Zen.parseAsRoot(["wait", "34", "--timeout", "900"]) as? WaitCommand)
+        XCTAssertEqual(wait.timeout, 900)
+        XCTAssertEqual(ControlClient.replyTimeout(for: .paneWait, ControlArgs(pane: 34, timeout: 900)), 610)
+    }
+
     func test_childrenTakesThePlaceOfAPane() throws {
         let wait = try XCTUnwrap(try Zen.parseAsRoot(["wait", "--children", "all"]) as? WaitCommand)
         XCTAssertNil(wait.pane)
@@ -41,10 +47,9 @@ final class WaitCommandTests: XCTestCase {
         XCTAssertEqual(ControlClient.replyTimeout(for: .sshAskpass, ControlArgs()), ControlWire.longestLoginAnswer + 10)
     }
 
-    func test_aMissingPaneOrAnOutOfRangeTimeoutIsAUsageError() {
+    func test_aMissingPaneOrATimeoutUnderASecondIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(parsing: ["wait"]), 2)
         XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--timeout", "0"]), 2)
-        XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--timeout", "601"]), 2)
         XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--output", ""]), 2)
         XCTAssertEqual(Zen.exitCode(parsing: ["wait", "34", "--output", "built\nready"]), 2)
     }

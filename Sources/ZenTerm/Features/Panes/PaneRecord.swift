@@ -5,4 +5,5 @@ struct PaneRecord: Equatable {
     var parent: Int?
     var firstTask: FirstTask?
     var outlivesParent = false
+    var closesOnExit = false
 }

@@ -635,8 +635,13 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
         onSurfaceExited?(s)
-        guard exitHold.closesOnExit(id), tokenByLeaf[id] != nil else { return closePane(id) }
-        exitHold.recordExit(id, lastLines: s.text(lastLines: LaunchedExitHold<PaneID>.tailLines))
+        guard exitHold.closesOnExit(id), let token = tokenByLeaf[id] else { return closePane(id) }
+        let lastLines = s.text(lastLines: LaunchedExitHold<PaneID>.tailLines)
+        RunOutput.save(s, token: token) { [weak self] in self?.exited(id, lastLines: lastLines, outputFile: $0) }
+    }
+
+    private func exited(_ id: PaneID, lastLines: String?, outputFile: URL?) {
+        exitHold.recordExit(id, lastLines: lastLines, outputFile: outputFile)
         if exitHold.hasMark(id) { return closeExited(id) }
         DispatchQueue.main.asyncAfter(deadline: .now() + LaunchedExitHold<PaneID>.markGrace) { [weak self] in
             self?.closeExited(id)
@@ -648,7 +653,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         onLaunchedPaneExited?(
             LaunchedPaneExit(
                 token: token, record: recordByLeaf[id] ?? PaneRecord(), exitCode: exit.exitCode,
-                lastLines: exit.lastLines))
+                lastLines: exit.lastLines, outputFile: exit.outputFile))
         closePane(id)
     }
 

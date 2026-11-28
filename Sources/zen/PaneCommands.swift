@@ -58,7 +58,9 @@ struct PaneCommands: ParsableCommand {
         @Flag(help: "Then wait on the pane as zen wait does, and print why as JSON.")
         var wait = false
 
-        @Option(help: "With --wait, seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
+        @Option(
+            help: ArgumentHelp(
+                "With --wait, seconds to wait before answering timeout, capped at \(ControlWire.longestPaneWait)."))
         var timeout: Int = ControlWire.defaultPaneWait
 
         @Option(
@@ -96,9 +98,7 @@ struct PaneCommands: ParsableCommand {
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")
             }
-            guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-                throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
-            }
+            guard timeout >= 1 else { throw ValidationError("--timeout must be at least 1.") }
             if output != nil, !wait { throw ValidationError("--output needs --wait.") }
             if output?.isEmpty == true { throw ValidationError("--output must not be empty.") }
             if output?.contains(where: \.isNewline) == true {
@@ -119,7 +119,7 @@ struct PaneCommands: ParsableCommand {
             var client = try connection.client()
             client.replyTimeout = ControlClient.replyTimeout(for: .paneRun, args)
             if wait {
-                print(try JSONOutput.text(client.send(.paneRun, args, expecting: WaitResult.self)))
+                try WaitAnswer.print(client.send(.paneRun, args, expecting: WaitResult.self))
             } else {
                 print(try JSONOutput.text(client.send(.paneRun, args, expecting: PaneRunResult.self)))
             }
@@ -227,14 +227,14 @@ struct PaneCommands: ParsableCommand {
         @Flag(help: "Then wait on the pane as zen wait does, and print why as JSON.")
         var wait = false
 
-        @Option(help: "With --wait, seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
+        @Option(
+            help: ArgumentHelp(
+                "With --wait, seconds to wait before answering timeout, capped at \(ControlWire.longestPaneWait)."))
         var timeout: Int = ControlWire.defaultPaneWait
 
         func validate() throws {
             if trailing != nil, paneOption != nil { throw PaneTarget.namedTwice }
-            guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-                throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
-            }
+            guard timeout >= 1 else { throw ValidationError("--timeout must be at least 1.") }
         }
 
         func run() throws {
@@ -243,7 +243,7 @@ struct PaneCommands: ParsableCommand {
             var client = try connection.client()
             if wait {
                 client.replyTimeout = ControlClient.replyTimeout(for: .paneSend, args)
-                print(try JSONOutput.text(client.send(.paneSend, args, expecting: WaitResult.self)))
+                try WaitAnswer.print(client.send(.paneSend, args, expecting: WaitResult.self))
             } else if try client.send(.paneSend, args, expecting: PaneSendResult.self).queued == true {
                 print(try JSONOutput.text(PaneSendResult(queued: true)))
             }

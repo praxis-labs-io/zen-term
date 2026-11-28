@@ -9,9 +9,11 @@ final class PaneWait {
     static let exitLines = 40
 
     struct Watched {
+        let token: Int
         let surfaceID: SurfaceID
         weak var surface: TerminalSurface?
         let readsForeground: Bool
+        let closesOnExit: Bool
         let pane: () -> ListResult.Pane?
         let exit: () -> LaunchedPaneExit?
         let awaitsQueuedTask: () -> Bool
@@ -21,6 +23,7 @@ final class PaneWait {
         let reason: WaitReason
         let exitCode: Int?
         let text: String?
+        let outputFile: URL?
         let pane: ListResult.Pane
     }
 
@@ -72,28 +75,35 @@ final class PaneWait {
         answer(.stopped)
     }
 
+    // A pane that closes on exit answers as it closes, once its output is saved.
     func commandFinished(exitCode: Int?) {
         if sawOutput() { return answer(.output) }
+        guard !watched.closesOnExit else { return }
         answer(.exited, exitCode: exitCode, text: Self.lastLines(of: watched.surface))
     }
 
     func closed() {
         let exit = watched.exit()
-        answer(.exited, exitCode: exit?.exitCode, text: exit?.lastLines)
+        answer(.exited, exitCode: exit?.exitCode, text: exit?.lastLines, outputFile: exit?.outputFile)
     }
 
     func answers(_ reason: WaitReason) -> Bool {
         reason != .stopped || (output == nil && !watched.awaitsQueuedTask())
     }
 
-    func messageArrived() { answer(.message) }
+    // Only the pane waited on speaks for it; anything else reaches the caller as input and leaves the wait standing.
+    func messageArrived(from sender: Int?) {
+        guard sender == watched.token else { return }
+        answer(.message)
+    }
 
     func cancel() { finish() }
 
     private func check() {
         if let pane = watched.pane() { lastPane = pane }
         if sawOutput() { return answer(.output) }
-        guard watched.readsForeground, let group = watched.surface?.foregroundProcessGroupID else { return }
+        guard watched.readsForeground, !watched.closesOnExit, let group = watched.surface?.foregroundProcessGroupID
+        else { return }
         if backAtShell, ForegroundGroup.isShell(group) {
             return answer(.exited, text: Self.lastLines(of: watched.surface))
         }
@@ -106,11 +116,11 @@ final class PaneWait {
         output?.sawNeedle(in: watched.surface) == true
     }
 
-    private func answer(_ reason: WaitReason, exitCode: Int? = nil, text: String? = nil) {
+    private func answer(_ reason: WaitReason, exitCode: Int? = nil, text: String? = nil, outputFile: URL? = nil) {
         guard let reply else { return }
         let pane = pane
         if !keepsWatching || reason == .exited { finish() }
-        reply(Answer(reason: reason, exitCode: exitCode, text: text, pane: pane))
+        reply(Answer(reason: reason, exitCode: exitCode, text: text, outputFile: outputFile, pane: pane))
     }
 
     private func finish() {

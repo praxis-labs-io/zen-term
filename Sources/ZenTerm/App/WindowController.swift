@@ -3717,7 +3717,7 @@ final class WindowController: NSObject {
 
     private func helperExited(_ exit: LaunchedPaneExit) {
         guard let (_, pane) = pane(token: exit.token) else { return }
-        noteHelper(pane.surfaceID, .exited(code: exit.exitCode), answering: .exited)
+        noteHelper(pane.surfaceID, .exited(code: exit.exitCode, outputFile: exit.outputFile?.path), answering: .exited)
     }
 
     // The banner lands on `owner`: a hidden Scratch asking for input is usually not in the active tab.

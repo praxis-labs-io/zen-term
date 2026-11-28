@@ -13,6 +13,7 @@ final class ControlPaneRunTests: WindowTestCase {
     private var spawned: [RecordingSurface] = []
     private var raised: [WindowController] = []
     private let originalPresence = WindowController.isPresent
+    private let waits = PaneWaits()
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -46,6 +47,7 @@ final class ControlPaneRunTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             initialCWD: FileManager.default.temporaryDirectory, firstTaskWindow: firstTaskWindow)
         c.appWindows = { [weak self] in self?.controllers ?? [] }
+        c.paneWaits = waits
         c.mountAndStart()
         c.window.contentView?.layoutSubtreeIfNeeded()
         controllers.append(c)
@@ -54,7 +56,8 @@ final class ControlPaneRunTests: WindowTestCase {
 
     private var responder: ControlResponder {
         var responder = ControlResponder(
-            windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first })
+            windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first },
+            paneWaits: waits)
         responder.bringForward = { [unowned self] in raised.append($0) }
         return responder
     }
@@ -324,7 +327,7 @@ final class ControlPaneRunTests: WindowTestCase {
     }
 
     func test_aCallersExitedName_answersItsWait_andStopsOtherVerbsReachingAnotherCallersPane() throws {
-        _ = makeWindow()
+        let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
         let other = try run(ControlArgs(cmd: "htop", split: .right), from: caller).pane
         let mine = try run(ControlArgs(cmd: "npm test", name: "tests", float: false), from: caller).pane
@@ -332,6 +335,7 @@ final class ControlPaneRunTests: WindowTestCase {
         let helper = try surface(mine)
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(c.launchedPaneExits.exit(of: mine) != nil, "the pane to close")
 
         let waited = try XCTUnwrap(
             try answer(.paneWait, ControlArgs(pane: .name("tests")), from: caller).get() as? WaitResult)
@@ -540,12 +544,165 @@ final class ControlPaneRunTests: WindowTestCase {
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
 
-        XCTAssertEqual(everyPane(c).map(\.token), [caller])
+        waitUntil(everyPane(c).map(\.token) == [caller], "the pane to close")
         let exit = try XCTUnwrap(c.launchedPaneExits.exit(of: opened.pane))
         XCTAssertEqual(exit.exitCode, 3)
         XCTAssertEqual(exit.record.name, "tests")
         XCTAssertEqual(exit.record.parent, caller)
         XCTAssertTrue(exit.lastLines?.hasPrefix("FAIL x.test.ts") == true, "\(String(describing: exit.lastLines))")
+    }
+
+    func test_aLaunchedPaneSavesItsOutput_andTheWaitAnswerGivesItsPath() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let opened = try run(ControlArgs(cmd: "swift test", name: "tests", split: .right), from: caller)
+        let helper = try surface(opened.pane)
+        helper.scrollback = ["FAIL test_theFirstOne"] + (1...60).map { "line \($0)" }
+
+        let file = try exitAndWait(helper, opened.pane, in: c, from: caller, expecting: 1)
+
+        let saved = try String(contentsOfFile: file, encoding: .utf8)
+        XCTAssertTrue(saved.hasPrefix("FAIL test_theFirstOne\nline 1\n"), saved)
+        XCTAssertTrue(saved.contains("line 60\n"), saved)
+        XCTAssertFalse(saved.contains(RunOutput.cutNotice), "nothing was cut")
+        let mode = try FileManager.default.attributesOfItem(atPath: file)[.posixPermissions] as? Int
+        XCTAssertEqual(mode, 0o600)
+    }
+
+    func test_aLaunchedPaneSavesOnlyItsLastScreenLines_andSaysEarlierOutputWasNotSaved() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let opened = try run(ControlArgs(cmd: "swift test", name: "tests", split: .right), from: caller)
+        let helper = try surface(opened.pane)
+        helper.rows = Array(repeating: "", count: 24)
+        helper.scrollback = (1...2500).map { "line \($0)" }
+        let firstKept = helper.scrollback.count + helper.rows.count - RunOutput.savedRows
+        helper.recordingGrid.wrappingRows = [firstKept - 1]
+
+        let file = try exitAndWait(helper, opened.pane, in: c, from: caller, expecting: 0)
+
+        let saved = try String(contentsOfFile: file, encoding: .utf8).components(separatedBy: "\n")
+        XCTAssertEqual(saved.first, RunOutput.cutNotice)
+        XCTAssertEqual(saved.dropFirst().first, "line \(firstKept + 2)", "a line cut through its wrap is dropped")
+        XCTAssertEqual(saved.dropLast().last, "line 2500")
+        XCTAssertLessThanOrEqual(saved.count - 2, RunOutput.savedRows)
+    }
+
+    private func exitAndWait(
+        _ helper: RecordingSurface, _ pane: Int, in c: WindowController, from caller: Int, expecting code: Int
+    ) throws -> String {
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: code, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(everyPane(c).map(\.token) == [caller], "the pane to close")
+        let got = try XCTUnwrap(try answer(.paneWait, ControlArgs(pane: .token(pane))).get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, code)
+        let file = try XCTUnwrap(got.outputFile)
+        XCTAssertTrue(file.hasPrefix(try XCTUnwrap(RunOutput.folderOverrideForTesting).path), file)
+        return file
+    }
+
+    func test_aWaitStartedBetweenAPanesExitAndItsCloseAnswersExited() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let mine = try run(ControlArgs(cmd: "npm test", name: "tests", float: false), from: caller).pane
+        let helper = try surface(mine)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        let byToken = send(.paneWait, ControlArgs(pane: .token(mine)), from: caller)
+        let byName = send(.paneWait, ControlArgs(pane: .name("tests")), from: caller)
+        let any = send(.paneWait, ControlArgs(children: .any), from: caller)
+
+        for reply in [byToken, byName] {
+            waitUntil(reply() != nil, "the wait's answer")
+            let got = try XCTUnwrap(try reply()?.get() as? WaitResult)
+            XCTAssertEqual(got.reason, .exited)
+            XCTAssertEqual(got.exitCode, 3)
+            XCTAssertNotNil(got.outputFile)
+        }
+        waitUntil(any() != nil, "the children wait's answer")
+        let children = try XCTUnwrap(try any()?.get() as? WaitResult)
+        XCTAssertEqual(children.reason, .exited)
+        XCTAssertEqual(children.children?.first?.exitCode, 3)
+        XCTAssertNotNil(children.children?.first?.outputFile)
+    }
+
+    func test_aWaitStartedBetweenASplitPanesExitAndItsCloseAnswersExited() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let mine = try run(ControlArgs(cmd: "npm test", name: "tests", split: .right), from: caller).pane
+        let helper = try surface(mine)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        let reply = send(.paneWait, ControlArgs(pane: .token(mine)), from: caller)
+
+        waitUntil(reply() != nil, "the wait's answer")
+        let got = try XCTUnwrap(try reply()?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 3)
+        XCTAssertNotNil(got.outputFile)
+    }
+
+    func test_aWaitStartedBetweenAFloatPanesExitAndItsCloseAnswersExited() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let caller = try token(of: parent)
+        waitUntil(c.hasAgent(atOrAbove: caller), "the caller to run an agent")
+        let mine = try run(ControlArgs(cmd: "npm test", name: "tests", float: true), from: caller).pane
+        let helper = try surface(mine)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        let reply = send(.paneWait, ControlArgs(pane: .name("tests")), from: caller)
+
+        waitUntil(reply() != nil, "the wait's answer")
+        let got = try XCTUnwrap(try reply()?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 3)
+        XCTAssertNotNil(got.outputFile)
+    }
+
+    func test_aWaitStartedInTheGraceOfAPaneWithNoExitMarkAnswersExited() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let caller = try token(of: parent)
+        waitUntil(c.hasAgent(atOrAbove: caller), "the caller to run an agent")
+        let mine = try run(ControlArgs(cmd: "npm test", name: "tests", float: true), from: caller).pane
+        let helper = try surface(mine)
+
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        let reply = send(.paneWait, ControlArgs(pane: .name("tests")), from: caller)
+
+        waitUntil(reply() != nil, "the wait's answer", timeout: 2)
+        let got = try XCTUnwrap(try reply()?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertNotNil(got.outputFile)
+    }
+
+    func test_onlyTheNewestRunOutputsAreKept() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let folder = try XCTUnwrap(RunOutput.folderOverrideForTesting)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for stamp in 1...LaunchedPaneExits.kept {
+            try Data("old".utf8).write(to: folder.appendingPathComponent("\(stamp)-1.txt"))
+        }
+        let opened = try run(ControlArgs(cmd: "npm test", split: .right), from: caller)
+        let helper = try surface(opened.pane)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+
+        waitUntil(everyPane(c).count == 1, "the pane to close")
+        let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        XCTAssertEqual(names.count, LaunchedPaneExits.kept)
+        XCTAssertFalse(names.contains("1-1.txt"), "the oldest goes")
+        let kept = try XCTUnwrap(c.launchedPaneExits.exit(of: opened.pane)?.outputFile)
+        XCTAssertTrue(names.contains(kept.lastPathComponent))
     }
 
     func test_aLaunchedPaneWhoseExitMarkTrailsItsExitStaysOpenForTheMark_andKeepsItsCode() throws {
@@ -558,7 +715,7 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(everyPane(c).map(\.token), [caller, opened.pane], "closed before its exit mark could land")
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
 
-        XCTAssertEqual(everyPane(c).map(\.token), [caller])
+        waitUntil(everyPane(c).map(\.token) == [caller], "the pane to close")
         XCTAssertEqual(c.launchedPaneExits.exit(of: opened.pane)?.exitCode, 3)
     }
 
@@ -584,7 +741,7 @@ final class ControlPaneRunTests: WindowTestCase {
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
 
-        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).count, 1)
+        waitUntil(c.listing().workspaces.flatMap(\.tabs).count == 1, "the tab to close")
         XCTAssertNotNil(c.launchedPaneExits.exit(of: opened.pane))
     }
 
@@ -1013,6 +1170,22 @@ final class ControlPaneRunTests: WindowTestCase {
         let got = try XCTUnwrap(try XCTUnwrap(reply()).get() as? WaitResult)
         XCTAssertEqual(got.reason, .output)
         XCTAssertEqual(got.pane?.name, "dev")
+    }
+
+    func test_runWaitWithATimeoutPastTheLongestStillRuns_andItsAnswerSaysTheWaitWasCapped() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let args = ControlArgs(cmd: "bin/check", name: "check", output: "passed", timeout: 900, wait: true)
+        let reply = send(.paneRun, args, from: caller)
+        let check = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(spawned.count, 2, "the run opened its pane")
+
+        check.rows = ["$ bin/check", "passed"]
+
+        waitUntil(reply() != nil, "the run to answer")
+        let got = try XCTUnwrap(try XCTUnwrap(reply()).get() as? WaitResult)
+        XCTAssertEqual(got.reason, .output)
+        XCTAssertEqual(got.timeoutCapped, ControlWire.longestPaneWait)
     }
 
     func test_runOutputNeedsWaitAndOneLine() throws {

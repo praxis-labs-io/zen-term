@@ -1,6 +1,6 @@
 struct LaunchedPaneExits {
     // Tokens only grow, so the smallest held is the oldest exit.
-    private static let kept = 64
+    static let kept = 64
     private var byToken: [Int: LaunchedPaneExit] = [:]
 
     mutating func record(_ exit: LaunchedPaneExit) {

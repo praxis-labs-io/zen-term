@@ -6,8 +6,11 @@ struct WaitCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "wait",
         abstract:
-            "Wait until a pane's agent stops, its program exits, text appears, or this pane is sent something, "
-            + "and print why as JSON. --children waits on the helpers this pane started instead.")
+            "Wait until a pane's agent stops, its program exits, text appears, or it sends this pane something, "
+            + "and print why as JSON. --children waits on the helpers this pane started instead.",
+        discussion:
+            "Exits 0 when the program exited 0, the text appeared or the agent stopped, 4 when the program exited "
+            + "with another code or none, 5 on timeout and 6 on a message.")
 
     @OptionGroup var connection: ConnectionOptions
 
@@ -26,7 +29,7 @@ struct WaitCommand: ParsableCommand {
 
     @Option(
         help: ArgumentHelp(
-            "Seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait). "
+            "Seconds to wait before answering timeout, capped at \(ControlWire.longestPaneWait). "
                 + "The default answers under the 2-minute default of agents' shell tools."))
     var timeout: Int = ControlWire.defaultPaneWait
 
@@ -38,9 +41,7 @@ struct WaitCommand: ParsableCommand {
         default: break
         }
         if children == .all, output != nil { throw ValidationError("--output takes a pane or --children any.") }
-        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-            throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
-        }
+        guard timeout >= 1 else { throw ValidationError("--timeout must be at least 1.") }
         if output?.isEmpty == true { throw ValidationError("--output must not be empty.") }
         if output?.contains(where: \.isNewline) == true {
             throw ValidationError("--output matches within one line, so it takes no newline.")
@@ -51,6 +52,6 @@ struct WaitCommand: ParsableCommand {
         let args = ControlArgs(pane: pane, output: output, timeout: timeout, children: children)
         var client = try connection.client()
         client.replyTimeout = ControlClient.replyTimeout(for: .paneWait, args)
-        print(try JSONOutput.text(client.send(.paneWait, args, expecting: WaitResult.self)))
+        try WaitAnswer.print(client.send(.paneWait, args, expecting: WaitResult.self))
     }
 }

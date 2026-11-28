@@ -274,7 +274,7 @@ extension ControlResponder {
         if overDraft, let stash = place.window.draftStash(of: place.pane) { surface.press(stash) }
         if !text.isEmpty { pastes(text, from: sender, into: place).forEach(surface.paste) }
         if enter { surface.submit() }
-        paneWaits.sent(to: place.pane.surfaceID)
+        paneWaits.sent(to: place.pane.surfaceID, from: sender)
     }
 
     func pastes(_ text: String, from sender: Int?, into place: PanePlace) -> [String] {
@@ -436,10 +436,19 @@ extension ControlResponder {
 
     static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {
         let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
-        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-            return .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds."))
+        guard timeout >= 1 else { return .failure(ControlError(.badRequest, "timeout must be at least 1 second.")) }
+        return .success(min(timeout, ControlWire.longestPaneWait))
+    }
+
+    // A longer timeout holds the longest wait instead of refusing the call, so the command it carries still runs.
+    static func reportingCappedTimeout(
+        of request: ControlRequest, _ reply: @escaping (ControlReply) -> Void
+    ) -> (ControlReply) -> Void {
+        guard let asked = request.args.timeout, asked > ControlWire.longestPaneWait else { return reply }
+        return { answer in
+            guard case .success(let result as WaitResult) = answer else { return reply(answer) }
+            reply(.success(result.capped(at: ControlWire.longestPaneWait)))
         }
-        return .success(timeout)
     }
 
     @discardableResult
@@ -449,7 +458,11 @@ extension ControlResponder {
     ) -> PaneWait? {
         let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
         let answered: (PaneWait.Answer) -> Void = {
-            reply(.success(WaitResult(reason: $0.reason, exitCode: $0.exitCode, text: $0.text, pane: $0.pane)))
+            reply(
+                .success(
+                    WaitResult(
+                        reason: $0.reason, exitCode: $0.exitCode, text: $0.text, outputFile: $0.outputFile?.path,
+                        pane: $0.pane)))
         }
         guard let wait = PaneWait(watched(place), caller: caller, output: output, reply: answered) else {
             reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
@@ -489,7 +502,8 @@ extension ControlResponder {
         let token = place.pane.token
         let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
         return PaneWait.Watched(
-            surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+            token: token, surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+            closesOnExit: place.pane.record.closesOnExit,
             pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } },
             exit: { [self] in launchedExit(of: token) },
             awaitsQueuedTask: { [paneDrafts, surfaceID = place.pane.surfaceID] in
@@ -516,7 +530,9 @@ extension ControlResponder {
     }
 
     static func exited(_ exit: LaunchedPaneExit) -> WaitResult {
-        WaitResult(reason: .exited, exitCode: exit.exitCode, text: exit.lastLines, pane: exit.pane ?? closedPane(exit))
+        WaitResult(
+            reason: .exited, exitCode: exit.exitCode, text: exit.lastLines, outputFile: exit.outputFile?.path,
+            pane: exit.pane ?? closedPane(exit))
     }
 
     private static func closedPane(_ exit: LaunchedPaneExit) -> ListResult.Pane {

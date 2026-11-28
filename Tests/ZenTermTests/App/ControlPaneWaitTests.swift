@@ -80,8 +80,9 @@ final class ControlPaneWaitTests: WindowTestCase {
         return answer
     }
 
-    private func send(_ cmd: ControlCommand, _ args: ControlArgs) {
-        responder.respond(to: ControlRequest(id: 2, cmd: cmd, args: args)) { _ in }
+    private func send(_ cmd: ControlCommand, _ args: ControlArgs, from sender: Int? = nil) {
+        let caller = sender.map { ControlCaller(pane: $0) }
+        responder.respond(to: ControlRequest(id: 2, cmd: cmd, args: args, caller: caller)) { _ in }
     }
 
     private func result(_ answer: Answer, within timeout: TimeInterval = 2) throws -> WaitResult {
@@ -104,6 +105,23 @@ final class ControlPaneWaitTests: WindowTestCase {
 
     private func settle(_ seconds: TimeInterval) {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    func test_aTimeoutPastTheLongestWaitsTheLongest_andTheAnswerSaysItWasCapped() throws {
+        makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.working, from: agent)
+        let longest = ControlWire.longestPaneWait
+        let asked = ControlRequest(id: 1, cmd: .paneWait, args: ControlArgs(pane: 1, timeout: longest + 300))
+        XCTAssertEqual(try ControlResponder.waitTimeout(asked).get(), longest)
+        let answer = wait(on: try token(of: agent), timeout: longest + 300)
+
+        report(.done, from: agent)
+
+        let got = try result(answer)
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(got.timeoutCapped, longest)
+        XCTAssertNil(try result(wait(on: try token(of: agent), timeout: 1), within: 3).timeoutCapped)
     }
 
     func test_aWorkingAgentThatFinishesAnswersStopped_withItsPaneAsPaneGetReportsIt() throws {
@@ -179,18 +197,25 @@ final class ControlPaneWaitTests: WindowTestCase {
         XCTAssertNil(got.exitCode)
     }
 
-    func test_textSentToTheWaitingCallersOwnPaneAnswersMessage() throws {
+    func test_textThePaneWaitedOnSendsTheCallerAnswersMessage_andTextFromAnyoneElseDoesNot() throws {
         makeWindow()
         let caller = try XCTUnwrap(spawned.first)
         send(.paneSplit, ControlArgs(pane: .token(try token(of: caller)), dir: .right))
         let helper = try XCTUnwrap(spawned.last)
+        send(.paneSplit, ControlArgs(pane: .token(try token(of: caller)), dir: .down))
+        let other = try XCTUnwrap(spawned.last)
         let answer = wait(on: try token(of: helper), from: try token(of: caller))
 
         send(.paneSend, ControlArgs(pane: .token(try token(of: helper)), text: "to the helper"))
+        send(.paneSend, ControlArgs(pane: .token(try token(of: caller)), text: "from a shell"))
+        let toCaller = ControlArgs(pane: .token(try token(of: caller)), text: "lint: clean")
+        send(.paneSend, toCaller, from: try token(of: other))
         settle(0.3)
-        XCTAssertNil(answer.reply, "a send to the pane waited on is not a message for the caller")
+        XCTAssertNil(answer.reply, "only the pane waited on speaks for it")
+        XCTAssertTrue(caller.inputs.contains(.paste("from a shell")), "the text still reaches the caller")
 
-        send(.paneSend, ControlArgs(pane: .token(try token(of: caller)), text: "done: 2 bugs"))
+        let fromHelper = ControlArgs(pane: .token(try token(of: caller)), text: "done: 2 bugs")
+        send(.paneSend, fromHelper, from: try token(of: helper))
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .message)
@@ -285,12 +310,11 @@ final class ControlPaneWaitTests: WindowTestCase {
         XCTAssertNil(answer.reply)
     }
 
-    func test_aWaitNeedsAPaneThatExists_aTimeoutInRange_andTextToWaitFor() throws {
+    func test_aWaitNeedsAPaneThatExists_aTimeoutOfASecondOrMore_andTextToWaitFor() throws {
         makeWindow()
         let pane = try token(of: try XCTUnwrap(spawned.first))
         let cases: [(Answer, ControlErrorCode)] = [
             (wait(on: nil), .badRequest), (wait(on: pane, timeout: 0), .badRequest),
-            (wait(on: pane, timeout: ControlWire.longestPaneWait + 1), .badRequest),
             (wait(on: pane, output: ""), .badRequest), (wait(on: pane, output: "built\nready"), .badRequest),
             (wait(on: 9999), .notFound),
         ]

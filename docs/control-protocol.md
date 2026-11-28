@@ -445,7 +445,7 @@ with `enter` sends it:
 | `stopped` | The child's `status` left `working`, but not to `blocked`. | `review stopped (done): read it with zen pane read --pane 34`           |
 | `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
 | `resumed` | The child's `status` went from `blocked` to `working`.     | `review is working again; wait on it with zen wait 34`                  |
-| `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
+| `exited`  | Its program exited, closing its pane.                      | `review exited with code 1, output in /Users/me/Library/Caches/ZenTerm/run-output/1764300000000-34.txt` |
 
 - A child without a name is `pane 34`. `blocked` names `a permission prompt` or `a login` when
   the program says which. A child blocked on a question sends
@@ -527,7 +527,7 @@ Returns one pane or drawer in the shape `list` uses, without the tree around it.
 
 ### `pane.wait`
 
-`args`: `pane` or `children` (`any` or `all`), `output`, `timeout` (seconds, 1 to 600, 90 by default, under the 2-minute default of agents' shell tools).
+`args`: `pane` or `children` (`any` or `all`), `output`, `timeout` (seconds, at least 1, 90 by default, under the 2-minute default of agents' shell tools). A longer `timeout` than 600 waits 600, and the answer carries `timeoutCapped: 600`, on `pane.send` and `pane.run` with `wait` too.
 
 Holds until something happens to the pane, then answers once with why:
 
@@ -536,11 +536,12 @@ Holds until something happens to the pane, then answers once with why:
 | `stopped` | The agent's `status` left `working`. Without `output` only. |
 | `exited`  | Its program exited, or the pane closed. |
 | `output`  | `output` appeared in text printed after the wait began. |
-| `message` | A `pane.send`, or a child's note, reached the caller's own pane. |
+| `message` | The pane waited on sent the caller's own pane a `pane.send` or a note. Anything else sent there still arrives, and leaves the wait standing. |
 | `timeout` | Nothing happened within `timeout`. A check-in, not a failure: wait again. |
 
 ```json
 {"reason":"exited","exitCode":1,"text":"$ make test\n1 test failed",
+ "outputFile":"/Users/me/Library/Caches/ZenTerm/run-output/1764300000000-34.txt",
  "pane":{"token":34,"title":"make test","busy":false,...}}
 ```
 
@@ -554,10 +555,14 @@ Holds until something happens to the pane, then answers once with why:
   `pane.run` opened it.
 - `output` is matched within one line, a soft-wrapped line read as one, without escapes, so a
   newline in it is a `bad_request`.
-- A pane `pane.run` opened closes when its program exits, and a wait on it still answers
-  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
-  A name then reaches the most recent such pane with that name, `caller.pane`'s own first. The app keeps the 64 most
-  recent such exits; an older one is `not_found`.
+- A pane `pane.run` opened closes when its program exits, and a wait on it answers `exited` as
+  it closes, with the `exitCode` and `text` read then, also when the wait begins after.
+  `outputFile` is the path of its last 2,000 screen lines, a wrapped line counting once per row,
+  saved in `~/Library/Caches/ZenTerm/run-output` before it closes and readable only by the user.
+  When earlier output was cut, the file's first line says so. A pane run with `keep` saves none.
+  A name then reaches the most recent such pane with that name, `caller.pane`'s own first. The
+  app keeps the 64 most recent such exits, and their 64 most recent output files; an older exit
+  is `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
 begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
@@ -574,7 +579,8 @@ with `enter` other than a slash command, counts as working until its `status` mo
 or `done`, clears, or its agent exits, so `all` does not answer before it starts on the task. A
 child with such a send queued for its person's draft counts as working until the send arrives.
 With `all`, each child's `reason` is its latest news while the wait held, so a child that
-stopped and then exited answers `exited` with its `exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+stopped and then exited answers `exited` with its `exitCode` and `text`. `message` answers when a child sends the
+caller something, and `timeout` as it does for a pane, and `output` is a
 `bad_request` with `all`.
 
 ```json
@@ -584,7 +590,7 @@ stopped and then exited answers `exited` with its `exitCode` and `text`. `messag
 ```
 
 `children` lists every child the wait watched, each with its `pane` as `pane.get` reports it, or
-as it was last read once it closed. A child's `reason`, `exitCode` and `text` are its own news
+as it was last read once it closed. A child's `reason`, `exitCode`, `text` and `outputFile` are its own news
 during the wait, absent when it had none. The answer has no `pane`. A caller with no children
 gets `{"reason":"no_children","children":[]}` at once. A request without `caller.pane` is a
 `bad_request`.
@@ -669,7 +675,10 @@ indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or did
 answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, 10 minutes 10 seconds as askpass, and
 the `--timeout` plus 10 seconds for `zen wait` and `zen pane send --wait`, or 70 more for
 `zen pane run --wait`), 2 usage,
-3 no instance or the connection failed.
+3 no instance or the connection failed. A wait (`zen wait`, `zen pane send --wait`, `zen pane run --wait`) prints
+its answer, then exits 0 for `stopped`, `output`, `no_children` or `exited` with `exitCode` 0, 4 for `exited` with
+any other `exitCode` or none, 5 for `timeout` and 6 for `message`. A wait on `children` exits 4 when any child's
+`reason` is such an `exited`, unless the wait answered `timeout` or `message`.
 
 `zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
 `0.0.0+src` for a build from source. A response whose `v` is newer than the protocol `zen`
@@ -680,7 +689,7 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 `zen tab new|select|rename|close`, `zen pane run|split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
-`--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
+`--output` and `--timeout`, and prints the answer as JSON.
 With `ZEN_ASKPASS_TOKEN` set, exactly one argument and a parent named `ssh`, `zen` is ssh's askpass: it sends the
 argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's pid, prints
 the answer, and exits 0. It never reads stdin. With `SSH_ASKPASS_PROMPT=confirm` it exits 1
