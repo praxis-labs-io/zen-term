@@ -25,7 +25,8 @@ If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
 - `zen pane get` prints your pane as JSON. `name` and `parent` are there when
   another pane started you with `zen pane run`: you are its helper.
 - `zen list --pretty` prints every window, workspace, tab, pane and drawer as a
-  tree. `zen list` prints the same as JSON.
+  tree, with each pane's name, and marks your pane `you`. `zen list` prints the
+  tree as JSON, without the `you` mark.
 - Addresses: a pane is its token (`31`) or its name (`tests`), a tab is
   `w1.t3`, a workspace is its folder (starting with `/`, `~` or `.`),
   `ssh:<host>`, or its title.

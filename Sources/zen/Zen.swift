@@ -36,8 +36,9 @@ struct Zen: ParsableCommand {
         var pretty = false
 
         func run() throws {
-            let list = try connection.client().send(.list, expecting: ListResult.self)
-            print(pretty ? ListTree.text(list) : try JSONOutput.text(list))
+            let client = try connection.client()
+            let list = try client.send(.list, expecting: ListResult.self)
+            print(pretty ? ListTree.text(list, caller: client.caller?.pane) : try JSONOutput.text(list))
         }
     }
 
