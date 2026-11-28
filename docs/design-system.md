@@ -250,6 +250,8 @@ A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, liv
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 
+A form that opens beside the control that opened it, rather than in Settings, is a `PopoverForm` in `ListPopover.open(content:)`: a header with a trailing control, a status line, `SectionCaption` sections, and a checklist of `ListRow`s under the transient-list rules. Tab walks the header's control, each section's control, then the checklist.
+
 A form or row's message line is a `FormErrorLabel`, in its destructive, warning or muted tone.
 
 A centered message that wraps is a `BalancedLabel`: its lines come out of similar width, and it never truncates.

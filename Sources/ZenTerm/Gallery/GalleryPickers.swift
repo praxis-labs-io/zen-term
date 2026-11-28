@@ -5,7 +5,7 @@
         static let width: CGFloat = 220
 
         static func sections() -> [GallerySection] {
-            [listRows(), focusRows(), dropdowns(), segmentedControls()]
+            [listRows(), focusRows(), dropdowns(), segmentedControls(), GalleryPopoverForm.section()]
         }
 
         static func liveDropdown() -> Dropdown {
