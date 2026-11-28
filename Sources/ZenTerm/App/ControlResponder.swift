@@ -13,6 +13,7 @@ struct ControlResponder {
     var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
     var paneWaits = PaneWaits()
     var paneDrafts = PaneDrafts()
+    var keepAwake: KeepAwake?
     var interruptGroup: (pid_t) -> Bool = ControlResponder.interrupt(group:)
 
     func respond(
@@ -44,6 +45,9 @@ struct ControlResponder {
         case .worktreeCreate: createWorktree(request, reply: reply)
         case .worktreeRemove: removeWorktree(request, reply: reply)
         case .action: reply(performAction(request))
+        case .awakeOn: reply(holdAwake(request))
+        case .awakeOff: reply(endAwake(request))
+        case .awakeStatus: reply(awakeStatus(request))
         case .sshAskpass: askLogin(request, hangup: hangup, reply: reply)
         }
     }

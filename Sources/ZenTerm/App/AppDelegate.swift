@@ -69,7 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
 
         keepAwake.onRelease = { [weak self] release in
-            self?.keyController()?.showToast(WindowController.keepAwakeEndedToast(release))
+            guard let self else { return }
+            let panes = self.keepAwake.paneHolds.count
+            self.keyController()?.showToast(WindowController.keepAwakeEndedToast(release, panesHolding: panes))
         }
         paneWaits.onPendingChanged = { [weak self] in self?.keepAwake.activityChanged() }
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -115,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             bringForward: { Self.bringForward($0) },
             isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals,
             runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) }, paneWaits: paneWaits,
-            paneDrafts: paneDrafts)
+            paneDrafts: paneDrafts, keepAwake: keepAwake)
         controlResponder = responder
         let control = ControlServer { responder.respond(to: $0, hangup: $1, reply: $2) }
         control.start()

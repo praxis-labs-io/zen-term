@@ -184,6 +184,22 @@ zen worktree create my-branch    # --open also opens it as a workspace
 zen worktree remove my-branch
 ```
 
+## Keep the Mac awake
+
+```sh
+zen awake on --for 2h    # hold the Mac awake for this pane, never the display
+zen awake off            # end it as soon as the work is done
+zen awake status         # what holds the Mac awake, as JSON
+```
+
+- Hold it before long work that runs while the user is away: a build, a test suite,
+  a migration, or helpers you wait on. Skip it for work that ends in a few minutes.
+- Pass `--for` with a generous estimate, so a hold you forget still ends. Without it
+  the hold lasts until `off` or your pane exits.
+- Run `zen awake off` when the work ends, before you report. Your pane exiting ends
+  the hold too, and the user turning Keep Awake off ends every hold.
+- `on` refuses below the battery stop the user set. Don't retry it; carry on.
+
 ## Rules
 
 - Nothing you open takes the screen unless you pass `--focus`. Pass it only

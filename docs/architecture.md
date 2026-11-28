@@ -1110,8 +1110,13 @@ Tools opens a system prompt.
 
 ## Keep Awake
 
-`KeepAwake` is the app's one hold on idle sleep, owned by `AppDelegate` and handed to every
-`WindowController`, so a command in any window changes the same hold. It posts
+`KeepAwake` is the app's hold on idle sleep, owned by `AppDelegate` and handed to every
+`WindowController` and to `ControlResponder`, so a command in any window changes the same hold.
+It holds the person's own hold and one pane hold per pane that ran `zen awake on`, keyed by
+`SurfaceID` and dropped from `onSurfacesReleased` when the pane goes. One power assertion covers
+them all: the display assertion follows the person's hold alone, since a pane hold never keeps
+the display on. Turn Off and the battery stop end every hold; the person's hold ending on its
+own leaves the pane holds, and its toast says panes still hold the Mac. It posts
 `.keepAwakeDidChange` on each change, for chrome that shows the hold. On wake it re-checks its
 deadlines against the wall clock, since a run-loop timer pauses while the Mac sleeps. The IOKit power assertion, the battery reading and the timers sit behind
 `PowerAssertions`, `BatterySource` and `KeepAwakeClock`, so the state machine is tested against
