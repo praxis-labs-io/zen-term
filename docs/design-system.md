@@ -66,6 +66,7 @@ Accent is rare. It goes in these places only:
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
 - The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
+- An on `ToggleSwitch`'s track, its knob in `onAccent`.
 - Role-toned `tint` surfaces: icon badges, the Workspaces chips, focused text selection, the scroll flash.
 
 A control's focus or edit ring takes `chrome.focusRing`, a neutral. Never accent text, an
@@ -249,6 +250,8 @@ Scroll mode names itself in the header: the chip turns to `ProcessIcon.scrollMod
 A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
+
+A boolean setting is a `ToggleSwitch`, never On/Off segments: off is a `fill(.active)` track with its knob in the control's ink, on is the accent track. A choice among named values is a `SegmentedControl`.
 
 A form or row's message line is a `FormErrorLabel`, in its destructive, warning or muted tone.
 

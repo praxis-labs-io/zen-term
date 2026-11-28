@@ -193,6 +193,20 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(control.selectedSurfaceFillForTesting, Theme.current.chrome.fill(.active).cgColor)
     }
 
+    func test_reapplyTheme_recolorsToggleSwitch() throws {
+        let control = ToggleSwitch(isOn: true) { _ in }
+        let window = makeWindow()
+        window.contentView?.addSubview(control)
+        let trackBefore = control.trackFillForTesting
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        control.reapplyThemeTree()
+
+        XCTAssertNotEqual(trackBefore, control.trackFillForTesting)
+        XCTAssertEqual(control.trackFillForTesting, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(control.knobFillForTesting, Theme.current.chrome.onAccent.nsColor.cgColor)
+    }
+
     func test_reapplyTheme_keepsAnAgentRowsFullMessageForVoiceOver() throws {
         let row = SidebarAgentRow {}
         let message = "Finished the migration. Two tests still need a look."

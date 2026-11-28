@@ -134,19 +134,31 @@ class SettingsFormSection: SettingsSection {
 
     func addSegmentedRow(
         key: String, caption: String, blurb: String?, options: [String],
-        read: @escaping (GeneralConfig) -> Int, token: @escaping (Int) -> String,
-        notifiesOnReselect: Bool = false
+        read: @escaping (GeneralConfig) -> Int, token: @escaping (Int) -> String
     ) {
         scalarKeys.append(key)
-        let segmented = SegmentedControl(
-            options: options, selectedIndex: read(GeneralConfig.current), notifiesOnReselect: notifiesOnReselect
-        ) { [weak self] index in
+        let segmented = SegmentedControl(options: options, selectedIndex: read(GeneralConfig.current)) {
+            [weak self] index in
             self?.writeOrRemove(key, token(index), row: key)
         }
         addRow(
             key: key, caption: caption, description: blurb, control: segmented, focusStop: segmented,
             width: nil,
             refresh: { [weak segmented] in segmented?.setSelection(read(GeneralConfig.current)) })
+    }
+
+    func addToggleRow(
+        key: String, caption: String, blurb: String?, read: @escaping (GeneralConfig) -> Bool,
+        token: @escaping (Bool) -> String = LayoutFormat.boolToken
+    ) {
+        scalarKeys.append(key)
+        let toggle = ToggleSwitch(isOn: read(GeneralConfig.current)) { [weak self] on in
+            self?.writeOrRemove(key, token(on), row: key)
+        }
+        toggle.setAccessibilityLabel(caption)
+        addRow(
+            key: key, caption: caption, description: blurb, control: toggle, focusStop: toggle, width: nil,
+            refresh: { [weak toggle] in toggle?.setOn(read(GeneralConfig.current)) })
     }
 
     func addTextRow(
@@ -218,6 +230,12 @@ class SettingsFormSection: SettingsSection {
             seg.onArrowLeft = { [weak self] in self?.onExitToNav?() }
             seg.onTab = { [weak self] in self?.moveTab(1) }
             seg.onBacktab = { [weak self] in self?.moveTab(-1) }
+        case let toggle as ToggleSwitch:
+            toggle.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+            toggle.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            toggle.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+            toggle.onTab = { [weak self] in self?.moveTab(1) }
+            toggle.onBacktab = { [weak self] in self?.moveTab(-1) }
         case let dropdown as Dropdown:
             dropdown.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             dropdown.onArrowDown = { [weak self] in self?.moveFocus(1) }
@@ -272,6 +290,7 @@ class SettingsFormSection: SettingsSection {
         do {
             try write()
         } catch {
+            refreshers.forEach { $0() }
             (reportKey.flatMap(rowFor) ?? rows.first)?.showMessage(
                 "Couldn't write config: \(error.localizedDescription)")
             return false
