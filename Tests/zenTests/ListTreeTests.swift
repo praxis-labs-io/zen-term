@@ -89,4 +89,64 @@ final class ListTreeTests: XCTestCase {
                   12  float  npm test  busy
             """)
     }
+
+    func test_aNamedPaneShowsItsName_andTheCallersPaneIsMarkedYou() {
+        let list = ListResult(windows: [
+            .init(
+                id: "w1", key: true,
+                workspaces: [
+                    .init(
+                        title: "app", folder: "/src/app", configured: false, worktree: nil, active: true,
+                        tabs: [
+                            .init(
+                                id: "w1.t4", title: "", active: true,
+                                panes: [
+                                    .init(token: 9, drawer: nil, title: "", cwd: nil, busy: false, agent: nil),
+                                    .init(
+                                        token: 12, drawer: nil, float: true, title: "swift test", cwd: nil,
+                                        busy: true, agent: nil, name: "tests"),
+                                ])
+                        ])
+                ])
+        ])
+
+        XCTAssertEqual(
+            ListTree.text(list, caller: 9),
+            """
+            w1  key
+              app  /src/app  active
+                w1.t4  active
+                  9  you
+                  12  float  named tests  swift test  busy
+            """)
+    }
+
+    func test_noPaneIsMarkedYou_withoutACaller() {
+        let list = ListResult(windows: [
+            .init(
+                id: "w1", key: false,
+                workspaces: [
+                    .init(
+                        title: "app", folder: "/src/app", configured: false, worktree: nil, active: true,
+                        tabs: [
+                            .init(
+                                id: "w1.t4", title: "", active: true,
+                                panes: [
+                                    .init(
+                                        token: 9, drawer: nil, title: "", cwd: nil, busy: false, agent: nil,
+                                        name: "lead")
+                                ])
+                        ])
+                ])
+        ])
+
+        XCTAssertEqual(
+            ListTree.text(list, caller: nil),
+            """
+            w1
+              app  /src/app  active
+                w1.t4  active
+                  9  named lead
+            """)
+    }
 }
