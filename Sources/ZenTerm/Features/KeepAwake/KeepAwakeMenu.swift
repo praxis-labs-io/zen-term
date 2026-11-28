@@ -124,15 +124,15 @@ final class KeepAwakeMenu {
     private func refresh() {
         let now = clock.now
         let hold = keepAwake.hold
-        let isBatteryLow = hold != nil && KeepAwakeSummary.isBatteryLow(keepAwake.battery, stop: keepAwake.batteryStop)
+        let isOn = keepAwake.isOn
+        let isBatteryLow = isOn && KeepAwakeSummary.isBatteryLow(keepAwake.battery, stop: keepAwake.batteryStop)
+        let detail =
+            hold.map { KeepAwakeSummary.footerDetail(hold: $0, activeCount: keepAwake.activeCount, now: now) }
+            ?? KeepAwakeSummary.paneDetail(count: keepAwake.paneHolds.count)
         indicator.render(
             KeepAwakeIndicator.Content(
-                isOn: hold != nil, keepsDisplayOn: keepAwake.keepsDisplayOn,
-                detail: hold.flatMap {
-                    KeepAwakeSummary.footerDetail(hold: $0, activeCount: keepAwake.activeCount, now: now)
-                },
-                isBatteryLow: isBatteryLow))
-        onActivityChanged(hold == nil ? nil : isBatteryLow ? .warning : .live)
+                isOn: isOn, keepsDisplayOn: keepAwake.holdsDisplay, detail: detail, isBatteryLow: isBatteryLow))
+        onActivityChanged(isOn ? isBatteryLow ? .warning : .live : nil)
         scheduleTick(hold: hold, now: now)
         guard let form, popover.isOpen else { return }
         syncControls()
@@ -156,10 +156,11 @@ final class KeepAwakeMenu {
     }
 
     private func status(now: Date) -> String? {
-        keepAwake.hold.map {
-            KeepAwakeSummary.sentence(
-                hold: $0, keepsDisplayOn: keepAwake.keepsDisplayOn, activeCount: keepAwake.activeCount, now: now)
-        }
+        let panes = keepAwake.holdingPanes
+        guard let hold = keepAwake.hold else { return KeepAwakeSummary.panesSentence(panes, alone: true) }
+        let own = KeepAwakeSummary.sentence(
+            hold: hold, keepsDisplayOn: keepAwake.keepsDisplayOn, activeCount: keepAwake.activeCount, now: now)
+        return ([own] + [KeepAwakeSummary.panesSentence(panes, alone: false)].compactMap { $0 }).joined(separator: " ")
     }
 
     private func rows() -> [PopoverForm.ChecklistRow] {

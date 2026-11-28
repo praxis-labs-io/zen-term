@@ -32,6 +32,21 @@ enum KeepAwakeSummary {
         }
     }
 
+    static func paneDetail(count: Int) -> String? {
+        switch count {
+        case 0: return nil
+        case 1: return "1 pane"
+        default: return "\(count) panes"
+        }
+    }
+
+    static func panesSentence(_ names: [String], alone: Bool) -> String? {
+        guard let last = names.last else { return nil }
+        let list = names.count == 1 ? last : "\(names.dropLast().joined(separator: ", ")) and \(last)"
+        let panes = names.count == 1 ? "pane \(list) holds" : "panes \(list) hold"
+        return alone ? "Awake while the \(panes) it. The display can still sleep." : "The \(panes) it too."
+    }
+
     static func isBatteryLow(_ battery: BatteryReading?, stop: Int?) -> Bool {
         guard let battery, let stop, battery.isOnBattery else { return false }
         return battery.percent <= stop + batteryWarningMargin

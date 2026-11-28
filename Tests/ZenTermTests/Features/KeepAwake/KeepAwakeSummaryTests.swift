@@ -81,4 +81,19 @@ final class KeepAwakeSummaryTests: XCTestCase {
         let grace = KeepAwake.Hold(until: .agentsFinish, endsAt: nil, graceEndsAt: now.addingTimeInterval(30))
         XCTAssertEqual(try XCTUnwrap(KeepAwakeSummary.nextChange(hold: grace, now: now)), 1, accuracy: 0.001)
     }
+
+    func test_paneHolds_areCounted_andNamedOldestFirst() {
+        XCTAssertNil(KeepAwakeSummary.paneDetail(count: 0))
+        XCTAssertEqual(KeepAwakeSummary.paneDetail(count: 1), "1 pane")
+        XCTAssertEqual(KeepAwakeSummary.paneDetail(count: 2), "2 panes")
+        XCTAssertNil(KeepAwakeSummary.panesSentence([], alone: true))
+        XCTAssertEqual(
+            KeepAwakeSummary.panesSentence(["build"], alone: true),
+            "Awake while the pane build holds it. The display can still sleep.")
+        XCTAssertEqual(
+            KeepAwakeSummary.panesSentence(["build", "tests"], alone: false), "The panes build and tests hold it too.")
+        XCTAssertEqual(
+            KeepAwakeSummary.panesSentence(["build", "tests", "dev"], alone: false),
+            "The panes build, tests and dev hold it too.")
+    }
 }

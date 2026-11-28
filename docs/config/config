@@ -233,15 +233,17 @@
 
 # Keep Awake holds the Mac awake: until you turn it off, for a set time, or until
 # the working agents finish. Start it from the cup in the sidebar footer or from
-# the command palette. These set how every hold behaves. Quitting ZenTerm ends
-# the hold.
+# the command palette. An agent can also hold it for its own pane with zen awake
+# on; that hold ends when the pane closes. Turning Keep Awake off ends every
+# hold, yours and the panes'. Quitting ZenTerm ends them all.
 
-# Keep the display on too, not only the Mac. Off by default: agents do not need
-# the screen. The palette's Keep Mac and Display Awake turns it on until you quit.
+# Keep the display on too, not only the Mac, while your own hold is on. Off by
+# default: agents do not need the screen, and a pane's hold never keeps it on.
+# The palette's Keep Mac and Display Awake turns it on until you quit.
 # In-app Settings edit: applies live.
 # keep-awake-display = false          # true | false
 
-# On battery, end the hold once the charge falls below this percentage, so the
+# On battery, end every hold once the charge falls below this percentage, so the
 # Mac can sleep before it runs out. On power, the hold carries on.
 # In-app Settings edit: applies live.
 # keep-awake-battery-stop = 10        # never | 5 | 10 | 20
@@ -526,7 +528,7 @@
 #   report_issue         opens the Report an Issue composer
 #   new_tool_float       opens the form that adds a tool float
 #   keep_awake           holds the Mac awake until you turn it off
-#   keep_awake_off       ends the hold
+#   keep_awake_off       ends every hold, the panes' too
 #   keep_awake_until_agents_finish   holds it until the working agents finish
 #   keep_awake_for_1_hour            holds it for an hour
 #   keep_awake_display   holds the display awake too, keeping the hold's end

@@ -3722,6 +3722,7 @@ final class WindowController: NSObject {
             ids.forEach { self?.floats.hidePane($0) }
             self?.paneWaits.panesClosed(ids)
             self?.paneDrafts.panesClosed(ids)
+            self?.keepAwake?.panesClosed(ids)
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
                 self?.firstTasks.release($0)

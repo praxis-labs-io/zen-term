@@ -6,9 +6,9 @@ import XCTest
 final class KeepAwakeMenuTests: WindowTestCase {
     private var window: NSWindow!
     private var footer: SidebarFooter!
-    private var power: FakePower!
-    private var battery: FakeBattery!
-    private var clock: FakeClock!
+    private var power: FakePowerAssertions!
+    private var battery: FakeBatterySource!
+    private var clock: FakeKeepAwakeClock!
     private var keepAwake: KeepAwake!
     private var menu: KeepAwakeMenu!
     private var settings = KeepAwake.Settings(keepsDisplayOn: false, batteryStop: 10, grace: 60)
@@ -29,9 +29,9 @@ final class KeepAwakeMenuTests: WindowTestCase {
             footer.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             footer.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
         ])
-        power = FakePower()
-        battery = FakeBattery()
-        clock = FakeClock()
+        power = FakePowerAssertions()
+        battery = FakeBatterySource()
+        clock = FakeKeepAwakeClock()
         settings = KeepAwake.Settings(keepsDisplayOn: false, batteryStop: 10, grace: 60)
         working = 0
         refusals = []
@@ -260,5 +260,37 @@ final class KeepAwakeMenuTests: WindowTestCase {
 
         keepAwake.turnOff()
         XCTAssertNil(activity, "the dot stayed after the hold ended")
+    }
+
+    func test_paneHoldsAlone_showTheIndicatorOn_andTheSwitchEndsThemToo() throws {
+        keepAwake.startPaneHold(SurfaceID(raw: 1), pane: 7, name: "build", for: nil)
+        XCTAssertEqual(indicator.awakeTextForTesting, "Awake")
+        XCTAssertEqual(indicator.detailTextForTesting, "1 pane")
+        XCTAssertFalse(indicator.showsDisplayForTesting, "a pane hold never keeps the display on")
+        XCTAssertEqual(activity, .live)
+
+        let form = try openPopover()
+        XCTAssertEqual(menu.toggleForTesting?.isOn, true)
+        XCTAssertEqual(form.statusForTesting, "Awake while the pane build holds it. The display can still sleep.")
+        XCTAssertEqual(
+            form.rowViewsForTesting.map(\.content.trailing), [nil, nil, nil, nil, nil], "no row of yours is on")
+
+        try click(try XCTUnwrap(menu.toggleForTesting))
+
+        XCTAssertFalse(keepAwake.isOn, "the switch left a pane holding the Mac")
+        XCTAssertNil(activity)
+    }
+
+    func test_yourHold_withPaneHolds_namesThePanesAfterYourSentence() throws {
+        keepAwake.start(.turnedOff)
+        keepAwake.startPaneHold(SurfaceID(raw: 1), pane: 7, name: "build", for: nil)
+        keepAwake.startPaneHold(SurfaceID(raw: 2), pane: 8, name: "tests", for: nil)
+
+        let form = try openPopover()
+
+        XCTAssertEqual(
+            form.statusForTesting,
+            "Awake until you turn it off. The display can still sleep. The panes build and tests hold it too.")
+        XCTAssertNil(indicator.detailTextForTesting, "your hold's detail wins over the pane count")
     }
 }

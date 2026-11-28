@@ -20,7 +20,7 @@ final class KeepAwakeWindowTests: WindowTestCase {
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         keepAwake = KeepAwake(
-            power: FakePower(), battery: FakeBattery(), clock: FakeClock(),
+            power: FakePowerAssertions(), battery: FakeBatterySource(), clock: FakeKeepAwakeClock(),
             settings: { KeepAwake.Settings(keepsDisplayOn: false, batteryStop: 10, grace: 60) },
             activeCount: { 0 })
         controller = WindowController(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)

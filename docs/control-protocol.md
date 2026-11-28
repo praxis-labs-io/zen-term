@@ -656,6 +656,40 @@ can be nothing. The aliases a `keybind` line accepts work too. `toggle_float:<id
 id of a configured float. A name that is not an action is `not_found`, and its message
 lists every action.
 
+### `awake.on`
+
+`args`: `duration` (seconds, from 1 to 604800, a week).
+
+Holds the Mac awake for the caller's pane, so it needs `caller.pane`; without one it is a
+`bad_request`. The hold keeps the Mac from idle sleep, never the display. It ends on
+`awake.off`, after `duration` when one is given, when the pane closes, when the person
+turns Keep Awake off in the app, or at the battery stop. A `pane.run` pane with `keep` stays
+open after its program exits, so its hold lasts until `awake.off`. Starting below the battery
+stop on battery is `refused`. A second `awake.on` from the same pane replaces its hold, with
+the new `duration` or none. Answers the `awake.status` result.
+
+### `awake.off`
+
+`args`: none.
+
+Ends the caller's pane hold, which needs `caller.pane`, and answers the `awake.status`
+result. A pane with no hold gets the same answer.
+
+### `awake.status`
+
+`args`: none.
+
+Answers what holds the Mac awake. `on` is any hold at all. `user` is the person's own hold, started in
+the app, and `display` whether that hold keeps the display on too. `pane` is the caller's own pane hold, absent without one or without `caller.pane`.
+`panes` is every pane hold, oldest first, with each pane's name and the whole seconds left as
+`remaining`, absent on a hold with no `duration`.
+
+```json
+{"on":true,"user":false,"display":false,
+ "pane":{"token":31,"name":"build","remaining":2700},
+ "panes":[{"token":31,"name":"build","remaining":2700},{"token":34,"name":"review"}]}
+```
+
 ### `ssh.askpass`
 
 `args`: `token`, `prompt` (both required), `ssh_pid`.
@@ -688,7 +722,10 @@ versions.
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
 `zen tab new|select|rename|close`, `zen pane run|split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
-`zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
+`zen action <name>` runs a keymap action. `zen awake on [--for <duration>]|off|status` holds the Mac awake
+for this pane and prints the `awake.status` result; `--for` takes hours, minutes and seconds in that
+order, like `90s`, `45m`, `2h` or `1h30m`, a week at most, and a number without a unit is a usage
+error. `zen wait <pane>` waits on a pane, taking
 `--output` and `--timeout`, and prints the answer as JSON.
 With `ZEN_ASKPASS_TOKEN` set, exactly one argument and a parent named `ssh`, `zen` is ssh's askpass: it sends the
 argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's pid, prints

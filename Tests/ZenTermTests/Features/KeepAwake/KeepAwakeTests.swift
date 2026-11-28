@@ -3,9 +3,9 @@ import XCTest
 @testable import ZenTerm
 
 final class KeepAwakeTests: XCTestCase {
-    private var power: FakePower!
-    private var battery: FakeBattery!
-    private var clock: FakeClock!
+    private var power: FakePowerAssertions!
+    private var battery: FakeBatterySource!
+    private var clock: FakeKeepAwakeClock!
     private var settings = KeepAwake.Settings(keepsDisplayOn: false, batteryStop: 10, grace: 60)
     private var working = 0
     private var releases: [KeepAwake.Release] = []
@@ -13,9 +13,9 @@ final class KeepAwakeTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        power = FakePower()
-        battery = FakeBattery()
-        clock = FakeClock()
+        power = FakePowerAssertions()
+        battery = FakeBatterySource()
+        clock = FakeKeepAwakeClock()
         settings = KeepAwake.Settings(keepsDisplayOn: false, batteryStop: 10, grace: 60)
         working = 0
         releases = []
@@ -287,5 +287,148 @@ final class KeepAwakeTests: XCTestCase {
         keepAwake.turnOff()
 
         wait(for: [announced], timeout: 1)
+    }
+
+    private let agent = SurfaceID(raw: 1)
+    private let builder = SurfaceID(raw: 2)
+
+    func test_aPaneHold_keepsTheMacAwake_neverTheDisplay() {
+        settings.keepsDisplayOn = true
+        makeKeepAwake()
+
+        XCTAssertNil(keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil))
+
+        XCTAssertTrue(keepAwake.isOn)
+        XCTAssertNil(keepAwake.hold, "the person's hold is not started")
+        XCTAssertEqual(power.held, false)
+        XCTAssertFalse(keepAwake.holdsDisplay)
+        XCTAssertEqual(keepAwake.holdingPanes, ["agent"])
+    }
+
+    func test_theDisplay_followsThePersonsHold_overPaneHolds() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+        keepAwake.start(keepsDisplayOn: true)
+        XCTAssertEqual(power.held, true)
+
+        keepAwake.start(.duration(60))
+        clock.advance(by: 60)
+
+        XCTAssertEqual(power.held, false, "the pane still holds the Mac, without the display")
+        XCTAssertTrue(keepAwake.isOn)
+        XCTAssertEqual(releases, [.timeUp(60)])
+    }
+
+    func test_eachPaneHoldEndsOnItsOwn_andTheLastOneLetsTheMacSleep() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+        keepAwake.startPaneHold(builder, pane: 8, name: "build", for: nil)
+
+        keepAwake.endPaneHold(agent)
+        XCTAssertEqual(keepAwake.holdingPanes, ["build"])
+        XCTAssertEqual(power.held, false)
+
+        keepAwake.panesClosed([builder])
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertNil(power.held)
+        XCTAssertEqual(releases, [], "a pane hold ending has no toast")
+    }
+
+    func test_aTimedPaneHold_endsWhenItsTimeRunsOut_andAgainReplacesIt() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: 60)
+        clock.advance(by: 30)
+        let held = keepAwake.paneHold(of: agent)
+        XCTAssertEqual(held.map(keepAwake.secondsLeft), 30)
+
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: 60)
+        clock.advance(by: 59)
+        XCTAssertTrue(keepAwake.isOn, "the second on restarted the minute")
+        XCTAssertEqual(keepAwake.paneHolds.count, 1)
+        clock.advance(by: 1)
+
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertNil(power.held)
+    }
+
+    func test_anUntimedOn_replacesATimedPaneHold() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: 60)
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+
+        clock.advance(by: 120)
+
+        XCTAssertTrue(keepAwake.isOn)
+        XCTAssertNil(keepAwake.paneHold(of: agent)?.endsAt)
+    }
+
+    func test_turnOff_endsThePersonsHoldAndEveryPaneHold() {
+        keepAwake.start(.turnedOff)
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: 60)
+        keepAwake.startPaneHold(builder, pane: 8, name: "build", for: nil)
+
+        keepAwake.turnOff()
+        clock.advance(by: 120)
+
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertEqual(keepAwake.paneHolds, [])
+        XCTAssertNil(power.held)
+        XCTAssertEqual(releases, [])
+    }
+
+    func test_turnOff_withOnlyPaneHolds_endsThem() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+
+        keepAwake.turnOff()
+
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertNil(power.held)
+    }
+
+    func test_theBatteryStop_refusesAPaneHold_andEndsEveryHold() {
+        battery.reading = BatteryReading(isOnBattery: true, percent: 8)
+        XCTAssertEqual(
+            keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil), .battery(percent: 8, stop: 10))
+        XCTAssertFalse(keepAwake.isOn)
+
+        battery.report(BatteryReading(isOnBattery: true, percent: 50))
+        keepAwake.start(.turnedOff)
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+        battery.report(BatteryReading(isOnBattery: true, percent: 9))
+
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertEqual(keepAwake.paneHolds, [])
+        XCTAssertNil(power.held)
+        XCTAssertEqual(releases, [.battery(percent: 9)])
+    }
+
+    func test_theBatteryStop_endsPaneHolds_withoutThePersonsHold() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+
+        battery.report(BatteryReading(isOnBattery: true, percent: 9))
+
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertEqual(releases, [.battery(percent: 9)])
+    }
+
+    func test_waking_endsAPaneHoldWhoseTimePassedInSleep_andRearmsTheRest() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: 30 * 60)
+        keepAwake.startPaneHold(builder, pane: 8, name: "build", for: 2 * 60 * 60)
+
+        clock.sleep(for: 60 * 60)
+        keepAwake.didWake()
+        XCTAssertEqual(keepAwake.holdingPanes, ["build"])
+
+        clock.advance(by: 60 * 60 - 1)
+        XCTAssertTrue(keepAwake.isOn)
+        clock.advance(by: 1)
+        XCTAssertFalse(keepAwake.isOn, "the nap counts toward the two hours")
+    }
+
+    func test_closingAPaneWithNoHold_announcesNothing() {
+        keepAwake.startPaneHold(agent, pane: 7, name: "agent", for: nil)
+        let announced = expectation(forNotification: .keepAwakeDidChange, object: keepAwake)
+        announced.isInverted = true
+
+        keepAwake.panesClosed([builder])
+
+        wait(for: [announced], timeout: 0.1)
+        XCTAssertTrue(keepAwake.isOn)
     }
 }

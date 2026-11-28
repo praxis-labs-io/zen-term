@@ -2,7 +2,7 @@ import Foundation
 
 @testable import ZenTerm
 
-final class FakePower: PowerAssertions {
+final class FakePowerAssertions: PowerAssertions {
     var held: Bool?
     var releases = 0
 
@@ -14,7 +14,7 @@ final class FakePower: PowerAssertions {
     }
 }
 
-final class FakeBattery: BatterySource {
+final class FakeBatterySource: BatterySource {
     var reading: BatteryReading?
     var onChange: (() -> Void)?
 
@@ -24,7 +24,7 @@ final class FakeBattery: BatterySource {
     }
 }
 
-final class FakeClock: KeepAwakeClock {
+final class FakeKeepAwakeClock: KeepAwakeClock {
     private struct Pending {
         let id: Int
         var due: Date
