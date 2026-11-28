@@ -201,8 +201,10 @@ final class CommandCatalogTests: XCTestCase {
             "remove_worktree",
         ]
         let listed = Set(
-            CommandCatalog.commands(tabCount: 9, workspaceCount: 9, keepAwakeIsOn: true, agentsWorking: true)
-                .map(\.chord.actionToken))
+            [true, false].flatMap {
+                CommandCatalog.commands(tabCount: 9, workspaceCount: 9, keepAwakeIsOn: $0, agentsWorking: true)
+            }
+            .map(\.chord.actionToken))
 
         let missing =
             SettingsKeybindGroupsTests.everyAction
@@ -227,14 +229,17 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(selects.count, 9)
     }
 
-    func test_keepAwake_listsTurnOffOnlyWhileOn_andUntilAgentsFinishOnlyWhileOneWorks() {
+    func test_keepAwake_listsOnWhileOff_offWhileOn_andUntilAgentsFinishOnlyWhileOneWorks() {
         func chords(on: Bool, working: Bool) -> [KeyInterceptor.ReservedChord] {
             CommandCatalog.commands(tabCount: 1, workspaceCount: 1, keepAwakeIsOn: on, agentsWorking: working)
                 .map(\.chord)
         }
-        let always: [KeyInterceptor.ReservedChord] = [.keepAwake, .keepAwakeForOneHour, .keepAwakeWithDisplay]
+        let always: [KeyInterceptor.ReservedChord] = [.keepAwakeForOneHour, .keepAwakeWithDisplay]
 
         XCTAssertTrue(Set(always).isSubset(of: chords(on: false, working: false)))
+        XCTAssertTrue(Set(always).isSubset(of: chords(on: true, working: false)))
+        XCTAssertTrue(chords(on: false, working: false).contains(.keepAwake))
+        XCTAssertFalse(chords(on: true, working: false).contains(.keepAwake), "Keep Awake only turns it on")
         XCTAssertFalse(chords(on: false, working: false).contains(.turnOffKeepAwake))
         XCTAssertFalse(chords(on: false, working: false).contains(.keepAwakeUntilAgentsFinish))
         XCTAssertTrue(chords(on: true, working: false).contains(.turnOffKeepAwake))

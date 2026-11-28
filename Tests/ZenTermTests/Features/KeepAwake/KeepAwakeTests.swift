@@ -28,7 +28,7 @@ final class KeepAwakeTests: XCTestCase {
     private final class FakeClock: KeepAwakeClock {
         private struct Pending {
             let id: Int
-            let due: Date
+            var due: Date
             let fire: () -> Void
         }
 
@@ -41,6 +41,11 @@ final class KeepAwakeTests: XCTestCase {
             let id = nextID
             pending.append(Pending(id: id, due: now.addingTimeInterval(seconds), fire: fire))
             return { [weak self] in self?.pending.removeAll { $0.id == id } }
+        }
+
+        func sleep(for seconds: TimeInterval) {
+            now = now.addingTimeInterval(seconds)
+            for index in pending.indices { pending[index].due.addTimeInterval(seconds) }
         }
 
         func advance(by seconds: TimeInterval) {
@@ -186,6 +191,41 @@ final class KeepAwakeTests: XCTestCase {
 
         XCTAssertFalse(keepAwake.isOn)
         XCTAssertEqual(releases, [.timeUp(60 * 60)])
+    }
+
+    func test_waking_pastATimedHoldsEnd_releasesAtOnce() {
+        keepAwake.start(.duration(60 * 60))
+        clock.advance(by: 30 * 60)
+
+        clock.sleep(for: 8 * 60 * 60)
+        keepAwake.didWake()
+
+        XCTAssertFalse(keepAwake.isOn)
+        XCTAssertEqual(releases, [.timeUp(60 * 60)])
+    }
+
+    func test_waking_beforeATimedHoldsEnd_endsItOnTheWallClock() {
+        keepAwake.start(.duration(60 * 60))
+        clock.advance(by: 10 * 60)
+        clock.sleep(for: 20 * 60)
+        keepAwake.didWake()
+
+        clock.advance(by: 30 * 60 - 1)
+        XCTAssertTrue(keepAwake.isOn)
+        clock.advance(by: 1)
+        XCTAssertEqual(releases, [.timeUp(60 * 60)], "the nap counts toward the hour")
+    }
+
+    func test_waking_pastTheGrace_releasesAtOnce() {
+        working = 1
+        keepAwake.start(.agentsFinish)
+        working = 0
+        keepAwake.activityChanged()
+
+        clock.sleep(for: 10 * 60)
+        keepAwake.didWake()
+
+        XCTAssertEqual(releases, [.agentsFinished])
     }
 
     func test_startingAnotherEndCondition_replacesTheTimer() {

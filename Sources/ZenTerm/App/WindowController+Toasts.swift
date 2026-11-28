@@ -120,6 +120,7 @@ extension WindowController {
 
     private static func timeUpPhrase(_ duration: TimeInterval) -> String {
         let minutes = Int(duration / 60)
+        if minutes == 1 { return "The minute is up." }
         guard minutes % 60 == 0 else { return "The \(minutes) minutes are up." }
         let hours = minutes / 60
         return hours == 1 ? "The hour is up." : "The \(hours) hours are up."

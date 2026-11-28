@@ -139,8 +139,7 @@ enum CommandCatalog {
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .dismissToast, .dismissAllToasts, .reportIssue,
         ]
-        chords += [.keepAwake]
-        if keepAwakeIsOn { chords += [.turnOffKeepAwake] }
+        chords += keepAwakeIsOn ? [.turnOffKeepAwake] : [.keepAwake]
         if agentsWorking { chords += [.keepAwakeUntilAgentsFinish] }
         chords += [.keepAwakeForOneHour, .keepAwakeWithDisplay]
         let onConnect = onHost && tabCount == 0

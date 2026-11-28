@@ -4,7 +4,7 @@ extension Notification.Name {
     static let keepAwakeDidChange = Notification.Name("ZenTerm.keepAwakeDidChange")
 }
 
-// The app's one hold on idle sleep, ended by you, a timer, the agents finishing or the battery stop. Main-thread only.
+// The app's one hold on idle sleep, ended by you, a timer, the agents finishing or the battery stop.
 @MainActor
 final class KeepAwake {
     enum Until: Equatable {
@@ -103,10 +103,22 @@ final class KeepAwake {
         guard grace > 0 else { return release(.agentsFinished) }
         current.graceEndsAt = clock.now.addingTimeInterval(grace)
         hold = current
-        cancelGrace = clock.schedule(after: grace) { [weak self] in
-            MainActor.assumeIsolated { self?.release(.agentsFinished) }
-        }
+        armGrace(after: grace)
         announce()
+    }
+
+    // A run-loop timer pauses while the Mac sleeps, so a lid closed mid-hold would stretch the hold by the nap.
+    func didWake() {
+        guard let current = hold else { return }
+        let now = clock.now
+        if let endsAt = current.endsAt, let duration = current.until.duration {
+            guard endsAt > now else { return release(.timeUp(duration)) }
+            armTimer(after: endsAt.timeIntervalSince(now), duration: duration)
+        }
+        if let graceEndsAt = current.graceEndsAt {
+            guard graceEndsAt > now else { return release(.agentsFinished) }
+            armGrace(after: graceEndsAt.timeIntervalSince(now))
+        }
     }
 
     func settingsChanged() {
@@ -130,8 +142,20 @@ final class KeepAwake {
         let duration = until.duration
         hold = Hold(until: until, endsAt: duration.map { clock.now.addingTimeInterval($0) }, graceEndsAt: nil)
         guard let duration else { return }
-        cancelTimer = clock.schedule(after: duration) { [weak self] in
+        armTimer(after: duration, duration: duration)
+    }
+
+    private func armTimer(after seconds: TimeInterval, duration: TimeInterval) {
+        cancelTimer?()
+        cancelTimer = clock.schedule(after: seconds) { [weak self] in
             MainActor.assumeIsolated { self?.release(.timeUp(duration)) }
+        }
+    }
+
+    private func armGrace(after seconds: TimeInterval) {
+        cancelGrace?()
+        cancelGrace = clock.schedule(after: seconds) { [weak self] in
+            MainActor.assumeIsolated { self?.release(.agentsFinished) }
         }
     }
 

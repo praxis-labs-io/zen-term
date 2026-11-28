@@ -72,6 +72,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.keyController()?.showToast(WindowController.keepAwakeEndedToast(release))
         }
         paneWaits.onPendingChanged = { [weak self] in self?.keepAwake.activityChanged() }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.keepAwake.didWake() }
+        }
 
         newWindow(initialCWD: nil, centered: true)
         reportBackendShadow()
@@ -170,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateController.checkForUpdates()
             return
         }
+        if case .keepAwake = chord, keepAwake.isOn { return }
         if let start = Self.keepAwakeStart(for: chord) {
             if let refusal = keepAwake.start(start.until, keepsDisplayOn: start.display) {
                 target?.showToast(WindowController.keepAwakeRefusedToast(refusal))
