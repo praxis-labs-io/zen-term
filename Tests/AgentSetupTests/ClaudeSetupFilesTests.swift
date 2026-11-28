@@ -133,8 +133,7 @@ final class ClaudeSetupFilesTests: XCTestCase {
             XCTAssertEqual(status, 0)
             XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"), start)
             XCTAssertFalse(output.contains("zen tab rename"), "a tab follows its agent's own title: \(start)")
-            XCTAssertTrue(
-                output.contains("- Your first action after the user's first prompt: load the /zen skill."), start)
+            XCTAssertTrue(output.hasSuffix("\n\n\(firstAction)\n"), start)
         }
     }
 
@@ -145,9 +144,10 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertEqual(status, 0)
         XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
         XCTAssertFalse(output.contains("You are helper"))
-        XCTAssertTrue(output.contains("zen pane run --name"))
-        XCTAssertTrue(output.contains("with no ready line, with `zen pane run --name <what it runs> -- <command>`"))
-        XCTAssertTrue(output.contains("a helper you started closes without `--force`"))
+        XCTAssertEqual(
+            output,
+            "This session runs in ZenTerm pane 31 (`$ZEN_PANE`), the user's terminal. "
+                + "The `zen` CLI controls it.\n\n\(firstAction)\n")
     }
 
     func test_shippedHookStillSpeaksWhenThePaneCannotBeRead() throws {
@@ -158,6 +158,10 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertFalse(output.contains("You are helper"))
         XCTAssertFalse(output.contains("zen tab rename"))
     }
+
+    private let firstAction =
+        "Your first action after the user's first prompt: load the /zen skill, then run `zen list --pretty` "
+        + "to see what is already running before you start anything."
 
     // A stub `zen` that answers `hello`, and `pane get` with `pane`, or fails it when nil.
     private func zenPaneEnvironment(pane token: Int, answering pane: String?) throws -> [String: String] {
