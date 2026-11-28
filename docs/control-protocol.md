@@ -115,7 +115,7 @@ write side is not closing it: the answer still comes.
 
 | Thing  | Address                           | Notes                                         |
 | ------ | --------------------------------- | --------------------------------------------- |
-| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among open panes, and is sent as a string; a string of digits is read as a token. |
+| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among the open panes one parent started, and is sent as a string; a string of digits is read as a token. A name reaches `caller.pane`'s own pane of that name first, else the one open pane with it anywhere; more than one there is `ambiguous`. When `caller.pane`'s own pane of that name has exited, the name is `not_found`, except to `pane.wait`. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`, except to `workspace.open`, which still reaches a renamed configured workspace through its entry's folder. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
@@ -363,7 +363,7 @@ send's wait begins when it is queued, and its `timeout` counts from then.
 ### `pane.run`
 
 `args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `float`, `pane`, `cwd`
-(absolute), `focus`, `keep`, `outlive_parent`, `wait`, `timeout`, `output`.
+(absolute), `focus`, `keep`, `outlive_parent`, `replace`, `wait`, `timeout`, `output`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
 it opens a hidden float pane in the tab of `pane` (the caller's by default), or a tab behind
@@ -396,8 +396,12 @@ The pane closes when its program exits, with any exit code. `keep` drops it to a
 the way `tab.new` and `pane.split` run a `cmd`, unless the command ends in its shell's own `exit`
 or, under zsh, an interrupt ends it.
 
-`name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
-digits. The name then addresses the pane anywhere a token does, until it closes.
+`name` is refused when an open pane `caller.pane` started has it, and is a `bad_request` when it
+is blank or all digits. The name then addresses the pane anywhere a token does, until it closes.
+`replace` closes that pane first, as its parent's `pane.close` would, and is refused the same way,
+leaving it open. The new pane opens where the other args put it, then takes the name. `replace`
+without `name`, or with `split` on the pane it closes, is a `bad_request`; with no such pane it
+runs as without it.
 
 ```json
 {"pane":34,"first_task":{"sent":false,"reason":"blocked"}}
@@ -544,7 +548,7 @@ Holds until something happens to the pane, then answers once with why:
   newline in it is a `bad_request`.
 - A pane `pane.run` opened closes when its program exits, and a wait on it still answers
   `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
-  A name then reaches the most recent such pane with that name. The app keeps the 64 most
+  A name then reaches the most recent such pane with that name, `caller.pane`'s own first. The app keeps the 64 most
   recent such exits; an older one is `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
@@ -678,14 +682,16 @@ or 3 without an instance, and prints neither prompt nor answer.
 and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane read --since-task` sends `since: "task"`, and says on stderr when the
-answer is `truncated`. `zen pane get` takes the pane as its argument, this pane by default.
+answer is `truncated`. Every `zen pane` verb but `run`, and `zen wait`, takes its pane as an
+argument or as `--pane`, and both is a usage error. `split`, `send`, `read` and `get` act on this
+pane without one. `zen pane send` reads two arguments as the pane and the text, and one as the text.
 `zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
 `zen wait` does. `zen pane send` without `--wait` prints `{"queued":true}` when the send was queued,
 and nothing when it arrived. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen pane keys <pane> <key>... [--force]` takes the keys as arguments, and a name that is not a
-key is a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--float|--tab] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` sends `--float` as `float: true` and `--tab` as `float: false`, and both together is a usage error. It takes
+`zen pane keys [<pane>] <key>... [--force]` takes the keys as the arguments after the pane, or as
+every argument with `--pane`, and a name that is not a key is a usage error.
+`zen pane run [--name [--replace]] [--task] [--split right|down] [--float|--tab] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` sends `--float` as `float: true` and `--tab` as `float: false`, and both together is a usage error. It takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
 `-h` prints the help, and `-- --help` runs `--help`. A pane argument,

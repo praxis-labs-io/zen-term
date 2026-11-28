@@ -71,7 +71,7 @@ struct Zen: ParsableCommand {
         }
     }
 
-    private static func finish(_ error: Error, usage: Bool) -> Int32 {
+    static func finish(_ error: Error, usage: Bool) -> Int32 {
         if let failure = error as? ZenFailure {
             printError("zen: \(failure.message)")
             return failure.exitCode

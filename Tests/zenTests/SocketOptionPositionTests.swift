@@ -32,6 +32,6 @@ final class SocketOptionPositionTests: XCTestCase {
     }
 
     func test_aDeadSocketBeforeTheSubcommandIsNoInstance() {
-        XCTAssertEqual(Zen.exitCode(running: ["--socket", "/tmp/zt-nothing-\(getpid()).sock", "list"]), 3)
+        XCTAssertEqual(Zen.exitCode(running: ["--socket", Zen.unreachableSocket, "list"]), 3)
     }
 }

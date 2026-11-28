@@ -30,6 +30,9 @@ If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
 - Addresses: a pane is its token (`31`) or its name (`tests`), a tab is
   `w1.t3`, a workspace is its folder (starting with `/`, `~` or `.`),
   `ssh:<host>`, or its title.
+- Every `zen pane` verb but `run`, and `zen wait`, takes its pane as an
+  argument or with `--pane`: `zen pane read dev` and `zen pane read --pane dev`
+  are the same.
 
 ## Run a command in a pane
 
@@ -46,8 +49,11 @@ zen pane read --pane dev --lines 40                                  # its outpu
 ```
 
 - Name every pane after what it runs (`dev`, `tests`), so the sidebar and
-  `zen list` read clearly. Before starting something long-running, check
-  `zen list` for a pane already running it, and use that one.
+  `zen list` read clearly. A name is unique only among your panes, and reaches
+  yours before another session's. Before starting something long-running,
+  check `zen list` for a pane of yours already running it, and use that one.
+- To restart one, run it again with `--replace`: it closes your pane of that
+  name and starts the new one with the name.
 - Start a server with `--wait --output` in the same command. A separate
   `zen wait --output` matches only text printed after it begins, so it misses
   a ready line printed before. If a wait times out, read

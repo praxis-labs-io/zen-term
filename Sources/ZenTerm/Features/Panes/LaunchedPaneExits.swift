@@ -13,4 +13,8 @@ struct LaunchedPaneExits {
     func latestExit(named name: String) -> LaunchedPaneExit? {
         byToken.values.filter { $0.record.name == name }.max { $0.token < $1.token }
     }
+
+    func latestExit(named name: String, startedBy parent: Int) -> LaunchedPaneExit? {
+        byToken.values.filter { $0.record.name == name && $0.record.parent == parent }.max { $0.token < $1.token }
+    }
 }

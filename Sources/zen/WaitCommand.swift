@@ -11,8 +11,9 @@ struct WaitCommand: ParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Argument(help: "A pane or drawer token, or a pane's name.")
-    var pane: ControlAddress.Pane?
+    @OptionGroup var target: PaneTarget
+
+    var pane: ControlAddress.Pane? { target.pane }
 
     @Option(
         help: ArgumentHelp(
@@ -31,7 +32,8 @@ struct WaitCommand: ParsableCommand {
 
     func validate() throws {
         switch (pane, children) {
-        case (nil, nil): throw ValidationError("Name a pane, or pass --children any|all.")
+        case (nil, nil):
+            throw ValidationError("Name a pane, as an argument or with --pane, or pass --children any|all.")
         case (.some, .some): throw ValidationError("Name a pane or pass --children, not both.")
         default: break
         }

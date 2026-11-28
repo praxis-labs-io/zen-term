@@ -153,14 +153,15 @@ final class ControlRequestTests: XCTestCase {
     func test_paneRunArgsDecodeFromTheWire() throws {
         let line =
             #"{"v":1,"id":3,"cmd":"pane.run","args":{"cmd":"claude","name":"review","task":"Review x.swift","#
-            + #""split":"down","pane":"lead","focus":true,"keep":true,"outlive_parent":true},"caller":{"pane":31}}"#
+            + #""split":"down","pane":"lead","focus":true,"keep":true,"outlive_parent":true,"replace":true},"#
+            + #""caller":{"pane":31}}"#
         XCTAssertEqual(
             try decode(line).get(),
             ControlRequest(
                 id: 3, cmd: .paneRun,
                 args: ControlArgs(
                     cmd: "claude", focus: true, pane: .name("lead"), name: "review", task: "Review x.swift",
-                    split: .down, keep: true, outliveParent: true),
+                    split: .down, keep: true, outliveParent: true, replace: true),
                 caller: ControlCaller(pane: 31)))
     }
 

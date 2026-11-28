@@ -36,6 +36,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var keep: Bool?
     /// Whether `pane.run`'s pane stays open when the pane that ran it closes. Sent as `outlive_parent`.
     public var outliveParent: Bool?
+    /// Whether `pane.run` first closes the caller's pane that has its `name`.
+    public var replace: Bool?
     /// Text `pane.wait` answers on once it appears in the pane's output.
     public var output: String?
     /// Seconds `pane.wait`, or a `pane.send` that waits, holds before it answers `timeout`.
@@ -58,7 +60,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         since: PaneReadSince? = nil,
         branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
         output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
-        float: Bool? = nil, keep: Bool? = nil, outliveParent: Bool? = nil, wait: Bool? = nil,
+        float: Bool? = nil, keep: Bool? = nil, outliveParent: Bool? = nil, replace: Bool? = nil,
+        wait: Bool? = nil,
         children: WaitChildren? = nil, token: String? = nil, prompt: String? = nil, sshPID: Int? = nil
     ) {
         self.workspace = workspace
@@ -89,6 +92,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.float = float
         self.keep = keep
         self.outliveParent = outliveParent
+        self.replace = replace
         self.children = children
         self.token = token
         self.prompt = prompt
@@ -97,7 +101,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, since, branch
-        case base, existing, open, name, output, timeout, task, split, float, keep, wait, children, token, prompt
+        case base, existing, open, name, output, timeout, task, split, float, keep, replace, wait, children
+        case token, prompt
         case outliveParent = "outlive_parent"
         case sshPID = "ssh_pid"
     }
