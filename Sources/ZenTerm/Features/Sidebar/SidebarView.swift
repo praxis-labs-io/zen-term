@@ -46,6 +46,8 @@ final class SidebarView: NSView, ThemeReapplying {
     private var scrollTop: NSLayoutConstraint?
     private let caption = SectionCaption("Workspaces")
     private let addButton: IconButton
+    private let settingsButton: IconButton
+    private var hidesSettingsButton = false
     private let rowStack = NSStackView()
     private var rows: [SidebarRowID: NavRow] = [:]
     private var numbers: [SidebarRowID: Int] = [:]
@@ -83,7 +85,8 @@ final class SidebarView: NSView, ThemeReapplying {
     private let onCloseWorkspace: (WorkspaceID) -> Void
 
     init(
-        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
+        onSettings: @escaping () -> Void, onActivate: @escaping (SidebarRowID) -> Void,
+        onNewWorktree: @escaping (SidebarRowID) -> Void,
         onRenameWorkspace: @escaping (WorkspaceID) -> Void, onCloseWorkspace: @escaping (WorkspaceID) -> Void,
         onAdd: @escaping () -> Void
     ) {
@@ -92,6 +95,7 @@ final class SidebarView: NSView, ThemeReapplying {
         self.onRenameWorkspace = onRenameWorkspace
         self.onCloseWorkspace = onCloseWorkspace
         addButton = SidebarFooter.button("plus", "Open workspace", .toggleRepoPicker, onAdd)
+        settingsButton = SidebarFooter.button("gearshape", "Settings", .openSettings, onSettings)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -103,6 +107,7 @@ final class SidebarView: NSView, ThemeReapplying {
             self?.setHoverCovered(isOpen, exempting: isOpen ? self?.rowMenu.anchor : nil)
         }
         installScroll()
+        addSubview(settingsButton)
         reapplyWindowButtonStrip()
         for view in [caption, addButton, rowStack] { content.addSubview(view) }
         installHosts()
@@ -116,6 +121,9 @@ final class SidebarView: NSView, ThemeReapplying {
             addButton.trailingAnchor.constraint(
                 equalTo: content.trailingAnchor, constant: -(Self.padding + Self.addInset)),
             addButton.centerYAnchor.constraint(equalTo: caption.centerYAnchor),
+            settingsButton.trailingAnchor.constraint(
+                equalTo: trailingAnchor, constant: -(Self.padding + Self.addInset)),
+            settingsButton.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.windowButtonStripHeight / 2),
             rowStack.topAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight),
             rowStack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: Self.padding),
             rowStack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -Self.padding),
@@ -575,7 +583,21 @@ final class SidebarView: NSView, ThemeReapplying {
     // The window's buttons sit over this strip, above the scroll area, so the rows scroll beneath them.
     func reapplyWindowButtonStrip() {
         scrollTop?.constant = GeneralConfig.current.windowChrome ? Self.windowButtonStripHeight : Self.chromelessTop
+        refreshSettingsButton()
     }
+
+    func setSettingsButtonHidden(_ hidden: Bool) {
+        hidesSettingsButton = hidden
+        refreshSettingsButton()
+    }
+
+    func setSettingsOpen(_ open: Bool) { settingsButton.isActive = open }
+
+    private func refreshSettingsButton() {
+        settingsButton.isHidden = hidesSettingsButton || !GeneralConfig.current.windowChrome
+    }
+
+    var settingsButtonForTesting: IconButton { settingsButton }
 
     var addButtonForTesting: IconButton { addButton }
 

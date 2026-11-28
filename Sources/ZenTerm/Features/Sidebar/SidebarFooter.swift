@@ -9,7 +9,6 @@ final class SidebarFooter: NSStackView {
         SidebarView.padding + ChromeMetrics.Spacing.controlInset + IconBadge.Size.small.side / 2 - buttonSize.width / 2
 
     private let paletteButton: IconButton
-    private let settingsButton: IconButton
 
     static func button(
         _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord, _ onClick: @escaping () -> Void
@@ -19,9 +18,8 @@ final class SidebarFooter: NSStackView {
             accessibilityLabel: label, shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
     }
 
-    init(onPalette: @escaping () -> Void, onSettings: @escaping () -> Void) {
+    init(onPalette: @escaping () -> Void) {
         paletteButton = Self.button("command", "Command palette", .toggleCommandPalette, onPalette)
-        settingsButton = Self.button("gearshape", "Settings", .openSettings, onSettings)
         super.init(frame: .zero)
         orientation = .horizontal
         alignment = .centerY
@@ -29,7 +27,6 @@ final class SidebarFooter: NSStackView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         addArrangedSubview(paletteButton)
-        addArrangedSubview(settingsButton)
         heightAnchor.constraint(equalToConstant: Self.buttonSize.height).isActive = true
     }
 
@@ -37,14 +34,9 @@ final class SidebarFooter: NSStackView {
 
     func setHiddenButtons(_ hidden: Set<ToolbarButton>) {
         paletteButton.isHidden = hidden.contains(.commandPalette)
-        settingsButton.isHidden = hidden.contains(.settings)
     }
 
-    func setOpenModal(palette: Bool, settings: Bool) {
-        paletteButton.isActive = palette
-        settingsButton.isActive = settings
-    }
+    func setPaletteOpen(_ open: Bool) { paletteButton.isActive = open }
 
     var paletteButtonForTesting: IconButton { paletteButton }
-    var settingsButtonForTesting: IconButton { settingsButton }
 }

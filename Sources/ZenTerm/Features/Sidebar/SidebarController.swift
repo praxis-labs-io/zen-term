@@ -536,9 +536,15 @@ final class SidebarController {
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
 
-    func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
+    func setOpenModal(palette: Bool, settings: Bool) {
+        footer.setPaletteOpen(palette)
+        view.setSettingsOpen(settings)
+    }
 
-    func setHiddenButtons(_ hidden: Set<ToolbarButton>) { footer.setHiddenButtons(hidden) }
+    func setHiddenButtons(_ hidden: Set<ToolbarButton>) {
+        footer.setHiddenButtons(hidden)
+        view.setSettingsButtonHidden(hidden.contains(.settings))
+    }
 
     func shutdown() { edgeReveal.shutdown() }
 

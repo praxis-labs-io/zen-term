@@ -16,9 +16,10 @@ final class SidebarColumn: ShadowCardView, ThemeReapplying {
         onAdd: @escaping () -> Void
     ) {
         rows = SidebarView(
-            onActivate: onActivate, onNewWorktree: onNewWorktree, onRenameWorkspace: onRenameWorkspace,
+            onSettings: onSettings, onActivate: onActivate, onNewWorktree: onNewWorktree,
+            onRenameWorkspace: onRenameWorkspace,
             onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
-        footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
+        footer = SidebarFooter(onPalette: onPalette)
         toggle = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false

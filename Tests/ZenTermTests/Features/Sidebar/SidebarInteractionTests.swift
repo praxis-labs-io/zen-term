@@ -305,16 +305,27 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
 
         XCTAssertTrue(controller.sidebarForTesting.footer.paletteButtonForTesting.isHidden)
-        XCTAssertFalse(controller.sidebarForTesting.footer.settingsButtonForTesting.isHidden)
+        XCTAssertFalse(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
         try press("p", [.command, .shift], keyCode: 35, in: controller)
         XCTAssertEqual(modals(CommandPaletteOverlay.self, in: controller).count, 1)
     }
 
-    func test_hidingSettings_hidesItsFooterButton_andItsShortcutStillWorks() throws {
+    func test_turningWindowChromeOff_hidesTheSettingsButton_andItsShortcutStillWorks() throws {
+        var config = GeneralConfig.current
+        config.windowChrome = false
+        GeneralConfig.setCurrentForTesting(config)
+        let controller = makeController()
+
+        XCTAssertTrue(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
+        try press(",", [.command], keyCode: 43, in: controller)
+        XCTAssertEqual(modals(SettingsOverlay.self, in: controller).count, 1)
+    }
+
+    func test_hidingSettings_hidesItsHeaderButton_andItsShortcutStillWorks() throws {
         hiding([.settings])
         let controller = makeController()
 
-        XCTAssertTrue(controller.sidebarForTesting.footer.settingsButtonForTesting.isHidden)
+        XCTAssertTrue(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
         XCTAssertFalse(controller.sidebarForTesting.footer.paletteButtonForTesting.isHidden)
         try press(",", [.command], keyCode: 43, in: controller)
         XCTAssertEqual(modals(SettingsOverlay.self, in: controller).count, 1)
@@ -329,13 +340,13 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.sidebarForTesting.footer.paletteButtonForTesting.isActive)
     }
 
-    func test_footerSettingsButton_opensSettings() throws {
+    func test_headerSettingsButton_opensSettings() throws {
         let controller = makeController()
 
-        try click(controller.sidebarForTesting.footer.settingsButtonForTesting)
+        try click(controller.sidebarForTesting.view.settingsButtonForTesting)
 
         XCTAssertEqual(modals(SettingsOverlay.self, in: controller).count, 1)
-        XCTAssertTrue(controller.sidebarForTesting.footer.settingsButtonForTesting.isActive)
+        XCTAssertTrue(controller.sidebarForTesting.view.settingsButtonForTesting.isActive)
     }
 
     func test_toolbar_noLongerCarriesThePaletteButton() throws {

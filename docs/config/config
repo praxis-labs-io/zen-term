@@ -93,9 +93,10 @@
 
 # ─── Chrome ──────────────────────────────────────────────────────────────────
 
-# Show the window buttons (close, minimize, zoom) at the top of the sidebar.
-# They hide while the sidebar is collapsed. Off = never shown; close and minimize
-# still work via ⌘W / ⌘M and the menu, and the window drags by its background.
+# Show the window buttons (close, minimize, zoom) and the Settings button at the
+# top of the sidebar. They hide while the sidebar is collapsed. Off = never shown;
+# close and minimize still work via ⌘W / ⌘M and the menu, Settings via ⌘, and the
+# window drags by its background.
 # In-app Settings edit: applies live.
 # window-chrome = true                # true | false
 
@@ -106,11 +107,11 @@
 # pane-headers = true                 # true | false
 
 # Hide any of the built-in buttons in the footer toolbar (bottom-right of the tab
-# bar) or the sidebar footer. Comma-separated, any order. Hiding is visual only:
-# every hidden button's shortcut stays live. A hidden bottom-drawer, right-drawer
-# or scratch button comes back while its shell is busy out of sight, or while
-# something there needs you, so work you cannot see keeps a handle in the toolbar.
-# Buttons, in toolbar order, then the sidebar footer's:
+# bar), the sidebar footer, or the top of the sidebar. Comma-separated, any order.
+# Hiding is visual only: every hidden button's shortcut stays live. A hidden
+# bottom-drawer, right-drawer or scratch button comes back while its shell is busy
+# out of sight, or while something there needs you, so work you cannot see keeps a handle in the toolbar.
+# Buttons, in toolbar order, then the sidebar's:
 #   new-tab, bottom-drawer, right-drawer, scratch, command-palette, settings
 # In-app Settings edit: applies live.
 # hide-toolbar-buttons =              # e.g. new-tab,scratch
