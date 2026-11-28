@@ -247,10 +247,10 @@ extension ControlResponder {
     enum Delivery {
         case paste, keys
 
-        fileprivate var verbs: (done: String, to: String) {
+        fileprivate var done: String {
             switch self {
-            case .paste: return ("sent", "send")
-            case .keys: return ("pressed", "press")
+            case .paste: return "sent"
+            case .keys: return "pressed"
             }
         }
     }
@@ -265,7 +265,7 @@ extension ControlResponder {
         return ControlError(
             .refused,
             "Pane \(place.pane.token)'s agent is waiting on the user\(waitsOn), and that decision is the user's. "
-                + "Nothing was \(delivery.verbs.done). Pass --force to \(delivery.verbs.to) anyway.")
+                + "Nothing was \(delivery.done).")
     }
 
     func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool, overDraft: Bool = false) {

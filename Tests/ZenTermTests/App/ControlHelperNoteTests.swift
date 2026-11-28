@@ -746,6 +746,20 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, try note("2 bugs", from: helper))
     }
 
+    func test_aSendFromAnyoneButItsHelperIntoABlockedAgentIsRefused_withoutOfferingForce() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try runHelper(from: parent)
+        let sibling = try runHelper(named: "tests", from: parent)
+        report(.blocked(.permission), from: helper)
+
+        let reply = try sending("yes", from: sibling, to: helper)
+        guard case .failure(let refusal) = reply else { return XCTFail("\(reply as Any)") }
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertFalse(refusal.message.contains("--force"), refusal.message)
+        XCTAssertEqual(helper.inputs, [])
+    }
+
     func test_aHelperWhoseBlockClearsTellsItsParentToWaitAgain() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)

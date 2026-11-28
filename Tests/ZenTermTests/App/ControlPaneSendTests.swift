@@ -144,6 +144,7 @@ final class ControlPaneSendTests: WindowTestCase {
         }
         XCTAssertEqual(refusal.code, .refused)
         XCTAssertTrue(refusal.message.contains("decision is the user's"), refusal.message)
+        XCTAssertFalse(refusal.message.contains("--force"), refusal.message)
         XCTAssertEqual(agent.inputs, [])
 
         XCTAssertEqual(send("yes", to: try token(of: agent), enter: true, force: true).reply?.isSuccess, true)
