@@ -2695,7 +2695,9 @@ final class WindowController: NSObject {
         renderAgents()
     }
 
-    func deliverFirstTask(_ task: String, toPane token: Int, settle: @escaping (FirstTask) -> Void) {
+    func deliverFirstTask(
+        toPane token: Int, pastes: @escaping () -> [String], settle: @escaping (FirstTask) -> Void
+    ) {
         guard let (_, handle) = pane(token: token) else { return settle(.held(.notReady)) }
         let surface = handle.surface
         let surfaceID = handle.surfaceID
@@ -2703,7 +2705,7 @@ final class WindowController: NSObject {
             surfaceID,
             send: { [weak self, weak surface] in
                 if let surface { self?.taskMarks.mark(surfaceID, at: surface) }
-                surface?.paste(task)
+                pastes().forEach { surface?.paste($0) }
                 surface?.submit()
                 self?.taskPickups.submitted(to: surfaceID)
             },

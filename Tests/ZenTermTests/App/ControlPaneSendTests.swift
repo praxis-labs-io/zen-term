@@ -858,7 +858,9 @@ final class ControlPaneSendTests: WindowTestCase {
         let helper = try XCTUnwrap(spawned.last)
 
         report(.idle, from: helper)
-        XCTAssertEqual(helper.inputs, [.paste("Review x.swift"), .submit])
+        let replyCommand = "zen pane send --pane \(caller) --enter"
+        let wrapped = "<zen from=\"\(caller)\" reply=\"\(replyCommand)\">Review x.swift</zen>"
+        XCTAssertEqual(helper.inputs, [.paste(wrapped), .submit])
         XCTAssertNil(answer.reply, "the wait holds until the helper's turn ends")
 
         report(.working, from: helper)

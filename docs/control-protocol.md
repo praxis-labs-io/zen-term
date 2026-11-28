@@ -414,7 +414,8 @@ runs as without it.
 Without `task` it answers at once and `first_task` is absent. With one, it answers once the
 program sends its first OSC 7501 status report, or after 60 seconds. A first report of `idle`
 or `done` means it is ready: the task is pasted and Return sent, as `pane.send` with `enter`
-does, and `first_task` is `{"sent":true}`. Otherwise the task is not sent and `reason` says why:
+does, in the caller's envelope, and `first_task` is `{"sent":true}`. A `task` with a `<zen` or
+`</zen` tag, in any case, is a `bad_request`, as it is for `pane.send`. Otherwise the task is not sent and `reason` says why:
 
 | `reason`    | When                                                                 |
 | ----------- | -------------------------------------------------------------------- |

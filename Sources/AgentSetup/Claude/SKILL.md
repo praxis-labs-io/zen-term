@@ -128,6 +128,8 @@ zen pane close review           # once you have its result
   `zen wait <name>`.
 - Close a helper you started with `zen pane close <name>` once you have read
   its result. Its parent closes it without `--force`.
+- As a helper, your task arrives in your parent's envelope, as its later
+  messages do.
 - As a helper, report to your parent with
   `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
   `--enter` the report is pasted but never submitted.
