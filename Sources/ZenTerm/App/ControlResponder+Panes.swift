@@ -143,12 +143,21 @@ extension ControlResponder {
         switch pane(request.args.pane, for: request) {
         case .failure(let error): reply(.failure(error))
         case .success(let place):
-            if let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) {
+            let fromHelper = isHelper(request.caller?.pane, of: place)
+            if !fromHelper,
+                let refusal = Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force)
+            {
                 return reply(.failure(refusal))
             }
             let token = place.pane.token
-            guard place.window.runsAgent(place.pane), paneDrafts.isHolding(place.pane.surfaceID) else {
+            let isHeld =
+                paneDrafts.isHolding(place.pane.surfaceID)
+                || Self.refusal(.paste, into: place, from: request.caller?.pane, force: request.args.force) != nil
+            guard place.window.runsAgent(place.pane), isHeld else {
                 return answer(deliver(to: token, for: request), for: request, hangup: hangup, reply: reply)
+            }
+            if fromHelper, request.args.enter == true, !text.isEmpty {
+                noteDelivery(from: request.caller?.pane, to: place, submitted: true)
             }
             let isBlocked = { [self] in
                 guard case .success(let place) = pane(.token(token), for: request) else { return false }
@@ -184,8 +193,13 @@ extension ControlResponder {
                             drop(error.message)
                         }
                     },
-                    drop: drop))
+                    drop: drop, waitsOutAnyBlock: fromHelper))
         }
+    }
+
+    private func isHelper(_ sender: Int?, of place: PanePlace) -> Bool {
+        guard let sender, let helper = locate(pane: sender) else { return false }
+        return helper.pane.record.parent == place.pane.token
     }
 
     // The pane is found again because a queued message can outlast it, and its agent can block meanwhile.
@@ -233,10 +247,10 @@ extension ControlResponder {
     enum Delivery {
         case paste, keys
 
-        fileprivate var verbs: (done: String, to: String) {
+        fileprivate var done: String {
             switch self {
-            case .paste: return ("sent", "send")
-            case .keys: return ("pressed", "press")
+            case .paste: return "sent"
+            case .keys: return "pressed"
             }
         }
     }
@@ -251,16 +265,22 @@ extension ControlResponder {
         return ControlError(
             .refused,
             "Pane \(place.pane.token)'s agent is waiting on the user\(waitsOn), and that decision is the user's. "
-                + "Nothing was \(delivery.verbs.done). Pass --force to \(delivery.verbs.to) anyway.")
+                + "Nothing was \(delivery.done).")
     }
 
     func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool, overDraft: Bool = false) {
         let surface = place.pane.surface
         if enter { place.window.markTask(on: place.pane) }
         if overDraft, let stash = place.window.draftStash(of: place.pane) { surface.press(stash) }
-        if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
+        if !text.isEmpty { pastes(text, from: sender, into: place).forEach(surface.paste) }
         if enter { surface.submit() }
         paneWaits.sent(to: place.pane.surfaceID)
+    }
+
+    func pastes(_ text: String, from sender: Int?, into place: PanePlace) -> [String] {
+        guard place.window.runsAgent(place.pane) else { return [text] }
+        return AgentPaste.pieces(
+            of: envelope(text, from: sender, into: place), rows: place.pane.surface.cellMetrics?.rows)
     }
 
     // An agent reads a bare paste as its user typing, so another agent's message says who sent it and how to answer.

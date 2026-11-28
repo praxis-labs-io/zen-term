@@ -762,13 +762,16 @@ message's agent has a draft stash (`AgentRules.draftStash`, Claude Code's Ctrl-S
 stash, pastes and submits, and the agent restores the draft on that submit, so the queue releases
 nothing more for `PaneDrafts.draftRestorePause`. The
 person's Return drains it through `PaneDrafts.after`, after the key reached the surface. A message
-the queue drops (its pane closed, or its agent blocked 10 minutes from when the queue could deliver)
+the queue drops (its pane closed, or its agent blocked 10 minutes from when the queue could deliver, which a
+child's `pane.send` to its parent never is: it queues past a blocked parent instead of being refused)
 goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
-`onHelperNote`. A child's submitted `pane.send` to its parent marks it in its window until its next turn or its parent's
+`onHelperNote`. A child's submitted `pane.send` to its parent, from when it delivers or queues, marks it in its window until its next turn or its parent's
 next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after the parent's `PaneDrafts` queue waits out a
-blocked agent and a draft, as a queued `pane.send` does. `pane.send`, `pane.keys` and a held note
+blocked agent and a draft, as a queued `pane.send` does. Into an agent, `ControlResponder.paste` hands the
+enveloped text to `AgentPaste`, which splits it into pastes under Claude Code's fold budgets, and a run's first task
+takes the same path through `WindowController.deliverFirstTask`. `pane.send`, `pane.keys` and a held note
 all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker's

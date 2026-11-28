@@ -144,6 +144,7 @@ final class ControlPaneSendTests: WindowTestCase {
         }
         XCTAssertEqual(refusal.code, .refused)
         XCTAssertTrue(refusal.message.contains("decision is the user's"), refusal.message)
+        XCTAssertFalse(refusal.message.contains("--force"), refusal.message)
         XCTAssertEqual(agent.inputs, [])
 
         XCTAssertEqual(send("yes", to: try token(of: agent), enter: true, force: true).reply?.isSuccess, true)
@@ -737,6 +738,26 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(shell.inputs, [.paste("ls")])
     }
 
+    func test_aLongSendIntoAnAgentArrivesAsPastesClaudeCodeKeepsInline() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try split(c, from: parent)
+        report(.idle, from: helper)
+        let from = try token(of: parent)
+        let text = (1...10).map { "finding \($0): " + String(repeating: "x", count: 190) }.joined(separator: "\n")
+
+        XCTAssertEqual(send(text, to: try token(of: helper), from: from, enter: true).reply?.isSuccess, true)
+
+        let envelope = "<zen from=\"\(from)\" reply=\"zen pane send --pane \(from) --enter\">\(text)</zen>"
+        XCTAssertGreaterThan(helper.pastes.count, 1)
+        XCTAssertEqual(helper.pastes.joined(), envelope)
+        for piece in helper.pastes {
+            XCTAssertLessThanOrEqual(piece.utf16.count, AgentPaste.maxLength)
+            XCTAssertLessThanOrEqual(piece.filter(\.isNewline).count, AgentPaste.maxNewlines)
+        }
+        XCTAssertEqual(helper.inputs.last, .submit)
+    }
+
     func test_anAgentsSlashCommandToAnotherAgentArrivesBare_andAMultilineOneIsWrapped() throws {
         let c = makeWindow()
         let parent = try XCTUnwrap(spawned.first)
@@ -838,7 +859,9 @@ final class ControlPaneSendTests: WindowTestCase {
         let helper = try XCTUnwrap(spawned.last)
 
         report(.idle, from: helper)
-        XCTAssertEqual(helper.inputs, [.paste("Review x.swift"), .submit])
+        let replyCommand = "zen pane send --pane \(caller) --enter"
+        let wrapped = "<zen from=\"\(caller)\" reply=\"\(replyCommand)\">Review x.swift</zen>"
+        XCTAssertEqual(helper.inputs, [.paste(wrapped), .submit])
         XCTAssertNil(answer.reply, "the wait holds until the helper's turn ends")
 
         report(.working, from: helper)

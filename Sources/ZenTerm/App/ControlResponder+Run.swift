@@ -15,6 +15,10 @@ extension ControlResponder {
         if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
         if let problem = Self.cwdProblem(request.args) { return reply(.failure(problem)) }
         if let problem = Self.placementProblem(request.args) { return reply(.failure(problem)) }
+        if let task = request.args.task, ZenEnvelope.carriesTag(task) {
+            let tagged = "pane.run task cannot contain a <zen or </zen tag, which marks who sent a message."
+            return reply(.failure(ControlError(.badRequest, tagged)))
+        }
         let name = request.args.name
         let replacing: PanePlace?
         switch replaced(request) {
@@ -67,7 +71,11 @@ extension ControlResponder {
             guard let task = request.args.task, !task.isEmpty else {
                 return answer(PaneRunResult(pane: token, firstTask: nil), for: request, hangup: hangup, reply: reply)
             }
-            window.deliverFirstTask(task, toPane: token) { [self] outcome in
+            let taskPastes = { [self] in
+                guard case .success(let place) = pane(.token(token), for: request) else { return [task] }
+                return pastes(task, from: request.caller?.pane, into: place)
+            }
+            window.deliverFirstTask(toPane: token, pastes: taskPastes) { [self] outcome in
                 answer(PaneRunResult(pane: token, firstTask: outcome), for: request, hangup: hangup, reply: reply)
             }
         }

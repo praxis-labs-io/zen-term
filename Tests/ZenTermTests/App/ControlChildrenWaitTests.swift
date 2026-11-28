@@ -168,7 +168,8 @@ final class ControlChildrenWaitTests: WindowTestCase {
         let caller = try token(of: try XCTUnwrap(spawned.first))
         let child = try run("claude", task: "review x.swift", from: caller)
         report(.idle, from: child)
-        XCTAssertEqual(child.pastes, ["review x.swift"])
+        let replyCommand = "zen pane send --pane \(caller) --enter"
+        XCTAssertEqual(child.pastes, ["<zen from=\"\(caller)\" reply=\"\(replyCommand)\">review x.swift</zen>"])
         let answer = waitOnChildren(.all, from: caller)
         settle(0.6)
         XCTAssertNil(answer.reply, "an idle child with its task just sent answered as finished")

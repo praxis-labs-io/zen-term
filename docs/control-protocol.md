@@ -327,7 +327,9 @@ Into a pane that runs an agent:
 - `refused` while its `status` is `blocked`, since what it waits on is the user's decision.
   `force` sends anyway. A `pane.run` parent's send to its child blocked on a `question` is not
   refused, since a question about the task is the parent's to answer; a `permission` or `auth`
-  block refuses the parent too. A `working` agent takes the text into its running turn.
+  block refuses the parent too. A `pane.run` child's send to its parent is never refused: while
+  the parent is `blocked` it is queued as below and answers `{"queued":true}`, and it waits until
+  the parent is not, with no 10-minute drop. A `working` agent takes the text into its running turn.
 - While the person has unsent text at its prompt, the send is queued and answers
   `{"queued":true}` at once. Only keys and pastes that reach the pane's terminal count, not ones a
   card, field or button of the window takes. Text is unsent from the first typed character, Up or Down arrow, Tab or paste
@@ -344,8 +346,9 @@ Into a pane that runs an agent:
   after. Into any other agent, or as a slash command or without `enter`, the send waits until the
   person sends or clears their text.
   Keys or a paste into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued
-  send whose agent is `blocked` when its turn comes waits until it is not, and is dropped once the
-  agent stays blocked 10 minutes from when the person sent or cleared their text. A queued send that
+  send whose agent is `blocked` when its turn comes waits until it is not, and, unless it is a
+  child's send to its parent, is dropped once the agent stays blocked 10 minutes from when the person
+  sent or cleared their text. A queued send that
   is dropped, there or because its pane closed or refused it, answers a `wait` with a `failed` error
   that gives the reason. While a send with `enter` other than a slash command is queued, a stop
   of the agent's turn answers no wait on the pane and sends no `stopped` note, and `children`
@@ -356,6 +359,10 @@ Into a pane that runs an agent:
   `&quot;`, `&lt;` and `&gt;`. A send into a shell, into the caller's own
   pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
   note to its parent (`pane.run`) arrives the same way, its name escaped the same way.
+- Into an agent, the text arrives as several pastes in a row, each at most 800 UTF-16 units and
+  2 line breaks, so Claude Code keeps it inline as the message instead of folding it into
+  pasted content. Claude Code folds a paste with fewer line breaks in a pane under 12 rows, so
+  text with line breaks can still fold there.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does. A queued
 send's wait begins when it is queued, and its `timeout` counts from then.
@@ -410,7 +417,8 @@ runs as without it.
 Without `task` it answers at once and `first_task` is absent. With one, it answers once the
 program sends its first OSC 7501 status report, or after 60 seconds. A first report of `idle`
 or `done` means it is ready: the task is pasted and Return sent, as `pane.send` with `enter`
-does, and `first_task` is `{"sent":true}`. Otherwise the task is not sent and `reason` says why:
+does, in the caller's envelope, and `first_task` is `{"sent":true}`. A `task` with a `<zen` or
+`</zen` tag, in any case, is a `bad_request`, as it is for `pane.send`. Otherwise the task is not sent and `reason` says why:
 
 | `reason`    | When                                                                 |
 | ----------- | -------------------------------------------------------------------- |
