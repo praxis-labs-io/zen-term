@@ -356,6 +356,10 @@ Into a pane that runs an agent:
   `&quot;`, `&lt;` and `&gt;`. A send into a shell, into the caller's own
   pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
   note to its parent (`pane.run`) arrives the same way, its name escaped the same way.
+- Into an agent, the text arrives as several pastes in a row, each at most 800 UTF-16 units and
+  2 line breaks, so Claude Code keeps it inline as the message instead of folding it into
+  pasted content. Claude Code folds a paste with fewer line breaks in a pane under 12 rows, so
+  text with line breaks can still fold there.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does. A queued
 send's wait begins when it is queued, and its `timeout` counts from then.

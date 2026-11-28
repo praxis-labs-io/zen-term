@@ -768,7 +768,9 @@ starts in `WindowController` on the 7501 change or the launched pane's exit, whi
 waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
 `onHelperNote`. A child's submitted `pane.send` to its parent marks it in its window until its next turn or its parent's
 next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after the parent's `PaneDrafts` queue waits out a
-blocked agent and a draft, as a queued `pane.send` does. `pane.send`, `pane.keys` and a held note
+blocked agent and a draft, as a queued `pane.send` does. Into an agent, `ControlResponder.paste` hands the
+enveloped text to `AgentPaste`, which splits it into pastes under Claude Code's fold budgets.
+`pane.send`, `pane.keys` and a held note
 all ask `ControlResponder.refusal` whether a blocked agent's prompt is the caller's to answer. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker's

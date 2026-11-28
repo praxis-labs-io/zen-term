@@ -258,9 +258,15 @@ extension ControlResponder {
         let surface = place.pane.surface
         if enter { place.window.markTask(on: place.pane) }
         if overDraft, let stash = place.window.draftStash(of: place.pane) { surface.press(stash) }
-        if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
+        if !text.isEmpty { pastes(text, from: sender, into: place).forEach(surface.paste) }
         if enter { surface.submit() }
         paneWaits.sent(to: place.pane.surfaceID)
+    }
+
+    func pastes(_ text: String, from sender: Int?, into place: PanePlace) -> [String] {
+        guard place.window.runsAgent(place.pane) else { return [text] }
+        return AgentPaste.pieces(
+            of: envelope(text, from: sender, into: place), rows: place.pane.surface.cellMetrics?.rows)
     }
 
     // An agent reads a bare paste as its user typing, so another agent's message says who sent it and how to answer.

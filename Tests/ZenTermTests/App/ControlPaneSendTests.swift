@@ -737,6 +737,26 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(shell.inputs, [.paste("ls")])
     }
 
+    func test_aLongSendIntoAnAgentArrivesAsPastesClaudeCodeKeepsInline() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try split(c, from: parent)
+        report(.idle, from: helper)
+        let from = try token(of: parent)
+        let text = (1...10).map { "finding \($0): " + String(repeating: "x", count: 190) }.joined(separator: "\n")
+
+        XCTAssertEqual(send(text, to: try token(of: helper), from: from, enter: true).reply?.isSuccess, true)
+
+        let envelope = "<zen from=\"\(from)\" reply=\"zen pane send --pane \(from) --enter\">\(text)</zen>"
+        XCTAssertGreaterThan(helper.pastes.count, 1)
+        XCTAssertEqual(helper.pastes.joined(), envelope)
+        for piece in helper.pastes {
+            XCTAssertLessThanOrEqual(piece.utf16.count, AgentPaste.maxLength)
+            XCTAssertLessThanOrEqual(piece.filter(\.isNewline).count, AgentPaste.maxNewlines)
+        }
+        XCTAssertEqual(helper.inputs.last, .submit)
+    }
+
     func test_anAgentsSlashCommandToAnotherAgentArrivesBare_andAMultilineOneIsWrapped() throws {
         let c = makeWindow()
         let parent = try XCTUnwrap(spawned.first)
