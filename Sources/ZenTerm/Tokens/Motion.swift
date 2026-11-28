@@ -301,7 +301,7 @@ enum Motion {
         layer.add(dissolve, forKey: "motion.crossfade")
     }
 
-    /// Layer-backed views disable implicit layer animations, so these properties are animated explicitly.
+    /// Animated explicitly, and written with implicit actions off so a standalone sublayer snaps under Reduce Motion.
     static func ease(
         _ layer: CALayer,
         keyPath: String,
@@ -311,7 +311,10 @@ enum Motion {
         completion: (() -> Void)? = nil
     ) {
         let from = start ?? layer.presentation()?.value(forKeyPath: keyPath) ?? layer.value(forKeyPath: keyPath)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         layer.setValue(value, forKeyPath: keyPath)
+        CATransaction.commit()
 
         if isReduceMotionEnabled() {
             completion?()
