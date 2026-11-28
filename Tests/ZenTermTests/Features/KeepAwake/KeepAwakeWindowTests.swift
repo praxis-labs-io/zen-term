@@ -86,4 +86,13 @@ final class KeepAwakeWindowTests: WindowTestCase {
 
         XCTAssertFalse(menu.isOpen, "the card stayed with nothing under it")
     }
+
+    func test_openingThePopover_endsScrollMode_soTheKeysReachThePopover() throws {
+        controller.handle(.toggleScrollMode)
+        XCTAssertTrue(controller.scrollMode.isActive, "precondition")
+
+        try XCTUnwrap(controller.keepAwakeMenuForTesting).togglePopover()
+
+        XCTAssertFalse(controller.scrollMode.isActive, "scroll mode kept the keyboard under the popover")
+    }
 }

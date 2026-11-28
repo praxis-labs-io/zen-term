@@ -826,6 +826,7 @@ final class WindowController: NSObject {
             onRefused: { [weak self] in self?.showToast(Self.keepAwakeRefusedToast($0)) },
             onActivityChanged: { [weak self] in self?.sidebar.setKeepAwakeActivity($0) })
         keepAwakeMenu?.onOpenChanged = { [weak self] isOpen in
+            if isOpen { self?.endModes() }
             self?.sidebar.setHoverCovered(isOpen)
             if !isOpen { self?.restoreFocusToActive() }
         }
