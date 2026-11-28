@@ -215,6 +215,7 @@ final class PopoverForm: NSView, ThemeReapplying {
                 from: cursor.flatMap(enabled.firstIndex(of:)), delta: delta, count: enabled.count)
         else { return }
         cursor = enabled[next]
+        KeyboardFocus.reveal(rowViews[enabled[next]], among: rowViews, travelling: delta > 0 ? .down : .up)
     }
 
     private func refreshHighlight() {

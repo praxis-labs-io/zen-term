@@ -125,6 +125,21 @@ final class PopoverFormTests: WindowTestCase {
         XCTAssertEqual(highlights(form), [true, false, false, false], "the cursor ran past the first row")
     }
 
+    func test_arrows_scrollTheCursorRowIntoView_inACardTooTallForTheWindow() throws {
+        window.setContentSize(NSSize(width: 500, height: 200))
+        let form = openForm()
+        let last = try XCTUnwrap(form.rowViewsForTesting.last)
+        let scroll = try XCTUnwrap(last.enclosingScrollView)
+        let visible = { scroll.contentView.bounds.contains(last.convert(last.bounds, to: scroll.contentView)) }
+        XCTAssertFalse(visible(), "precondition: the card has to clip the last row")
+
+        try press(.arrowDown)
+        try press(.arrowDown)
+
+        XCTAssertEqual(highlights(form), [false, false, false, true])
+        XCTAssertTrue(visible(), "the cursor moved onto a row the card does not show")
+    }
+
     func test_return_choosesTheCursorRow() throws {
         _ = openForm()
 
