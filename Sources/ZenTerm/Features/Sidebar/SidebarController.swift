@@ -293,7 +293,7 @@ final class SidebarController {
         let cardInset = onCard ? ChromeMetrics.windowGutter : 0
         return HostWindow.WindowButtonPlacement(
             leading: cardInset + SidebarView.captionLeading,
-            centerFromTop: ChromeMetrics.windowGutter + cardInset + SidebarView.windowButtonStripHeight / 2)
+            centerFromTop: ChromeMetrics.windowGutter + cardInset + SidebarView.windowButtonCenterY)
     }
 
     private func applyRevealInsets() {

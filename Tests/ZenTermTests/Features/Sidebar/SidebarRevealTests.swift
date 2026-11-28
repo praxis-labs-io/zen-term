@@ -827,7 +827,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(buttons[0].minX, headingFrame.minX, accuracy: 0.5, "\(context): leading edge", line: line)
         for button in buttons {
             XCTAssertEqual(
-                button.midY, rowsFrame.maxY - SidebarView.windowButtonStripHeight / 2, accuracy: 0.5,
+                button.midY, rowsFrame.maxY - SidebarView.windowButtonCenterY, accuracy: 0.5,
                 "\(context): centered in the strip above the heading", line: line)
         }
         for (left, right) in zip(buttons, buttons.dropFirst()) {

@@ -35,7 +35,9 @@ final class SidebarView: NSView, ThemeReapplying {
     private static let captionHeight: CGFloat = ChromeMetrics.Height.control
     private static let captionInset: CGFloat = ChromeMetrics.Spacing.controlInset
     static let captionLeading = padding + captionInset
-    static let windowButtonStripHeight: CGFloat = ChromeMetrics.Height.control
+    // The sidebar and the panes start one window gutter down, so the strip centers on the pane headers' line.
+    static var windowButtonCenterY: CGFloat { ModeChrome.headerCenterY }
+    static var windowButtonStripHeight: CGFloat { windowButtonCenterY * 2 }
     private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
     // Without window buttons the caption centers on the first pane header's line, across the gap.
     private static let chromelessTop = ModeChrome.headerCenterY - captionHeight / 2
@@ -123,7 +125,7 @@ final class SidebarView: NSView, ThemeReapplying {
             addButton.centerYAnchor.constraint(equalTo: caption.centerYAnchor),
             settingsButton.trailingAnchor.constraint(
                 equalTo: trailingAnchor, constant: -(Self.padding + Self.addInset)),
-            settingsButton.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.windowButtonStripHeight / 2),
+            settingsButton.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.windowButtonCenterY),
             rowStack.topAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight),
             rowStack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: Self.padding),
             rowStack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -Self.padding),
