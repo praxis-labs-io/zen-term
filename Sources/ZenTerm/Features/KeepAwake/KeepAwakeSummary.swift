@@ -57,7 +57,7 @@ enum KeepAwakeSummary {
 
     private static func shortRemaining(until end: Date, from now: Date) -> String {
         let left = seconds(until: end, from: now)
-        guard left > 60 else { return "\(left)s" }
+        guard left >= 60 else { return "\(left)s" }
         let minutes = (left + 59) / 60
         guard minutes >= 60 else { return "\(minutes)m" }
         return minutes % 60 == 0 ? "\(minutes / 60)h" : "\(minutes / 60)h \(minutes % 60)m"
@@ -65,7 +65,7 @@ enum KeepAwakeSummary {
 
     private static func longRemaining(until end: Date, from now: Date) -> String {
         let left = seconds(until: end, from: now)
-        guard left > 60 else { return plural(left, "more second") }
+        guard left >= 60 else { return plural(left, "more second") }
         let minutes = (left + 59) / 60
         let hours = minutes / 60
         let rest = minutes % 60

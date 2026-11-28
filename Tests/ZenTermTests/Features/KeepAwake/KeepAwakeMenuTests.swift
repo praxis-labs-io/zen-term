@@ -66,7 +66,7 @@ final class KeepAwakeMenuTests: WindowTestCase {
 
     private func openPopover() throws -> PopoverForm {
         try click(indicator)
-        XCTAssertTrue(menu.isOpenForTesting, "clicking the indicator did not open the popover")
+        XCTAssertTrue(menu.isOpen, "clicking the indicator did not open the popover")
         return try XCTUnwrap(menu.formForTesting)
     }
 
@@ -89,7 +89,7 @@ final class KeepAwakeMenuTests: WindowTestCase {
 
         XCTAssertEqual(keepAwake.hold?.until, .duration(60 * 60))
         XCTAssertEqual(power.held, false)
-        XCTAssertTrue(menu.isOpenForTesting)
+        XCTAssertTrue(menu.isOpen)
         XCTAssertEqual(menu.toggleForTesting?.isOn, true, "the switch did not follow the hold")
         XCTAssertEqual(form.rowViewsForTesting.map(\.content.trailing), [nil, nil, nil, .check, nil])
         XCTAssertEqual(form.headerTintForTesting, Theme.current.chrome.accent.nsColor)
@@ -121,6 +121,38 @@ final class KeepAwakeMenuTests: WindowTestCase {
         XCTAssertEqual(keepAwake.hold?.until, .turnedOff)
         XCTAssertEqual(power.held, true, "the display chosen while off was not used")
         XCTAssertTrue(indicator.showsDisplayForTesting)
+    }
+
+    func test_aDisplayChoiceMadeWhileOff_isRememberedByKeepAwake_acrossClosingThePopover() throws {
+        _ = try openPopover()
+        try click(try XCTUnwrap(menu.scopeForTesting?.subviews.last))
+        XCTAssertTrue(keepAwake.keepsDisplayOn, "the choice did not reach KeepAwake")
+        menu.close()
+
+        _ = try openPopover()
+        XCTAssertEqual(menu.scopeForTesting?.selectedIndex, 1, "reopening forgot the display choice")
+        keepAwake.start(.turnedOff)
+        XCTAssertEqual(power.held, true, "a start from elsewhere did not honor the choice")
+    }
+
+    func test_openingAndClosing_reportsEachOnce() throws {
+        var reports: [Bool] = []
+        menu.onOpenChanged = { reports.append($0) }
+
+        _ = try openPopover()
+        NSApp.sendEvent(try TypedKey.escape.event(in: window))
+        XCTAssertFalse(menu.isOpen, "precondition: Escape closes the popover")
+        _ = try openPopover()
+        menu.togglePopover()
+
+        XCTAssertEqual(reports, [true, false, true, false])
+    }
+
+    func test_theIndicatorsSpokenValue_includesTheBatteryWarning() {
+        keepAwake.start(.turnedOff)
+        battery.report(BatteryReading(isOnBattery: true, percent: 20))
+
+        XCTAssertEqual(indicator.accessibilityValue() as? String, "Awake, battery low")
     }
 
     func test_choosingTheDisplay_whileOn_keepsTheEndCondition() throws {
@@ -172,7 +204,7 @@ final class KeepAwakeMenuTests: WindowTestCase {
 
         menu.togglePopover()
 
-        XCTAssertFalse(menu.isOpenForTesting)
+        XCTAssertFalse(menu.isOpen)
         XCTAssertFalse(indicator.isActive)
     }
 
@@ -209,8 +241,10 @@ final class KeepAwakeMenuTests: WindowTestCase {
         clock.advance(by: 60)
         XCTAssertEqual(indicator.detailTextForTesting, "29m")
 
-        clock.advance(by: 28 * 60)
-        XCTAssertEqual(indicator.detailTextForTesting, "60s")
+        clock.advance(by: 27 * 60)
+        XCTAssertEqual(indicator.detailTextForTesting, "2m")
+        clock.advance(by: 60)
+        XCTAssertEqual(indicator.detailTextForTesting, "1m", "the last minute skipped 1m")
         clock.advance(by: 1)
         XCTAssertEqual(indicator.detailTextForTesting, "59s")
     }

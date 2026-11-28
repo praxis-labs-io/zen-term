@@ -83,6 +83,13 @@ final class KeepAwake {
         return nil
     }
 
+    func setKeepsDisplayOn(_ display: Bool) {
+        guard display != keepsDisplayOn else { return }
+        keepsDisplayOn = display
+        if hold != nil { power.hold(keepingDisplayOn: display) }
+        announce()
+    }
+
     func turnOff() {
         guard hold != nil else { return }
         end()

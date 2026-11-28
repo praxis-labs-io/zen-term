@@ -27,7 +27,7 @@ final class KeepAwakeSummaryTests: XCTestCase {
     func test_footerDetail_countsMinutes_thenSeconds_roundingUp() {
         let cases: [(TimeInterval, String)] = [
             (2 * 60 * 60, "2h"), (60 * 60 + 30 * 60, "1h 30m"), (42 * 60, "42m"), (41 * 60 + 1, "42m"),
-            (61, "2m"), (60, "60s"), (44.5, "45s"),
+            (61, "2m"), (60, "1m"), (44.5, "45s"),
         ]
         for (left, detail) in cases {
             XCTAssertEqual(

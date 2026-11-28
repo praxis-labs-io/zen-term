@@ -103,7 +103,8 @@ final class KeepAwakeIndicator: ControlView, ThemeReapplying {
 
     override func accessibilityValue() -> Any? {
         guard content.isOn else { return "Off" }
-        return (["Awake"] + [content.keepsDisplayOn ? "display on" : nil, content.detail].compactMap { $0 })
+        let parts = [content.keepsDisplayOn ? "display on" : nil, content.detail, content.isBatteryLow ? "battery low" : nil]
+        return (["Awake"] + parts.compactMap { $0 })
             .joined(separator: ", ")
     }
 

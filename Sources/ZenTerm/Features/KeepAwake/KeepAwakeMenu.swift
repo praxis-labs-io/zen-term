@@ -23,8 +23,8 @@ final class KeepAwakeMenu {
     private var form: PopoverForm?
     private var toggle: ToggleSwitch?
     private var scope: SegmentedControl?
-    private var displayChoice: Bool?
     private var observer: NSObjectProtocol?
+    var onOpenChanged: (Bool) -> Void = { _ in }
     private var cancelTick: KeepAwakeClock.Cancel?
 
     init(
@@ -47,12 +47,15 @@ final class KeepAwakeMenu {
     }
 
     func shutdown() {
+        onOpenChanged = { _ in }
         if let observer { NotificationCenter.default.removeObserver(observer) }
         observer = nil
         cancelTick?()
         cancelTick = nil
         close()
     }
+
+    var isOpen: Bool { popover.isOpen }
 
     func togglePopover() {
         guard !popover.isOpen else { return close() }
@@ -70,26 +73,29 @@ final class KeepAwakeMenu {
         self.form = form
         syncControls()
         popover.open(content: form)
+        guard popover.isOpen else { return didClose() }
         if !keepAwake.isOn, keepAwake.activeCount > 0 { form.highlightedRow = Self.agentsRow }
         form.takeFocus()
         indicator.isActive = true
+        onOpenChanged(true)
     }
 
-    var isOpenForTesting: Bool { popover.isOpen }
     var formForTesting: PopoverForm? { form }
     var toggleForTesting: ToggleSwitch? { toggle }
     var scopeForTesting: SegmentedControl? { scope }
 
-    private func close() {
+    func close() {
         popover.close()
         didClose()
     }
 
     private func didClose() {
+        let wasOpen = form != nil && indicator.isActive
         form = nil
         toggle = nil
         scope = nil
         indicator.isActive = false
+        if wasOpen { onOpenChanged(false) }
     }
 
     private func flip(_ on: Bool) {
@@ -107,20 +113,12 @@ final class KeepAwakeMenu {
     }
 
     private func chooseDisplay(_ display: Bool) {
-        if keepAwake.isOn {
-            start(nil, keepsDisplayOn: display)
-        } else {
-            displayChoice = display
-        }
+        keepAwake.setKeepsDisplayOn(display)
         refresh()
     }
 
-    private func start(_ until: KeepAwake.Until?, keepsDisplayOn display: Bool? = nil) {
-        if let refusal = keepAwake.start(until, keepsDisplayOn: display ?? displayChoice) {
-            onRefused(refusal)
-            return
-        }
-        displayChoice = nil
+    private func start(_ until: KeepAwake.Until?) {
+        if let refusal = keepAwake.start(until) { onRefused(refusal) }
     }
 
     private func refresh() {
@@ -153,7 +151,7 @@ final class KeepAwakeMenu {
     private func syncControls() {
         toggle?.setOn(keepAwake.isOn)
         scope?.setSelection(
-            (keepAwake.isOn ? keepAwake.keepsDisplayOn : displayChoice ?? keepAwake.keepsDisplayOn) ? 1 : 0)
+            keepAwake.keepsDisplayOn ? 1 : 0)
         form?.setHeaderAccented(keepAwake.isOn)
     }
 

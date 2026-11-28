@@ -524,7 +524,11 @@ final class WindowController: NSObject {
             self?.sidebar.edgeReveal.recheck()
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
-        sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
+        sidebar.onRevealChanged = { [weak self] in
+            guard let self else { return }
+            if !sidebar.isShown { keepAwakeMenu?.close() }
+            syncWindowFocus()
+        }
         sidebar.slidesWithDocking = { [weak self] in
             guard let self, let tabBarHeight = self.tabBarHeight else { return [] }
             return [(tabBarHeight, self.tabBarBand)]
@@ -619,6 +623,7 @@ final class WindowController: NSObject {
                     self.renderDock()
                 }
                 if change.contains(.toolbarButtons) {
+                    if GeneralConfig.current.hiddenToolbarButtons.contains(.keepAwake) { self.keepAwakeMenu?.close() }
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
@@ -820,6 +825,10 @@ final class WindowController: NSObject {
             keepAwake: keepAwake, indicator: sidebar.footer.keepAwakeIndicator, clock: TimerClock(),
             onRefused: { [weak self] in self?.showToast(Self.keepAwakeRefusedToast($0)) },
             onActivityChanged: { [weak self] in self?.sidebar.setKeepAwakeActivity($0) })
+        keepAwakeMenu?.onOpenChanged = { [weak self] isOpen in
+            self?.sidebar.setHoverCovered(isOpen)
+            if !isOpen { self?.restoreFocusToActive() }
+        }
     }
 
     private func refreshTitlesFromCWD() {
@@ -3349,6 +3358,7 @@ final class WindowController: NSObject {
     private func toggleSidebar() {
         Log.info("sidebar toggled", category: .workspace)
         if sidebar.hasFocus { restoreFocusToActive() }
+        keepAwakeMenu?.close()
         guard canDockSidebar else {
             sidebar.toggleFloat()
             return

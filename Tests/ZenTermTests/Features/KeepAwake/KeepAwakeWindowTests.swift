@@ -47,6 +47,7 @@ final class KeepAwakeWindowTests: WindowTestCase {
 
         keepAwake.start(.turnedOff)
         XCTAssertEqual(sidebar.windowToggleForTesting.activityDotForTesting.state, .live)
+        XCTAssertEqual(sidebar.windowToggleForTesting.accessibilityValue() as? String, "Keep Awake on")
 
         keepAwake.turnOff()
         XCTAssertNil(sidebar.windowToggleForTesting.activityDotForTesting.state)
@@ -56,11 +57,33 @@ final class KeepAwakeWindowTests: WindowTestCase {
         let indicator = sidebar.footer.keepAwakeIndicator
         XCTAssertFalse(indicator.isHidden)
         XCTAssertTrue(indicator.accessibilityPerformPress())
-        XCTAssertEqual(controller.keepAwakeMenuForTesting?.isOpenForTesting, true)
+        XCTAssertEqual(controller.keepAwakeMenuForTesting?.isOpen, true)
 
         sidebar.setHiddenButtons([.keepAwake])
 
         XCTAssertTrue(indicator.isHidden)
         XCTAssertFalse(sidebar.footer.paletteButtonForTesting.isHidden, "hiding the cup hid the palette button")
+    }
+
+    func test_closingThePopover_handsTheKeyboardBack_andUncoversTheRows() throws {
+        let before = controller.window.firstResponder
+        let menu = try XCTUnwrap(controller.keepAwakeMenuForTesting)
+        menu.togglePopover()
+        XCTAssertFalse(controller.window.firstResponder === before, "precondition: the popover took the keyboard")
+        XCTAssertTrue(sidebar.view.isHoverCovered, "the rows under the card still take hover")
+
+        menu.togglePopover()
+
+        XCTAssertTrue(controller.window.firstResponder === before, "the pane did not get the keyboard back")
+        XCTAssertFalse(sidebar.view.isHoverCovered)
+    }
+
+    func test_collapsingTheSidebar_closesThePopover() throws {
+        let menu = try XCTUnwrap(controller.keepAwakeMenuForTesting)
+        menu.togglePopover()
+
+        controller.handle(.toggleSidebar)
+
+        XCTAssertFalse(menu.isOpen, "the card stayed with nothing under it")
     }
 }

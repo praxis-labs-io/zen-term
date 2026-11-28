@@ -541,7 +541,11 @@ final class SidebarController {
         view.setSettingsOpen(settings)
     }
 
-    func setKeepAwakeActivity(_ activity: IconButton.Activity?) { collapsedToggle.activity = activity }
+    func setKeepAwakeActivity(_ activity: IconButton.Activity?) {
+        collapsedToggle.activity = activity
+        collapsedToggle.setAccessibilityValue(
+            activity.map { $0 == .warning ? "Keep Awake on, battery low" : "Keep Awake on" })
+    }
 
     func setHiddenButtons(_ hidden: Set<ToolbarButton>) {
         footer.setHiddenButtons(hidden)
