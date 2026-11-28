@@ -331,7 +331,7 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_hideToolbarButtons_parsesEverySlug() {
         let config = parse(
-            "hide-toolbar-buttons = new-tab,bottom-drawer,right-drawer,scratch,command-palette,settings\n")
+            "hide-toolbar-buttons = new-tab,bottom-drawer,right-drawer,scratch,command-palette,keep-awake,settings\n")
         XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
     }
 
@@ -484,8 +484,8 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_sidebarFooterSlugs_parseAsButtons() {
-        let config = parse("hide-toolbar-buttons = scratch,command-palette,settings\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.scratch, .commandPalette, .settings])
+        let config = parse("hide-toolbar-buttons = scratch,command-palette,keep-awake,settings\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.scratch, .commandPalette, .keepAwake, .settings])
         XCTAssertEqual(config.configDiagnostics, [])
     }
 
