@@ -68,6 +68,54 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["wait", "review"]) as? WaitCommand).pane, .name("review"))
     }
 
+    func test_everyPaneVerbTakesItsPaneAsAnArgumentOrWithPaneOption() throws {
+        for verb in ["split", "focus", "close", "interrupt", "read", "get"] {
+            for form in [[verb, "review"], [verb, "--pane", "review"]] {
+                let parsed = try Zen.parseAsRoot(["pane"] + form)
+                let pane =
+                    (parsed as? PaneCommands.Split)?.pane ?? (parsed as? PaneCommands.Focus)?.pane
+                    ?? (parsed as? PaneCommands.Close)?.pane ?? (parsed as? PaneCommands.Interrupt)?.pane
+                    ?? (parsed as? PaneCommands.Read)?.pane ?? (parsed as? PaneCommands.Get)?.pane
+                XCTAssertEqual(pane, .name("review"), "pane \(form.joined(separator: " "))")
+            }
+            XCTAssertEqual(
+                Zen.exitCode(running: ["pane", verb, "999999", "--pane", "999999"]), 2, "pane \(verb) twice")
+        }
+        for form in [["wait", "review"], ["wait", "--pane", "review"]] {
+            XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(form) as? WaitCommand).pane, .name("review"))
+        }
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "999999", "--pane", "999999"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "--pane", "999999", "--children", "any"]), 2)
+    }
+
+    func test_sendTakesThePaneBeforeTheTextOrWithPaneOption() throws {
+        let leading = try XCTUnwrap(try Zen.parseAsRoot(["pane", "send", "31", "hi", "--enter"]) as? PaneCommands.Send)
+        XCTAssertEqual(leading.pane, 31)
+        XCTAssertEqual(leading.text, "hi")
+        XCTAssertTrue(leading.enter)
+
+        let option = try XCTUnwrap(try Zen.parseAsRoot(["pane", "send", "--pane", "31", "hi"]) as? PaneCommands.Send)
+        XCTAssertEqual(option.pane, 31)
+        XCTAssertEqual(option.text, "hi")
+
+        let mine = try XCTUnwrap(try Zen.parseAsRoot(["pane", "send", "31"]) as? PaneCommands.Send)
+        XCTAssertNil(mine.pane)
+        XCTAssertEqual(mine.text, "31")
+
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "send", "999999", "hi", "--pane", "999999"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "send", "999999", "hi", "there"]), 2)
+    }
+
+    func test_keysTakeThePaneFirstOrWithPaneOption() throws {
+        let option = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "keys", "--pane", "review", "down", "enter"]) as? PaneCommands.Keys)
+        XCTAssertEqual(option.args, ControlArgs(force: false, pane: .name("review"), keys: ["down", "enter"]))
+
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "999999", "enter", "--pane", "999999"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "--pane", "999999"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys"]), 2)
+    }
+
     func test_runsFloatAndTabFlagsSendFloat_andNeitherLeavesItToTheApp() throws {
         let float = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--float", "htop"]) as? PaneCommands.Run)
         let tab = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--tab", "htop"]) as? PaneCommands.Run)

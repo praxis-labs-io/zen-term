@@ -30,6 +30,9 @@ If `zen` fails with exit 3, ZenTerm isn't running or this shell outlived it.
 - Addresses: a pane is its token (`31`) or its name (`tests`), a tab is
   `w1.t3`, a workspace is its folder (starting with `/`, `~` or `.`),
   `ssh:<host>`, or its title.
+- Every `zen pane` verb but `run`, and `zen wait`, takes its pane as an
+  argument or with `--pane`: `zen pane read dev` and `zen pane read --pane dev`
+  are the same.
 
 ## Run a command in a pane
 

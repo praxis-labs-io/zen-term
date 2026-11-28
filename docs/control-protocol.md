@@ -678,13 +678,15 @@ or 3 without an instance, and prints neither prompt nor answer.
 and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane read --since-task` sends `since: "task"`, and says on stderr when the
-answer is `truncated`. `zen pane get` takes the pane as its argument, this pane by default.
+answer is `truncated`. Every `zen pane` verb but `run`, and `zen wait`, takes its pane as an
+argument or as `--pane`, and both is a usage error. `split`, `send`, `read` and `get` act on this
+pane without one. `zen pane send` reads two arguments as the pane and the text, and one as the text.
 `zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
 `zen wait` does. `zen pane send` without `--wait` prints `{"queued":true}` when the send was queued,
 and nothing when it arrived. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen pane keys <pane> <key>... [--force]` takes the keys as arguments, and a name that is not a
-key is a usage error.
+`zen pane keys [<pane>] <key>... [--force]` takes the keys as the arguments after the pane, or as
+every argument with `--pane`, and a name that is not a key is a usage error.
 `zen pane run [--name] [--task] [--split right|down] [--float|--tab] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` sends `--float` as `float: true` and `--tab` as `float: false`, and both together is a usage error. It takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or

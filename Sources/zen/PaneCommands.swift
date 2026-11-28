@@ -124,12 +124,14 @@ struct PaneCommands: ParsableCommand {
 
     struct Split: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Open a pane beside one, leaving focus where it is, and print its token as JSON.")
+            abstract: "Open a pane beside one, leaving focus where it is, and print its token as JSON.",
+            discussion: PaneTarget.thisPaneByDefault)
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Option(help: "The pane to split. This pane by default.")
-        var pane: ControlAddress.Pane?
+        @OptionGroup var target: PaneTarget
+
+        var pane: ControlAddress.Pane? { target.pane }
 
         @Option(help: "Where the new pane goes: right or down.")
         var dir: PaneDirection = .right
@@ -152,8 +154,11 @@ struct PaneCommands: ParsableCommand {
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Argument(help: "A pane or drawer token, or a pane's name.")
-        var pane: ControlAddress.Pane
+        @OptionGroup var target: PaneTarget
+
+        var pane: ControlAddress.Pane? { target.pane }
+
+        func validate() throws { _ = try target.required() }
 
         func run() throws {
             _ = try connection.client().send(.paneFocus, ControlArgs(pane: pane), expecting: NoPayload.self)
@@ -166,11 +171,14 @@ struct PaneCommands: ParsableCommand {
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Argument(help: "A pane token or name.")
-        var pane: ControlAddress.Pane
+        @OptionGroup var target: PaneTarget
 
         @Flag(help: "Close it anyway.")
         var force = false
+
+        var pane: ControlAddress.Pane? { target.pane }
+
+        func validate() throws { _ = try target.required() }
 
         func run() throws {
             let args = ControlArgs(force: force, pane: pane)
@@ -181,18 +189,26 @@ struct PaneCommands: ParsableCommand {
     struct Send: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Paste text into a pane. Control characters arrive as spaces.",
+            usage: "zen pane send [<pane>] <text> [<options>]",
             discussion:
                 "Into an agent whose person has unsent text at its prompt, it is queued until they send or clear "
                 + "it, or, in Claude Code, stop typing for 60 seconds, and prints {\"queued\":true}. "
-                + "It refuses while the agent waits on the user.")
+                + "It refuses while the agent waits on the user. " + PaneTarget.thisPaneByDefault)
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Argument(help: "The text. Several lines arrive as one block.")
-        var text: String
+        @Argument(help: ArgumentHelp("The pane, when the text follows it. Otherwise the text.", valueName: "pane"))
+        var leading: String
 
-        @Option(help: "A pane or drawer token, or a pane's name. This pane by default.")
-        var pane: ControlAddress.Pane?
+        @Argument(help: ArgumentHelp("The text. Several lines arrive as one block.", valueName: "text"))
+        var trailing: String?
+
+        @Option(name: .customLong("pane"), help: "The pane, as an option instead of an argument.")
+        var paneOption: ControlAddress.Pane?
+
+        var pane: ControlAddress.Pane? { trailing == nil ? paneOption : ControlAddress.Pane(leading) }
+
+        var text: String { trailing ?? leading }
 
         @Flag(help: "Press Return after it, which runs the block once.")
         var enter = false
@@ -207,6 +223,7 @@ struct PaneCommands: ParsableCommand {
         var timeout: Int = ControlWire.defaultPaneWait
 
         func validate() throws {
+            if trailing != nil, paneOption != nil { throw PaneTarget.namedTwice }
             guard (1...ControlWire.longestPaneWait).contains(timeout) else {
                 throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
             }
@@ -227,22 +244,38 @@ struct PaneCommands: ParsableCommand {
 
     struct Keys: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Press keys in a pane, in order, as keystrokes rather than a paste.")
+            abstract: "Press keys in a pane, in order, as keystrokes rather than a paste.",
+            usage: "zen pane keys [<pane>] <key> ... [<options>]")
 
-        private static let names = "One of " + PaneKey.names.joined(separator: ", ") + "."
+        private static let names = "A key is one of " + PaneKey.names.joined(separator: ", ") + "."
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Argument(help: "A pane or drawer token, or a pane's name.")
-        var pane: ControlAddress.Pane
+        @Argument(
+            help: ArgumentHelp(
+                "The pane, unless --pane names it, then the keys.", discussion: Keys.names, valueName: "key"))
+        var words: [String] = []
 
-        @Argument(help: ArgumentHelp("The keys.", discussion: Keys.names))
-        var keys: [PaneKey]
+        @Option(name: .customLong("pane"), help: "The pane, as an option instead of an argument.")
+        var paneOption: ControlAddress.Pane?
 
         @Flag(help: "Press them into an agent that is waiting on the user.")
         var force = false
 
+        var pane: ControlAddress.Pane? { paneOption ?? words.first.map(ControlAddress.Pane.init) }
+
+        var keys: [PaneKey] { (paneOption == nil ? words.dropFirst() : words[...]).compactMap(PaneKey.init(name:)) }
+
         var args: ControlArgs { ControlArgs(force: force, pane: pane, keys: keys.map(\.name)) }
+
+        func validate() throws {
+            guard pane != nil else { throw PaneTarget.unnamed }
+            let named = paneOption == nil ? words.dropFirst() : words[...]
+            if named.isEmpty { throw ValidationError("Name at least one key. \(Self.names)") }
+            if let unknown = named.first(where: { PaneKey(name: $0) == nil }) {
+                throw ValidationError("\(unknown) is not a key. \(Self.names)")
+            }
+        }
 
         func run() throws {
             _ = try connection.client().send(.paneKeys, args, expecting: NoPayload.self)
@@ -255,8 +288,11 @@ struct PaneCommands: ParsableCommand {
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Argument(help: "A pane or drawer token, or a pane's name.")
-        var pane: ControlAddress.Pane
+        @OptionGroup var target: PaneTarget
+
+        var pane: ControlAddress.Pane? { target.pane }
+
+        func validate() throws { _ = try target.required() }
 
         func run() throws {
             _ = try connection.client().send(.paneInterrupt, ControlArgs(pane: pane), expecting: NoPayload.self)
@@ -267,12 +303,14 @@ struct PaneCommands: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract:
                 "Print a pane's text: the rows on screen, its last lines with --lines, or what it printed since its "
-                + "last task with --since-task.")
+                + "last task with --since-task.",
+            discussion: PaneTarget.thisPaneByDefault)
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Option(help: "A pane or drawer token, or a pane's name. This pane by default.")
-        var pane: ControlAddress.Pane?
+        @OptionGroup var target: PaneTarget
+
+        var pane: ControlAddress.Pane? { target.pane }
 
         @Option(help: "Print the last this many lines, scrollback included.")
         var lines: Int?
@@ -303,12 +341,14 @@ struct PaneCommands: ParsableCommand {
 
     struct Get: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Print one pane's state as JSON: its title, folder, program and agent status.")
+            abstract: "Print one pane's state as JSON: its title, folder, program and agent status.",
+            discussion: PaneTarget.thisPaneByDefault)
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Argument(help: "A pane or drawer token, or a pane's name. This pane by default.")
-        var pane: ControlAddress.Pane?
+        @OptionGroup var target: PaneTarget
+
+        var pane: ControlAddress.Pane? { target.pane }
 
         func run() throws {
             let got = try connection.client().send(.paneGet, ControlArgs(pane: pane), expecting: ListResult.Pane.self)
