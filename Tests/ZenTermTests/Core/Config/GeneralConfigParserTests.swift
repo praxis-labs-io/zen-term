@@ -507,4 +507,35 @@ final class GeneralConfigParserTests: XCTestCase {
                 ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "32"))))
         XCTAssertTrue(diagnostics.contains { if case .keybind = $0.scope { return true } else { return false } })
     }
+
+    func test_keepAwakeKeys_parse() {
+        let config = parse(
+            """
+            keep-awake-display = true
+            keep-awake-battery-stop = 20
+            keep-awake-grace = 30
+            """)
+        XCTAssertTrue(config.keepAwakeDisplay)
+        XCTAssertEqual(config.keepAwakeBatteryStop, 20)
+        XCTAssertEqual(config.keepAwakeGrace, 30)
+        XCTAssertNil(parse("keep-awake-battery-stop = never\n").keepAwakeBatteryStop)
+    }
+
+    func test_keepAwakeKeys_default() {
+        let config = parse("")
+        XCTAssertFalse(config.keepAwakeDisplay)
+        XCTAssertEqual(config.keepAwakeBatteryStop, 10)
+        XCTAssertEqual(config.keepAwakeGrace, 60)
+    }
+
+    func test_keepAwakeBatteryStop_rejectsAStopTheSettingCannotShow() {
+        let config = parse("keep-awake-battery-stop = 15\n")
+        XCTAssertEqual(config.keepAwakeBatteryStop, 10)
+        XCTAssertEqual(config.configDiagnostics.first?.scope, .setting(key: "keep-awake-battery-stop"))
+    }
+
+    func test_keepAwakeGrace_clampsToTenMinutes_andRoundsToWholeSeconds() {
+        XCTAssertEqual(parse("keep-awake-grace = 9000\n").keepAwakeGrace, 600)
+        XCTAssertEqual(parse("keep-awake-grace = 12.6\n").keepAwakeGrace, 13)
+    }
 }

@@ -66,7 +66,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Segment: Int {
-        case attentionToast, completionToast
+        case attentionToast, completionToast, batteryStop
     }
 
     private enum Toggle: Int {
@@ -85,12 +85,13 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         let detail = mount()
         let segments = descendants(of: detail).compactMap { $0 as? SegmentedControl }
         let toggles = descendants(of: detail).compactMap { $0 as? ToggleSwitch }
-        XCTAssertEqual(segments.count, 2, "the two toast rows")
+        XCTAssertEqual(segments.count, 3, "the two toast rows and battery stop")
         XCTAssertEqual(toggles.count, 3, "notifications, Claude Code setup, and updates")
         XCTAssertTrue(toggles[Toggle.notifications.rawValue].isOn, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
         XCTAssertTrue(toggles[Toggle.updates.rawValue].isOn, "automatic updates On")
+        XCTAssertEqual(segments[Segment.batteryStop.rawValue].selectedIndex, 2, "battery stop 10%")
     }
 
     func test_agentPrograms_typedInTheField_registerAsAgents() throws {
@@ -110,6 +111,28 @@ final class SettingsGeneralSectionTests: WindowTestCase {
 
         XCTAssertTrue(
             configText().contains("agent-notifications = false"), "got: \(configText())")
+    }
+
+    func test_batteryStop_offersFourStops_andWritesEach() {
+        let control = segment(.batteryStop)
+        XCTAssertEqual(control.optionTitles, ["Never", "5%", "10%", "20%"])
+        for (index, value) in [(0, "never"), (1, "5"), (3, "20"), (2, "10")] {
+            control.select(index)
+            XCTAssertTrue(configText().contains("keep-awake-battery-stop = \(value)"), "got: \(configText())")
+        }
+        XCTAssertEqual(GeneralConfig.current.keepAwakeBatteryStop, 10)
+    }
+
+    func test_grace_typedInTheField_writesWholeSeconds() throws {
+        _ = mountSegments()
+        let field = try XCTUnwrap(section?.controlForTesting("keep-awake-grace") as? FieldBox)
+
+        field.setText("90")
+        field.onChange?()
+        field.onEndEditing?()
+
+        XCTAssertTrue(configText().contains("keep-awake-grace = 90"), "got: \(configText())")
+        XCTAssertEqual(GeneralConfig.current.keepAwakeGrace, 90)
     }
 
     func test_toastRows_offerOffStickyAndAuto() {

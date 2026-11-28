@@ -88,6 +88,11 @@ enum CommandCatalog {
         case .renameWorkspace: return workspace("Rename Workspace…", glyph, chord)
         case .nextWaitingAgent: return workspace("Jump to Waiting Agent", glyph, chord)
         case .toggleAgentPicker: return workspace("Open Agent Picker", glyph, chord)
+        case .keepAwake: return app("Keep Awake", glyph, chord)
+        case .turnOffKeepAwake: return app("Turn Off Keep Awake", glyph, chord)
+        case .keepAwakeUntilAgentsFinish: return app("Keep Awake Until Agents Finish", glyph, chord)
+        case .keepAwakeForOneHour: return app("Keep Awake for 1 Hour", glyph, chord)
+        case .keepAwakeWithDisplay: return app("Keep Mac and Display Awake", glyph, chord)
         }
     }
 
@@ -95,7 +100,10 @@ enum CommandCatalog {
         Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
-    static func commands(tabCount: Int, workspaceCount: Int, onHost: Bool = false) -> [PaletteCommand] {
+    static func commands(
+        tabCount: Int, workspaceCount: Int, onHost: Bool = false, keepAwakeIsOn: Bool = false,
+        agentsWorking: Bool = false
+    ) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [
             .toggleRepoPicker, .newWorkspace, .prevWorkspace, .nextWorkspace,
         ]
@@ -131,6 +139,10 @@ enum CommandCatalog {
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .dismissToast, .dismissAllToasts, .reportIssue,
         ]
+        chords += [.keepAwake]
+        if keepAwakeIsOn { chords += [.turnOffKeepAwake] }
+        if agentsWorking { chords += [.keepAwakeUntilAgentsFinish] }
+        chords += [.keepAwakeForOneHour, .keepAwakeWithDisplay]
         let onConnect = onHost && tabCount == 0
         return chords.map {
             switch $0 {

@@ -54,6 +54,8 @@ enum LayoutFormat {
 
     static func boolToken(_ on: Bool) -> String { on ? "true" : "false" }
 
+    static func batteryStopToken(_ stop: Int?) -> String { stop.map(String.init) ?? "never" }
+
     static func hideToolbarButtonsToken(_ hidden: Set<ToolbarButton>) -> String {
         ToolbarButton.allCases.filter(hidden.contains).map(\.rawValue).joined(separator: ",")
     }

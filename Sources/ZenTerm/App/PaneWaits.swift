@@ -5,6 +5,9 @@ import Foundation
 final class PaneWaits {
     private(set) var pending: [PaneWait] = []
     private(set) var childrenWaits: [ChildrenWait] = []
+    var onPendingChanged: (() -> Void)?
+
+    var waitedSurfaces: Set<SurfaceID> { Set(pending.map(\.watched.surfaceID)) }
 
     func hold(_ wait: PaneWait, timeout: TimeInterval, hangup: ControlHangup) {
         track(wait)
@@ -38,7 +41,11 @@ final class PaneWaits {
 
     private func track(_ wait: PaneWait) {
         pending.append(wait)
-        wait.onAnswered = { [weak self, weak wait] in self?.pending.removeAll { $0 === wait } }
+        wait.onAnswered = { [weak self, weak wait] in
+            self?.pending.removeAll { $0 === wait }
+            self?.onPendingChanged?()
+        }
+        onPendingChanged?()
     }
 
     func callers(answeredBy reason: WaitReason, on surface: SurfaceID) -> Set<SurfaceID> {

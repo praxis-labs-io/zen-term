@@ -1108,6 +1108,21 @@ gets its own thread, never the global dispatch pool, which AppKit can saturate. 
 runs git through it and gates on `xcode-select -p`, since `/usr/bin/git` without Command Line
 Tools opens a system prompt.
 
+## Keep Awake
+
+`KeepAwake` is the app's one hold on idle sleep, owned by `AppDelegate` and handed to every
+`WindowController`, so all windows show and change the same hold. It announces each change as
+`.keepAwakeDidChange`. The IOKit power assertion, the battery reading and the timers sit behind
+`PowerAssertions`, `BatterySource` and `KeepAwakeClock`, so the state machine is tested against
+fakes. The battery is read on IOKit's change notification, never polled.
+
+"Until agents finish" counts the working agents in every window (`AttentionStore.working`)
+together with the panes a `zen wait` is pending on (`PaneWaits.waitedSurfaces`). A helper nobody
+waits on, such as a dev server, never counts, or the hold would never end. Each window reports a
+change through `onWorkingAgentsChanged`, `PaneWaits` through `onPendingChanged`, and `KeepAwake`
+recounts on either. A release you did not trigger raises a toast in the key window; turning it off
+yourself raises none.
+
 ## Invariants that will bite you
 
 - **Closures capture by id, never by object.**

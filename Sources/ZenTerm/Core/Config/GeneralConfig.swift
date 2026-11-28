@@ -47,6 +47,11 @@ struct GeneralConfig: Equatable {
 
     var automaticUpdateChecks: Bool
 
+    var keepAwakeDisplay = false
+    var keepAwakeBatteryStop: Int? = 10
+    var keepAwakeGrace: TimeInterval = 60
+    static let keepAwakeBatteryStops: [Int?] = [nil, 5, 10, 20]
+
     var debug: Bool
 
     var shell: String?

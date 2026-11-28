@@ -41,6 +41,11 @@ extension KeyInterceptor.ReservedChord {
         case .toggleCommandPalette: return "toggle_command_palette"
         case .openSettings: return "open_settings"
         case .reloadConfig: return "reload_config"
+        case .keepAwake: return "keep_awake"
+        case .turnOffKeepAwake: return "keep_awake_off"
+        case .keepAwakeUntilAgentsFinish: return "keep_awake_until_agents_finish"
+        case .keepAwakeForOneHour: return "keep_awake_for_1_hour"
+        case .keepAwakeWithDisplay: return "keep_awake_display"
         case .checkForUpdates: return "check_for_updates"
         case .reportIssue: return "report_issue"
         case .newTool: return "new_tool_float"
@@ -99,7 +104,8 @@ extension KeyInterceptor.ReservedChord {
             .copyScreenFilePath, .openScreenFile,
             .dismissToast, .dismissAllToasts,
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace,
-            .nextWaitingAgent, .toggleAgentPicker:
+            .nextWaitingAgent, .toggleAgentPicker, .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish,
+            .keepAwakeForOneHour, .keepAwakeWithDisplay:
             return false
         }
     }
@@ -110,7 +116,8 @@ extension KeyInterceptor.ReservedChord {
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWindow,
             .newWindow, .reloadConfig, .checkForUpdates, .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .toggleSidebar, .focusSidebar, .dismissToast, .dismissAllToasts, .nextWaitingAgent, .fillScreen,
-            .newWorkspace, .toggleAgentPicker:
+            .newWorkspace, .toggleAgentPicker, .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish,
+            .keepAwakeForOneHour, .keepAwakeWithDisplay:
             return true
         case .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .closePane, .closeTab, .newTab, .selectTab, .prevTab, .nextTab,
@@ -149,7 +156,8 @@ extension KeyInterceptor.ReservedChord {
             .openSettings,
             .dismissToast, .dismissAllToasts,
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace,
-            .nextWaitingAgent, .toggleAgentPicker:
+            .nextWaitingAgent, .toggleAgentPicker, .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish,
+            .keepAwakeForOneHour, .keepAwakeWithDisplay:
             return true
         }
     }
@@ -228,6 +236,11 @@ extension KeyInterceptor.ReservedChord {
         case "rename_workspace": self = .renameWorkspace
         case "next_waiting_agent": self = .nextWaitingAgent
         case "toggle_agent_picker": self = .toggleAgentPicker
+        case "keep_awake": self = .keepAwake
+        case "keep_awake_off": self = .turnOffKeepAwake
+        case "keep_awake_until_agents_finish": self = .keepAwakeUntilAgentsFinish
+        case "keep_awake_for_1_hour": self = .keepAwakeForOneHour
+        case "keep_awake_display": self = .keepAwakeWithDisplay
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -259,7 +272,8 @@ extension KeyInterceptor.ReservedChord {
             .openSettings, .reloadConfig, .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .checkForUpdates, .reportIssue, .newTool,
             .newWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace, .nextWaitingAgent,
-            .toggleAgentPicker,
+            .toggleAgentPicker, .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish, .keepAwakeForOneHour,
+            .keepAwakeWithDisplay,
         ]
         let numbered: [KeyInterceptor.ReservedChord] =
             (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }

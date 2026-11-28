@@ -40,6 +40,18 @@ final class SettingsGeneralSection: SettingsFormSection {
                 blurb: "Seconds", range: 1...60,
                 read: { CGFloat($0.toastDuration) })
         }
+        addGroup("Keep Awake") {
+            self.addSegmentedRow(
+                key: "keep-awake-battery-stop", caption: "Stop below battery level",
+                blurb: "Ends the hold on battery only",
+                options: Self.batteryStopTitles,
+                read: { Self.batteryStopIndex($0.keepAwakeBatteryStop) },
+                token: { LayoutFormat.batteryStopToken(GeneralConfig.keepAwakeBatteryStops[$0]) })
+            self.addNumericRow(
+                key: "keep-awake-grace", caption: "Wait after agents finish",
+                blurb: "Seconds", range: 0...600,
+                read: { CGFloat($0.keepAwakeGrace) }, integer: true)
+        }
         addGroup("Updates") {
             self.addToggleRow(
                 key: "automatic-update-checks", caption: "Check for updates in the background",
@@ -121,6 +133,11 @@ final class SettingsGeneralSection: SettingsFormSection {
         case .edited: "Your zen setup has changes, and updating replaces them."
         case .notInstalled, .newer, .current: nil
         }
+    }
+
+    private static let batteryStopTitles = ["Never", "5%", "10%", "20%"]
+    private static func batteryStopIndex(_ stop: Int?) -> Int {
+        GeneralConfig.keepAwakeBatteryStops.firstIndex(of: stop) ?? 0
     }
 
     private static let dismissals: [GeneralConfig.ToastDismissal] = [.off, .sticky, .auto]

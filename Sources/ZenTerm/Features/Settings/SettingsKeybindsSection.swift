@@ -41,6 +41,10 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Window", [.toggleSidebar, .focusSidebar, .fillScreen, .closeWindow, .dismissToast, .dismissAllToasts]),
         ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer]),
         (
+            "Keep Awake",
+            [.keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish, .keepAwakeForOneHour, .keepAwakeWithDisplay]
+        ),
+        (
             "Surfaces & Tools",
             [
                 .toggleToolFloat(ToolFloat.scratch.id), .toggleCommandPalette, .newTool, .openSettings,

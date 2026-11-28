@@ -64,6 +64,15 @@
                     "Agents",
                     [Window.nothingWaitingToast(elsewhere: false), Window.nothingWaitingToast(elsewhere: true)]
                 ),
+                (
+                    "Keep Awake",
+                    [
+                        Window.keepAwakeEndedToast(.agentsFinished), Window.keepAwakeEndedToast(.timeUp(60 * 60)),
+                        Window.keepAwakeEndedToast(.battery(percent: 9)),
+                        Window.keepAwakeRefusedToast(.battery(percent: 8, stop: 10)),
+                        Window.keepAwakeRefusedToast(.nothingWorking),
+                    ]
+                ),
                 ("Focus Mode", [TabController.zoomBlockedToast("split"), TabController.focusModeUnavailableToast]),
                 ("Navigation", [TabController.noNeighborToast(.left, hint: nil)]),
                 (

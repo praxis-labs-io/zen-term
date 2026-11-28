@@ -229,6 +229,27 @@
 # In-app Settings edit: applies to the next notice.
 # toast-duration = 4                  # 1-60
 
+# ─── Keep Awake ──────────────────────────────────────────────────────────────
+
+# The Keep Awake commands in the command palette hold the Mac awake: until you
+# turn it off, for an hour, or until the working agents finish. These set how
+# every hold behaves. Quitting ZenTerm ends the hold.
+
+# Keep the display on too, not only the Mac. Off by default: agents do not need
+# the screen. The palette's Keep Mac and Display Awake turns it on until you quit.
+# In-app Settings edit: applies live.
+# keep-awake-display = false          # true | false
+
+# On battery, end the hold once the charge falls below this percentage, so the
+# Mac can sleep before it runs out. On power, the hold carries on.
+# In-app Settings edit: applies live.
+# keep-awake-battery-stop = 10        # never | 5 | 10 | 20
+
+# Seconds to wait after the last working agent finishes before the hold ends.
+# An agent that starts working during the wait keeps the hold on.
+# In-app Settings edit: applies to the next wait.
+# keep-awake-grace = 60               # 0-600
+
 # ─── Updates ─────────────────────────────────────────────────────────────────
 
 # Check for a new release in the background. On by default; turn it off to check
@@ -399,6 +420,8 @@
 #   select_workspace_1 … select_workspace_9  close_workspace
 #   rename_workspace    (no default binding; right-click a workspace, or use the palette)
 #   next_waiting_agent  toggle_agent_picker
+#   keep_awake  keep_awake_off  keep_awake_until_agents_finish  keep_awake_for_1_hour
+#   keep_awake_display  (no default binding; also in the command palette)
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
@@ -497,14 +520,19 @@
 #   ⌥←  ⌥→        move a word at a time
 #   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
 #
-# Three actions ship with no shortcut:
+# These actions ship with no shortcut:
 #   check_for_updates    runs a manual update check
 #   report_issue         opens the Report an Issue composer
 #   new_tool_float       opens the form that adds a tool float
+#   keep_awake           holds the Mac awake until you turn it off
+#   keep_awake_off       ends the hold
+#   keep_awake_until_agents_finish   holds it until the working agents finish
+#   keep_awake_for_1_hour            holds it for an hour
+#   keep_awake_display   holds the display awake too, keeping the hold's end
 #
-# The first two are menu-bar errands; the third is something you do once in a while, so it
-# spends no chord by default. All three are in the command palette, and take a chord here
-# if you want one.
+# The first two are menu-bar errands; the rest are things you do once in a while, so they
+# spend no chord by default. All are in the command palette, and take a chord here if you
+# want one.
 #
 # Chords ZenTerm does not ship, if you want them:
 #   keybind = nav_left=cmd+h                # ⌘HJKL nav, with the other three

@@ -28,6 +28,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .toggleToolFloat(ToolFloat.scratch.id), .toggleToolFloat("btop"),
             .prevWorkspace, .nextWorkspace, .renameWorkspace, .closeWorkspace,
             .nextWaitingAgent, .toggleAgentPicker,
+            .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish, .keepAwakeForOneHour, .keepAwakeWithDisplay,
         ] + (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }
 
     func test_everyEditableActionHasARow() {
