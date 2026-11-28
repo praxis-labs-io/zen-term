@@ -8,7 +8,7 @@ struct LaunchedExitHold<Key: Hashable> {
 
     private var closing: Set<Key> = []
     private var codes: [Key: Int] = [:]
-    private var exits: [Key: String?] = [:]
+    private var exits: [Key: (lastLines: String?, outputFile: URL?)] = [:]
 
     mutating func watch(_ key: Key) { closing.insert(key) }
 
@@ -22,12 +22,14 @@ struct LaunchedExitHold<Key: Hashable> {
         if closing.contains(key) { codes[key] = exitCode }
     }
 
-    mutating func recordExit(_ key: Key, lastLines: String?) { exits[key] = .some(lastLines) }
+    mutating func recordExit(_ key: Key, lastLines: String?, outputFile: URL?) {
+        if closing.contains(key) { exits[key] = (lastLines, outputFile) }
+    }
 
     // Removes the exit as it hands it over, so a late mark and the grace cannot both report it.
-    mutating func take(_ key: Key) -> (exitCode: Int?, lastLines: String?)? {
-        guard let lastLines = exits.removeValue(forKey: key) else { return nil }
-        return (codes[key], lastLines)
+    mutating func take(_ key: Key) -> (exitCode: Int?, lastLines: String?, outputFile: URL?)? {
+        guard let exit = exits.removeValue(forKey: key) else { return nil }
+        return (codes[key], exit.lastLines, exit.outputFile)
     }
 
     mutating func forget(_ key: Key) {

@@ -6,7 +6,7 @@ struct HelperNote: Equatable {
         case stopped(ListResult.AgentStatus?)
         case blocked(ListResult.AgentNeed?)
         case resumed
-        case exited(code: Int?)
+        case exited(code: Int?, outputFile: String?)
     }
 
     let helper: Int
@@ -38,8 +38,9 @@ struct HelperNote: Equatable {
             return "\(who) is blocked; that decision is the user's"
         case .resumed:
             return "\(who) is working again; wait on it with zen wait \(helper)"
-        case .exited(let code):
-            return "\(who) exited\(code.map { " with code \($0)" } ?? "")"
+        case .exited(let code, let outputFile):
+            let withCode = code.map { " with code \($0)" } ?? ""
+            return "\(who) exited\(withCode)\(outputFile.map { ", output in \($0)" } ?? "")"
         }
     }
 }

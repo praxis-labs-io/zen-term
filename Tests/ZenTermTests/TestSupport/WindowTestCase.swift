@@ -17,6 +17,8 @@ class WindowTestCase: XCTestCase {
         MainActor.assumeIsolated { HostConnectView.after = { _, work in work() } }
         ClaudeCodeSetup.configRootOverrideForTesting = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-claude-\(UUID().uuidString)")
+        RunOutput.folderOverrideForTesting = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-run-output-\(UUID().uuidString)")
     }
 
     /// Not `tearDown`, which runs first and would close windows before a subclass's own teardown.
@@ -29,6 +31,8 @@ class WindowTestCase: XCTestCase {
             HostConnectView.now = originalConnectNow
         }
         WorktreeStore.isRemovedOverrideForTesting = nil
+        if let folder = RunOutput.folderOverrideForTesting { try? FileManager.default.removeItem(at: folder) }
+        RunOutput.folderOverrideForTesting = nil
         PointerRest.resetForTesting()
         ClaudeCodeSetup.configRootOverrideForTesting.map { try? FileManager.default.removeItem(at: $0) }
         ClaudeCodeSetup.configRootOverrideForTesting = nil

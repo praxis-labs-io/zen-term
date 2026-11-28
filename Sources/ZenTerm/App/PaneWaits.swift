@@ -5,8 +5,6 @@ import Foundation
 final class PaneWaits {
     private(set) var pending: [PaneWait] = []
     private(set) var childrenWaits: [ChildrenWait] = []
-    // Callers whose answered wait already told them a pane exited, kept until the pane closes so no note repeats it.
-    private var exitsAnswered: [SurfaceID: Set<SurfaceID>] = [:]
 
     func hold(_ wait: PaneWait, timeout: TimeInterval, hangup: ControlHangup) {
         track(wait)
@@ -16,11 +14,7 @@ final class PaneWaits {
 
     func hold(_ wait: ChildrenWait, timeout: TimeInterval, hangup: ControlHangup) {
         childrenWaits.append(wait)
-        wait.onAnswered = { [weak self, weak wait] in
-            guard let self, let wait else { return }
-            self.childrenWaits.removeAll { $0 === wait }
-            wait.answeredExits.forEach { self.exitsAnswered[$0, default: []].insert(wait.caller) }
-        }
+        wait.onAnswered = { [weak self, weak wait] in self?.childrenWaits.removeAll { $0 === wait } }
         hangup.onHangup { [weak wait] in wait?.cancel() }
         wait.probes.forEach(track)
         wait.start(timeout: timeout)
@@ -35,7 +29,6 @@ final class PaneWaits {
     func panesClosed(_ surfaces: [SurfaceID]) {
         let closed = Set(surfaces)
         pending.filter { closed.contains($0.watched.surfaceID) }.forEach { $0.closed() }
-        closed.forEach { exitsAnswered[$0] = nil }
     }
 
     func sent(to surface: SurfaceID, from sender: Int?) {
@@ -45,19 +38,12 @@ final class PaneWaits {
 
     private func track(_ wait: PaneWait) {
         pending.append(wait)
-        wait.onAnswered = { [weak self, weak wait] in
-            guard let self, let wait else { return }
-            self.pending.removeAll { $0 === wait }
-            if wait.answeredExit, let caller = wait.caller {
-                self.exitsAnswered[wait.watched.surfaceID, default: []].insert(caller)
-            }
-        }
+        wait.onAnswered = { [weak self, weak wait] in self?.pending.removeAll { $0 === wait } }
     }
 
     func callers(answeredBy reason: WaitReason, on surface: SurfaceID) -> Set<SurfaceID> {
         let children = childrenWaits.filter { $0.answers(reason, from: surface) }.map(\.caller)
-        let answered = reason == .exited ? exitsAnswered[surface] ?? [] : []
-        return answered.union(waits(on: surface).filter { $0.answers(reason) }.compactMap(\.caller) + children)
+        return Set(waits(on: surface).filter { $0.answers(reason) }.compactMap(\.caller) + children)
     }
 
     func callers(watching surface: SurfaceID) -> Set<SurfaceID> {

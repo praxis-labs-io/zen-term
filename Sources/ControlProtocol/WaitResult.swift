@@ -1,18 +1,22 @@
-/// Why `pane.wait` answered. A wait on a pane carries `pane` as `pane.get` reports it; a wait on the caller's
-/// children carries `children` instead. `exitCode` is the shell's report and `text` the last lines of output, both
-/// only on `exited` and each when known. `timeoutCapped` is the seconds waited when the asked timeout was longer.
+/// Why `pane.wait` answered, with `pane` as `pane.get` reports it or the caller's `children`. On `exited`, when known:
+/// `exitCode`, the last lines as `text`, and `outputFile`, the path of a `pane.run` pane's saved output.
+/// `timeoutCapped` is the seconds waited when the asked timeout was longer.
 public struct WaitResult: ControlPayload, Equatable {
     public let reason: WaitReason
     public let exitCode: Int?
     public let text: String?
+    public let outputFile: String?
     public let pane: ListResult.Pane?
     public let children: [Child]?
     public private(set) var timeoutCapped: Int?
 
-    public init(reason: WaitReason, exitCode: Int? = nil, text: String? = nil, pane: ListResult.Pane) {
+    public init(
+        reason: WaitReason, exitCode: Int? = nil, text: String? = nil, outputFile: String? = nil, pane: ListResult.Pane
+    ) {
         self.reason = reason
         self.exitCode = exitCode
         self.text = text
+        self.outputFile = outputFile
         self.pane = pane
         children = nil
     }
@@ -21,6 +25,7 @@ public struct WaitResult: ControlPayload, Equatable {
         self.reason = reason
         exitCode = nil
         text = nil
+        outputFile = nil
         pane = nil
         self.children = children
     }
@@ -36,12 +41,17 @@ public struct WaitResult: ControlPayload, Equatable {
         public let reason: WaitReason?
         public let exitCode: Int?
         public let text: String?
+        public let outputFile: String?
         public let pane: ListResult.Pane
 
-        public init(reason: WaitReason? = nil, exitCode: Int? = nil, text: String? = nil, pane: ListResult.Pane) {
+        public init(
+            reason: WaitReason? = nil, exitCode: Int? = nil, text: String? = nil, outputFile: String? = nil,
+            pane: ListResult.Pane
+        ) {
             self.reason = reason
             self.exitCode = exitCode
             self.text = text
+            self.outputFile = outputFile
             self.pane = pane
         }
     }

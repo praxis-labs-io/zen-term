@@ -402,9 +402,8 @@ final class AgentNestingTests: WindowTestCase {
         process.surface.delegate?.surface(
             process.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
         process.surface.delegate?.surfaceDidExit(process.surface, code: 0)
-        drainMainQueue()
 
-        XCTAssertEqual(items(c).map(\.id), [root.id])
+        waitUntil(items(c).map(\.id) == [root.id], "the row to leave once the pane closes")
     }
 
     func test_aKeptProcessRowInATabLeavesWhenItsProcessFallsIdle() throws {

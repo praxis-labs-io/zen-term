@@ -223,7 +223,7 @@ final class FloatPaneTests: WindowTestCase {
         program.delegate?.surface(program, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
         program.delegate?.surfaceDidExit(program, code: 0)
 
-        XCTAssertFalse(isOpen(float, in: c))
+        waitUntil(!isOpen(float, in: c), "the float to close")
         let got = try XCTUnwrap(
             try answer(.paneWait, ControlArgs(pane: .token(float))).get() as? WaitResult)
         XCTAssertEqual(got.reason, .exited)
@@ -231,6 +231,8 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertTrue(got.text?.hasPrefix("FAIL x.test.ts") == true, "\(String(describing: got.text))")
         XCTAssertEqual(got.pane?.parent, lead)
         XCTAssertEqual(got.pane?.float, true)
+        let saved = try got.outputFile.map { try String(contentsOfFile: $0, encoding: .utf8) }
+        XCTAssertTrue(saved?.hasPrefix("FAIL x.test.ts\n") == true, "\(String(describing: saved))")
     }
 
     func test_aFloatPaneWhoseExitMarkTrailsItsExitWaitsForIt() throws {
@@ -244,7 +246,7 @@ final class FloatPaneTests: WindowTestCase {
         XCTAssertTrue(isOpen(float, in: c), "closed before its exit mark could land")
         program.delegate?.surface(program, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
 
-        XCTAssertFalse(isOpen(float, in: c))
+        waitUntil(!isOpen(float, in: c), "the float to close")
         XCTAssertEqual(c.launchedPaneExits.exit(of: float)?.exitCode, 3)
     }
 

@@ -81,7 +81,8 @@ final class OutputWatchTests: XCTestCase {
         let wait = try XCTUnwrap(
             PaneWait(
                 PaneWait.Watched(
-                    token: 1, surfaceID: SurfaceID(raw: 1), surface: pane, readsForeground: false, pane: { listing },
+                    token: 1, surfaceID: SurfaceID(raw: 1), surface: pane, readsForeground: false, closesOnExit: false,
+                    pane: { listing },
                     exit: { nil }, awaitsQueuedTask: { false }),
                 caller: nil, output: "ready"
             ) { _ in answered = true })

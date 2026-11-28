@@ -445,14 +445,13 @@ with `enter` sends it:
 | `stopped` | The child's `status` left `working`, but not to `blocked`. | `review stopped (done): read it with zen pane read --pane 34`           |
 | `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
 | `resumed` | The child's `status` went from `blocked` to `working`.     | `review is working again; wait on it with zen wait 34`                  |
-| `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
+| `exited`  | Its program exited, closing its pane.                      | `review exited with code 1, output in /Users/me/Library/Caches/ZenTerm/run-output/1764300000000-34.txt` |
 
 - A child without a name is `pane 34`. `blocked` names `a permission prompt` or `a login` when
   the program says which. A child blocked on a question sends
   `review is asking a question: read it with zen pane read --pane 34 and answer it, or ask the user when it is a product or scope call`.
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
-  child answers the same change, when one the parent held answered the child's exit before its pane
-  closed, when one it holds on its `children` watches the child, since
+  child answers the same change, when one it holds on its `children` watches the child, since
   that wait reports the change, or for the report that settles `first_task`, which `pane.run`
   answers with. No wait answers `resumed`, so any wait the parent holds on the child stands in
   for it, and there is none when the parent sent or pressed anything into the child while it was
@@ -542,6 +541,7 @@ Holds until something happens to the pane, then answers once with why:
 
 ```json
 {"reason":"exited","exitCode":1,"text":"$ make test\n1 test failed",
+ "outputFile":"/Users/me/Library/Caches/ZenTerm/run-output/1764300000000-34.txt",
  "pane":{"token":34,"title":"make test","busy":false,...}}
 ```
 
@@ -555,10 +555,14 @@ Holds until something happens to the pane, then answers once with why:
   `pane.run` opened it.
 - `output` is matched within one line, a soft-wrapped line read as one, without escapes, so a
   newline in it is a `bad_request`.
-- A pane `pane.run` opened closes when its program exits, and a wait on it still answers
-  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
-  A name then reaches the most recent such pane with that name, `caller.pane`'s own first. The app keeps the 64 most
-  recent such exits; an older one is `not_found`.
+- A pane `pane.run` opened closes when its program exits, and a wait on it answers `exited` as
+  it closes, with the `exitCode` and `text` read then, also when the wait begins after.
+  `outputFile` is the path of its last 2,000 screen lines, a wrapped line counting once per row,
+  saved in `~/Library/Caches/ZenTerm/run-output` before it closes and readable only by the user.
+  When earlier output was cut, the file's first line says so. A pane run with `keep` saves none.
+  A name then reaches the most recent such pane with that name, `caller.pane`'s own first. The
+  app keeps the 64 most recent such exits, and their 64 most recent output files; an older exit
+  is `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
 begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
@@ -586,7 +590,7 @@ caller something, and `timeout` as it does for a pane, and `output` is a
 ```
 
 `children` lists every child the wait watched, each with its `pane` as `pane.get` reports it, or
-as it was last read once it closed. A child's `reason`, `exitCode` and `text` are its own news
+as it was last read once it closed. A child's `reason`, `exitCode`, `text` and `outputFile` are its own news
 during the wait, absent when it had none. The answer has no `pane`. A caller with no children
 gets `{"reason":"no_children","children":[]}` at once. A request without `caller.pane` is a
 `bad_request`.

@@ -130,6 +130,23 @@ final class ControlHelperNoteTests: WindowTestCase {
         return answer
     }
 
+    private func settle(_ seconds: TimeInterval) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    private func waitForClose(of helper: RecordingSurface, in c: WindowController) throws {
+        let token = try token(of: helper)
+        waitUntil(c.launchedPaneExits.exit(of: token) != nil, "the helper's pane to close")
+    }
+
+    private func exitText(_ who: String, code: Int, of helper: RecordingSurface, in c: WindowController) throws
+        -> String
+    {
+        try waitForClose(of: helper, in: c)
+        let file = try XCTUnwrap(c.launchedPaneExits.exit(of: try token(of: helper))?.outputFile).path
+        return "\(who) exited with code \(code), output in \(file)"
+    }
+
     private func note(_ text: String, from helper: RecordingSurface, named name: String? = "review") throws
         -> [RecordingSurface.Input]
     {
@@ -243,8 +260,8 @@ final class ControlHelperNoteTests: WindowTestCase {
             try note("review is blocked on a permission prompt; that decision is the user's", from: helper))
     }
 
-    func test_aHelperWhoseProgramExitsTellsItsParentTheCode() throws {
-        makeWindow()
+    func test_aHelperWhoseProgramExitsTellsItsParentTheCodeAndWhereItsOutputIs() throws {
+        let c = makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         report(.idle, from: parent)
         let helper = try runHelper(named: nil, from: parent)
@@ -253,7 +270,8 @@ final class ControlHelperNoteTests: WindowTestCase {
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
 
-        XCTAssertEqual(parent.inputs, try note("\(name) exited with code 1", from: helper, named: nil))
+        let text = try exitText(name, code: 1, of: helper, in: c)
+        XCTAssertEqual(parent.inputs, try note(text, from: helper, named: nil))
     }
 
     func test_aNoteWaitsOutTheParentsDraft() throws {
@@ -290,7 +308,7 @@ final class ControlHelperNoteTests: WindowTestCase {
     }
 
     func test_aParentThatRunsNoAgentHearsNothing() throws {
-        makeWindow()
+        let c = makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         let helper = try runHelper(from: parent)
 
@@ -298,6 +316,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         report(.blocked(.permission), from: helper)
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
+        try waitForClose(of: helper, in: c)
 
         XCTAssertEqual(parent.inputs, [])
     }
@@ -322,7 +341,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, [])
     }
 
-    func test_aWaitThatAnsweredTheExitBeforeThePaneClosedTakesThePlaceOfTheNote() throws {
+    func test_aWaitHeldThroughTheExitMarkAnswersAsThePaneCloses_andTakesThePlaceOfTheNote() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         report(.idle, from: parent)
@@ -330,14 +349,19 @@ final class ControlHelperNoteTests: WindowTestCase {
         let exit = try wait(parent, on: helper)
 
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
-        waitUntil(exit.reply != nil, "the wait to answer the exit mark")
+        settle(0.3)
+        XCTAssertNil(exit.reply, "the exit mark alone does not answer a pane that closes on exit")
         helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(exit.reply != nil, "the wait to answer as the pane closes")
 
-        XCTAssertEqual((try exit.reply?.get() as? WaitResult)?.reason, .exited)
+        let got = try XCTUnwrap(try exit.reply?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 1)
+        XCTAssertNotNil(got.outputFile)
         XCTAssertEqual(parent.inputs, [])
     }
 
-    func test_aChildrenWaitThatAnsweredTheExitBeforeThePaneClosedTakesThePlaceOfTheNote() throws {
+    func test_aChildrenWaitHeldThroughTheExitMarkAnswersAsThePaneCloses_andTakesThePlaceOfTheNote() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         report(.idle, from: parent)
@@ -345,10 +369,14 @@ final class ControlHelperNoteTests: WindowTestCase {
         let any = try waitOnChildren(of: parent, .any)
 
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
-        waitUntil(any.reply != nil, "the wait to answer the exit mark")
+        settle(0.3)
+        XCTAssertNil(any.reply, "the exit mark alone does not answer a pane that closes on exit")
         helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(any.reply != nil, "the wait to answer as the pane closes")
 
-        XCTAssertEqual((try any.reply?.get() as? WaitResult)?.reason, .exited)
+        let got = try XCTUnwrap(try any.reply?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertNotNil(got.children?.first?.outputFile)
         XCTAssertEqual(parent.inputs, [])
     }
 
@@ -520,7 +548,7 @@ final class ControlHelperNoteTests: WindowTestCase {
     }
 
     func test_aChildrenWaitForAllKeepsWatchingAStoppedChild_soItsExitIsRecordedNotLost() throws {
-        makeWindow()
+        let c = makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         report(.idle, from: parent)
         let helper = try runHelper(from: parent)
@@ -533,6 +561,7 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
+        try waitForClose(of: helper, in: c)
         XCTAssertEqual(parent.inputs, [])
         report(.done, from: other)
 
@@ -694,10 +723,11 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
+        let text = try exitText(name, code: 1, of: helper, in: c)
         XCTAssertEqual(parent.inputs, [])
         try sendDraft(in: c)
 
-        XCTAssertEqual(parent.inputs, try note("\(name) exited with code 1", from: helper, named: nil))
+        XCTAssertEqual(parent.inputs, try note(text, from: helper, named: nil))
     }
 
     func test_aHelperBlockedOnAQuestionTellsItsParentToAnswerIt() throws {

@@ -117,7 +117,9 @@ final class PaneFloats: NSObject {
     private func closeExited(_ token: Int) {
         guard let entry = entries.first(where: { $0.token == token }), let exit = exitHold.take(token) else { return }
         onLaunchedPaneExited?(
-            LaunchedPaneExit(token: token, record: entry.record, exitCode: exit.exitCode, lastLines: exit.lastLines))
+            LaunchedPaneExit(
+                token: token, record: entry.record, exitCode: exit.exitCode, lastLines: exit.lastLines,
+                outputFile: exit.outputFile))
         close(token: token)
     }
 
@@ -154,7 +156,12 @@ extension PaneFloats: TerminalSurfaceDelegate {
         guard let token = entry(of: s)?.token else { return }
         onSurfaceExited?(s)
         guard exitHold.closesOnExit(token) else { return close(token: token) }
-        exitHold.recordExit(token, lastLines: s.text(lastLines: LaunchedExitHold<Int>.tailLines))
+        let lastLines = s.text(lastLines: LaunchedExitHold<Int>.tailLines)
+        RunOutput.save(s, token: token) { [weak self] in self?.exited(token, lastLines: lastLines, outputFile: $0) }
+    }
+
+    private func exited(_ token: Int, lastLines: String?, outputFile: URL?) {
+        exitHold.recordExit(token, lastLines: lastLines, outputFile: outputFile)
         if exitHold.hasMark(token) { return closeExited(token) }
         DispatchQueue.main.asyncAfter(deadline: .now() + LaunchedExitHold<Int>.markGrace) { [weak self] in
             self?.closeExited(token)

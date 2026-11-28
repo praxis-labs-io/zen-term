@@ -21,7 +21,6 @@ final class ChildrenWait {
     private var news: [Int: PaneWait.Answer] = [:]
     private var reply: ((ControlReply) -> Void)?
     private var ticker: Timer?
-    private(set) var answeredExits: [SurfaceID] = []
     var onAnswered: (() -> Void)?
 
     var probes: [PaneWait] { watches.map(\.probe) }
@@ -90,9 +89,9 @@ final class ChildrenWait {
         let children = watches.map { watch in
             let heard = news[watch.token]
             return WaitResult.Child(
-                reason: heard?.reason, exitCode: heard?.exitCode, text: heard?.text, pane: watch.probe.pane)
+                reason: heard?.reason, exitCode: heard?.exitCode, text: heard?.text,
+                outputFile: heard?.outputFile?.path, pane: watch.probe.pane)
         }
-        answeredExits = watches.filter { news[$0.token]?.reason == .exited }.map(\.probe.watched.surfaceID)
         finish()
         reply(.success(WaitResult(reason: reason, children: children)))
     }

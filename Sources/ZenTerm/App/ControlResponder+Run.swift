@@ -67,6 +67,7 @@ extension ControlResponder {
                 $0.name = name
                 $0.parent = request.caller?.pane
                 $0.outlivesParent = request.args.outliveParent == true
+                $0.closesOnExit = program.exitClosesPane
             }
             guard let task = request.args.task, !task.isEmpty else {
                 return answer(PaneRunResult(pane: token, firstTask: nil), for: request, hangup: hangup, reply: reply)
@@ -206,7 +207,7 @@ extension ControlResponder {
         let answer = exited(exit)
         guard let pane = answer.pane else { return answer }
         return WaitResult(
-            reason: .exited, exitCode: answer.exitCode, text: answer.text,
+            reason: .exited, exitCode: answer.exitCode, text: answer.text, outputFile: answer.outputFile,
             pane: ListResult.Pane(
                 token: pane.token, drawer: pane.drawer, float: pane.float, title: pane.title, cwd: pane.cwd,
                 busy: pane.busy, process: pane.process, agent: pane.agent, name: pane.name, parent: pane.parent,

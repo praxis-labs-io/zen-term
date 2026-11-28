@@ -293,7 +293,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   runs in the caller (`ControlResponder.opensFloat`), with a `PaneProgram` whose `exitClosesPane` drops the shell that
   `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
   Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
-  program's `D` mark and its last 40 lines. The mark follows the command inline. Under sh, bash,
+  program's `D` mark, its last 40 lines, and the file `RunOutput` saved its last 2,000 grid rows
+  to. As the child exits, main reads only those rows in one `TerminalGrid.text` call, since a
+  line-by-line walk of that many rows costs more than a frame in a wide pane. The cut notice, a
+  line split by the cut, the `0600` write and the prune run off main
+  (`~/Library/Caches/ZenTerm/run-output`, the newest 64), and the close waits for the write. The mark follows the command inline. Under sh, bash,
   zsh, dash and ksh a guarded `__zen_mark` prints it once, and a builtin `exit` still reports
   through an exit hook: `zshexit_functions` in zsh, an `EXIT` trap chained onto the existing one
   in bash, an sh that is bash, and ksh. dash shows its traps only to itself, not to a `$(trap)`,
@@ -767,9 +771,9 @@ the queue drops (its pane closed, or its agent blocked 10 minutes from when the 
 child's `pane.send` to its parent never is: it queues past a blocked parent instead of being refused)
 goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
-waits it answers before `PaneWaits` drops them. The exit note lands after the OSC 133 finish or the foreground check
-has already answered a wait, so `PaneWaits` keeps the callers whose wait answered a pane's exit until the pane is
-released. The note reaches `ControlResponder.tell` through
+waits it answers before `PaneWaits` drops them. A wait on a pane that closes on exit (`PaneRecord.closesOnExit`)
+answers `exited` only from the surface's release, not the OSC 133 finish or the foreground check, so it is still held
+when the exit note is read and carries the saved output. The note reaches `ControlResponder.tell` through
 `onHelperNote`. A child's submitted `pane.send` to its parent, from when it delivers or queues, marks it in its window until its next turn or its parent's
 next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after the parent's `PaneDrafts` queue waits out a
 blocked agent and a draft, as a queued `pane.send` does. Into an agent, `ControlResponder.paste` hands the
