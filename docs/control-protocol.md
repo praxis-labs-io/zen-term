@@ -451,7 +451,8 @@ with `enter` sends it:
   the program says which. A child blocked on a question sends
   `review is asking a question: read it with zen pane read --pane 34 and answer it, or ask the user when it is a product or scope call`.
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
-  child answers the same change, when one it holds on its `children` watches the child, since
+  child answers the same change, when one the parent held answered the child's exit before its pane
+  closed, when one it holds on its `children` watches the child, since
   that wait reports the change, or for the report that settles `first_task`, which `pane.run`
   answers with. No wait answers `resumed`, so any wait the parent holds on the child stands in
   for it, and there is none when the parent sent or pressed anything into the child while it was
@@ -536,7 +537,7 @@ Holds until something happens to the pane, then answers once with why:
 | `stopped` | The agent's `status` left `working`. Without `output` only. |
 | `exited`  | Its program exited, or the pane closed. |
 | `output`  | `output` appeared in text printed after the wait began. |
-| `message` | A `pane.send`, or a child's note, reached the caller's own pane. |
+| `message` | The pane waited on sent the caller's own pane a `pane.send` or a note. Anything else sent there still arrives, and leaves the wait standing. |
 | `timeout` | Nothing happened within `timeout`. A check-in, not a failure: wait again. |
 
 ```json
@@ -574,7 +575,8 @@ with `enter` other than a slash command, counts as working until its `status` mo
 or `done`, clears, or its agent exits, so `all` does not answer before it starts on the task. A
 child with such a send queued for its person's draft counts as working until the send arrives.
 With `all`, each child's `reason` is its latest news while the wait held, so a child that
-stopped and then exited answers `exited` with its `exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+stopped and then exited answers `exited` with its `exitCode` and `text`. `message` answers when a child sends the
+caller something, and `timeout` as it does for a pane, and `output` is a
 `bad_request` with `all`.
 
 ```json

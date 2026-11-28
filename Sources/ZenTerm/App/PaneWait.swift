@@ -9,6 +9,7 @@ final class PaneWait {
     static let exitLines = 40
 
     struct Watched {
+        let token: Int
         let surfaceID: SurfaceID
         weak var surface: TerminalSurface?
         let readsForeground: Bool
@@ -33,6 +34,7 @@ final class PaneWait {
     private var ranJob = false
     private var backAtShell = false
     private var ticker: Timer?
+    private(set) var answeredExit = false
     var onAnswered: (() -> Void)?
 
     init?(
@@ -86,7 +88,11 @@ final class PaneWait {
         reason != .stopped || (output == nil && !watched.awaitsQueuedTask())
     }
 
-    func messageArrived() { answer(.message) }
+    // Only the pane waited on speaks for it; anything else reaches the caller as input and leaves the wait standing.
+    func messageArrived(from sender: Int?) {
+        guard sender == watched.token else { return }
+        answer(.message)
+    }
 
     func cancel() { finish() }
 
@@ -109,6 +115,7 @@ final class PaneWait {
     private func answer(_ reason: WaitReason, exitCode: Int? = nil, text: String? = nil) {
         guard let reply else { return }
         let pane = pane
+        if reason == .exited { answeredExit = true }
         if !keepsWatching || reason == .exited { finish() }
         reply(Answer(reason: reason, exitCode: exitCode, text: text, pane: pane))
     }

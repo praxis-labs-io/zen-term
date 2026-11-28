@@ -274,7 +274,7 @@ extension ControlResponder {
         if overDraft, let stash = place.window.draftStash(of: place.pane) { surface.press(stash) }
         if !text.isEmpty { pastes(text, from: sender, into: place).forEach(surface.paste) }
         if enter { surface.submit() }
-        paneWaits.sent(to: place.pane.surfaceID)
+        paneWaits.sent(to: place.pane.surfaceID, from: sender)
     }
 
     func pastes(_ text: String, from sender: Int?, into place: PanePlace) -> [String] {
@@ -489,7 +489,7 @@ extension ControlResponder {
         let token = place.pane.token
         let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
         return PaneWait.Watched(
-            surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+            token: token, surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
             pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } },
             exit: { [self] in launchedExit(of: token) },
             awaitsQueuedTask: { [paneDrafts, surfaceID = place.pane.surfaceID] in

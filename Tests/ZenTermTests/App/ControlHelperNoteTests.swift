@@ -322,6 +322,53 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, [])
     }
 
+    func test_aWaitThatAnsweredTheExitBeforeThePaneClosedTakesThePlaceOfTheNote() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        let exit = try wait(parent, on: helper)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
+        waitUntil(exit.reply != nil, "the wait to answer the exit mark")
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+
+        XCTAssertEqual((try exit.reply?.get() as? WaitResult)?.reason, .exited)
+        XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_aChildrenWaitThatAnsweredTheExitBeforeThePaneClosedTakesThePlaceOfTheNote() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        let any = try waitOnChildren(of: parent, .any)
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
+        waitUntil(any.reply != nil, "the wait to answer the exit mark")
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+
+        XCTAssertEqual((try any.reply?.get() as? WaitResult)?.reason, .exited)
+        XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_anotherHelpersNoteReachesTheParentButLeavesItsWaitOnAHelperStanding() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        let other = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+        report(.working, from: other)
+        let answer = try wait(parent, on: helper)
+
+        report(.done, from: other)
+
+        let read = "tests stopped (done): read it with zen pane read --pane \(try token(of: other))"
+        XCTAssertEqual(parent.inputs, try note(read, from: other, named: "tests"))
+        XCTAssertNil(answer.reply)
+    }
+
     func test_aWaitForOutputDoesNotAnswerAStop_soTheNoteStillArrives() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)

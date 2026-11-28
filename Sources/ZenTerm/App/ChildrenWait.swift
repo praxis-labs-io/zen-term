@@ -21,6 +21,7 @@ final class ChildrenWait {
     private var news: [Int: PaneWait.Answer] = [:]
     private var reply: ((ControlReply) -> Void)?
     private var ticker: Timer?
+    private(set) var answeredExits: [SurfaceID] = []
     var onAnswered: (() -> Void)?
 
     var probes: [PaneWait] { watches.map(\.probe) }
@@ -52,7 +53,10 @@ final class ChildrenWait {
         answerOnceNoneWorks()
     }
 
-    func messageArrived() { answer(.message) }
+    func messageArrived(from sender: Int?) {
+        guard watches.contains(where: { $0.token == sender }) else { return }
+        answer(.message)
+    }
 
     // `all` keeps each child's probe until it exits, records the latest change, and reports it when it answers.
     func answers(_ reason: WaitReason, from surface: SurfaceID) -> Bool {
@@ -88,6 +92,7 @@ final class ChildrenWait {
             return WaitResult.Child(
                 reason: heard?.reason, exitCode: heard?.exitCode, text: heard?.text, pane: watch.probe.pane)
         }
+        answeredExits = watches.filter { news[$0.token]?.reason == .exited }.map(\.probe.watched.surfaceID)
         finish()
         reply(.success(WaitResult(reason: reason, children: children)))
     }

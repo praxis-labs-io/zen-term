@@ -735,7 +735,8 @@ stalls main. A command that reads off-main (`workspace.open` reading the workspa
 replies when the read lands, holding only its own connection. A command that can hold past `ControlWire.longestReplyWait` (`pane.wait`, `pane.send`, `pane.run`) takes its deadline from its own args through `ControlWire.answerWait`, which the server and `zen` both read, so neither end gives up before the other. `pane.wait` holds in `PaneWaits`,
 app-wide since a caller and the pane it waits on can sit in different windows: `WindowController`
 feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
-`pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
+`pane.send` a message for the caller with its sender, which answers only a wait on that sender or on children it is
+one of. libghostty reports no output, so output and a job's exit
 without OSC 133 are checked on a timer while a wait holds: the text from a grid mark at the screen
 the last check read down to the bottom row (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). A task or message sent with `enter` drops a grid mark at the start of the cursor's row, one per pane and replaced by the
 next (`TaskMarks`), which `pane.read` with `since` reads from. The
@@ -766,7 +767,9 @@ the queue drops (its pane closed, or its agent blocked 10 minutes from when the 
 child's `pane.send` to its parent never is: it queues past a blocked parent instead of being refused)
 goes to its `drop`, which logs it and answers a waiting `pane.send` with the reason. A `pane.run` child's note to its parent (`HelperNote`)
 starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
-waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
+waits it answers before `PaneWaits` drops them. The exit note lands after the OSC 133 finish or the foreground check
+has already answered a wait, so `PaneWaits` keeps the callers whose wait answered a pane's exit until the pane is
+released. The note reaches `ControlResponder.tell` through
 `onHelperNote`. A child's submitted `pane.send` to its parent, from when it delivers or queues, marks it in its window until its next turn or its parent's
 next `pane.send` or `pane.keys` into it, which skips its `stopped` note. It takes `pane.send`'s paste and envelope, after the parent's `PaneDrafts` queue waits out a
 blocked agent and a draft, as a queued `pane.send` does. Into an agent, `ControlResponder.paste` hands the

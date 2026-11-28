@@ -288,12 +288,16 @@ final class ControlChildrenWaitTests: WindowTestCase {
         }
     }
 
-    func test_aTextSentToTheCallerAnswersAChildrenWaitWithMessage() throws {
+    func test_aTextAChildSendsTheCallerAnswersAChildrenWaitWithMessage_andTextFromAnyoneElseDoesNot() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))
         let child = try run("claude", from: caller)
         report(.working, from: child)
         let answer = waitOnChildren(.all, from: caller)
+
+        _ = request(.paneSend, ControlArgs(pane: .token(caller), text: "from a shell"), from: nil)
+        settle(0.3)
+        XCTAssertNil(answer.reply, "only a child speaks for a children wait")
 
         _ = request(.paneSend, ControlArgs(pane: .token(caller), text: "done: 2 bugs"), from: try token(of: child))
 

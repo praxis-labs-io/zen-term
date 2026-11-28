@@ -80,8 +80,9 @@ final class ControlPaneWaitTests: WindowTestCase {
         return answer
     }
 
-    private func send(_ cmd: ControlCommand, _ args: ControlArgs) {
-        responder.respond(to: ControlRequest(id: 2, cmd: cmd, args: args)) { _ in }
+    private func send(_ cmd: ControlCommand, _ args: ControlArgs, from sender: Int? = nil) {
+        let caller = sender.map { ControlCaller(pane: $0) }
+        responder.respond(to: ControlRequest(id: 2, cmd: cmd, args: args, caller: caller)) { _ in }
     }
 
     private func result(_ answer: Answer, within timeout: TimeInterval = 2) throws -> WaitResult {
@@ -179,18 +180,25 @@ final class ControlPaneWaitTests: WindowTestCase {
         XCTAssertNil(got.exitCode)
     }
 
-    func test_textSentToTheWaitingCallersOwnPaneAnswersMessage() throws {
+    func test_textThePaneWaitedOnSendsTheCallerAnswersMessage_andTextFromAnyoneElseDoesNot() throws {
         makeWindow()
         let caller = try XCTUnwrap(spawned.first)
         send(.paneSplit, ControlArgs(pane: .token(try token(of: caller)), dir: .right))
         let helper = try XCTUnwrap(spawned.last)
+        send(.paneSplit, ControlArgs(pane: .token(try token(of: caller)), dir: .down))
+        let other = try XCTUnwrap(spawned.last)
         let answer = wait(on: try token(of: helper), from: try token(of: caller))
 
         send(.paneSend, ControlArgs(pane: .token(try token(of: helper)), text: "to the helper"))
+        send(.paneSend, ControlArgs(pane: .token(try token(of: caller)), text: "from a shell"))
+        let toCaller = ControlArgs(pane: .token(try token(of: caller)), text: "lint: clean")
+        send(.paneSend, toCaller, from: try token(of: other))
         settle(0.3)
-        XCTAssertNil(answer.reply, "a send to the pane waited on is not a message for the caller")
+        XCTAssertNil(answer.reply, "only the pane waited on speaks for it")
+        XCTAssertTrue(caller.inputs.contains(.paste("from a shell")), "the text still reaches the caller")
 
-        send(.paneSend, ControlArgs(pane: .token(try token(of: caller)), text: "done: 2 bugs"))
+        let fromHelper = ControlArgs(pane: .token(try token(of: caller)), text: "done: 2 bugs")
+        send(.paneSend, fromHelper, from: try token(of: helper))
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .message)
