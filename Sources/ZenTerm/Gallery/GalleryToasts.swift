@@ -118,8 +118,8 @@
                     }),
                 row(
                     "Claude Code failed",
-                    Window.setupFailureToast(
-                        title: Window.updateFailedTitle, reason: "~/.claude/settings.json isn't valid JSON."),
+                    Window.claudeSetupFailureToast(
+                        title: Window.claudeUpdateFailedTitle, reason: "~/.claude/settings.json isn't valid JSON."),
                     [], showsClose: true),
                 row(
                     "Surface failed", Window.surfaceFailureToast,

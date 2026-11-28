@@ -4,7 +4,7 @@ import Foundation
 struct ClaudeSettings {
     private(set) var root: [String: Any]
 
-    static func read(at url: URL) throws(SetupError) -> ClaudeSettings {
+    static func read(at url: URL) throws(ClaudeSetupError) -> ClaudeSettings {
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -22,7 +22,7 @@ struct ClaudeSettings {
         return settings
     }
 
-    func write(to url: URL) throws(SetupError) {
+    func write(to url: URL) throws(ClaudeSetupError) {
         let target = url.resolvingSymlinksInPath()
         do {
             var data = try JSONSerialization.data(
@@ -100,7 +100,7 @@ struct ClaudeSettings {
         (root["hooks"] as? [String: Any])?["SessionStart"] as? [Any] ?? []
     }
 
-    private func sessionStart(at url: URL) throws(SetupError) -> [Any] {
+    private func sessionStart(at url: URL) throws(ClaudeSetupError) -> [Any] {
         guard let hooks = root["hooks"] else { return [] }
         guard let events = hooks as? [String: Any] else {
             throw .malformed(url, "has a \"hooks\" that isn't an object")
