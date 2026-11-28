@@ -1112,7 +1112,10 @@ Tools opens a system prompt.
 
 `KeepAwake` is the app's one hold on idle sleep, owned by `AppDelegate` and handed to every
 `WindowController`, so a command in any window changes the same hold. It posts
-`.keepAwakeDidChange` on each change, for chrome that shows the hold. On wake it re-checks its
+`.keepAwakeDidChange` on each change, including a change in the agent count. Each window's
+`KeepAwakeMenu` renders the hold from it: the sidebar footer's indicator, its popover, and the
+collapsed sidebar toggle's dot. It ticks only while a timed or grace hold shows a countdown, once a
+minute or once a second as the text needs. On wake it re-checks its
 deadlines against the wall clock, since a run-loop timer pauses while the Mac sleeps. The IOKit power assertion, the battery reading and the timers sit behind
 `PowerAssertions`, `BatterySource` and `KeepAwakeClock`, so the state machine is tested against
 fakes. The battery is read on IOKit's change notification, never polled.

@@ -65,8 +65,9 @@ Accent is rare. It goes in these places only:
 - The focus border of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
-- The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
+- The live `StateDot`: a toolbar button's background dot, the collapsed sidebar's toggle while Keep Awake is on, and the workspace form's opens-focused tab.
 - An on `ToggleSwitch`'s track, its knob in `onAccent`.
+- The Keep Awake cup while a hold is on, in the sidebar footer and the Keep Awake popover's header, and the footer's display glyph while the display is held on. Near the battery stop the cup takes `warning` instead.
 - Role-toned `tint` surfaces: icon badges, the Workspaces chips, focused text selection, the scroll flash.
 
 A control's focus or edit ring takes `chrome.focusRing`, a neutral. Never accent text, an
@@ -247,7 +248,7 @@ Find takes the header's row: the chip turns to `ProcessIcon.find`, the name, pat
 
 Scroll mode names itself in the header: the chip turns to `ProcessIcon.scrollMode`, the name reads Scroll mode and its readout (the cursor's position, a selection's count, a copy's confirmation) takes the path's place in its muted ink, in the `.digits` face; the controls stay. A pane with headers off keeps its header hidden. Find open over scroll mode keeps its own chip and field.
 
-A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, idle muted ink, live `accent`, online (an SSH host's Connect screen) `positive`, warning (Keep Awake near its battery stop, on the collapsed sidebar's toggle) `warning`, working `working`. It is never a ring. Under Reduce Motion a spinning `Spinner` shows a still dot in its role instead: working for an agent, live for loading. An Agents row centers its chip, dot or spinner on the title's line, and its workspace line starts with the title's text (`ListRow.Content.leadingOnTitleLine`). A nested Agents row's chip starts there too (`ListRow.Nesting.underTitle`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 

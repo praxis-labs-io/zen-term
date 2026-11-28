@@ -26,24 +26,26 @@
         }
 
         static func form(
-            isOn: Bool, current: Int? = nil, header: SegmentedControl? = nil,
+            isOn: Bool, current: Int? = nil, header: ToggleSwitch? = nil,
             onChoose: @escaping (Int) -> Void = { _ in }
         ) -> PopoverForm {
-            let header = header ?? SegmentedControl(options: ["Off", "On"], selectedIndex: isOn ? 1 : 0) { _ in }
+            let header = header ?? ToggleSwitch(isOn: isOn) { _ in }
             let scope = SegmentedControl(options: ["This Mac", "Mac and display"]) { _ in }
-            return PopoverForm(
+            let form = PopoverForm(
                 header: PopoverForm.Header(symbol: "cup.and.saucer", title: "Keep Awake", control: header),
                 status: isOn ? onStatus : nil,
                 sections: [PopoverForm.Section(caption: "Keep awake", control: scope)],
                 checklistCaption: "Until",
                 rows: rows(current: current ?? (isOn ? 1 : nil), agentsWorking: isOn || current != nil),
                 onChoose: onChoose)
+            form.setHeaderAccented(isOn)
+            return form
         }
 
         private final class LiveSample: NSView {
             private lazy var button = AppButton(title: "Open", variant: .secondary) { [weak self] in self?.open() }
             private lazy var popover = ListPopover(anchor: button, anchorToggles: true)
-            private lazy var onOff = SegmentedControl(options: ["Off", "On"]) { [weak self] in self?.setOn($0 == 1) }
+            private lazy var onOff = ToggleSwitch { [weak self] in self?.setOn($0) }
             private var form: PopoverForm?
             private var isOn = false
             private var current: Int?
@@ -87,12 +89,13 @@
             private func choose(_ index: Int) {
                 isOn = true
                 current = index
-                onOff.setSelection(1)
+                onOff.setOn(true)
                 render()
             }
 
             private func render() {
                 guard popover.isOpen else { return }
+                form?.setHeaderAccented(isOn)
                 form?.render(
                     status: isOn ? GalleryPopoverForm.onStatus : nil,
                     rows: GalleryPopoverForm.rows(current: current, agentsWorking: true), in: popover)

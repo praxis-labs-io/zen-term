@@ -309,6 +309,7 @@ final class WindowController: NSObject {
 
     var paneWaits = PaneWaits()
     var keepAwake: KeepAwake?
+    private var keepAwakeMenu: KeepAwakeMenu?
     var onWorkingAgentsChanged: (() -> Void)?
 
     var paneDrafts = PaneDrafts()
@@ -804,12 +805,21 @@ final class WindowController: NSObject {
     func mountAndStart() {
         bindFirstControllerIfNeeded()
         mount(.instant)
+        mountKeepAwake()
         activeController?.start()
         renderTabBar()
         window.contentView?.layoutSubtreeIfNeeded()
         titlePoll = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshTitlesFromCWD() }
         }
+    }
+
+    private func mountKeepAwake() {
+        guard let keepAwake, keepAwakeMenu == nil else { return }
+        keepAwakeMenu = KeepAwakeMenu(
+            keepAwake: keepAwake, indicator: sidebar.footer.keepAwakeIndicator, clock: TimerClock(),
+            onRefused: { [weak self] in self?.showToast(Self.keepAwakeRefusedToast($0)) },
+            onActivityChanged: { [weak self] in self?.sidebar.setKeepAwakeActivity($0) })
     }
 
     private func refreshTitlesFromCWD() {
@@ -4723,6 +4733,8 @@ final class WindowController: NSObject {
 
     func pollTitlesForTesting() { refreshTitlesFromCWD() }
 
+    var keepAwakeMenuForTesting: KeepAwakeMenu? { keepAwakeMenu }
+
     func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
 
     func closeModalForTesting() { closeModal() }
@@ -5083,6 +5095,7 @@ final class WindowController: NSObject {
         if let hostStatusObserver { NotificationCenter.default.removeObserver(hostStatusObserver) }
         hostStatusObserver = nil
         floats.shutdown()
+        keepAwakeMenu?.shutdown()
         sidebar.shutdown()
         for workspace in workspaces {
             workspace.shutdown()

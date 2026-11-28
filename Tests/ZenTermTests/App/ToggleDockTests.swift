@@ -474,6 +474,7 @@ final class ToggleDockTests: XCTestCase {
     }
 
     func test_toolbarGroupsThenSidebarFooter_coverEveryCaseInOrder() {
-        XCTAssertEqual(ToolbarButton.groups.flatMap { $0 } + [.commandPalette, .settings], ToolbarButton.allCases)
+        XCTAssertEqual(
+            ToolbarButton.groups.flatMap { $0 } + [.commandPalette, .keepAwake, .settings], ToolbarButton.allCases)
     }
 }

@@ -3,59 +3,6 @@ import XCTest
 @testable import ZenTerm
 
 final class KeepAwakeTests: XCTestCase {
-    private final class FakePower: PowerAssertions {
-        var held: Bool?
-        var releases = 0
-
-        func hold(keepingDisplayOn: Bool) { held = keepingDisplayOn }
-
-        func release() {
-            held = nil
-            releases += 1
-        }
-    }
-
-    private final class FakeBattery: BatterySource {
-        var reading: BatteryReading?
-        var onChange: (() -> Void)?
-
-        func report(_ reading: BatteryReading?) {
-            self.reading = reading
-            onChange?()
-        }
-    }
-
-    private final class FakeClock: KeepAwakeClock {
-        private struct Pending {
-            let id: Int
-            var due: Date
-            let fire: () -> Void
-        }
-
-        var now = Date(timeIntervalSinceReferenceDate: 0)
-        private var pending: [Pending] = []
-        private var nextID = 0
-
-        func schedule(after seconds: TimeInterval, _ fire: @escaping () -> Void) -> Cancel {
-            nextID += 1
-            let id = nextID
-            pending.append(Pending(id: id, due: now.addingTimeInterval(seconds), fire: fire))
-            return { [weak self] in self?.pending.removeAll { $0.id == id } }
-        }
-
-        func sleep(for seconds: TimeInterval) {
-            now = now.addingTimeInterval(seconds)
-            for index in pending.indices { pending[index].due.addTimeInterval(seconds) }
-        }
-
-        func advance(by seconds: TimeInterval) {
-            now = now.addingTimeInterval(seconds)
-            let due = pending.filter { $0.due <= now }
-            pending.removeAll { $0.due <= now }
-            due.forEach { $0.fire() }
-        }
-    }
-
     private var power: FakePower!
     private var battery: FakeBattery!
     private var clock: FakeClock!
@@ -296,6 +243,22 @@ final class KeepAwakeTests: XCTestCase {
 
         XCTAssertEqual(power.held, true)
         XCTAssertTrue(keepAwake.keepsDisplayOn)
+    }
+
+    func test_aChangeInTheAgentCount_isAnnounced_onlyWhenTheCountMoves() {
+        var announcements = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: .keepAwakeDidChange, object: keepAwake, queue: nil
+        ) { _ in announcements += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        working = 3
+        keepAwake.activityChanged()
+        keepAwake.activityChanged()
+        working = 2
+        keepAwake.activityChanged()
+
+        XCTAssertEqual(announcements, 2, "each new count is announced once, a repeat is not")
     }
 
     func test_everyChange_isAnnounced() {

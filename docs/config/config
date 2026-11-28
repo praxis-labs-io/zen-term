@@ -112,7 +112,7 @@
 # bottom-drawer, right-drawer or scratch button comes back while its shell is busy
 # out of sight, or while something there needs you, so work you cannot see keeps a handle in the toolbar.
 # Buttons, in toolbar order, then the sidebar's:
-#   new-tab, bottom-drawer, right-drawer, scratch, command-palette, settings
+#   new-tab, bottom-drawer, right-drawer, scratch, command-palette, keep-awake, settings
 # In-app Settings edit: applies live.
 # hide-toolbar-buttons =              # e.g. new-tab,scratch
 
@@ -231,9 +231,10 @@
 
 # ─── Keep Awake ──────────────────────────────────────────────────────────────
 
-# The Keep Awake commands in the command palette hold the Mac awake: until you
-# turn it off, for an hour, or until the working agents finish. These set how
-# every hold behaves. Quitting ZenTerm ends the hold.
+# Keep Awake holds the Mac awake: until you turn it off, for a set time, or until
+# the working agents finish. Start it from the cup in the sidebar footer or from
+# the command palette. These set how every hold behaves. Quitting ZenTerm ends
+# the hold.
 
 # Keep the display on too, not only the Mac. Off by default: agents do not need
 # the screen. The palette's Keep Mac and Display Awake turns it on until you quit.

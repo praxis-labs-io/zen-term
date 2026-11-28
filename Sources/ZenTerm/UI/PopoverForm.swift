@@ -50,6 +50,7 @@ final class PopoverForm: NSView, ThemeReapplying {
     private var cursor: Int? {
         didSet { refreshHighlight() }
     }
+    private var isHeaderAccented = false
     private var hasFocus = false {
         didSet { refreshHighlight() }
     }
@@ -60,6 +61,8 @@ final class PopoverForm: NSView, ThemeReapplying {
     }
 
     var rowViewsForTesting: [ListRow] { rowViews }
+    var headerTintForTesting: NSColor? { glyph.contentTintColor }
+    var statusForTesting: String? { statusView.isHidden ? nil : statusLabel.stringValue }
 
     init(
         header: Header, status: String?, sections: [Section], checklistCaption: String, rows: [ChecklistRow],
@@ -140,9 +143,15 @@ final class PopoverForm: NSView, ThemeReapplying {
         return true
     }
 
+    func setHeaderAccented(_ accented: Bool) {
+        guard accented != isHeaderAccented else { return }
+        isHeaderAccented = accented
+        reapplyTheme()
+    }
+
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        glyph.contentTintColor = chrome.ink(.subtle)
+        glyph.contentTintColor = isHeaderAccented ? chrome.accent.nsColor : chrome.ink(.subtle)
         titleLabel.textColor = chrome.ink(.normal)
         statusLabel.textColor = chrome.ink(.muted)
     }

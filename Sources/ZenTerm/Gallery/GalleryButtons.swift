@@ -5,7 +5,7 @@
         static let variants: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link, .quietLink]
 
         static func sections() -> [GallerySection] {
-            [appButtons(), iconButtons(), keycaps(), stateDots()]
+            [appButtons(), iconButtons(), keepAwakeIndicators(), keycaps(), stateDots()]
         }
 
         static func title(for variant: AppButton.Variant) -> String {
@@ -58,7 +58,9 @@
             let active = iconButton()
             active.isActive = true
             let live = iconButton()
-            live.showsActivity = true
+            live.activity = .live
+            let warning = iconButton()
+            warning.activity = .warning
             return GallerySection(
                 title: "IconButton",
                 rows: [
@@ -67,7 +69,30 @@
                     GallerySection.Row(label: "Active", samples: [active]),
                     GallerySection.Row(label: "Rests filled", samples: [iconButton(restsFilled: true)]),
                     GallerySection.Row(label: "Live in the background", samples: [live]),
+                    GallerySection.Row(label: "Warning in the background", samples: [warning]),
                 ])
+        }
+
+        private static func keepAwakeIndicators() -> GallerySection {
+            typealias Content = KeepAwakeIndicator.Content
+            let states: [(String, Content)] = [
+                ("Off", Content()),
+                ("On, until turned off", Content(isOn: true)),
+                ("On, until agents finish", Content(isOn: true, detail: "3 agents")),
+                ("On, timed, display too", Content(isOn: true, keepsDisplayOn: true, detail: "42m")),
+                ("Grace", Content(isOn: true, detail: "ending in 45s")),
+                ("Near the battery stop", Content(isOn: true, detail: "42m", isBatteryLow: true)),
+            ]
+            let hovered = KeepAwakeIndicator {}
+            hovered.render(Content(isOn: true, detail: "3 agents"))
+            hovered.forceHoverForGallery()
+            return GallerySection(
+                title: "KeepAwakeIndicator",
+                rows: states.map { label, content in
+                    let indicator = KeepAwakeIndicator {}
+                    indicator.render(content)
+                    return GallerySection.Row(label: label, samples: [indicator])
+                } + [GallerySection.Row(label: "Hover", samples: [hovered])])
         }
 
         private static func stateDots() -> GallerySection {
@@ -75,7 +100,7 @@
                 title: "StateDot",
                 rows: [
                     GallerySection.Row(
-                        label: "Blocked, done, idle, live, online, working",
+                        label: "Blocked, done, idle, live, online, warning, working",
                         samples: StateDot.State.allCases.map(StateDot.init))
                 ])
         }

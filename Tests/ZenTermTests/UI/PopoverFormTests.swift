@@ -7,7 +7,7 @@ final class PopoverFormTests: WindowTestCase {
     private var window: NSWindow!
     private var anchor: NSView!
     private var popover: ListPopover!
-    private var headerControl: SegmentedControl!
+    private var headerControl: ToggleSwitch!
     private var sectionControl: SegmentedControl!
     private var chosen: [Int] = []
 
@@ -41,7 +41,7 @@ final class PopoverFormTests: WindowTestCase {
     private func openForm(
         status: String? = nil, rows: [PopoverForm.ChecklistRow] = rows, header: NSView? = nil
     ) -> PopoverForm {
-        headerControl = SegmentedControl(options: ["Off", "On"]) { _ in }
+        headerControl = ToggleSwitch { _ in }
         sectionControl = SegmentedControl(options: ["This Mac", "Mac and display"]) { _ in }
         let form = PopoverForm(
             header: PopoverForm.Header(
@@ -279,5 +279,17 @@ final class PopoverFormTests: WindowTestCase {
         form.render(status: "Awake for 42 more minutes, until 4:31 PM.", rows: Self.rows, in: popover)
 
         XCTAssertTrue(window.firstResponder === headerControl)
+    }
+
+    func test_anAccentedHeader_tintsTheGlyphInTheAccent_andBackToSubtle() {
+        let form = openForm()
+        let chrome = Theme.current.chrome
+        XCTAssertEqual(form.headerTintForTesting, chrome.ink(.subtle))
+
+        form.setHeaderAccented(true)
+        XCTAssertEqual(form.headerTintForTesting, chrome.accent.nsColor)
+
+        form.setHeaderAccented(false)
+        XCTAssertEqual(form.headerTintForTesting, chrome.ink(.subtle))
     }
 }

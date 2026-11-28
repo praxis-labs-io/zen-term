@@ -46,6 +46,7 @@ final class KeepAwake {
     private let settings: () -> Settings
     private let count: () -> Int
     private var seenDisplaySetting: Bool
+    private var lastCount = 0
     private var cancelTimer: KeepAwakeClock.Cancel?
     private var cancelGrace: KeepAwakeClock.Cancel?
 
@@ -88,23 +89,10 @@ final class KeepAwake {
     }
 
     func activityChanged() {
-        guard var current = hold, current.until == .agentsFinish else { return }
-        if count() > 0 {
-            guard current.graceEndsAt != nil else { return }
-            cancelGrace?()
-            cancelGrace = nil
-            current.graceEndsAt = nil
-            hold = current
-            announce()
-            return
-        }
-        guard current.graceEndsAt == nil else { return }
-        let grace = settings().grace
-        guard grace > 0 else { return release(.agentsFinished) }
-        current.graceEndsAt = clock.now.addingTimeInterval(grace)
-        hold = current
-        armGrace(after: grace)
-        announce()
+        let active = count()
+        let countChanged = active != lastCount
+        lastCount = active
+        if !followAgents(active: active), countChanged { announce() }
     }
 
     // A run-loop timer pauses while the Mac sleeps, so a lid closed mid-hold would stretch the hold by the nap.
@@ -130,6 +118,30 @@ final class KeepAwake {
         }
         if hold != nil, let percent = percentBelowStop() { return release(.battery(percent: percent)) }
         announce()
+    }
+
+    private func followAgents(active: Int) -> Bool {
+        guard var current = hold, current.until == .agentsFinish else { return false }
+        if active > 0 {
+            guard current.graceEndsAt != nil else { return false }
+            cancelGrace?()
+            cancelGrace = nil
+            current.graceEndsAt = nil
+            hold = current
+            announce()
+            return true
+        }
+        guard current.graceEndsAt == nil else { return false }
+        let grace = settings().grace
+        guard grace > 0 else {
+            release(.agentsFinished)
+            return true
+        }
+        current.graceEndsAt = clock.now.addingTimeInterval(grace)
+        hold = current
+        armGrace(after: grace)
+        announce()
+        return true
     }
 
     private func batteryChanged() {

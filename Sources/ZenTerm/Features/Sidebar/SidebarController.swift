@@ -541,6 +541,8 @@ final class SidebarController {
         view.setSettingsOpen(settings)
     }
 
+    func setKeepAwakeActivity(_ activity: IconButton.Activity?) { collapsedToggle.activity = activity }
+
     func setHiddenButtons(_ hidden: Set<ToolbarButton>) {
         footer.setHiddenButtons(hidden)
         view.setSettingsButtonHidden(hidden.contains(.settings))
