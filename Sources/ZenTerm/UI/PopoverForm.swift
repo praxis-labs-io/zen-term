@@ -1,0 +1,285 @@
+import AppKit
+
+final class PopoverForm: NSView, ThemeReapplying {
+    struct Header {
+        let symbol: String
+        let title: String
+        let control: NSView
+    }
+
+    struct Section {
+        let caption: String
+        let control: NSView
+    }
+
+    struct ChecklistRow: Equatable {
+        var title: String
+        var note: String?
+        var isCurrent: Bool
+        var isEnabled: Bool
+
+        init(title: String, note: String? = nil, isCurrent: Bool = false, isEnabled: Bool = true) {
+            self.title = title
+            self.note = note
+            self.isCurrent = isCurrent
+            self.isEnabled = isEnabled
+        }
+    }
+
+    static let width: CGFloat = 272
+    private static let headerHeight = ChromeMetrics.Height.lg
+    private static let rowHeight = ChromeMetrics.Height.control
+    private static let statusGap = ChromeMetrics.Spacing.s4
+    private static let sectionGap = ChromeMetrics.Spacing.s12
+    private static let captionGap = ChromeMetrics.Spacing.s6
+    private static let textInset = ChromeMetrics.Spacing.controlInset
+
+    private let header: Header
+    private let sections: [Section]
+    private let onChoose: (Int) -> Void
+    private let stack = NSStackView()
+    private let glyph = NSImageView()
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let statusLabel = NSTextField(wrappingLabelWithString: "")
+    private lazy var headerView = Self.inset(headerLine())
+    private lazy var statusView = Self.inset(statusLabel)
+    private let checklistCaption: SectionCaption
+    private lazy var checklistCaptionView = Self.inset(checklistCaption)
+    private var rows: [ChecklistRow] = []
+    private var rowViews: [ListRow] = []
+    private var cursor: Int? {
+        didSet { refreshHighlight() }
+    }
+    private var isHeaderAccented = false
+    private var hasFocus = false {
+        didSet { refreshHighlight() }
+    }
+
+    var highlightedRow: Int? {
+        get { cursor }
+        set { cursor = newValue.flatMap { isChoosable($0) ? $0 : nil } }
+    }
+
+    var rowViewsForTesting: [ListRow] { rowViews }
+    var headerTintForTesting: NSColor? { glyph.contentTintColor }
+    var statusForTesting: String? { statusView.isHidden ? nil : statusLabel.stringValue }
+
+    init(
+        header: Header, status: String?, sections: [Section], checklistCaption: String, rows: [ChecklistRow],
+        onChoose: @escaping (Int) -> Void
+    ) {
+        self.header = header
+        self.sections = sections
+        self.checklistCaption = SectionCaption(checklistCaption)
+        self.onChoose = onChoose
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        stack.orientation = .vertical
+        stack.alignment = .width
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: Self.width),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+
+        titleLabel.font = ChromeType.font(.body, weight: .semibold)
+        titleLabel.stringValue = header.title
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        glyph.image = IconCatalog.image(header.symbol, pointSize: ChromeMetrics.Icon.md, weight: .regular)
+        statusLabel.font = ChromeType.font(.small)
+        statusLabel.preferredMaxLayoutWidth = Self.width - Self.textInset * 2
+
+        headerView.heightAnchor.constraint(equalToConstant: Self.headerHeight).isActive = true
+        stack.addArrangedSubview(headerView)
+        stack.addArrangedSubview(statusView)
+        stack.setCustomSpacing(Self.sectionGap, after: statusView)
+        for section in sections {
+            let caption = Self.inset(SectionCaption(section.caption))
+            stack.addArrangedSubview(caption)
+            stack.setCustomSpacing(Self.captionGap, after: caption)
+            let control = Self.inset(NSStackView.huggingRow(section.control))
+            stack.addArrangedSubview(control)
+            stack.setCustomSpacing(Self.sectionGap, after: control)
+        }
+        stack.addArrangedSubview(checklistCaptionView)
+        stack.setCustomSpacing(Self.captionGap, after: checklistCaptionView)
+
+        for control in [header.control] + sections.map(\.control) { routeTab(from: control) }
+        apply(status: status, rows: rows)
+        cursor = rows.firstIndex { $0.isCurrent && $0.isEnabled }
+        reapplyTheme()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func render(status: String?, rows: [ChecklistRow], in popover: ListPopover) {
+        layoutSubtreeIfNeeded()
+        let before = fittingSize.height
+        apply(status: status, rows: rows)
+        layoutSubtreeIfNeeded()
+        guard popover.isOpen, fittingSize.height != before else { return }
+        let focused = (window?.firstResponder as? NSView).flatMap { $0.isDescendant(of: self) ? $0 : nil }
+        popover.replace(content: self)
+        window?.makeFirstResponder(focused ?? self)
+        if let cursor { popover.reveal(rowViews[cursor]) }
+    }
+
+    func takeFocus() { window?.makeFirstResponder(self) }
+
+    override func becomeFirstResponder() -> Bool {
+        hasFocus = true
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        hasFocus = false
+        return true
+    }
+
+    func setHeaderAccented(_ accented: Bool) {
+        guard accented != isHeaderAccented else { return }
+        isHeaderAccented = accented
+        reapplyTheme()
+    }
+
+    func reapplyTheme() {
+        let chrome = Theme.current.chrome
+        glyph.contentTintColor = isHeaderAccented ? chrome.accent.nsColor : chrome.ink(.subtle)
+        titleLabel.textColor = chrome.ink(.normal)
+        statusLabel.textColor = chrome.ink(.muted)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        switch KeyboardFocus.key(for: event) {
+        case .up: moveHighlight(-1)
+        case .down: moveHighlight(1)
+        case .activate: if let cursor { choose(cursor) }
+        case .tab(let shift): moveFocus(shift ? -1 : 1)
+        default: super.keyDown(with: event)
+        }
+    }
+
+    private func apply(status: String?, rows: [ChecklistRow]) {
+        statusLabel.stringValue = status ?? ""
+        statusView.isHidden = status == nil
+        stack.setCustomSpacing(status == nil ? Self.sectionGap : Self.statusGap, after: headerView)
+
+        if rows.count != rowViews.count { rebuildRows(count: rows.count) }
+        self.rows = rows
+        for (row, view) in zip(rows, rowViews) {
+            view.render(Self.content(row))
+            view.setAccessibilityEnabled(row.isEnabled)
+        }
+        if let cursor, !isChoosable(cursor) { self.cursor = nil }
+    }
+
+    private func rebuildRows(count: Int) {
+        rowViews.forEach { $0.removeFromSuperview() }
+        rowViews = (0..<count).map { index in
+            let row = ListRow(ListRow.Content(title: "")) { [weak self] in self?.choose(index) }
+            row.onPointerEnter = { [weak self] in self?.highlightPointed(index) }
+            return row
+        }
+        for row in rowViews {
+            stack.addArrangedSubview(row)
+            row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
+        }
+        refreshHighlight()
+    }
+
+    private static func content(_ row: ChecklistRow) -> ListRow.Content {
+        ListRow.Content(
+            title: row.title, note: row.note, trailing: row.isCurrent ? .check : nil,
+            ink: row.isEnabled ? .normal : .faint)
+    }
+
+    private func isChoosable(_ index: Int) -> Bool { rows.indices.contains(index) && rows[index].isEnabled }
+
+    private func choose(_ index: Int) {
+        guard isChoosable(index) else { return }
+        cursor = index
+        takeFocus()
+        onChoose(index)
+    }
+
+    private func highlightPointed(_ index: Int) {
+        guard isChoosable(index) else { return }
+        cursor = index
+        takeFocus()
+    }
+
+    private func moveHighlight(_ delta: Int) {
+        let enabled = rows.indices.filter(isChoosable)
+        guard
+            let next = KeyboardFocus.step(
+                from: cursor.flatMap(enabled.firstIndex(of:)), delta: delta, count: enabled.count)
+        else { return }
+        cursor = enabled[next]
+        KeyboardFocus.reveal(rowViews[enabled[next]], among: rowViews, travelling: delta > 0 ? .down : .up)
+    }
+
+    private func refreshHighlight() {
+        for (index, view) in rowViews.enumerated() { view.isHighlighted = hasFocus && index == cursor }
+    }
+
+    private func routeTab(from control: NSView) {
+        let forward: () -> Void = { [weak self] in self?.moveFocus(1) }
+        let backward: () -> Void = { [weak self] in self?.moveFocus(-1) }
+        if let segmented = control as? SegmentedControl {
+            segmented.onTab = forward
+            segmented.onBacktab = backward
+        } else if let button = control as? AppButton {
+            button.onTab = forward
+            button.onBacktab = backward
+        }
+    }
+
+    private var focusStops: [NSView] {
+        ([header.control] + sections.map(\.control)).filter(\.acceptsFirstResponder) + [self]
+    }
+
+    private func moveFocus(_ delta: Int) {
+        let stops = focusStops
+        let responder = window?.firstResponder as? NSView
+        let current = stops.firstIndex { stop in
+            guard let responder else { return false }
+            return stop === self ? responder === self : responder.isDescendant(of: stop)
+        }
+        guard let next = KeyboardFocus.step(from: current, delta: delta, count: stops.count, wrap: true) else { return }
+        window?.makeFirstResponder(stops[next])
+    }
+
+    private func headerLine() -> NSView {
+        let line = NSStackView(views: [glyph, titleLabel, header.control])
+        line.orientation = .horizontal
+        line.alignment = .centerY
+        line.spacing = ChromeMetrics.Spacing.s8
+        line.setHuggingPriority(.defaultLow, for: .horizontal)
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        header.control.setContentHuggingPriority(.required, for: .horizontal)
+        return line
+    }
+
+    private static func inset(_ view: NSView) -> NSView {
+        let host = NSView()
+        host.translatesAutoresizingMaskIntoConstraints = false
+        view.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: textInset),
+            view.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -textInset),
+            view.topAnchor.constraint(equalTo: host.topAnchor),
+            view.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+        ])
+        return host
+    }
+}

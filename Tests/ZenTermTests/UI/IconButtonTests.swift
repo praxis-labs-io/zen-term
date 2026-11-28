@@ -182,16 +182,19 @@ final class IconButtonTests: WindowTestCase {
         XCTAssertNil(plain.tooltipShortcutForTesting, "no resolver → no shortcut in the tooltip")
     }
 
-    func test_showsActivity_togglesTheDot() {
+    func test_activity_setsTheDotsState() {
         let button = IconButton(
             symbol: "rectangle.bottomthird.inset.filled", accessibilityLabel: "Toggle bottom drawer",
             onClick: {})
         XCTAssertTrue(button.activityDotHiddenForTesting, "dot is hidden by default")
 
-        button.showsActivity = true
-        XCTAssertFalse(button.activityDotHiddenForTesting, "showsActivity reveals the dot")
+        button.activity = .live
+        XCTAssertEqual(button.activityDotForTesting.state, .live, "a live activity shows the live dot")
 
-        button.showsActivity = false
+        button.activity = .warning
+        XCTAssertEqual(button.activityDotForTesting.state, .warning, "a warning activity shows the warning dot")
+
+        button.activity = nil
         XCTAssertTrue(button.activityDotHiddenForTesting)
     }
 

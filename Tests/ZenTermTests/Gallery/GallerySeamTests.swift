@@ -121,6 +121,17 @@ final class GallerySeamTests: WindowTestCase {
         assertSeam(seam, matches: real, unlike: rest, "ToggleSwitch")
     }
 
+    func test_keepAwakeIndicatorHoverSeam_rendersLikeRealHover() {
+        let indicators = (0..<3).map { _ in KeepAwakeIndicator {} }
+        indicators.forEach { $0.render(KeepAwakeIndicator.Content(isOn: true, detail: "3 agents")) }
+        let (rest, real, seam) = (indicators[0], indicators[1], indicators[2])
+        mount([rest, real, seam])
+        real.mouseEntered(with: crossing(.mouseEntered))
+        seam.forceHoverForGallery()
+        assertSeam(seam, matches: real, unlike: rest, "KeepAwakeIndicator")
+        TooltipPresenter.shared.dismiss()
+    }
+
     func test_keybindChipFocusSeam_rendersLikeRealFocus() {
         let (rest, real, seam) = (keybindChip(), keybindChip(), keybindChip())
         mount([rest, real, seam])

@@ -245,6 +245,40 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertTrue(keepAwake.keepsDisplayOn)
     }
 
+    func test_aChangeInTheAgentCount_isAnnounced_onlyWhenTheCountMoves() {
+        var announcements = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: .keepAwakeDidChange, object: keepAwake, queue: nil
+        ) { _ in announcements += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        working = 3
+        keepAwake.activityChanged()
+        keepAwake.activityChanged()
+        working = 2
+        keepAwake.activityChanged()
+
+        XCTAssertEqual(announcements, 2, "each new count is announced once, a repeat is not")
+    }
+
+    func test_aDisplayChoiceMadeWhileOff_isUsedByTheNextStart() {
+        keepAwake.setKeepsDisplayOn(true)
+        XCTAssertNil(power.held, "choosing the display alone does not hold")
+
+        keepAwake.start(.turnedOff)
+
+        XCTAssertEqual(power.held, true)
+    }
+
+    func test_aDisplayChoiceMadeWhileOn_reassertsTheHold_andKeepsTheEndCondition() {
+        keepAwake.start(.duration(60 * 60))
+
+        keepAwake.setKeepsDisplayOn(true)
+
+        XCTAssertEqual(power.held, true)
+        XCTAssertEqual(keepAwake.hold?.until, .duration(60 * 60))
+    }
+
     func test_everyChange_isAnnounced() {
         let announced = expectation(forNotification: .keepAwakeDidChange, object: keepAwake)
         announced.expectedFulfillmentCount = 2

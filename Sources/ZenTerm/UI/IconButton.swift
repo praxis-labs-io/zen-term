@@ -1,10 +1,5 @@
 import AppKit
 
-// `NSImageView` takes alignment insets from SF Symbol baseline metadata, which hangs symbols off-centre beside brand marks.
-private final class GlyphView: NSImageView {
-    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
-}
-
 final class IconButton: ControlView, ThemeReapplying {
     var onClick: () -> Void
     private let icon = GlyphView()
@@ -31,7 +26,18 @@ final class IconButton: ControlView, ThemeReapplying {
         }
     }
 
-    var showsActivity = false { didSet { activityDot.state = showsActivity ? .live : nil } }
+    enum Activity {
+        case live, warning
+
+        var dotState: StateDot.State {
+            switch self {
+            case .live: return .live
+            case .warning: return .warning
+            }
+        }
+    }
+
+    var activity: Activity? { didSet { activityDot.state = activity?.dotState } }
 
     var activityDotHiddenForTesting: Bool { activityDot.state == nil }
     var activityDotForTesting: StateDot { activityDot }

@@ -5,6 +5,7 @@ enum ToolbarButton: String, CaseIterable {
     case rightDrawer = "right-drawer"
     case scratch = "scratch"
     case commandPalette = "command-palette"
+    case keepAwake = "keep-awake"
     case settings = "settings"
 
     static let groups: [[ToolbarButton]] = [
@@ -19,6 +20,7 @@ enum ToolbarButton: String, CaseIterable {
         case .rightDrawer: return "Right drawer"
         case .scratch: return "Scratch"
         case .commandPalette: return "Command palette"
+        case .keepAwake: return "Keep Awake"
         case .settings: return "Settings"
         }
     }

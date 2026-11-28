@@ -309,6 +309,7 @@ final class WindowController: NSObject {
 
     var paneWaits = PaneWaits()
     var keepAwake: KeepAwake?
+    private var keepAwakeMenu: KeepAwakeMenu?
     var onWorkingAgentsChanged: (() -> Void)?
 
     var paneDrafts = PaneDrafts()
@@ -523,7 +524,11 @@ final class WindowController: NSObject {
             self?.sidebar.edgeReveal.recheck()
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
-        sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
+        sidebar.onRevealChanged = { [weak self] in
+            guard let self else { return }
+            if !sidebar.isShown { keepAwakeMenu?.close() }
+            syncWindowFocus()
+        }
         sidebar.slidesWithDocking = { [weak self] in
             guard let self, let tabBarHeight = self.tabBarHeight else { return [] }
             return [(tabBarHeight, self.tabBarBand)]
@@ -618,6 +623,7 @@ final class WindowController: NSObject {
                     self.renderDock()
                 }
                 if change.contains(.toolbarButtons) {
+                    if GeneralConfig.current.hiddenToolbarButtons.contains(.keepAwake) { self.keepAwakeMenu?.close() }
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
@@ -804,11 +810,25 @@ final class WindowController: NSObject {
     func mountAndStart() {
         bindFirstControllerIfNeeded()
         mount(.instant)
+        mountKeepAwake()
         activeController?.start()
         renderTabBar()
         window.contentView?.layoutSubtreeIfNeeded()
         titlePoll = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshTitlesFromCWD() }
+        }
+    }
+
+    private func mountKeepAwake() {
+        guard let keepAwake, keepAwakeMenu == nil else { return }
+        keepAwakeMenu = KeepAwakeMenu(
+            keepAwake: keepAwake, indicator: sidebar.footer.keepAwakeIndicator, clock: TimerClock(),
+            onRefused: { [weak self] in self?.showToast(Self.keepAwakeRefusedToast($0)) },
+            onActivityChanged: { [weak self] in self?.sidebar.setKeepAwakeActivity($0) })
+        keepAwakeMenu?.onOpenChanged = { [weak self] isOpen in
+            if isOpen { self?.endModes() }
+            self?.sidebar.setHoverCovered(isOpen)
+            if !isOpen { self?.restoreFocusToActive() }
         }
     }
 
@@ -3339,6 +3359,7 @@ final class WindowController: NSObject {
     private func toggleSidebar() {
         Log.info("sidebar toggled", category: .workspace)
         if sidebar.hasFocus { restoreFocusToActive() }
+        keepAwakeMenu?.close()
         guard canDockSidebar else {
             sidebar.toggleFloat()
             return
@@ -4724,6 +4745,8 @@ final class WindowController: NSObject {
 
     func pollTitlesForTesting() { refreshTitlesFromCWD() }
 
+    var keepAwakeMenuForTesting: KeepAwakeMenu? { keepAwakeMenu }
+
     func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
 
     func closeModalForTesting() { closeModal() }
@@ -5084,6 +5107,7 @@ final class WindowController: NSObject {
         if let hostStatusObserver { NotificationCenter.default.removeObserver(hostStatusObserver) }
         hostStatusObserver = nil
         floats.shutdown()
+        keepAwakeMenu?.shutdown()
         sidebar.shutdown()
         for workspace in workspaces {
             workspace.shutdown()

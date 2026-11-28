@@ -9,6 +9,7 @@ final class SidebarFooter: NSStackView {
         SidebarView.padding + ChromeMetrics.Spacing.controlInset + IconBadge.Size.small.side / 2 - buttonSize.width / 2
 
     private let paletteButton: IconButton
+    let keepAwakeIndicator = KeepAwakeIndicator {}
 
     static func button(
         _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord, _ onClick: @escaping () -> Void
@@ -27,6 +28,7 @@ final class SidebarFooter: NSStackView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         addArrangedSubview(paletteButton)
+        addArrangedSubview(keepAwakeIndicator)
         heightAnchor.constraint(equalToConstant: Self.buttonSize.height).isActive = true
     }
 
@@ -34,6 +36,7 @@ final class SidebarFooter: NSStackView {
 
     func setHiddenButtons(_ hidden: Set<ToolbarButton>) {
         paletteButton.isHidden = hidden.contains(.commandPalette)
+        keepAwakeIndicator.isHidden = hidden.contains(.keepAwake)
     }
 
     func setPaletteOpen(_ open: Bool) { paletteButton.isActive = open }

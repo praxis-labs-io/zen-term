@@ -76,10 +76,10 @@ final class ToggleDock: NSView, ThemeReapplying {
         }
     }
 
-    var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
-    var rightActivityForTesting: Bool { rightBtn.showsActivity }
+    var bottomActivityForTesting: Bool { bottomBtn.activity != nil }
+    var rightActivityForTesting: Bool { rightBtn.activity != nil }
 
-    var scratchActivityForTesting: Bool { scratchBtn.showsActivity }
+    var scratchActivityForTesting: Bool { scratchBtn.activity != nil }
 
     var rightActivityDotForTesting: StateDot { rightBtn.activityDotForTesting }
     var scratchActivityDotForTesting: StateDot { scratchBtn.activityDotForTesting }
@@ -87,7 +87,7 @@ final class ToggleDock: NSView, ThemeReapplying {
     var rightActiveForTesting: Bool { rightBtn.isActive }
 
     var dottedToolFloatIDsForTesting: Set<String> {
-        Set(toolFloatBtns.filter { $0.value.showsActivity }.keys)
+        Set(toolFloatBtns.filter { $0.value.activity != nil }.keys)
     }
 
     var hasNewTabButtonForTesting: Bool {
@@ -159,13 +159,13 @@ final class ToggleDock: NSView, ThemeReapplying {
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
             btn.isActive = floatID == id
-            btn.showsActivity = isLive
+            btn.activity = isLive ? .live : nil
             btn.isHidden = !showsToolFloat(id) || (toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive)
         }
 
         scratchBtn.isActive = floatID == ToolFloat.scratch.id
         let scratchAttention = floatAttention(ToolFloat.scratch.id)
-        scratchBtn.showsActivity = isLiveInBackground(ToolFloat.scratch.id)
+        scratchBtn.activity = isLiveInBackground(ToolFloat.scratch.id) ? .live : nil
 
         let floatCoversTab = floatID != nil
         if floatCoversTab {
@@ -188,8 +188,8 @@ final class ToggleDock: NSView, ThemeReapplying {
             }
         }
 
-        bottomBtn.showsActivity = overlay.bottomBusy && !bottomBtn.isActive
-        rightBtn.showsActivity = overlay.rightBusy && !rightBtn.isActive
+        bottomBtn.activity = overlay.bottomBusy && !bottomBtn.isActive ? .live : nil
+        rightBtn.activity = overlay.rightBusy && !rightBtn.isActive ? .live : nil
 
         surface(
             .bottomDrawer, busy: overlay.bottomBusy || drawerAttention(.bottom) != .idle,
