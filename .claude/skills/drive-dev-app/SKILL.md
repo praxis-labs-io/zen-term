@@ -1,6 +1,12 @@
 ---
 name: drive-dev-app
-description: Drive an in-flight `bin/run` dev build of ZenTerm to verify behavior no test can reach. Launches the worktree build, proves it contains the change, sends commands and chords into its panes, screenshots to inspect state. Manual invocation only, never auto-run: it synthesizes OS-level input, so use it when Drew asks for it, not because a runbook step looks automatable. Never targets the installed or Dev app.
+description: >-
+  Drive an in-flight `bin/run` dev build of ZenTerm to verify behavior no test can
+  reach. Launches the worktree build, proves it contains the change, sends commands
+  and chords into its panes, screenshots to inspect state. Manual invocation only,
+  never auto-run: it synthesizes OS-level input, so use it when Drew asks for it,
+  not because a runbook step looks automatable. Never targets the installed or Dev
+  app.
 ---
 
 # Driving the dev app (zen-term)

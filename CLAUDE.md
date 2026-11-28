@@ -55,17 +55,11 @@ Terminal-native. Xcode must be installed for the toolchain, but you never open i
   `ZenTermTests.xctest`, so a `kill`/`pkill` on it silently kills a test run in
   progress in any worktree.
 
-**Run the full gate once, before pushing.** `bin/check` fully green before a push or a
-PR, not after each commit. Not just build and test: format-lint and swiftlint are part
-of the gate and CI enforces them. While iterating, run the tests that cover the change
-(`swift test --filter`) and lint the files you touched.
-
 ### What to test, and what to show
 
 **Test what can be silently dead. Show the rest.** A test earns its keep where a
 thing can be broken while looking fine. Anything you would catch by glancing at the
-screen goes in the runbook
-``
+screen goes in the runbook.
 
 - **AppKit controls get window-based interaction tests, not state-only tests.**
   Drive the real control in a real window. A test that only checks the backing
