@@ -200,7 +200,7 @@ final class ControlAwakeTests: WindowTestCase {
         let refused = try error(.awakeOn, from: panes.first)
 
         XCTAssertEqual(refused.code, .refused)
-        XCTAssertEqual(refused.message, "The battery is at 8%, below the 10% stop in Settings.")
+        XCTAssertEqual(refused.message, "Battery is at 8%, below the 10% stop.")
         XCTAssertFalse(keepAwake.isOn)
     }
 

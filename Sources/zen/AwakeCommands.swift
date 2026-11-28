@@ -19,7 +19,10 @@ struct AwakeCommands: ParsableCommand {
         @OptionGroup var connection: ConnectionOptions
 
         @Option(
-            name: .customLong("for"), help: "End the hold after this long, like 90s, 45m, 2h or 1h30m. A week at most.")
+            name: .customLong("for"),
+            help: ArgumentHelp(
+                "End the hold after this long, like 90s, 45m, 2h or 1h30m. Each number needs its unit. "
+                    + "A week at most."))
         var duration: AwakeDuration?
 
         func validate() throws {

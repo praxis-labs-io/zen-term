@@ -665,7 +665,8 @@ Holds the Mac awake for the caller's pane, so it needs `caller.pane`; without on
 `awake.off`, after `duration` when one is given, when the pane closes, when the person
 turns Keep Awake off in the app, or at the battery stop. A `pane.run` pane with `keep` stays
 open after its program exits, so its hold lasts until `awake.off`. Starting below the battery
-stop on battery is `refused`. A second `awake.on` from the same pane replaces its hold, with
+stop on battery is `refused`, with the message the app's own refusal shows:
+`Battery is at 8%, below the 10% stop.` A second `awake.on` from the same pane replaces its hold, with
 the new `duration` or none. Answers the `awake.status` result.
 
 ### `awake.off`

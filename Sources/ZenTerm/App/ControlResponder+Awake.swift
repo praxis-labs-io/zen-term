@@ -18,7 +18,7 @@ extension ControlResponder {
                 for: request.args.duration.map(TimeInterval.init))
             if case .battery(let percent, let stop) = refusal {
                 return .failure(
-                    ControlError(.refused, "The battery is at \(percent)%, below the \(stop)% stop in Settings."))
+                    ControlError(.refused, "Battery is at \(percent)%, below the \(stop)% stop."))
             }
             return .success(Self.awakeResult(keepAwake, caller: pane.surfaceID))
         }
