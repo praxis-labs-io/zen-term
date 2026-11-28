@@ -29,7 +29,7 @@ struct WaitCommand: ParsableCommand {
 
     @Option(
         help: ArgumentHelp(
-            "Seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait). "
+            "Seconds to wait before answering timeout, capped at \(ControlWire.longestPaneWait). "
                 + "The default answers under the 2-minute default of agents' shell tools."))
     var timeout: Int = ControlWire.defaultPaneWait
 
@@ -41,9 +41,7 @@ struct WaitCommand: ParsableCommand {
         default: break
         }
         if children == .all, output != nil { throw ValidationError("--output takes a pane or --children any.") }
-        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-            throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
-        }
+        guard timeout >= 1 else { throw ValidationError("--timeout must be at least 1.") }
         if output?.isEmpty == true { throw ValidationError("--output must not be empty.") }
         if output?.contains(where: \.isNewline) == true {
             throw ValidationError("--output matches within one line, so it takes no newline.")

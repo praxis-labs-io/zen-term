@@ -107,6 +107,23 @@ final class ControlPaneWaitTests: WindowTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
 
+    func test_aTimeoutPastTheLongestWaitsTheLongest_andTheAnswerSaysItWasCapped() throws {
+        makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        report(.working, from: agent)
+        let longest = ControlWire.longestPaneWait
+        let asked = ControlRequest(id: 1, cmd: .paneWait, args: ControlArgs(pane: 1, timeout: longest + 300))
+        XCTAssertEqual(try ControlResponder.waitTimeout(asked).get(), longest)
+        let answer = wait(on: try token(of: agent), timeout: longest + 300)
+
+        report(.done, from: agent)
+
+        let got = try result(answer)
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(got.timeoutCapped, longest)
+        XCTAssertNil(try result(wait(on: try token(of: agent), timeout: 1), within: 3).timeoutCapped)
+    }
+
     func test_aWorkingAgentThatFinishesAnswersStopped_withItsPaneAsPaneGetReportsIt() throws {
         makeWindow()
         let agent = try XCTUnwrap(spawned.first)
@@ -293,12 +310,11 @@ final class ControlPaneWaitTests: WindowTestCase {
         XCTAssertNil(answer.reply)
     }
 
-    func test_aWaitNeedsAPaneThatExists_aTimeoutInRange_andTextToWaitFor() throws {
+    func test_aWaitNeedsAPaneThatExists_aTimeoutOfASecondOrMore_andTextToWaitFor() throws {
         makeWindow()
         let pane = try token(of: try XCTUnwrap(spawned.first))
         let cases: [(Answer, ControlErrorCode)] = [
             (wait(on: nil), .badRequest), (wait(on: pane, timeout: 0), .badRequest),
-            (wait(on: pane, timeout: ControlWire.longestPaneWait + 1), .badRequest),
             (wait(on: pane, output: ""), .badRequest), (wait(on: pane, output: "built\nready"), .badRequest),
             (wait(on: 9999), .notFound),
         ]

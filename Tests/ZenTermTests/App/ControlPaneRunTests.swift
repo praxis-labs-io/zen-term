@@ -1015,6 +1015,22 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(got.pane?.name, "dev")
     }
 
+    func test_runWaitWithATimeoutPastTheLongestStillRuns_andItsAnswerSaysTheWaitWasCapped() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let args = ControlArgs(cmd: "bin/check", name: "check", output: "passed", timeout: 900, wait: true)
+        let reply = send(.paneRun, args, from: caller)
+        let check = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(spawned.count, 2, "the run opened its pane")
+
+        check.rows = ["$ bin/check", "passed"]
+
+        waitUntil(reply() != nil, "the run to answer")
+        let got = try XCTUnwrap(try XCTUnwrap(reply()).get() as? WaitResult)
+        XCTAssertEqual(got.reason, .output)
+        XCTAssertEqual(got.timeoutCapped, ControlWire.longestPaneWait)
+    }
+
     func test_runOutputNeedsWaitAndOneLine() throws {
         makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))

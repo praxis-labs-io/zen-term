@@ -436,10 +436,19 @@ extension ControlResponder {
 
     static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {
         let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
-        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-            return .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds."))
+        guard timeout >= 1 else { return .failure(ControlError(.badRequest, "timeout must be at least 1 second.")) }
+        return .success(min(timeout, ControlWire.longestPaneWait))
+    }
+
+    // A longer timeout holds the longest wait instead of refusing the call, so the command it carries still runs.
+    static func reportingCappedTimeout(
+        of request: ControlRequest, _ reply: @escaping (ControlReply) -> Void
+    ) -> (ControlReply) -> Void {
+        guard let asked = request.args.timeout, asked > ControlWire.longestPaneWait else { return reply }
+        return { answer in
+            guard case .success(let result as WaitResult) = answer else { return reply(answer) }
+            reply(.success(result.capped(at: ControlWire.longestPaneWait)))
         }
-        return .success(timeout)
     }
 
     @discardableResult

@@ -528,7 +528,7 @@ Returns one pane or drawer in the shape `list` uses, without the tree around it.
 
 ### `pane.wait`
 
-`args`: `pane` or `children` (`any` or `all`), `output`, `timeout` (seconds, 1 to 600, 90 by default, under the 2-minute default of agents' shell tools).
+`args`: `pane` or `children` (`any` or `all`), `output`, `timeout` (seconds, at least 1, 90 by default, under the 2-minute default of agents' shell tools). A longer `timeout` than 600 waits 600, and the answer carries `timeoutCapped: 600`, on `pane.send` and `pane.run` with `wait` too.
 
 Holds until something happens to the pane, then answers once with why:
 
