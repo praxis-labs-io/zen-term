@@ -103,6 +103,14 @@ enum GeneralConfigParser {
                 if let n = parseDouble(value, key, &diagnostics) {
                     config.toastDuration = clamp(n, 1, 60, key, &diagnostics)
                 }
+            case "keep-awake-display":
+                if let b = parseBool(value, key, &diagnostics) { config.keepAwakeDisplay = b }
+            case "keep-awake-battery-stop":
+                if let stop = parseBatteryStop(value, &diagnostics) { config.keepAwakeBatteryStop = stop }
+            case "keep-awake-grace":
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.keepAwakeGrace = clamp(n.rounded(), 0, 600, key, &diagnostics)
+                }
             case "automatic-update-checks":
                 if let b = parseBool(value, key, &diagnostics) { config.automaticUpdateChecks = b }
             case "debug":
@@ -328,6 +336,17 @@ enum GeneralConfigParser {
             diagnostics.append(invalid(key, got: value, expected: "off, sticky, or auto"))
             return nil
         }
+    }
+
+    private static func parseBatteryStop(_ value: String, _ diagnostics: inout [ConfigDiagnostic]) -> Int?? {
+        let token = value.lowercased()
+        if token == "never" { return .some(nil) }
+        if let n = Int(token), GeneralConfig.keepAwakeBatteryStops.contains(n) { return .some(n) }
+        Log.warning(
+            "GeneralConfig: `keep-awake-battery-stop` expected never/5/10/20, got `\(value)` — using default",
+            category: .config)
+        diagnostics.append(invalid("keep-awake-battery-stop", got: value, expected: "never, 5, 10, or 20"))
+        return nil
     }
 
     private static func clamp(

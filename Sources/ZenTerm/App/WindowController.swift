@@ -308,6 +308,8 @@ final class WindowController: NSObject {
     var worktreeRemovals = WorktreeRemovalTracker()
 
     var paneWaits = PaneWaits()
+    var keepAwake: KeepAwake?
+    var onWorkingAgentsChanged: (() -> Void)?
 
     var paneDrafts = PaneDrafts()
 
@@ -557,7 +559,10 @@ final class WindowController: NSObject {
         yieldSidebarIfNarrow()
         window.delegate = self
         wireModes()
-        attention.onChange = { [weak self] in self?.renderAttention() }
+        attention.onChange = { [weak self] in
+            self?.renderAttention()
+            self?.onWorkingAgentsChanged?()
+        }
 
         hostStatusObserver = NotificationCenter.default.addObserver(
             forName: .sshHostStatusDidChange, object: nil, queue: .main
@@ -1772,7 +1777,8 @@ final class WindowController: NSObject {
                 CommandCatalog.commands(
                     tabCount: self?.activeTabIDs.count ?? 0,
                     workspaceCount: self?.workspaces.count ?? 0,
-                    onHost: self?.selection.host != nil)
+                    onHost: self?.selection.host != nil, keepAwakeIsOn: self?.keepAwake?.isOn ?? false,
+                    agentsWorking: (self?.keepAwake?.activeCount ?? 0) > 0)
             },
             onRun: { [weak self] chord in self?.runCommand(chord) },
             onDismiss: { [weak self] in self?.closeModal() }
@@ -2007,7 +2013,7 @@ final class WindowController: NSObject {
             "reduce-motion", "hide-toolbar-buttons":
             return .appearance
         case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
-            "automatic-update-checks":
+            "keep-awake-display", "keep-awake-battery-stop", "keep-awake-grace", "automatic-update-checks":
             return .general
         case "ssh-host":
             return .sshHosts
@@ -2548,6 +2554,8 @@ final class WindowController: NSObject {
     }
 
     func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
+
+    var workingAgents: Set<SurfaceID> { attention.working }
 
     func draftStash(of pane: PaneHandle) -> TerminalKey? {
         AgentRules.draftStash(for: liveAgent(pane.surfaceID)?.name).flatMap(TerminalKey.init(chord:))
@@ -3223,7 +3231,8 @@ final class WindowController: NSObject {
             Log.info("close window", category: .tabs)
             requestCloseWindow()
         case .newWindow, .reloadConfig, .checkForUpdates,
-            .increaseFontSize, .decreaseFontSize, .resetFontSize:
+            .increaseFontSize, .decreaseFontSize, .resetFontSize,
+            .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish, .keepAwakeForOneHour, .keepAwakeWithDisplay:
             onAppGlobalCommand?(chord)
         case .toggleBottomDrawer:
             Log.info("bottom drawer toggled", category: .drawers)

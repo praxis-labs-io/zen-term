@@ -56,6 +56,7 @@ final class KeyInterceptor {
         case closeWorkspace, renameWorkspace
         case nextWaitingAgent
         case toggleAgentPicker
+        case keepAwake, turnOffKeepAwake, keepAwakeUntilAgentsFinish, keepAwakeForOneHour, keepAwakeWithDisplay
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

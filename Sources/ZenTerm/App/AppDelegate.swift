@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var quitConfirmPending = false
     private var updateController: UpdateController?
     private let hostProbe = SSHHostProbe(center: .shared)
+    private lazy var keepAwake = KeepAwake(
+        power: IOKitPowerAssertions(), battery: IOKitBatterySource(), clock: TimerClock(),
+        settings: { KeepAwake.Settings(GeneralConfig.current) },
+        activeCount: { [weak self] in self?.activeAgentCount() ?? 0 })
 
     private lazy var configApplier = ConfigApplier(
         sinks: ConfigApplier.Sinks(
@@ -63,6 +67,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if GeneralConfig.current.debug { Log.isVerbose = true }
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
+
+        keepAwake.onRelease = { [weak self] release in
+            self?.keyController()?.showToast(WindowController.keepAwakeEndedToast(release))
+        }
+        paneWaits.onPendingChanged = { [weak self] in self?.keepAwake.activityChanged() }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.keepAwake.didWake() }
+        }
 
         newWindow(initialCWD: nil, centered: true)
         reportBackendShadow()
@@ -128,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if change.contains(.sshHosts) {
                     self.hostProbe.setHosts(GeneralConfig.current.sshHostAliases)
                 }
+                if change.contains(.keepAwake) { self.keepAwake.settingsChanged() }
             }
         }
 
@@ -160,6 +175,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateController.checkForUpdates()
             return
         }
+        if case .keepAwake = chord, keepAwake.isOn { return }
+        if let start = Self.keepAwakeStart(for: chord) {
+            if let refusal = keepAwake.start(start.until, keepsDisplayOn: start.display) {
+                target?.showToast(WindowController.keepAwakeRefusedToast(refusal))
+            }
+            return
+        }
+        if case .turnOffKeepAwake = chord {
+            keepAwake.turnOff()
+            return
+        }
         switch chord {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize:
             if let target, target.isModalOverlayOpen || target.isConfirmOpen { return }
@@ -170,6 +196,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         default: target?.handle(chord)
         }
+    }
+
+    static func keepAwakeStart(
+        for chord: KeyInterceptor.ReservedChord
+    ) -> (until: KeepAwake.Until?, display: Bool?)? {
+        switch chord {
+        case .keepAwake: return (.turnedOff, nil)
+        case .keepAwakeUntilAgentsFinish: return (.agentsFinish, nil)
+        case .keepAwakeForOneHour: return (.duration(60 * 60), nil)
+        case .keepAwakeWithDisplay: return (nil, true)
+        default: return nil
+        }
+    }
+
+    private func activeAgentCount() -> Int {
+        windows.reduce(into: paneWaits.waitedSurfaces) { $0.formUnion($1.workingAgents) }.count
     }
 
     /// App-global because libghostty applies its own font-size binds to the focused surface alone.
@@ -238,6 +280,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
         wc.worktreeRemovals = worktreeRemovals
         wc.paneWaits = paneWaits
+        wc.keepAwake = keepAwake
+        wc.onWorkingAgentsChanged = { [weak self] in self?.keepAwake.activityChanged() }
         wc.paneDrafts = paneDrafts
         wc.claudeSetupOffer = claudeSetupOffer
         wc.onHelperNote = { [weak self] in self?.controlResponder?.tell($0) }
@@ -284,6 +328,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }
             self.windows.removeAll { $0 === wc }
+            self.keepAwake.activityChanged()
         }
         windows.append(wc)
         wc.mountAndStart()
@@ -335,6 +380,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
+        keepAwake.turnOff()
         navSocket?.stop()
         controlSocket?.stop()
     }

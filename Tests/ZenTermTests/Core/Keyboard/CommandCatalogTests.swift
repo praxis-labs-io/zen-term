@@ -85,6 +85,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Settings…", "Reload Config", "Check for Updates",
                 "Increase Font Size", "Decrease Font Size", "Reset Font Size",
                 "Dismiss Notice", "Dismiss All Notices", "Report an Issue…",
+                "Keep Awake", "Keep Awake for 1 Hour", "Keep Mac and Display Awake",
             ])
     }
 
@@ -176,8 +177,15 @@ final class CommandCatalogTests: XCTestCase {
             KeyInterceptor.ReservedChord.renameTab.actionToken,
             KeyInterceptor.ReservedChord.renameWorkspace.actionToken,
             KeyInterceptor.ReservedChord.focusSidebar.actionToken,
+            KeyInterceptor.ReservedChord.keepAwake.actionToken,
+            KeyInterceptor.ReservedChord.turnOffKeepAwake.actionToken,
+            KeyInterceptor.ReservedChord.keepAwakeUntilAgentsFinish.actionToken,
+            KeyInterceptor.ReservedChord.keepAwakeForOneHour.actionToken,
+            KeyInterceptor.ReservedChord.keepAwakeWithDisplay.actionToken,
         ]
-        for command in CommandCatalog.commands(tabCount: 9, workspaceCount: 9) {
+        for command in CommandCatalog.commands(
+            tabCount: 9, workspaceCount: 9, keepAwakeIsOn: true, agentsWorking: true)
+        {
             XCTAssertFalse(command.title.isEmpty)
             guard !unbound.contains(command.chord.actionToken) else { continue }
             XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
@@ -192,7 +200,11 @@ final class CommandCatalogTests: XCTestCase {
             "create_worktree",
             "remove_worktree",
         ]
-        let listed = Set(CommandCatalog.commands(tabCount: 9, workspaceCount: 9).map(\.chord.actionToken))
+        let listed = Set(
+            [true, false].flatMap {
+                CommandCatalog.commands(tabCount: 9, workspaceCount: 9, keepAwakeIsOn: $0, agentsWorking: true)
+            }
+            .map(\.chord.actionToken))
 
         let missing =
             SettingsKeybindGroupsTests.everyAction
@@ -215,5 +227,35 @@ final class CommandCatalogTests: XCTestCase {
         let selects = CommandCatalog.commands(tabCount: 1, workspaceCount: 12)
             .filter { $0.title.hasPrefix("Select Workspace") }
         XCTAssertEqual(selects.count, 9)
+    }
+
+    func test_keepAwake_listsOnWhileOff_offWhileOn_andUntilAgentsFinishOnlyWhileOneWorks() {
+        func chords(on: Bool, working: Bool) -> [KeyInterceptor.ReservedChord] {
+            CommandCatalog.commands(tabCount: 1, workspaceCount: 1, keepAwakeIsOn: on, agentsWorking: working)
+                .map(\.chord)
+        }
+        let always: [KeyInterceptor.ReservedChord] = [.keepAwakeForOneHour, .keepAwakeWithDisplay]
+
+        XCTAssertTrue(Set(always).isSubset(of: chords(on: false, working: false)))
+        XCTAssertTrue(Set(always).isSubset(of: chords(on: true, working: false)))
+        XCTAssertTrue(chords(on: false, working: false).contains(.keepAwake))
+        XCTAssertFalse(chords(on: true, working: false).contains(.keepAwake), "Keep Awake only turns it on")
+        XCTAssertFalse(chords(on: false, working: false).contains(.turnOffKeepAwake))
+        XCTAssertFalse(chords(on: false, working: false).contains(.keepAwakeUntilAgentsFinish))
+        XCTAssertTrue(chords(on: true, working: false).contains(.turnOffKeepAwake))
+        XCTAssertTrue(chords(on: false, working: true).contains(.keepAwakeUntilAgentsFinish))
+    }
+
+    func test_keepAwakeCommands_areAppCommands_withNoDefaultShortcut() {
+        let chords: [KeyInterceptor.ReservedChord] = [
+            .keepAwake, .turnOffKeepAwake, .keepAwakeUntilAgentsFinish, .keepAwakeForOneHour, .keepAwakeWithDisplay,
+        ]
+        for chord in chords {
+            let spec = CommandCatalog.spec(for: chord)
+            XCTAssertEqual(spec.category, .app, spec.title)
+            XCTAssertEqual(spec.shortcut, "", spec.title)
+            XCTAssertTrue(chord.isEditableInSettings, spec.title)
+            XCTAssertEqual(KeyInterceptor.ReservedChord(token: chord.actionToken), chord, spec.title)
+        }
     }
 }

@@ -91,6 +91,41 @@ extension WindowController {
                 : "No agent in this window is asking for you.\nThe sidebar lists the ones that are.")
     }
 
+    static func keepAwakeEndedToast(_ release: KeepAwake.Release) -> ToastContent {
+        switch release {
+        case .agentsFinished:
+            return ToastContent(
+                variant: .info, title: "Keep Awake ended", message: "Agents finished.\nYour Mac can sleep again.")
+        case .timeUp(let duration):
+            return ToastContent(
+                variant: .info, title: "Keep Awake ended",
+                message: "\(timeUpPhrase(duration))\nYour Mac can sleep again.")
+        case .battery(let percent):
+            return ToastContent(
+                variant: .warning, title: "Keep Awake ended",
+                message: "Battery is at \(percent)%.\nYour Mac can sleep again.")
+        }
+    }
+
+    static func keepAwakeRefusedToast(_ refusal: KeepAwake.Refusal) -> ToastContent {
+        switch refusal {
+        case .nothingWorking:
+            return ToastContent(variant: .info, title: "Keep Awake didn't start", message: "No agents are working.")
+        case .battery(let percent, let stop):
+            return ToastContent(
+                variant: .warning, title: "Keep Awake didn't start",
+                message: "Battery is at \(percent)%, below the \(stop)% stop.")
+        }
+    }
+
+    private static func timeUpPhrase(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration / 60)
+        if minutes == 1 { return "The minute is up." }
+        guard minutes % 60 == 0 else { return "The \(minutes) minutes are up." }
+        let hours = minutes / 60
+        return hours == 1 ? "The hour is up." : "The \(hours) hours are up."
+    }
+
     static func worktreeRemovedToast(name: String) -> ToastContent {
         ToastContent(variant: .warning, title: "Worktree removed", message: "\(name) is no longer on disk.")
     }

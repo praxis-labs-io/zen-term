@@ -171,6 +171,8 @@ final class AttentionStore {
         entries[id]?.working == true
     }
 
+    var working: Set<SurfaceID> { Set(entries.filter(\.value.working).keys) }
+
     func agentSince(of id: SurfaceID) -> Date? {
         entries[id]?.agentSince
     }
