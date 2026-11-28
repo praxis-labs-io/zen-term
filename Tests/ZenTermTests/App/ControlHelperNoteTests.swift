@@ -711,6 +711,41 @@ final class ControlHelperNoteTests: WindowTestCase {
         }
     }
 
+    func test_aHelpersReportToABlockedParentIsHeldPastTheLongestHold_untilTheParentIsFree() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.blocked(.permission), from: parent)
+
+        let reply = try sending("2 bugs", from: helper, to: parent)
+        guard case .success(let payload) = reply else { return XCTFail("\(reply as Any)") }
+        XCTAssertEqual((payload as? PaneSendResult)?.queued, true)
+        for _ in 0...Int(PaneDrafts.longestBlockedHold) { clock.advance(PaneDrafts.blockedRecheck) }
+        XCTAssertEqual(parent.inputs, [], "the report answered the parent's permission prompt")
+
+        report(.working, from: parent)
+        clock.advance(PaneDrafts.blockedRecheck)
+        XCTAssertEqual(parent.inputs, try note("2 bugs", from: helper))
+    }
+
+    func test_aHelperWhoseReportIsHeldStopsWithoutASecondNote() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        report(.blocked(.permission), from: parent)
+
+        _ = try sending("2 bugs", from: helper, to: parent)
+        report(.done, from: helper)
+        report(.working, from: parent)
+        clock.advance(PaneDrafts.blockedRecheck * 5)
+
+        XCTAssertEqual(parent.inputs, try note("2 bugs", from: helper))
+    }
+
     func test_aHelperWhoseBlockClearsTellsItsParentToWaitAgain() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)

@@ -111,7 +111,8 @@ zen pane close review           # once you have its result
 - Never answer another agent's permission prompt or login, with
   `zen pane send`, `zen pane keys` or anything else. Tell the user. ZenTerm
   refuses both into an agent waiting on the user, except a helper's question
-  from its parent.
+  from its parent, and holds a helper's report to its parent until the parent
+  is free.
 - A helper's question about the task you gave it is yours to answer. It
   arrives with a `stopped` notice, because the helper ends its turn to ask:
   the helper is not finished. Read the question with
@@ -179,7 +180,9 @@ zen worktree remove my-branch
 - `zen pane send` pastes: control characters arrive as spaces. `--enter`
   presses Return once after it. Pass it for every message to an agent, or the
   agent never reads it. Into an agent that waits on the user it
-  refuses; that wait is the user's to answer.
+  refuses; that wait is the user's to answer. A helper's send to its parent
+  waiting on the user prints `{"queued":true}` and arrives once the parent is
+  free. Don't send it again.
 - While the user has unsent text in an agent's prompt, `zen pane send` prints
   `{"queued":true}`: the message arrives on its own once the user sends or
   clears it, or, in Claude Code, stops typing for 60 seconds. Don't send it

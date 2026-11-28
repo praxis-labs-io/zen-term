@@ -197,7 +197,8 @@ struct PaneCommands: ParsableCommand {
             discussion:
                 "Into an agent whose person has unsent text at its prompt, it is queued until they send or clear "
                 + "it, or, in Claude Code, stop typing for 60 seconds, and prints {\"queued\":true}. "
-                + "It refuses while the agent waits on the user. " + PaneTarget.thisPaneByDefault)
+                + "It refuses while the agent waits on the user, except from that agent's helper, which is "
+                + "queued the same way until the agent is free. " + PaneTarget.thisPaneByDefault)
 
         @OptionGroup var connection: ConnectionOptions
 

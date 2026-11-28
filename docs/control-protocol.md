@@ -327,7 +327,9 @@ Into a pane that runs an agent:
 - `refused` while its `status` is `blocked`, since what it waits on is the user's decision.
   `force` sends anyway. A `pane.run` parent's send to its child blocked on a `question` is not
   refused, since a question about the task is the parent's to answer; a `permission` or `auth`
-  block refuses the parent too. A `working` agent takes the text into its running turn.
+  block refuses the parent too. A `pane.run` child's send to its parent is never refused: while
+  the parent is `blocked` it is queued as below and answers `{"queued":true}`, and it waits until
+  the parent is not, with no 10-minute drop. A `working` agent takes the text into its running turn.
 - While the person has unsent text at its prompt, the send is queued and answers
   `{"queued":true}` at once. Only keys and pastes that reach the pane's terminal count, not ones a
   card, field or button of the window takes. Text is unsent from the first typed character, Up or Down arrow, Tab or paste
@@ -344,8 +346,9 @@ Into a pane that runs an agent:
   after. Into any other agent, or as a slash command or without `enter`, the send waits until the
   person sends or clears their text.
   Keys or a paste into the agent while it is `blocked` answer its prompt and leave the text as it was. A queued
-  send whose agent is `blocked` when its turn comes waits until it is not, and is dropped once the
-  agent stays blocked 10 minutes from when the person sent or cleared their text. A queued send that
+  send whose agent is `blocked` when its turn comes waits until it is not, and, unless it is a
+  child's send to its parent, is dropped once the agent stays blocked 10 minutes from when the person
+  sent or cleared their text. A queued send that
   is dropped, there or because its pane closed or refused it, answers a `wait` with a `failed` error
   that gives the reason. While a send with `enter` other than a slash command is queued, a stop
   of the agent's turn answers no wait on the pane and sends no `stopped` note, and `children`

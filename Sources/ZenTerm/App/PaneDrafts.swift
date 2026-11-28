@@ -8,6 +8,7 @@ final class PaneDrafts {
         let isBlocked: () -> Bool
         let deliver: (_ overDraft: Bool) -> Void
         let drop: (_ reason: String) -> Void
+        var waitsOutAnyBlock = false
     }
 
     // A nil length is text ZenTerm could not count, or a cursor it lost, which only Return or a clearing key ends.
@@ -145,7 +146,7 @@ final class PaneDrafts {
             }
             let since = blockedSince[surface] ?? now()
             blockedSince[surface] = since
-            guard now() >= since.addingTimeInterval(Self.longestBlockedHold) else {
+            guard !head.waitsOutAnyBlock, now() >= since.addingTimeInterval(Self.longestBlockedHold) else {
                 return schedule(surface, in: Self.blockedRecheck)
             }
             queues[surface]?.removeFirst()
