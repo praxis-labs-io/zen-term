@@ -102,4 +102,13 @@ final class ControlClientTests: XCTestCase {
             XCTAssertEqual($0 as? ZenFailure, .app("ZenTerm didn't answer within 1 seconds."))
         }
     }
+
+    func test_aWaitOnAProgramThatFailedPrintsItsAnswerAndExits4() {
+        let pane = ListResult.Pane(
+            token: 34, drawer: nil, title: "", cwd: nil, busy: false, agent: nil, name: nil, parent: nil,
+            firstTask: nil)
+        answerOnce { try WaitResult(reason: .exited, exitCode: 1, pane: pane).responseLine(id: $0.id) }
+
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--socket", path]), ZenFailure.programFailedCode)
+    }
 }

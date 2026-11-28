@@ -119,7 +119,7 @@ struct PaneCommands: ParsableCommand {
             var client = try connection.client()
             client.replyTimeout = ControlClient.replyTimeout(for: .paneRun, args)
             if wait {
-                print(try JSONOutput.text(client.send(.paneRun, args, expecting: WaitResult.self)))
+                try WaitAnswer.print(client.send(.paneRun, args, expecting: WaitResult.self))
             } else {
                 print(try JSONOutput.text(client.send(.paneRun, args, expecting: PaneRunResult.self)))
             }
@@ -243,7 +243,7 @@ struct PaneCommands: ParsableCommand {
             var client = try connection.client()
             if wait {
                 client.replyTimeout = ControlClient.replyTimeout(for: .paneSend, args)
-                print(try JSONOutput.text(client.send(.paneSend, args, expecting: WaitResult.self)))
+                try WaitAnswer.print(client.send(.paneSend, args, expecting: WaitResult.self))
             } else if try client.send(.paneSend, args, expecting: PaneSendResult.self).queued == true {
                 print(try JSONOutput.text(PaneSendResult(queued: true)))
             }

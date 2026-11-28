@@ -671,7 +671,10 @@ indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or did
 answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`, 10 minutes 10 seconds as askpass, and
 the `--timeout` plus 10 seconds for `zen wait` and `zen pane send --wait`, or 70 more for
 `zen pane run --wait`), 2 usage,
-3 no instance or the connection failed.
+3 no instance or the connection failed. A wait (`zen wait`, `zen pane send --wait`, `zen pane run --wait`) prints
+its answer, then exits 0 for `stopped`, `output`, `no_children` or `exited` with `exitCode` 0, 4 for `exited` with
+any other `exitCode` or none, 5 for `timeout` and 6 for `message`. A wait on `children` exits 4 when any child's
+`reason` is such an `exited`, unless the wait answered `timeout` or `message`.
 
 `zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
 `0.0.0+src` for a build from source. A response whose `v` is newer than the protocol `zen`
@@ -682,7 +685,7 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 `zen tab new|select|rename|close`, `zen pane run|split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
-`--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
+`--output` and `--timeout`, and prints the answer as JSON.
 With `ZEN_ASKPASS_TOKEN` set, exactly one argument and a parent named `ssh`, `zen` is ssh's askpass: it sends the
 argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's pid, prints
 the answer, and exits 0. It never reads stdin. With `SSH_ASKPASS_PROMPT=confirm` it exits 1

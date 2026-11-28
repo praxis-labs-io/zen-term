@@ -73,7 +73,7 @@ struct Zen: ParsableCommand {
 
     static func finish(_ error: Error, usage: Bool) -> Int32 {
         if let failure = error as? ZenFailure {
-            printError("zen: \(failure.message)")
+            if !failure.message.isEmpty { printError("zen: \(failure.message)") }
             return failure.exitCode
         }
         let code = exitCode(for: error)

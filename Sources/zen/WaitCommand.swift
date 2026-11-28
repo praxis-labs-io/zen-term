@@ -6,8 +6,11 @@ struct WaitCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "wait",
         abstract:
-            "Wait until a pane's agent stops, its program exits, text appears, or this pane is sent something, "
-            + "and print why as JSON. --children waits on the helpers this pane started instead.")
+            "Wait until a pane's agent stops, its program exits, text appears, or it sends this pane something, "
+            + "and print why as JSON. --children waits on the helpers this pane started instead.",
+        discussion:
+            "Exits 0 when the program exited 0, the text appeared or the agent stopped, 4 when the program exited "
+            + "with another code or none, 5 on timeout and 6 on a message.")
 
     @OptionGroup var connection: ConnectionOptions
 
@@ -51,6 +54,6 @@ struct WaitCommand: ParsableCommand {
         let args = ControlArgs(pane: pane, output: output, timeout: timeout, children: children)
         var client = try connection.client()
         client.replyTimeout = ControlClient.replyTimeout(for: .paneWait, args)
-        print(try JSONOutput.text(client.send(.paneWait, args, expecting: WaitResult.self)))
+        try WaitAnswer.print(client.send(.paneWait, args, expecting: WaitResult.self))
     }
 }
