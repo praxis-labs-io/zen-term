@@ -26,7 +26,8 @@
         }
 
         static func form(
-            isOn: Bool, header: SegmentedControl? = nil, onChoose: @escaping (Int) -> Void = { _ in }
+            isOn: Bool, current: Int? = nil, header: SegmentedControl? = nil,
+            onChoose: @escaping (Int) -> Void = { _ in }
         ) -> PopoverForm {
             let header = header ?? SegmentedControl(options: ["Off", "On"], selectedIndex: isOn ? 1 : 0) { _ in }
             let scope = SegmentedControl(options: ["This Mac", "Mac and display"]) { _ in }
@@ -34,7 +35,8 @@
                 header: PopoverForm.Header(symbol: "cup.and.saucer", title: "Keep Awake", control: header),
                 status: isOn ? onStatus : nil,
                 sections: [PopoverForm.Section(caption: "Keep awake", control: scope)],
-                checklistCaption: "Until", rows: rows(current: isOn ? 1 : nil, agentsWorking: isOn),
+                checklistCaption: "Until",
+                rows: rows(current: current ?? (isOn ? 1 : nil), agentsWorking: isOn || current != nil),
                 onChoose: onChoose)
         }
 
@@ -67,10 +69,12 @@
 
             private func open() {
                 guard !popover.isOpen else { return popover.close() }
-                let form = GalleryPopoverForm.form(isOn: isOn, header: onOff) { [weak self] in self?.choose($0) }
+                let form = GalleryPopoverForm.form(isOn: isOn, current: current, header: onOff) { [weak self] in
+                    self?.choose($0)
+                }
                 self.form = form
-                render()
                 popover.open(content: form)
+                render()
                 form.takeFocus()
             }
 
@@ -88,6 +92,7 @@
             }
 
             private func render() {
+                guard popover.isOpen else { return }
                 form?.render(
                     status: isOn ? GalleryPopoverForm.onStatus : nil,
                     rows: GalleryPopoverForm.rows(current: current, agentsWorking: true), in: popover)

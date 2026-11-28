@@ -38,11 +38,14 @@ final class PopoverFormTests: WindowTestCase {
         PopoverForm.ChecklistRow(title: "For 1 hour"),
     ]
 
-    private func openForm(status: String? = nil, rows: [PopoverForm.ChecklistRow] = rows) -> PopoverForm {
+    private func openForm(
+        status: String? = nil, rows: [PopoverForm.ChecklistRow] = rows, header: NSView? = nil
+    ) -> PopoverForm {
         headerControl = SegmentedControl(options: ["Off", "On"]) { _ in }
         sectionControl = SegmentedControl(options: ["This Mac", "Mac and display"]) { _ in }
         let form = PopoverForm(
-            header: PopoverForm.Header(symbol: "cup.and.saucer", title: "Keep Awake", control: headerControl),
+            header: PopoverForm.Header(
+                symbol: "cup.and.saucer", title: "Keep Awake", control: header ?? headerControl),
             status: status,
             sections: [PopoverForm.Section(caption: "Keep awake", control: sectionControl)],
             checklistCaption: "Until", rows: rows
@@ -141,15 +144,68 @@ final class PopoverFormTests: WindowTestCase {
         XCTAssertEqual(chosen, [3])
     }
 
+    func test_clickingARow_whileAControlHasFocus_givesTheChecklistTheKeyboard() throws {
+        let form = openForm()
+        try press(.tab)
+        XCTAssertTrue(window.firstResponder === headerControl, "precondition")
+
+        try click(form.rowViewsForTesting[2])
+        try press(.arrowDown)
+
+        XCTAssertTrue(window.firstResponder === form, "the arrows still go to the header control")
+        XCTAssertEqual(highlights(form), [false, false, false, true])
+    }
+
+    func test_theCursorShowsOnlyWhileTheChecklistHasFocus() throws {
+        let form = openForm()
+
+        try press(.tab)
+        XCTAssertEqual(highlights(form), [false, false, false, false], "two stops look focused")
+        try press(.tab)
+        try press(.tab)
+        XCTAssertEqual(highlights(form), [true, false, false, false], "the cursor did not come back with focus")
+    }
+
+    func test_tab_leavesAControlThatHandlesTabItself() throws {
+        let button = AppButton(title: "On", variant: .secondary)
+        button.isKeyboardFocusable = true
+        let form = openForm(header: button)
+        try press(.tab)
+        XCTAssertTrue(window.firstResponder === button, "precondition")
+
+        try press(.tab)
+        XCTAssertTrue(window.firstResponder === sectionControl, "Tab stuck on the header button")
+        try press(.tab)
+        XCTAssertTrue(window.firstResponder === form, "Tab stuck on the section control")
+    }
+
+    func test_highlightedRow_refusesADisabledRow() {
+        let form = openForm()
+
+        form.highlightedRow = 1
+        XCTAssertNil(form.highlightedRow)
+        form.highlightedRow = 9
+        XCTAssertNil(form.highlightedRow)
+        form.highlightedRow = 2
+        XCTAssertEqual(form.highlightedRow, 2)
+    }
+
+    func test_aDisabledRow_isDisabledForAccessibility() {
+        let form = openForm()
+
+        XCTAssertEqual(form.rowViewsForTesting.map { $0.isAccessibilityEnabled() }, [true, false, true, true])
+    }
+
     func test_thePointerMovesTheCursor_andTheArrowContinuesFromIt() throws {
         let form = openForm()
+        try press(.tab)
         let enter = try XCTUnwrap(
             NSEvent.enterExitEvent(
                 with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
 
         form.rowViewsForTesting[2].mouseEntered(with: enter)
-        XCTAssertEqual(highlights(form), [false, false, true, false])
+        XCTAssertEqual(highlights(form), [false, false, true, false], "pointing did not bring the checklist focus")
         form.rowViewsForTesting[1].mouseEntered(with: enter)
         XCTAssertEqual(highlights(form), [false, false, true, false], "the pointer lit a disabled row")
 

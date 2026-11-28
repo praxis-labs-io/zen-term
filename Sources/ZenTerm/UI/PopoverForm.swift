@@ -1,6 +1,5 @@
 import AppKit
 
-// A small form hosted in a `ListPopover`: a header with a trailing control, a status line, captioned sections, and a checklist.
 final class PopoverForm: NSView, ThemeReapplying {
     struct Header {
         let symbol: String
@@ -46,14 +45,20 @@ final class PopoverForm: NSView, ThemeReapplying {
     private lazy var statusView = Self.inset(statusLabel)
     private let checklistCaption: SectionCaption
     private lazy var checklistCaptionView = Self.inset(checklistCaption)
-    private(set) var rows: [ChecklistRow] = []
+    private var rows: [ChecklistRow] = []
     private var rowViews: [ListRow] = []
-
-    var highlightedRow: Int? {
+    private var cursor: Int? {
+        didSet { refreshHighlight() }
+    }
+    private var hasFocus = false {
         didSet { refreshHighlight() }
     }
 
-    var status: String? { statusView.isHidden ? nil : statusLabel.stringValue }
+    var highlightedRow: Int? {
+        get { cursor }
+        set { cursor = newValue.flatMap { isChoosable($0) ? $0 : nil } }
+    }
+
     var rowViewsForTesting: [ListRow] { rowViews }
 
     init(
@@ -103,26 +108,37 @@ final class PopoverForm: NSView, ThemeReapplying {
         stack.addArrangedSubview(checklistCaptionView)
         stack.setCustomSpacing(Self.captionGap, after: checklistCaptionView)
 
+        for control in [header.control] + sections.map(\.control) { routeTab(from: control) }
         apply(status: status, rows: rows)
-        highlightedRow = rows.firstIndex { $0.isCurrent && $0.isEnabled }
-        refreshHighlight()
+        cursor = rows.firstIndex { $0.isCurrent && $0.isEnabled }
         reapplyTheme()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func render(status: String?, rows: [ChecklistRow], in popover: ListPopover? = nil) {
+    func render(status: String?, rows: [ChecklistRow], in popover: ListPopover) {
         layoutSubtreeIfNeeded()
         let before = fittingSize.height
         apply(status: status, rows: rows)
         layoutSubtreeIfNeeded()
-        guard let popover, popover.isOpen, fittingSize.height != before else { return }
+        guard popover.isOpen, fittingSize.height != before else { return }
         let focused = (window?.firstResponder as? NSView).flatMap { $0.isDescendant(of: self) ? $0 : nil }
         popover.replace(content: self)
         window?.makeFirstResponder(focused ?? self)
+        if let cursor { popover.reveal(rowViews[cursor]) }
     }
 
     func takeFocus() { window?.makeFirstResponder(self) }
+
+    override func becomeFirstResponder() -> Bool {
+        hasFocus = true
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        hasFocus = false
+        return true
+    }
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
@@ -137,7 +153,7 @@ final class PopoverForm: NSView, ThemeReapplying {
         switch KeyboardFocus.key(for: event) {
         case .up: moveHighlight(-1)
         case .down: moveHighlight(1)
-        case .activate: if let highlightedRow { choose(highlightedRow) }
+        case .activate: if let cursor { choose(cursor) }
         case .tab(let shift): moveFocus(shift ? -1 : 1)
         default: super.keyDown(with: event)
         }
@@ -150,10 +166,11 @@ final class PopoverForm: NSView, ThemeReapplying {
 
         if rows.count != rowViews.count { rebuildRows(count: rows.count) }
         self.rows = rows
-        for (row, view) in zip(rows, rowViews) { view.render(Self.content(row)) }
-        if let highlightedRow, !rows.indices.contains(highlightedRow) || !rows[highlightedRow].isEnabled {
-            self.highlightedRow = nil
+        for (row, view) in zip(rows, rowViews) {
+            view.render(Self.content(row))
+            view.setAccessibilityEnabled(row.isEnabled)
         }
+        if let cursor, !isChoosable(cursor) { self.cursor = nil }
     }
 
     private func rebuildRows(count: Int) {
@@ -176,28 +193,44 @@ final class PopoverForm: NSView, ThemeReapplying {
             ink: row.isEnabled ? .normal : .faint)
     }
 
+    private func isChoosable(_ index: Int) -> Bool { rows.indices.contains(index) && rows[index].isEnabled }
+
     private func choose(_ index: Int) {
-        guard rows.indices.contains(index), rows[index].isEnabled else { return }
-        highlightedRow = index
+        guard isChoosable(index) else { return }
+        cursor = index
+        takeFocus()
         onChoose(index)
     }
 
     private func highlightPointed(_ index: Int) {
-        guard rows.indices.contains(index), rows[index].isEnabled else { return }
-        highlightedRow = index
+        guard isChoosable(index) else { return }
+        cursor = index
+        takeFocus()
     }
 
     private func moveHighlight(_ delta: Int) {
-        let enabled = rows.indices.filter { rows[$0].isEnabled }
+        let enabled = rows.indices.filter(isChoosable)
         guard
             let next = KeyboardFocus.step(
-                from: highlightedRow.flatMap(enabled.firstIndex(of:)), delta: delta, count: enabled.count)
+                from: cursor.flatMap(enabled.firstIndex(of:)), delta: delta, count: enabled.count)
         else { return }
-        highlightedRow = enabled[next]
+        cursor = enabled[next]
     }
 
     private func refreshHighlight() {
-        for (index, view) in rowViews.enumerated() { view.isHighlighted = index == highlightedRow }
+        for (index, view) in rowViews.enumerated() { view.isHighlighted = hasFocus && index == cursor }
+    }
+
+    private func routeTab(from control: NSView) {
+        let forward: () -> Void = { [weak self] in self?.moveFocus(1) }
+        let backward: () -> Void = { [weak self] in self?.moveFocus(-1) }
+        if let segmented = control as? SegmentedControl {
+            segmented.onTab = forward
+            segmented.onBacktab = backward
+        } else if let button = control as? AppButton {
+            button.onTab = forward
+            button.onBacktab = backward
+        }
     }
 
     private var focusStops: [NSView] {
