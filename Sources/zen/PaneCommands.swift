@@ -20,7 +20,7 @@ struct PaneCommands: ParsableCommand {
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Option(help: "A name for the pane, unique among open panes. It works anywhere a pane token does.")
+        @Option(help: "A name for the pane, unique among the panes this pane starts. It works anywhere a token does.")
         var name: String?
 
         @Option(help: "A first message to send the program once it reports it is ready.")

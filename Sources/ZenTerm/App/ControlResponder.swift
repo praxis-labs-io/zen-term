@@ -59,6 +59,12 @@ struct ControlResponder {
         windows().flatMap { window in window.panes(named: name).map { (window, $0.tab, $0.pane) } }
     }
 
+    func locate(paneNamed name: String, startedBy parent: Int?) -> (
+        window: WindowController, tab: TabID, pane: PaneHandle
+    )? {
+        locate(paneNamed: name).first { $0.pane.record.parent == parent }
+    }
+
     private func openWorkspace(_ request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
         guard let address = request.args.workspace else {
             return reply(.failure(ControlError(.badRequest, "workspace.open needs a workspace.")))

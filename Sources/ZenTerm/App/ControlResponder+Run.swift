@@ -22,7 +22,7 @@ extension ControlResponder {
                     .failure(
                         ControlError(.badRequest, "A pane name needs a character that is not a digit or a space.")))
             }
-            if let open = locate(paneNamed: name).first {
+            if let open = locate(paneNamed: name, startedBy: request.caller?.pane) {
                 return reply(
                     .failure(ControlError(.refused, "Pane \(open.pane.token) is already named \(name).")))
             }

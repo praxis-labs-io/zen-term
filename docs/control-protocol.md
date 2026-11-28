@@ -115,7 +115,7 @@ write side is not closing it: the answer still comes.
 
 | Thing  | Address                           | Notes                                         |
 | ------ | --------------------------------- | --------------------------------------------- |
-| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among open panes, and is sent as a string; a string of digits is read as a token. |
+| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among the open panes one parent started, and is sent as a string; a string of digits is read as a token. A name reaches `caller.pane`'s own pane of that name first, else the one open pane with it anywhere; more than one there is `ambiguous`. When `caller.pane`'s own pane of that name has exited, the name is `not_found`, except to `pane.wait`. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`, except to `workspace.open`, which still reaches a renamed configured workspace through its entry's folder. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
@@ -396,8 +396,8 @@ The pane closes when its program exits, with any exit code. `keep` drops it to a
 the way `tab.new` and `pane.split` run a `cmd`, unless the command ends in its shell's own `exit`
 or, under zsh, an interrupt ends it.
 
-`name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
-digits. The name then addresses the pane anywhere a token does, until it closes.
+`name` is refused when an open pane `caller.pane` started has it, and is a `bad_request` when it
+is blank or all digits. The name then addresses the pane anywhere a token does, until it closes.
 
 ```json
 {"pane":34,"first_task":{"sent":false,"reason":"blocked"}}
@@ -544,7 +544,7 @@ Holds until something happens to the pane, then answers once with why:
   newline in it is a `bad_request`.
 - A pane `pane.run` opened closes when its program exits, and a wait on it still answers
   `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
-  A name then reaches the most recent such pane with that name. The app keeps the 64 most
+  A name then reaches the most recent such pane with that name, `caller.pane`'s own first. The app keeps the 64 most
   recent such exits; an older one is `not_found`.
 
 `children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait

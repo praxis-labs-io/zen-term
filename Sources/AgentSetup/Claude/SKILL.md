@@ -49,8 +49,9 @@ zen pane read --pane dev --lines 40                                  # its outpu
 ```
 
 - Name every pane after what it runs (`dev`, `tests`), so the sidebar and
-  `zen list` read clearly. Before starting something long-running, check
-  `zen list` for a pane already running it, and use that one.
+  `zen list` read clearly. A name is unique only among your panes, and reaches
+  yours before another session's. Before starting something long-running,
+  check `zen list` for a pane of yours already running it, and use that one.
 - Start a server with `--wait --output` in the same command. A separate
   `zen wait --output` matches only text printed after it begins, so it misses
   a ready line printed before. If a wait times out, read

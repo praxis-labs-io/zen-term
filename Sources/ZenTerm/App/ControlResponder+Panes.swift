@@ -20,6 +20,14 @@ extension ControlResponder {
             }
             return .success(PanePlace(window: found.window, tab: found.tab, pane: found.pane))
         case .name(let name):
+            if let parent = request.caller?.pane {
+                if let own = locate(paneNamed: name, startedBy: parent) {
+                    return .success(PanePlace(window: own.window, tab: own.tab, pane: own.pane))
+                }
+                if let exit = latestExit(named: name, startedBy: parent) {
+                    return .failure(ControlError(.notFound, "Pane \(exit.token), named \(name), exited."))
+                }
+            }
             let found = locate(paneNamed: name)
             guard found.count < 2 else {
                 return .failure(ControlError(.ambiguous, "\(found.count) panes are named \(name)."))
@@ -387,7 +395,7 @@ extension ControlResponder {
         }
         switch pane(address, for: request) {
         case .failure(let error):
-            if error.code == .notFound, let exit = launchedExit(of: address) {
+            if error.code == .notFound, let exit = launchedExit(of: address, for: request) {
                 return reply(.success(Self.exited(exit)))
             }
             reply(.failure(error))
@@ -473,12 +481,18 @@ extension ControlResponder {
         windows().lazy.compactMap { $0.launchedPaneExits.exit(of: token) }.first
     }
 
-    private func launchedExit(of address: ControlAddress.Pane) -> LaunchedPaneExit? {
+    private func launchedExit(of address: ControlAddress.Pane, for request: ControlRequest) -> LaunchedPaneExit? {
         switch address {
         case .token(let token): return launchedExit(of: token)
         case .name(let name):
+            if let parent = request.caller?.pane, let own = latestExit(named: name, startedBy: parent) { return own }
             return windows().compactMap { $0.launchedPaneExits.latestExit(named: name) }.max { $0.token < $1.token }
         }
+    }
+
+    private func latestExit(named name: String, startedBy parent: Int) -> LaunchedPaneExit? {
+        windows().compactMap { $0.launchedPaneExits.latestExit(named: name, startedBy: parent) }
+            .max { $0.token < $1.token }
     }
 
     static func exited(_ exit: LaunchedPaneExit) -> WaitResult {
