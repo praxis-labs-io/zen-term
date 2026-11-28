@@ -41,6 +41,9 @@ final class SettingsGeneralSection: SettingsFormSection {
                 read: { CGFloat($0.toastDuration) })
         }
         addGroup("Keep Awake") {
+            self.addToggleRow(
+                key: "keep-awake-display", caption: "Keep the display on too",
+                blurb: "Agents do not need the screen", read: { $0.keepAwakeDisplay })
             self.addSegmentedRow(
                 key: "keep-awake-battery-stop", caption: "Stop below battery level",
                 blurb: "Ends the hold on battery only",

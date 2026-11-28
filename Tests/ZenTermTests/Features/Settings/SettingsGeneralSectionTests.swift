@@ -70,7 +70,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Toggle: Int {
-        case notifications, claudeSetup, updates
+        case notifications, claudeSetup, keepAwakeDisplay, updates
     }
 
     private func segment(_ which: Segment) -> SegmentedControl {
@@ -86,7 +86,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         let segments = descendants(of: detail).compactMap { $0 as? SegmentedControl }
         let toggles = descendants(of: detail).compactMap { $0 as? ToggleSwitch }
         XCTAssertEqual(segments.count, 3, "the two toast rows and battery stop")
-        XCTAssertEqual(toggles.count, 3, "notifications, Claude Code setup, and updates")
+        XCTAssertEqual(toggles.count, 4, "notifications, Claude Code setup, keep the display on, and updates")
+        XCTAssertFalse(toggles[Toggle.keepAwakeDisplay.rawValue].isOn, "the display can sleep by default")
         XCTAssertTrue(toggles[Toggle.notifications.rawValue].isOn, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
@@ -111,6 +112,13 @@ final class SettingsGeneralSectionTests: WindowTestCase {
 
         XCTAssertTrue(
             configText().contains("agent-notifications = false"), "got: \(configText())")
+    }
+
+    func test_keepAwakeDisplay_switchedOn_writesTrue() {
+        flip(toggle(.keepAwakeDisplay))
+
+        XCTAssertTrue(configText().contains("keep-awake-display = true"), "got: \(configText())")
+        XCTAssertTrue(GeneralConfig.current.keepAwakeDisplay)
     }
 
     func test_batteryStop_offersFourStops_andWritesEach() {

@@ -149,4 +149,10 @@ final class ConfigChangeTests: XCTestCase {
             XCTAssertTrue(ConfigChange.all.contains(kind), "\(kind.rawValue) missing from .all")
         }
     }
+
+    func test_eachKeepAwakeKey_yieldsKeepAwakeOnly() {
+        XCTAssertEqual(change(from: { $0.keepAwakeDisplay = true }), .keepAwake)
+        XCTAssertEqual(change(from: { $0.keepAwakeBatteryStop = nil }), .keepAwake)
+        XCTAssertEqual(change(from: { $0.keepAwakeGrace = 5 }), .keepAwake)
+    }
 }
