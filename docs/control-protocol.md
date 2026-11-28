@@ -658,12 +658,13 @@ lists every action.
 
 ### `awake.on`
 
-`args`: `duration` (seconds, at least 1).
+`args`: `duration` (seconds, from 1 to 604800, a week).
 
 Holds the Mac awake for the caller's pane, so it needs `caller.pane`; without one it is a
 `bad_request`. The hold keeps the Mac from idle sleep, never the display. It ends on
-`awake.off`, after `duration` when one is given, when the pane exits or closes, when the
-person turns Keep Awake off in the app, or at the battery stop. Starting below the battery
+`awake.off`, after `duration` when one is given, when the pane closes, when the person
+turns Keep Awake off in the app, or at the battery stop. A `pane.run` pane with `keep` stays
+open after its program exits, so its hold lasts until `awake.off`. Starting below the battery
 stop on battery is `refused`. A second `awake.on` from the same pane replaces its hold, with
 the new `duration` or none. Answers the `awake.status` result.
 
@@ -723,7 +724,8 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen awake on [--for <duration>]|off|status` holds the Mac awake
 for this pane and prints the `awake.status` result; `--for` takes hours, minutes and seconds in that
-order, like `90s`, `45m`, `2h` or `1h30m`, and a number without a unit is a usage error. `zen wait <pane>` waits on a pane, taking
+order, like `90s`, `45m`, `2h` or `1h30m`, a week at most, and a number without a unit is a usage
+error. `zen wait <pane>` waits on a pane, taking
 `--output` and `--timeout`, and prints the answer as JSON.
 With `ZEN_ASKPASS_TOKEN` set, exactly one argument and a parent named `ssh`, `zen` is ssh's askpass: it sends the
 argument as `ssh.askpass`'s `prompt`, with `$ZEN_CONTROL_SOCK` and its parent's pid, prints

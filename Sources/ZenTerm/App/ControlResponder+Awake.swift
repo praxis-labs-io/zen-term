@@ -3,8 +3,11 @@ import Foundation
 
 extension ControlResponder {
     func holdAwake(_ request: ControlRequest) -> ControlReply {
-        if let duration = request.args.duration, duration < 1 {
-            return .failure(ControlError(.badRequest, "awake.on needs a duration of a second or more."))
+        if let duration = request.args.duration, !(1...ControlWire.longestAwakeHold).contains(duration) {
+            return .failure(
+                ControlError(
+                    .badRequest,
+                    "awake.on takes a duration from 1 to \(ControlWire.longestAwakeHold) seconds, a week."))
         }
         return awakePane(request).flatMap { keepAwake, pane in
             let name =

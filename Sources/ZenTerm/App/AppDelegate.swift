@@ -177,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateController.checkForUpdates()
             return
         }
-        if case .keepAwake = chord, keepAwake.isOn { return }
+        if case .keepAwake = chord, keepAwake.hold != nil { return }
         if let start = Self.keepAwakeStart(for: chord) {
             if let refusal = keepAwake.start(start.until, keepsDisplayOn: start.display) {
                 target?.showToast(WindowController.keepAwakeRefusedToast(refusal))

@@ -6,19 +6,27 @@ struct AwakeCommands: ParsableCommand {
         commandName: "awake",
         abstract: "Hold the Mac awake for this pane, never the display.",
         discussion:
-            "The hold ends on zen awake off, when its time runs out, when this pane exits, or when the person turns "
-            + "Keep Awake off. Each prints what holds the Mac awake, as JSON.",
+            "The hold ends on zen awake off, when its time runs out, when this pane closes, or when the person turns "
+            + "Keep Awake off. A pane run with --keep stays open after its program exits, so it holds until off. "
+            + "Each prints what holds the Mac awake, as JSON.",
         subcommands: [Hold.self, Release.self, Status.self])
 
     struct Hold: ParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "on",
-            abstract: "Hold the Mac awake until zen awake off or this pane exits. Again replaces the hold.")
+            abstract: "Hold the Mac awake until zen awake off or this pane closes. Again replaces the hold.")
 
         @OptionGroup var connection: ConnectionOptions
 
-        @Option(name: .customLong("for"), help: "End the hold after this long, like 90s, 45m, 2h or 1h30m.")
+        @Option(
+            name: .customLong("for"), help: "End the hold after this long, like 90s, 45m, 2h or 1h30m. A week at most.")
         var duration: AwakeDuration?
+
+        func validate() throws {
+            if let duration, duration.seconds > ControlWire.longestAwakeHold {
+                throw ValidationError("--for holds a week at most.")
+            }
+        }
 
         func run() throws {
             let args = ControlArgs(duration: duration?.seconds)

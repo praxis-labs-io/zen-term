@@ -212,6 +212,10 @@ final class ControlAwakeTests: WindowTestCase {
         XCTAssertEqual(try error(.awakeOn, from: 9999).code, .notFound)
         let pane = try token(of: try XCTUnwrap(spawned.first))
         XCTAssertEqual(try error(.awakeOn, ControlArgs(duration: 0), from: pane).code, .badRequest)
-        XCTAssertFalse(try awake(.awakeStatus, from: nil).on, "status needs no pane")
+        XCTAssertEqual(try error(.awakeOn, ControlArgs(duration: Int.max), from: pane).code, .badRequest)
+        XCTAssertEqual(
+            try awake(.awakeOn, ControlArgs(duration: ControlWire.longestAwakeHold), from: pane).pane?.remaining,
+            ControlWire.longestAwakeHold)
+        XCTAssertTrue(try awake(.awakeStatus, from: nil).on, "status needs no pane")
     }
 }

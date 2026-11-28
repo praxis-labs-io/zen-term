@@ -24,5 +24,7 @@ final class AwakeCommandTests: XCTestCase {
             XCTAssertNil(AwakeDuration(argument: bad), bad)
         }
         XCTAssertEqual(Zen.exitCode(parsing: ["awake", "on", "--for", "90"]), 2)
+        XCTAssertEqual(Zen.exitCode(parsing: ["awake", "on", "--for", "168h"]), 0)
+        XCTAssertEqual(Zen.exitCode(parsing: ["awake", "on", "--for", "168h1s"]), 2, "past a week")
     }
 }

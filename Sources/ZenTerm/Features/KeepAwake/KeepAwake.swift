@@ -131,7 +131,7 @@ final class KeepAwake {
     func paneHold(of surface: SurfaceID) -> PaneHold? { paneHolds.first { $0.surface == surface } }
 
     func secondsLeft(_ held: PaneHold) -> Int? {
-        held.endsAt.map { max(0, Int($0.timeIntervalSince(clock.now).rounded(.up))) }
+        held.endsAt.map { Int(min(max(0, $0.timeIntervalSince(clock.now).rounded(.up)), Double(Int32.max))) }
     }
 
     func activityChanged() {

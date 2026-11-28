@@ -196,8 +196,9 @@ zen awake status         # what holds the Mac awake, as JSON
   a migration, or helpers you wait on. Skip it for work that ends in a few minutes.
 - Pass `--for` with a generous estimate, so a hold you forget still ends. Without it
   the hold lasts until `off` or your pane exits.
-- Run `zen awake off` when the work ends, before you report. Your pane exiting ends
-  the hold too, and the user turning Keep Awake off ends every hold.
+- Run `zen awake off` when the work ends, before you report. Your pane closing ends
+  the hold too, and the user turning Keep Awake off ends every hold. A `--keep` pane
+  stays open after its program exits, so it holds until `off`.
 - `on` refuses below the battery stop the user set. Don't retry it; carry on.
 
 ## Rules
