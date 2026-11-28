@@ -5,6 +5,11 @@ import XCTest
 @testable import ZenTerm
 
 final class GallerySeamTests: WindowTestCase {
+    private struct LooseLayer: Equatable {
+        let border: [CGFloat]?
+        let background: [CGFloat]?
+    }
+
     private struct Rendered: Equatable {
         let path: String
         let type: String
@@ -12,7 +17,7 @@ final class GallerySeamTests: WindowTestCase {
         let background: [CGFloat]?
         let borderWidth: CGFloat
         let border: [CGFloat]?
-        let looseSublayers: [[CGFloat]?]
+        let looseSublayers: [LooseLayer]
         let title: NSAttributedString?
         let tint: [CGFloat]?
         let text: NSAttributedString?
@@ -98,6 +103,22 @@ final class GallerySeamTests: WindowTestCase {
         XCTAssertTrue(window.makeFirstResponder(real))
         seam.forceFocusForGallery()
         assertSeam(seam, matches: real, unlike: rest, "SegmentedControl")
+    }
+
+    func test_toggleSwitchFocusSeam_rendersLikeRealFocus() {
+        let (rest, real, seam) = (toggle(), toggle(), toggle())
+        mount([rest, real, seam])
+        XCTAssertTrue(window.makeFirstResponder(real))
+        seam.forceFocusForGallery()
+        assertSeam(seam, matches: real, unlike: rest, "ToggleSwitch")
+    }
+
+    func test_toggleSwitchHoverSeam_rendersLikeRealHover() {
+        let (rest, real, seam) = (toggle(), toggle(), toggle())
+        mount([rest, real, seam])
+        real.mouseEntered(with: crossing(.mouseEntered))
+        seam.forceHoverForGallery()
+        assertSeam(seam, matches: real, unlike: rest, "ToggleSwitch")
     }
 
     func test_keybindChipFocusSeam_rendersLikeRealFocus() {
@@ -212,7 +233,7 @@ final class GallerySeamTests: WindowTestCase {
             let layer = view.layer
             let backing = Set(view.subviews.compactMap(\.layer).map(ObjectIdentifier.init))
             let loose = (layer?.sublayers ?? []).filter { !backing.contains(ObjectIdentifier($0)) }.map {
-                $0.borderColor?.components
+                LooseLayer(border: $0.borderColor?.components, background: $0.backgroundColor?.components)
             }
             let button = view as? NSButton
             let field = view as? NSTextField
@@ -299,6 +320,10 @@ final class GallerySeamTests: WindowTestCase {
 
     private func segmented() -> SegmentedControl {
         SegmentedControl(options: ["Off", "On"]) { _ in }
+    }
+
+    private func toggle() -> ToggleSwitch {
+        ToggleSwitch { _ in }
     }
 
     private func chip() -> WorkspaceTabChip {

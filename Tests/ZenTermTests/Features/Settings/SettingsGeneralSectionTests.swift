@@ -38,7 +38,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func mountSegments() -> [SegmentedControl] {
+    @discardableResult
+    private func mount() -> NSView {
         let section = SettingsGeneralSection()
         self.section = section
         let detail = section.makeDetailView()
@@ -48,7 +49,15 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         window.contentView?.addSubview(detail)
         detail.frame = window.contentView!.bounds
         hostWindow = window
-        return descendants(of: detail).compactMap { $0 as? SegmentedControl }
+        return detail
+    }
+
+    private func mountSegments() -> [SegmentedControl] {
+        descendants(of: mount()).compactMap { $0 as? SegmentedControl }
+    }
+
+    private func mountToggles() -> [ToggleSwitch] {
+        descendants(of: mount()).compactMap { $0 as? ToggleSwitch }
     }
 
     private func configText() -> String {
@@ -57,20 +66,31 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Segment: Int {
-        case notifications, claudeSetup, attentionToast, completionToast, updates
+        case attentionToast, completionToast
+    }
+
+    private enum Toggle: Int {
+        case notifications, claudeSetup, updates
     }
 
     private func segment(_ which: Segment) -> SegmentedControl {
         mountSegments()[which.rawValue]
     }
 
-    func test_everyToggle_isPresent_andDefaults() {
-        let segments = mountSegments()
-        XCTAssertEqual(segments.count, 5, "notifications, Claude Code setup, the two toast rows, and updates")
-        XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
+    private func toggle(_ which: Toggle) -> ToggleSwitch {
+        mountToggles()[which.rawValue]
+    }
+
+    func test_everyRow_isPresent_andDefaults() {
+        let detail = mount()
+        let segments = descendants(of: detail).compactMap { $0 as? SegmentedControl }
+        let toggles = descendants(of: detail).compactMap { $0 as? ToggleSwitch }
+        XCTAssertEqual(segments.count, 2, "the two toast rows")
+        XCTAssertEqual(toggles.count, 3, "notifications, Claude Code setup, and updates")
+        XCTAssertTrue(toggles[Toggle.notifications.rawValue].isOn, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
-        XCTAssertEqual(segments[Segment.updates.rawValue].selectedIndex, 0, "automatic updates On")
+        XCTAssertTrue(toggles[Toggle.updates.rawValue].isOn, "automatic updates On")
     }
 
     func test_agentPrograms_typedInTheField_registerAsAgents() throws {
@@ -85,8 +105,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(AgentRoster.agentName(launching: "gemini", listed: GeneralConfig.current.listedAgents), "gemini")
     }
 
-    func test_notifications_selectingOff_writesFalse() {
-        segment(.notifications).select(1)
+    func test_notifications_switchingOff_writesFalse() {
+        flip(toggle(.notifications))
 
         XCTAssertTrue(
             configText().contains("agent-notifications = false"), "got: \(configText())")
@@ -118,22 +138,22 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         }
     }
 
-    func test_updates_selectingOff_thenOn_writesFalseThenTrue() {
-        let updates = segment(.updates)
+    func test_updates_switchingOff_thenOn_writesFalseThenTrue() {
+        let updates = toggle(.updates)
 
-        updates.select(1)
+        flip(updates)
         XCTAssertTrue(
             configText().contains("automatic-update-checks = false"), "got: \(configText())")
 
-        updates.select(0)
+        flip(updates)
         XCTAssertTrue(
             configText().contains("automatic-update-checks = true"), "got: \(configText())")
     }
 
     private var claudeRoot: URL { tempRoot.appendingPathComponent("claude") }
 
-    private func claudeSetupControl() -> SegmentedControl {
-        let control = segment(.claudeSetup)
+    private func claudeSetupControl() -> ToggleSwitch {
+        let control = toggle(.claudeSetup)
         waitUntil(control.isEnabled, "the Claude Code setup state to load")
         return control
     }
@@ -142,16 +162,20 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         section?.rowFor(SettingsGeneralSection.claudeSetupKey)?.renderedMessageForTesting
     }
 
-    private func press(_ keyCode: UInt16, on control: SegmentedControl) {
+    private func flip(_ control: ToggleSwitch) {
         hostWindow?.makeFirstResponder(control)
-        control.keyDown(with: arrow(keyCode))
+        control.keyDown(with: space())
+    }
+
+    private func flipClaudeSetup(_ control: ToggleSwitch) {
+        flip(control)
         waitUntil(control.isEnabled, "the Claude Code setup change to land")
     }
 
     func test_claudeSetup_showsOffWhenNothingIsInstalled() {
         let control = claudeSetupControl()
 
-        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertFalse(control.isOn)
         XCTAssertNil(claudeSetupMessage())
     }
 
@@ -169,16 +193,16 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     func test_claudeSetup_choosingOnInstalls_andOffRemoves() {
         let control = claudeSetupControl()
 
-        press(Self.leftKey, on: control)
+        flipClaudeSetup(control)
 
-        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertTrue(control.isOn)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills/zen/SKILL.md").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("settings.json").path))
 
-        press(Self.rightKey, on: control)
+        flipClaudeSetup(control)
 
-        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertFalse(control.isOn)
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills/zen/SKILL.md").path))
     }
@@ -213,9 +237,9 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         let control = claudeSetupControl()
         XCTAssertEqual(updateRow?.isHidden, true)
 
-        press(Self.leftKey, on: control)
+        flipClaudeSetup(control)
 
-        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertTrue(control.isOn)
         XCTAssertEqual(updateRow?.isHidden, true)
         XCTAssertTrue(try updateButton().isHidden)
     }
@@ -233,7 +257,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         try clickUpdate()
 
         XCTAssertEqual(updateRow?.isHidden, true)
-        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertTrue(control.isOn)
         XCTAssertEqual(try installedSkill(), Data("skill".utf8))
     }
 
@@ -271,9 +295,9 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         try Data("{".utf8).write(to: claudeRoot.appendingPathComponent("settings.json"))
         let control = claudeSetupControl()
 
-        press(Self.leftKey, on: control)
+        flipClaudeSetup(control)
 
-        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertFalse(control.isOn)
         XCTAssertTrue(claudeSetupMessage()?.contains("settings.json") == true, "got: \(claudeSetupMessage() ?? "nil")")
         XCTAssertFalse(FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills").path))
     }
@@ -284,37 +308,54 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
             isARepeat: false, keyCode: keyCode)!
     }
+    private func space() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: 0, context: nil, characters: " ", charactersIgnoringModifiers: " ",
+            isARepeat: false, keyCode: 49)!
+    }
     private static let leftKey: UInt16 = 123
     private static let upKey: UInt16 = 126
-    private static let rightKey: UInt16 = 124
+    private static let downKey: UInt16 = 125
 
-    func test_leftAtLeftmostSegment_exitsToNav_withoutChangingTheValue() {
-        let notifications = mountSegments()[0]
+    func test_leftOnASwitch_exitsToNav_withoutFlippingIt() {
+        let notifications = toggle(.notifications)
         var exited = 0
         section?.onExitToNav = { exited += 1 }
 
         hostWindow?.makeFirstResponder(notifications)
         notifications.keyDown(with: arrow(Self.leftKey))
 
-        XCTAssertEqual(exited, 1, "Left at the leftmost segment returns to the nav")
-        XCTAssertEqual(notifications.selectedIndex, 0, "exiting must not flip the toggle")
+        XCTAssertEqual(exited, 1, "Left on a switch returns to the nav")
+        XCTAssertTrue(notifications.isOn, "exiting must not flip the switch")
+    }
+
+    func test_downOnASwitch_movesToTheNextRow_withoutFlippingIt() throws {
+        let notifications = toggle(.notifications)
+
+        hostWindow?.makeFirstResponder(notifications)
+        notifications.keyDown(with: arrow(Self.downKey))
+
+        XCTAssertTrue(notifications.isOn)
+        let agents = try XCTUnwrap(section?.controlForTesting("agents") as? FieldBox)
+        XCTAssertTrue(KeyboardFocus.isFocused(agents.field, in: hostWindow))
     }
 
     func test_leftAtNonLeftmostSegment_cycles_ratherThanExiting() {
-        let notifications = mountSegments()[0]
+        let attention = segment(.attentionToast)
         var exited = 0
         section?.onExitToNav = { exited += 1 }
-        notifications.select(1)
+        attention.select(1)
 
-        hostWindow?.makeFirstResponder(notifications)
-        notifications.keyDown(with: arrow(Self.leftKey))
+        hostWindow?.makeFirstResponder(attention)
+        attention.keyDown(with: arrow(Self.leftKey))
 
-        XCTAssertEqual(notifications.selectedIndex, 0, "Left off a non-leftmost segment cycles left")
+        XCTAssertEqual(attention.selectedIndex, 0, "Left off a non-leftmost segment cycles left")
         XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
     }
 
     func test_upFromFirstStop_staysPut() {
-        let notifications = mountSegments()[0]
+        let notifications = toggle(.notifications)
         var exited = 0
         section?.onExitToNav = { exited += 1 }
 

@@ -6,17 +6,15 @@ final class SettingsGeneralSection: SettingsFormSection {
 
     static let claudeSetupKey = "claude-setup"
     static let claudeUpdateKey = "claude-update"
-    private weak var claudeSetupControl: SegmentedControl?
+    private weak var claudeSetupControl: ToggleSwitch?
     private weak var claudeUpdateButton: AppButton?
     private var claudeSetupState: ClaudeSetup.State = .notInstalled
 
     override func populate() {
         addGroup("Agents") {
-            self.addSegmentedRow(
+            self.addToggleRow(
                 key: "agent-notifications", caption: "Notify me when an agent needs attention",
-                blurb: "System banner when the app is unfocused", options: ["On", "Off"],
-                read: { $0.agentNotifications ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+                blurb: "System banner when the app is unfocused", read: { $0.agentNotifications })
             self.addTextRow(
                 key: "agents", caption: "Agent programs",
                 blurb: "claude and codex are built in", placeholder: "pi, gemini",
@@ -29,35 +27,27 @@ final class SettingsGeneralSection: SettingsFormSection {
                 blurb: nil,
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.attentionToast) },
-                token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
-                notifiesOnReselect: false)
+                token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) })
             self.addSegmentedRow(
                 key: "completion-toast", caption: "Notice for something that finished",
                 blurb: nil,
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.completionToast) },
-                token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
-                notifiesOnReselect: false)
+                token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) })
             self.addNumericRow(
                 key: "toast-duration", caption: "How long a notice that clears itself stays up",
                 blurb: "Seconds", range: 1...60,
                 read: { CGFloat($0.toastDuration) })
         }
         addGroup("Updates") {
-            self.addSegmentedRow(
+            self.addToggleRow(
                 key: "automatic-update-checks", caption: "Check for updates in the background",
-                blurb: nil,
-                options: ["On", "Off"],
-                read: { $0.automaticUpdateChecks ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+                blurb: nil, read: { $0.automaticUpdateChecks })
         }
     }
 
     private func addClaudeSetupRow() {
-        let control = SegmentedControl(options: ["On", "Off"], selectedIndex: 1, notifiesOnReselect: true) {
-            [weak self] index in
-            self?.applyClaudeSetup(index == 0 ? .install : .remove)
-        }
+        let control = ToggleSwitch { [weak self] on in self?.applyClaudeSetup(on ? .install : .remove) }
         control.isEnabled = false
         claudeSetupControl = control
         addCustomRow(
@@ -104,7 +94,7 @@ final class SettingsGeneralSection: SettingsFormSection {
         case .failure(let error):
             row?.showMessage(error.message)
         }
-        claudeSetupControl?.setSelection(claudeSetupState == .notInstalled ? 1 : 0)
+        claudeSetupControl?.setOn(claudeSetupState != .notInstalled)
         claudeSetupControl?.isEnabled = true
         claudeUpdateButton?.isEnabled = true
         showClaudeUpdate()

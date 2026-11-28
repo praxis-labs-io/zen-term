@@ -5,7 +5,7 @@
         static let width: CGFloat = 220
 
         static func sections() -> [GallerySection] {
-            [listRows(), focusRows(), dropdowns(), segmentedControls()]
+            [listRows(), focusRows(), dropdowns(), segmentedControls(), toggleSwitches()]
         }
 
         static func liveDropdown() -> Dropdown {
@@ -168,6 +168,26 @@
                     GallerySection.Row(label: "Selected", samples: [selected]),
                     GallerySection.Row(label: "Focused", samples: [focused]),
                     GallerySection.Row(label: "Disabled", samples: [disabled]),
+                ])
+        }
+
+        private static func toggleSwitches() -> GallerySection {
+            let hover = ToggleSwitch { _ in }
+            hover.forceHoverForGallery()
+            let focused = ToggleSwitch(isOn: true) { _ in }
+            focused.forceFocusForGallery()
+            let disabledOff = ToggleSwitch { _ in }
+            disabledOff.isEnabled = false
+            let disabledOn = ToggleSwitch(isOn: true) { _ in }
+            disabledOn.isEnabled = false
+            return GallerySection(
+                title: "ToggleSwitch",
+                rows: [
+                    GallerySection.Row(label: "Off", samples: [ToggleSwitch { _ in }]),
+                    GallerySection.Row(label: "On", samples: [ToggleSwitch(isOn: true) { _ in }]),
+                    GallerySection.Row(label: "Hover", samples: [hover]),
+                    GallerySection.Row(label: "Focused", samples: [focused]),
+                    GallerySection.Row(label: "Disabled", samples: [disabledOff, disabledOn]),
                 ])
         }
 

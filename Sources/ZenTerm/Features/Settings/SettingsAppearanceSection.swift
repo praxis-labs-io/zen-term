@@ -16,16 +16,8 @@ final class SettingsAppearanceSection: SettingsFormSection {
             self.addAccentRow()
         }
         addGroup("Window") {
-            self.addSegmentedRow(
-                key: "window-chrome", caption: "Window buttons",
-                blurb: nil, options: ["On", "Off"],
-                read: { $0.windowChrome ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
-            self.addSegmentedRow(
-                key: "pane-headers", caption: "Pane headers",
-                blurb: nil, options: ["On", "Off"],
-                read: { $0.paneHeaders ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addToggleRow(key: "window-chrome", caption: "Window buttons", blurb: nil, read: { $0.windowChrome })
+            self.addToggleRow(key: "pane-headers", caption: "Pane headers", blurb: nil, read: { $0.paneHeaders })
         }
         addGroup("Toolbar") {
             self.addToolbarButtonsRow()
@@ -57,10 +49,9 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 blurb: nil, range: 0.3...0.95, read: { $0.maxDrawerFraction }, width: 64)
         }
         addGroup("Motion") {
-            self.addSegmentedRow(
-                key: "reduce-motion", caption: "Reduce motion", blurb: nil, options: ["On", "Off"],
-                read: { Self.reduceMotionIndex($0) },
-                token: { LayoutFormat.reduceMotionToken($0 == 0 ? .on : .off) }, notifiesOnReselect: true)
+            self.addToggleRow(
+                key: "reduce-motion", caption: "Reduce motion", blurb: nil, read: { Self.reducesMotion($0) },
+                token: { LayoutFormat.reduceMotionToken($0 ? .on : .off) })
         }
     }
 
@@ -193,11 +184,11 @@ final class SettingsAppearanceSection: SettingsFormSection {
     }
 
     /// Static so the stored read closure doesn't retain the section.
-    private static func reduceMotionIndex(_ config: GeneralConfig) -> Int {
+    private static func reducesMotion(_ config: GeneralConfig) -> Bool {
         switch config.reduceMotion {
-        case .on: return 0
-        case .off: return 1
-        case .system: return Motion.isReduceMotionEnabled() ? 0 : 1
+        case .on: return true
+        case .off: return false
+        case .system: return Motion.isReduceMotionEnabled()
         }
     }
 }

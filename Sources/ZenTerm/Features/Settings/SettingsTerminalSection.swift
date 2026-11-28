@@ -17,10 +17,7 @@ final class SettingsTerminalSection: SettingsFormSection {
             self.addNumericRow(
                 key: "font-size", caption: "Font size", blurb: nil,
                 range: SessionFontSize.range, read: { $0.fontSize }, width: 64)
-            self.addSegmentedRow(
-                key: "font-thicken", caption: "Thicken", blurb: nil,
-                options: ["On", "Off"], read: { $0.fontThicken ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addToggleRow(key: "font-thicken", caption: "Thicken", blurb: nil, read: { $0.fontThicken })
         }
         addGroup("Background") {
             self.addNumericRow(
@@ -32,21 +29,16 @@ final class SettingsTerminalSection: SettingsFormSection {
             self.addSegmentedRow(
                 key: "cursor-style", caption: "Style", blurb: nil,
                 options: ["Block", "Bar", "Underline"], read: { Self.cursorStyleIndex($0) },
-                token: { LayoutFormat.cursorStyleToken(Self.cursorStyles[$0]) }, notifiesOnReselect: false)
-            self.addSegmentedRow(
-                key: "cursor-style-blink", caption: "Blink", blurb: nil,
-                options: ["On", "Off"], read: { $0.cursorBlink ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+                token: { LayoutFormat.cursorStyleToken(Self.cursorStyles[$0]) })
+            self.addToggleRow(key: "cursor-style-blink", caption: "Blink", blurb: nil, read: { $0.cursorBlink })
             self.addNumericRow(
                 key: "cursor-thickness", caption: "Thickness", blurb: "Pixels",
                 range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64, integer: true)
             self.addShaderRow()
         }
         addGroup("Input") {
-            self.addSegmentedRow(
-                key: "macos-option-as-alt", caption: "Option as Alt", blurb: nil,
-                options: ["On", "Off"], read: { $0.optionAsAlt ? 0 : 1 },
-                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addToggleRow(
+                key: "macos-option-as-alt", caption: "Option as Alt", blurb: nil, read: { $0.optionAsAlt })
             self.addNumericRow(
                 key: "scroll-multiplier", caption: "Scroll speed", blurb: nil,
                 range: 0.1...10, read: { CGFloat($0.scrollMultiplier) }, width: 64)
@@ -62,7 +54,7 @@ final class SettingsTerminalSection: SettingsFormSection {
                 key: "tab-inherit-cwd", caption: "Start directory",
                 blurb: "Applies to new tabs and windows",
                 options: ["Home", "Current pane"], read: { $0.tabInheritCWD ? 1 : 0 },
-                token: { LayoutFormat.boolToken($0 == 1) }, notifiesOnReselect: false)
+                token: { LayoutFormat.boolToken($0 == 1) })
         }
     }
 

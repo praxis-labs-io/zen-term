@@ -24,7 +24,7 @@ final class SegmentedControl: ControlView, ThemeReapplying {
     private var segments: [Segment] = []
     // A layer the control owns, so the slide drives its geometry.
     private let selectedSurface = CALayer()
-    // Lets a reselect pin a value that is only OS-derived, as the reduce-motion row needs.
+    // Lets a reselect act again, as the gallery's live-state picker needs to replay a state.
     private let notifiesOnReselect: Bool
 
     init(

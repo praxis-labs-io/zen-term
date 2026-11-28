@@ -41,23 +41,41 @@ final class SettingsTerminalRowsTests: WindowTestCase {
             "the Terminal section should mount a segmented row for \(key)")
     }
 
+    private func toggle(_ key: String) throws -> ToggleSwitch {
+        try XCTUnwrap(
+            section?.controlForTesting(key) as? ToggleSwitch,
+            "the Terminal section should mount a switch row for \(key)")
+    }
+
+    private func click(_ toggle: ToggleSwitch) throws {
+        hostWindow?.contentView?.layoutSubtreeIfNeeded()
+        let point = toggle.convert(NSPoint(x: toggle.bounds.midX, y: toggle.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: hostWindow?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: 1))
+            type == .leftMouseDown ? toggle.mouseDown(with: event) : toggle.mouseUp(with: event)
+        }
+    }
+
     private func configText() -> String {
         (try? String(
             contentsOf: ConfigLoader.defaultRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
 
     func test_fontThicken_defaultsToOff() throws {
-        let thicken = try segment("font-thicken")
-        XCTAssertEqual(thicken.selectedIndex, 1, "off is the shipped default, and Off is index 1")
+        XCTAssertFalse(try toggle("font-thicken").isOn, "off is the shipped default")
     }
 
-    func test_fontThicken_selectingOn_thenOff_writesTrueThenFalse() throws {
-        let thicken = try segment("font-thicken")
+    func test_fontThicken_switchingOn_thenOff_writesTrueThenFalse() throws {
+        let thicken = try toggle("font-thicken")
 
-        thicken.select(0)
+        try click(thicken)
         XCTAssertTrue(configText().contains("font-thicken = true"), "got: \(configText())")
 
-        thicken.select(1)
+        try click(thicken)
         XCTAssertTrue(configText().contains("font-thicken = false"), "got: \(configText())")
     }
 
