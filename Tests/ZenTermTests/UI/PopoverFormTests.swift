@@ -42,7 +42,7 @@ final class PopoverFormTests: WindowTestCase {
         status: String? = nil, rows: [PopoverForm.ChecklistRow] = rows, header: NSView? = nil
     ) -> PopoverForm {
         headerControl = SegmentedControl(options: ["Off", "On"]) { _ in }
-        sectionControl = SegmentedControl(options: ["This Mac", "Mac and display"]) { _ in }
+        sectionControl = SegmentedControl(options: ["This Mac", "Mac and display"], fillsWidth: true) { _ in }
         let form = PopoverForm(
             header: PopoverForm.Header(
                 symbol: "cup.and.saucer", title: "Keep Awake", control: header ?? headerControl),
@@ -279,5 +279,82 @@ final class PopoverFormTests: WindowTestCase {
         form.render(status: "Awake for 42 more minutes, until 4:31 PM.", rows: Self.rows, in: popover)
 
         XCTAssertTrue(window.firstResponder === headerControl)
+    }
+
+    private func laidOut(_ form: PopoverForm) throws -> NSStackView {
+        popover.cardForTesting?.layoutSubtreeIfNeeded()
+        return try XCTUnwrap(form.subviews.first as? NSStackView)
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap(descendants(of:))
+    }
+
+    private func frames(_ form: PopoverForm) -> [NSRect] {
+        descendants(of: form).map { $0.convert($0.bounds, to: form) }
+    }
+
+    private func textStart(_ view: NSView, in form: PopoverForm) -> CGFloat {
+        view.convert(view.alignmentRect(forFrame: view.bounds), to: form).minX
+    }
+
+    private func assertSpansAndInsets(_ form: PopoverForm, file: StaticString = #filePath, line: UInt = #line) throws {
+        let stack = try laidOut(form)
+        let inset = ChromeMetrics.Spacing.controlInset
+        XCTAssertEqual(form.bounds.width, PopoverForm.width, file: file, line: line)
+        for view in stack.arrangedSubviews where !view.isHidden {
+            let frame = view.convert(view.bounds, to: form)
+            XCTAssertEqual(frame.minX, 0, "\(type(of: view)) starts in from the form", file: file, line: line)
+            XCTAssertEqual(
+                frame.width, form.bounds.width, "\(type(of: view)) does not span the form", file: file, line: line)
+        }
+        for caption in descendants(of: form).compactMap({ $0 as? SectionCaption }) {
+            XCTAssertEqual(
+                textStart(caption, in: form), inset, "a caption is off the text inset", file: file, line: line)
+        }
+        for row in form.rowViewsForTesting {
+            XCTAssertEqual(
+                textStart(row.titleLabelForTesting, in: form), inset, "a row title is off the text inset", file: file,
+                line: line)
+        }
+        let ambiguous = ([form] + descendants(of: form)).filter(\.hasAmbiguousLayout)
+        XCTAssertEqual(ambiguous.map { "\(type(of: $0))" }, [], "the layout is ambiguous", file: file, line: line)
+    }
+
+    func test_everyLine_spansTheForm_withItsTextOnTheInset_andNoAmbiguity() throws {
+        let form = openForm(status: "Awake for 42 more minutes, until 4:31 PM.")
+
+        try assertSpansAndInsets(form)
+        let header = try XCTUnwrap(try laidOut(form).arrangedSubviews.first)
+        let control = headerControl.convert(headerControl.bounds, to: form)
+        XCTAssertEqual(
+            control.maxX, form.bounds.width - ChromeMetrics.Spacing.controlInset, accuracy: 0.5,
+            "the header control is off the trailing inset")
+        XCTAssertEqual(
+            header.subviews.first?.subviews.first.map { $0.convert($0.bounds, to: form).minX },
+            ChromeMetrics.Spacing.controlInset, "the header glyph is off the leading inset")
+    }
+
+    func test_rowsRebuiltByRender_spanTheForm() throws {
+        let form = openForm()
+
+        form.render(status: nil, rows: Self.rows + [PopoverForm.ChecklistRow(title: "For 2 hours")], in: popover)
+
+        XCTAssertEqual(form.rowViewsForTesting.count, Self.rows.count + 1)
+        try assertSpansAndInsets(form)
+    }
+
+    func test_reopening_laysTheFormOutTheSame() throws {
+        let first = openForm()
+        _ = try laidOut(first)
+        let opened = frames(first)
+        let card = popover.cardFrame.size
+        popover.close()
+
+        let second = openForm()
+        _ = try laidOut(second)
+
+        XCTAssertEqual(frames(second), opened)
+        XCTAssertEqual(popover.cardFrame.size, card)
     }
 }

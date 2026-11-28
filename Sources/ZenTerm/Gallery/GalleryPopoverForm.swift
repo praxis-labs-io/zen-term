@@ -30,7 +30,7 @@
             onChoose: @escaping (Int) -> Void = { _ in }
         ) -> PopoverForm {
             let header = header ?? SegmentedControl(options: ["Off", "On"], selectedIndex: isOn ? 1 : 0) { _ in }
-            let scope = SegmentedControl(options: ["This Mac", "Mac and display"]) { _ in }
+            let scope = SegmentedControl(options: ["This Mac", "Mac and display"], fillsWidth: true) { _ in }
             return PopoverForm(
                 header: PopoverForm.Header(symbol: "cup.and.saucer", title: "Keep Awake", control: header),
                 status: isOn ? onStatus : nil,

@@ -73,7 +73,7 @@ final class PopoverForm: NSView, ThemeReapplying {
         translatesAutoresizingMaskIntoConstraints = false
 
         stack.orientation = .vertical
-        stack.alignment = .width
+        stack.alignment = .leading
         stack.spacing = 0
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
@@ -94,18 +94,19 @@ final class PopoverForm: NSView, ThemeReapplying {
         statusLabel.preferredMaxLayoutWidth = Self.width - Self.textInset * 2
 
         headerView.heightAnchor.constraint(equalToConstant: Self.headerHeight).isActive = true
-        stack.addArrangedSubview(headerView)
-        stack.addArrangedSubview(statusView)
+        arrange(headerView)
+        arrange(statusView)
         stack.setCustomSpacing(Self.sectionGap, after: statusView)
         for section in sections {
             let caption = Self.inset(SectionCaption(section.caption))
-            stack.addArrangedSubview(caption)
+            arrange(caption)
             stack.setCustomSpacing(Self.captionGap, after: caption)
-            let control = Self.inset(NSStackView.huggingRow(section.control))
-            stack.addArrangedSubview(control)
+            let fills = (section.control as? SegmentedControl)?.fillsWidth == true
+            let control = Self.inset(fills ? section.control : NSStackView.huggingRow(section.control))
+            arrange(control)
             stack.setCustomSpacing(Self.sectionGap, after: control)
         }
-        stack.addArrangedSubview(checklistCaptionView)
+        arrange(checklistCaptionView)
         stack.setCustomSpacing(Self.captionGap, after: checklistCaptionView)
 
         for control in [header.control] + sections.map(\.control) { routeTab(from: control) }
@@ -181,10 +182,16 @@ final class PopoverForm: NSView, ThemeReapplying {
             return row
         }
         for row in rowViews {
-            stack.addArrangedSubview(row)
+            arrange(row)
             row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
         }
         refreshHighlight()
+    }
+
+    /// The width constraint follows the add, which throws without a common ancestor.
+    private func arrange(_ view: NSView) {
+        stack.addArrangedSubview(view)
+        view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     private static func content(_ row: ChecklistRow) -> ListRow.Content {
@@ -253,8 +260,9 @@ final class PopoverForm: NSView, ThemeReapplying {
         let line = NSStackView(views: [glyph, titleLabel, header.control])
         line.orientation = .horizontal
         line.alignment = .centerY
+        line.distribution = .fill
         line.spacing = ChromeMetrics.Spacing.s8
-        line.setHuggingPriority(.defaultLow, for: .horizontal)
+        glyph.setContentHuggingPriority(.required, for: .horizontal)
         titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         header.control.setContentHuggingPriority(.required, for: .horizontal)
         return line

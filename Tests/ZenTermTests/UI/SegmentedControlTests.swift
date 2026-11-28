@@ -55,6 +55,30 @@ final class SegmentedControlTests: WindowTestCase {
                 context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
     }
 
+    func test_fillsWidth_givesEverySegmentAnEqualShare_spanningTheTrack() throws {
+        let control = SegmentedControl(options: ["This Mac", "Mac and display"], fillsWidth: true) { _ in }
+        window.contentView?.addSubview(control)
+        NSLayoutConstraint.activate([
+            control.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 20),
+            control.topAnchor.constraint(equalTo: window.contentView!.topAnchor, constant: 20),
+            control.widthAnchor.constraint(equalToConstant: 300),
+        ])
+        window.contentView?.layoutSubtreeIfNeeded()
+        let segments = control.segmentsForTesting.map(\.frame)
+
+        XCTAssertEqual(segments[0].width, segments[1].width, "the segments are not equal shares")
+        XCTAssertEqual(segments[0].minX, ChromeMetrics.Spacing.s2)
+        XCTAssertEqual(segments[1].minX, segments[0].maxX)
+        XCTAssertEqual(segments[1].maxX, 300 - ChromeMetrics.Spacing.s2, "the segments do not reach the track's end")
+        XCTAssertFalse(control.hasAmbiguousLayout || control.segmentsForTesting.contains(where: \.hasAmbiguousLayout))
+
+        try click(segment: 1, of: control)
+        control.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(
+            control.selectedSurfaceFrameForTesting, segments[1], "the selected surface does not cover its segment")
+    }
+
     func test_clickingASegment_selectsIt_andSlidesTheRaisedSurfaceOntoIt() throws {
         var changes: [Int] = []
         let control = mount { changes.append($0) }

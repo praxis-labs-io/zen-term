@@ -160,6 +160,7 @@
             focused.forceFocusForGallery()
             let disabled = SegmentedControl(options: options) { _ in }
             disabled.isEnabled = false
+            let filling = sized(SegmentedControl(options: ["This Mac", "Mac and display"], fillsWidth: true) { _ in })
             return GallerySection(
                 title: "SegmentedControl",
                 rows: [
@@ -168,6 +169,7 @@
                     GallerySection.Row(label: "Selected", samples: [selected]),
                     GallerySection.Row(label: "Focused", samples: [focused]),
                     GallerySection.Row(label: "Disabled", samples: [disabled]),
+                    GallerySection.Row(label: "Fills width", samples: [filling]),
                 ])
         }
 

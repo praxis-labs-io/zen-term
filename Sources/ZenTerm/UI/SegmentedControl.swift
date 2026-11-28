@@ -3,6 +3,7 @@ import AppKit
 final class SegmentedControl: ControlView, ThemeReapplying {
     private(set) var selectedIndex: Int
     private(set) var optionTitles: [String]
+    let fillsWidth: Bool
     var onChange: (Int) -> Void
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
@@ -28,10 +29,11 @@ final class SegmentedControl: ControlView, ThemeReapplying {
     private let notifiesOnReselect: Bool
 
     init(
-        options: [String], selectedIndex: Int = 0, notifiesOnReselect: Bool = false,
+        options: [String], selectedIndex: Int = 0, notifiesOnReselect: Bool = false, fillsWidth: Bool = false,
         onChange: @escaping (Int) -> Void
     ) {
         self.optionTitles = options
+        self.fillsWidth = fillsWidth
         self.selectedIndex = min(max(selectedIndex, 0), max(options.count - 1, 0))
         self.notifiesOnReselect = notifiesOnReselect
         self.onChange = onChange
@@ -48,7 +50,7 @@ final class SegmentedControl: ControlView, ThemeReapplying {
         layer?.insertSublayer(selectedSurface, at: 0)
 
         segments = options.enumerated().map { index, title in
-            Segment(title: title) { [weak self] in self?.select(index) }
+            Segment(title: title, centersTitle: fillsWidth) { [weak self] in self?.select(index) }
         }
         var leading = leadingAnchor
         var leadingInset = Self.inset
@@ -63,7 +65,15 @@ final class SegmentedControl: ControlView, ThemeReapplying {
         }
         heightAnchor.constraint(equalToConstant: Self.trackHeight).isActive = true
         if let last = segments.last {
-            last.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset).isActive = true
+            if fillsWidth {
+                last.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset).isActive = true
+                segments.dropFirst().forEach {
+                    $0.widthAnchor.constraint(equalTo: segments[0].widthAnchor).isActive = true
+                }
+                setContentHuggingPriority(.defaultLow, for: .horizontal)
+            } else {
+                last.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset).isActive = true
+            }
         }
         restyle()
     }
@@ -72,7 +82,8 @@ final class SegmentedControl: ControlView, ThemeReapplying {
 
     // Without an intrinsic width the control stretches to fill its row instead of hugging its segments.
     override var intrinsicContentSize: NSSize {
-        let segmentsWidth = segments.reduce(0) { $0 + $1.fittingSize.width }
+        let widths = segments.map(\.fittingSize.width)
+        let segmentsWidth = fillsWidth ? (widths.max() ?? 0) * CGFloat(widths.count) : widths.reduce(0, +)
         return NSSize(width: segmentsWidth + Self.inset * 2, height: Self.trackHeight)
     }
 
@@ -169,7 +180,7 @@ private final class Segment: ControlView {
         }
     }
 
-    init(title: String, onPress: @escaping () -> Void) {
+    init(title: String, centersTitle: Bool, onPress: @escaping () -> Void) {
         label = NSTextField(labelWithString: title)
         self.onPress = onPress
         super.init(frame: .zero)
@@ -182,12 +193,21 @@ private final class Segment: ControlView {
         setAccessibilityElement(true)
         setAccessibilityRole(.radioButton)
         setAccessibilityLabel(title)
+        let inset = ChromeMetrics.Spacing.controlInset
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.sm),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
+        NSLayoutConstraint.activate(
+            centersTitle
+                ? [
+                    label.centerXAnchor.constraint(equalTo: centerXAnchor),
+                    label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: inset),
+                ]
+                : [
+                    label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+                    label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
+                ])
         restyle()
     }
 
