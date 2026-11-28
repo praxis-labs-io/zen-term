@@ -163,6 +163,16 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(server.commandLine, "npm run dev")
     }
 
+    func test_replaceSendsReplace_andNeedsAName() throws {
+        let replacing = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "run", "--name", "dev", "--replace", "npm run dev"]) as? PaneCommands.Run)
+        XCTAssertEqual(try replacing.args(in: "/").replace, true)
+        let plain = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "run", "--name", "dev", "npm run dev"]) as? PaneCommands.Run)
+        XCTAssertNil(try plain.args(in: "/").replace)
+        XCTAssertThrowsError(try Zen.parseAsRoot(["pane", "run", "--replace", "npm run dev"]))
+    }
+
     func test_runCwdIsAFolderResolvedFromHere() throws {
         let here = FileManager.default.temporaryDirectory.appendingPathComponent("zen-cwd-\(UUID().uuidString)")
         try FileManager.default.createDirectory(

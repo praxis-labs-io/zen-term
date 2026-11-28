@@ -52,6 +52,8 @@ zen pane read --pane dev --lines 40                                  # its outpu
   `zen list` read clearly. A name is unique only among your panes, and reaches
   yours before another session's. Before starting something long-running,
   check `zen list` for a pane of yours already running it, and use that one.
+- To restart one, run it again with `--replace`: it closes your pane of that
+  name and starts the new one with the name.
 - Start a server with `--wait --output` in the same command. A separate
   `zen wait --output` matches only text printed after it begins, so it misses
   a ready line printed before. If a wait times out, read

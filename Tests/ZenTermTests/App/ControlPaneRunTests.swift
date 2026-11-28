@@ -294,7 +294,7 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(duplicate.code, .refused)
         XCTAssertEqual(
             duplicate.message,
-            "Pane \(first.pane) is already named review.")
+            "Pane \(first.pane) is already named review. Add --replace to close it and start this one in its place.")
         XCTAssertEqual(everyPane(c).count, 3, "a refused run opened a pane")
 
         let elsewhere = try run(ControlArgs(cmd: "htop", name: "review", float: false), from: other)
@@ -344,6 +344,55 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(got.message, "Pane \(mine), named tests, exited.")
         let theirsGot = try answer(.paneGet, ControlArgs(pane: .name("tests")), from: other).get() as? ListResult.Pane
         XCTAssertEqual(theirsGot?.token, theirs)
+    }
+
+    func test_replaceClosesTheCallersPaneOfThatName_andStartsTheNewOneWithIt() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let other = try run(ControlArgs(cmd: "htop", split: .right), from: caller).pane
+        let theirs = try run(ControlArgs(cmd: "npm run dev", name: "dev", float: false), from: other).pane
+        let first = try run(ControlArgs(cmd: "npm run dev", name: "dev", float: false, replace: true), from: caller)
+        try surface(first.pane).isBusy = true
+
+        let second = try run(ControlArgs(cmd: "npm run dev", name: "dev", float: false, replace: true), from: caller)
+
+        XCTAssertFalse(isOpen(first.pane, in: c))
+        XCTAssertTrue(isOpen(theirs, in: c))
+        XCTAssertEqual(try listed(second.pane, in: c).name, "dev")
+        XCTAssertEqual(try listed(second.pane, in: c).parent, caller)
+        XCTAssertEqual(everyPane(c).filter { $0.name == "dev" }.map(\.token), [theirs, second.pane])
+
+        XCTAssertEqual(
+            error(try answer(.paneRun, ControlArgs(cmd: "htop", replace: true), from: caller))?.code, .badRequest)
+    }
+
+    func test_replaceIsRefusedAsAPaneCloseIs_leavingTheOldPane() throws {
+        let c = makeWindow()
+        let old = try run(ControlArgs(cmd: "npm run dev", name: "dev", float: false), from: nil).pane
+        try surface(old).isBusy = true
+        try surface(old).title = "npm run dev"
+        let before = everyPane(c).map(\.token)
+
+        let refusal = try XCTUnwrap(
+            error(try answer(.paneRun, ControlArgs(cmd: "npm run dev", name: "dev", replace: true), from: nil)))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.panes.map(\.token), [old])
+        XCTAssertEqual(everyPane(c).map(\.token), before, "a refused replace closed or opened a pane")
+    }
+
+    func test_replaceCannotSplitThePaneItCloses() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let old = try run(ControlArgs(cmd: "htop", name: "dev", split: .right), from: caller).pane
+
+        let reply = try answer(
+            .paneRun, ControlArgs(cmd: "htop", pane: .name("dev"), name: "dev", split: .down, replace: true),
+            from: caller)
+
+        XCTAssertEqual(error(reply)?.code, .badRequest)
+        XCTAssertTrue(isOpen(old, in: c))
+        XCTAssertEqual(everyPane(c).count, 2)
     }
 
     func test_aNameAddressesThePaneAnywhereATokenDoes() throws {

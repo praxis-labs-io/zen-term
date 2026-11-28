@@ -363,7 +363,7 @@ send's wait begins when it is queued, and its `timeout` counts from then.
 ### `pane.run`
 
 `args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `float`, `pane`, `cwd`
-(absolute), `focus`, `keep`, `outlive_parent`, `wait`, `timeout`, `output`.
+(absolute), `focus`, `keep`, `outlive_parent`, `replace`, `wait`, `timeout`, `output`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
 it opens a hidden float pane in the tab of `pane` (the caller's by default), or a tab behind
@@ -398,6 +398,10 @@ or, under zsh, an interrupt ends it.
 
 `name` is refused when an open pane `caller.pane` started has it, and is a `bad_request` when it
 is blank or all digits. The name then addresses the pane anywhere a token does, until it closes.
+`replace` closes that pane first, as its parent's `pane.close` would, and is refused the same way,
+leaving it open. The new pane opens where the other args put it, then takes the name. `replace`
+without `name`, or with `split` on the pane it closes, is a `bad_request`; with no such pane it
+runs as without it.
 
 ```json
 {"pane":34,"first_task":{"sent":false,"reason":"blocked"}}
@@ -687,7 +691,7 @@ and nothing when it arrived. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys [<pane>] <key>... [--force]` takes the keys as the arguments after the pane, or as
 every argument with `--pane`, and a name that is not a key is a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--float|--tab] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` sends `--float` as `float: true` and `--tab` as `float: false`, and both together is a usage error. It takes
+`zen pane run [--name [--replace]] [--task] [--split right|down] [--float|--tab] [--pane] [--cwd] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` sends `--float` as `float: true` and `--tab` as `float: false`, and both together is a usage error. It takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
 `-h` prints the help, and `-- --help` runs `--help`. A pane argument,

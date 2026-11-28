@@ -52,6 +52,9 @@ struct PaneCommands: ParsableCommand {
         @Flag(help: "Keep the pane open after this pane closes. Otherwise it closes with it.")
         var outliveParent = false
 
+        @Flag(help: "Close the pane this pane started with --name, and start this one in its place.")
+        var replace = false
+
         @Flag(help: "Then wait on the pane as zen wait does, and print why as JSON.")
         var wait = false
 
@@ -89,6 +92,7 @@ struct PaneCommands: ParsableCommand {
             if let first = command.first, ["--help", "-h"].contains(first) { throw CleanExit.helpRequest(self) }
             if commandLine.isEmpty { throw ValidationError("pane run needs a command to run.") }
             if float, tab { throw ValidationError("Pass --float or --tab, not both.") }
+            if replace, name == nil { throw ValidationError("--replace needs --name, the pane to replace.") }
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")
             }
@@ -107,7 +111,7 @@ struct PaneCommands: ParsableCommand {
                 cwd: try cwd.map { try CommandPath.folder($0, in: folder) }, cmd: commandLine, focus: focus, pane: pane,
                 name: name, output: output, timeout: wait ? timeout : nil,
                 task: task, split: split, float: float ? true : (tab ? false : nil), keep: keep,
-                outliveParent: outliveParent, wait: wait)
+                outliveParent: outliveParent, replace: replace ? true : nil, wait: wait)
         }
 
         func run() throws {
@@ -215,6 +219,9 @@ struct PaneCommands: ParsableCommand {
 
         @Flag(help: "Send it to an agent that is waiting on the user.")
         var force = false
+
+        @Flag(help: "Close the pane this pane started with --name, and start this one in its place.")
+        var replace = false
 
         @Flag(help: "Then wait on the pane as zen wait does, and print why as JSON.")
         var wait = false

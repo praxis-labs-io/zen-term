@@ -16,22 +16,23 @@ extension ControlResponder {
         if let problem = Self.cwdProblem(request.args) { return reply(.failure(problem)) }
         if let problem = Self.placementProblem(request.args) { return reply(.failure(problem)) }
         let name = request.args.name
-        if let name {
-            guard ControlAddress.Pane.isValidName(name) else {
-                return reply(
-                    .failure(
-                        ControlError(.badRequest, "A pane name needs a character that is not a digit or a space.")))
-            }
-            if let open = locate(paneNamed: name, startedBy: request.caller?.pane) {
-                return reply(
-                    .failure(ControlError(.refused, "Pane \(open.pane.token) is already named \(name).")))
-            }
+        let replacing: PanePlace?
+        switch replaced(request) {
+        case .failure(let error): return reply(.failure(error))
+        case .success(let place): replacing = place
         }
         let program = PaneProgram(command: command, exitClosesPane: request.args.keep != true, marksExit: true)
         let focus = request.args.focus == true
         let opened = pane(request.args.pane, for: request).flatMap {
             place -> Result<(WindowController, Int), ControlError> in
             if let direction = request.args.split {
+                if let replacing, replacing.pane.token == place.pane.token {
+                    return .failure(
+                        ControlError(
+                            .badRequest,
+                            "--replace closes pane \(place.pane.token), so the run cannot split it. "
+                                + "Leave out --pane or --split."))
+                }
                 let cwd = callerFolder(as: place.pane.token, for: request)
                 return split(place, direction, running: program, cwd: cwd, focus: focus).map { (place.window, $0) }
             }
@@ -57,6 +58,7 @@ extension ControlResponder {
         case .failure(let error):
             reply(.failure(error))
         case .success(let (window, token)):
+            if let replacing { replacing.window.removePane(replacing.pane.token, in: replacing.tab) }
             window.updateRecord(pane: token) {
                 $0.name = name
                 $0.parent = request.caller?.pane
@@ -69,6 +71,35 @@ extension ControlResponder {
                 answer(PaneRunResult(pane: token, firstTask: outcome), for: request, hangup: hangup, reply: reply)
             }
         }
+    }
+
+    private func replaced(_ request: ControlRequest) -> Result<PanePlace?, ControlError> {
+        guard let name = request.args.name else {
+            guard request.args.replace != true else {
+                return .failure(ControlError(.badRequest, "replace needs the name of the pane to replace."))
+            }
+            return .success(nil)
+        }
+        guard ControlAddress.Pane.isValidName(name) else {
+            return .failure(ControlError(.badRequest, "A pane name needs a character that is not a digit or a space."))
+        }
+        guard let open = locate(paneNamed: name, startedBy: request.caller?.pane) else { return .success(nil) }
+        let token = open.pane.token
+        guard request.args.replace == true else {
+            return .failure(
+                ControlError(
+                    .refused,
+                    "Pane \(token) is already named \(name). "
+                        + "Add --replace to close it and start this one in its place."))
+        }
+        guard
+            let stakes = open.window.closeStakes(
+                pane: open.pane, in: open.tab, closedByItsParent: request.caller?.pane != nil)
+        else {
+            return .failure(ControlError(.notFound, "There is no pane \(token)."))
+        }
+        if stakes.needsForce { return .failure(Self.refusal(closing: "pane \(token)", stakes)) }
+        return .success(PanePlace(window: open.window, tab: open.tab, pane: open.pane))
     }
 
     private static func placementProblem(_ args: ControlArgs) -> ControlError? {
