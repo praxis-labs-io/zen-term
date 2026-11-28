@@ -91,19 +91,22 @@ extension WindowController {
                 : "No agent in this window is asking for you.\nThe sidebar lists the ones that are.")
     }
 
-    static func keepAwakeEndedToast(_ release: KeepAwake.Release) -> ToastContent {
+    static func keepAwakeEndedToast(_ release: KeepAwake.Release, panesHolding: Int = 0) -> ToastContent {
+        let after: String
+        switch panesHolding {
+        case 0: after = "Your Mac can sleep again."
+        case 1: after = "A pane still holds your Mac awake."
+        default: after = "\(panesHolding) panes still hold your Mac awake."
+        }
         switch release {
         case .agentsFinished:
-            return ToastContent(
-                variant: .info, title: "Keep Awake ended", message: "Agents finished.\nYour Mac can sleep again.")
+            return ToastContent(variant: .info, title: "Keep Awake ended", message: "Agents finished.\n\(after)")
         case .timeUp(let duration):
             return ToastContent(
-                variant: .info, title: "Keep Awake ended",
-                message: "\(timeUpPhrase(duration))\nYour Mac can sleep again.")
+                variant: .info, title: "Keep Awake ended", message: "\(timeUpPhrase(duration))\n\(after)")
         case .battery(let percent):
             return ToastContent(
-                variant: .warning, title: "Keep Awake ended",
-                message: "Battery is at \(percent)%.\nYour Mac can sleep again.")
+                variant: .warning, title: "Keep Awake ended", message: "Battery is at \(percent)%.\n\(after)")
         }
     }
 

@@ -25,5 +25,8 @@ public enum ControlCommand: String, Codable, Sendable, CaseIterable {
     case worktreeCreate = "worktree.create"
     case worktreeRemove = "worktree.remove"
     case action
+    case awakeOn = "awake.on"
+    case awakeOff = "awake.off"
+    case awakeStatus = "awake.status"
     case sshAskpass = "ssh.askpass"
 }

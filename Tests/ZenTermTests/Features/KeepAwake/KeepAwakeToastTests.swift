@@ -24,6 +24,15 @@ final class KeepAwakeToastTests: XCTestCase {
         XCTAssertEqual(WindowController.keepAwakeEndedToast(.agentsFinished).variant, .info)
     }
 
+    func test_anEndWhilePanesStillHold_saysTheMacStaysAwake() {
+        XCTAssertEqual(
+            WindowController.keepAwakeEndedToast(.timeUp(60 * 60), panesHolding: 1).message,
+            "The hour is up.\nA pane still holds your Mac awake.")
+        XCTAssertEqual(
+            WindowController.keepAwakeEndedToast(.agentsFinished, panesHolding: 3).message,
+            "Agents finished.\n3 panes still hold your Mac awake.")
+    }
+
     func test_aHoldThatNeverStarted_isNotCalledEnded() {
         for refusal in refused {
             XCTAssertEqual(WindowController.keepAwakeRefusedToast(refusal).title, "Keep Awake didn't start")
@@ -35,7 +44,9 @@ final class KeepAwakeToastTests: XCTestCase {
 
     func test_copy_fitsTheToastWithoutWrapping() {
         let toasts =
-            ended.map(WindowController.keepAwakeEndedToast) + refused.map(WindowController.keepAwakeRefusedToast)
+            ended.map { WindowController.keepAwakeEndedToast($0) }
+            + ended.map { WindowController.keepAwakeEndedToast($0, panesHolding: 12) }
+            + refused.map(WindowController.keepAwakeRefusedToast)
         for toast in toasts {
             for line in (toast.message ?? "").split(separator: "\n") {
                 let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width

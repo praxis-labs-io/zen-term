@@ -69,6 +69,7 @@
                     [
                         Window.keepAwakeEndedToast(.agentsFinished), Window.keepAwakeEndedToast(.timeUp(60 * 60)),
                         Window.keepAwakeEndedToast(.battery(percent: 9)),
+                        Window.keepAwakeEndedToast(.timeUp(60 * 60), panesHolding: 1),
                         Window.keepAwakeRefusedToast(.battery(percent: 8, stop: 10)),
                         Window.keepAwakeRefusedToast(.nothingWorking),
                     ]

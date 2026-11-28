@@ -26,6 +26,9 @@ public enum ControlWire {
     /// The most seconds `ssh.askpass` holds for a person to answer ssh.
     public static let longestLoginAnswer = 600
 
+    /// The most seconds an `awake.on` `duration` may hold.
+    public static let longestAwakeHold = 7 * 24 * 60 * 60
+
     /// Whether `cmd` can hold its answer past `longestReplyWait`, and so sets its own deadline with `answerWait`.
     public static func setsOwnDeadline(_ cmd: ControlCommand) -> Bool {
         cmd == .paneWait || cmd == .paneSend || cmd == .paneRun || cmd == .sshAskpass
